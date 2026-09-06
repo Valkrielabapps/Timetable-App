@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://timetable-app-production-1b1f.up.railway.app/api/:path*"
+      "destination": "https://timetable-app-production-f6bb.up.railway.app/api/:path*"
     }
   ]
 }
