@@ -1,5 +1,0 @@
-[33m2a638c5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Point frontend API rewrite at new Railway deployment
-[33m48a67b3[m Add batch constraint entry (paste multiple rules at once); fix stale GETTING_STARTED next-steps
-[33m931c5b9[m Send invite/password-reset emails via Resend; add forgot/reset password flow
-[33m054b308[m Add CI gate (backend+frontend tests, frontend build) before mirror-to-deploy; add frontend test infra and new backend/frontend tests
-[33m158b5de[m Add solver conflict diagnostics, institution-type editing, viewer role-gating, and .gitattributes
