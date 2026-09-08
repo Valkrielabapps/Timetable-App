@@ -3,6 +3,7 @@ import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import PeriodsPanel from './PeriodsPanel'
 import RoomsPanel from './RoomsPanel'
+import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
 
@@ -610,6 +611,11 @@ function SetupSection({ schoolId, periods, onPeriodsChanged, rooms, onRoomsChang
         {!readOnly && (
           <div className="p-4">
             <BulkImportPanel schoolId={schoolId} resource="rooms" onImported={onImported} />
+          </div>
+        )}
+        {!readOnly && (
+          <div className="p-4">
+            <SetupExtractionPanel schoolId={schoolId} onImported={onImported} />
           </div>
         )}
       </div>

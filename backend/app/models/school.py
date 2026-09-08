@@ -228,6 +228,14 @@ class Timetable(Base):
     status = Column(String, default="generating")  # generating, draft, failed, published, archived
     solver_status = Column(String, nullable=True)  # optimal, feasible, infeasible, unknown, no_periods, ...
     error_message = Column(Text, nullable=True)
+    # Plain-language rewrite of error_message, generated once at failure
+    # time by app/services/infeasibility_explainer.py (see its docstring).
+    # Null whenever that service couldn't run (no ANTHROPIC_API_KEY, etc.)
+    # or wasn't applicable (e.g. the generic timeout/unattributed-failure
+    # messages, which are already plain English) — the frontend falls
+    # back to showing just the raw error_message list in that case, so a
+    # null here is never a broken state, just a less-polished one.
+    error_explanation = Column(Text, nullable=True)
 
     entries = relationship("TimetableEntry", back_populates="timetable", cascade="all, delete-orphan")
 

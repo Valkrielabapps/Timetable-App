@@ -42,6 +42,20 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
  * this" is ambiguous (though the red/green tint still shows there, as
  * information).
  *
+ * The text box above the grid ("Or describe an edit...") is a
+ * conversational alternative to dragging — POST
+ * /api/timetables/{id}/edit-command (backend/app/services/
+ * edit_command_parser.py) resolves plain English against this
+ * timetable's actual entries and the school's actual periods (grounded
+ * by id, not fuzzy-matched from text) and performs the SAME lock/move/
+ * swap operation the drag-and-drop handlers below call. It can reference
+ * any class group in the school by name, not just whichever one is
+ * currently selected in the grid. There's no non-LLM fallback for this
+ * one (unlike constraint parsing) — with no ANTHROPIC_API_KEY configured
+ * it just returns an error telling the admin to drag instead, since
+ * there's no fixed-pattern shortcut for "which of potentially hundreds of
+ * entries did they mean" worth building.
+ *
  * `page` toggles between this generated-schedule view and Substitutions
  * (SubstitutionsTab) — they used to be separate top-level tabs, but
  * Substitutions is really a sibling lens on the same generated timetable
@@ -92,6 +106,15 @@ export default function TimetableTab({
   // Which export format is currently downloading, if any — guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
+  // Conversational editing (POST /api/timetables/{id}/edit-command) — a
+  // plain-English alternative to drag-and-drop, e.g. "move Grade 8's Math
+  // to period 2 on Wednesdays". Section-view-only, same reasoning as
+  // drag-and-drop above. commandFeedback holds the last result (success
+  // description or error message) so the admin gets confirmation of what
+  // actually happened, since there's no visual drag to watch this time.
+  const [commandText, setCommandText] = useState('')
+  const [commandSubmitting, setCommandSubmitting] = useState(false)
+  const [commandFeedback, setCommandFeedback] = useState(null) // { ok: bool, text: string } | null
 
   async function handleExport(format) {
     if (exporting) return
@@ -149,6 +172,24 @@ export default function TimetableTab({
         entries: prev.entries.map((e) => updated.find((u) => u.id === e.id) ?? e),
       }
     })
+  }
+
+  async function handleEditCommand(e) {
+    e.preventDefault()
+    const text = commandText.trim()
+    if (!text) return
+    setCommandSubmitting(true)
+    setCommandFeedback(null)
+    try {
+      const result = await api.editTimetableByCommand(timetable.id, text)
+      applyEntryUpdates(...result.entries)
+      setCommandFeedback({ ok: true, text: result.description })
+      setCommandText('')
+    } catch (err) {
+      setCommandFeedback({ ok: false, text: err.message })
+    } finally {
+      setCommandSubmitting(false)
+    }
   }
 
   async function handleToggleLock(entry) {
@@ -323,6 +364,18 @@ export default function TimetableTab({
           <div className="font-medium text-amber-900">
             We couldn't build a conflict-free timetable
           </div>
+          {/* error_explanation is a plain-language rewrite of error_message
+              generated once at failure time (see
+              backend/app/services/infeasibility_explainer.py) — shown as
+              the lead sentence when available, with the raw technical
+              causes still underneath (behind a toggle) for anyone who
+              wants the precise detail. Null whenever that service didn't
+              run (no ANTHROPIC_API_KEY) or wasn't applicable, in which
+              case this falls back to showing just the raw list, same as
+              before this existed. */}
+          {timetable.error_explanation && (
+            <p className="mt-2 text-sm text-amber-900">{timetable.error_explanation}</p>
+          )}
           {/* error_message is newline-joined when the solver diagnosed one
               or more specific causes (see _diagnose_infeasibility in
               backend/app/services/solver.py) — rendered as a list so each
@@ -331,16 +384,32 @@ export default function TimetableTab({
             const lines = (timetable.error_message || 'Generation failed for an unknown reason.')
               .split('\n')
               .filter(Boolean)
-            if (lines.length > 1) {
-              return (
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
-                  {lines.map((line, i) => (
-                    <li key={i}>{line}</li>
-                  ))}
-                </ul>
-              )
+            const details = lines.length > 1 ? (
+              <ul className="list-disc space-y-1 pl-5 text-sm text-amber-800">
+                {lines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-amber-800">{lines[0]}</p>
+            )
+
+            if (!timetable.error_explanation) {
+              return <div className="mt-2">{details}</div>
             }
-            return <p className="mt-2 text-sm text-amber-800">{lines[0]}</p>
+            // The friendly explanation is already shown above, so the raw
+            // detail is secondary here — tucked behind <details> instead
+            // of always-visible, so the common case (read the friendly
+            // sentence, fix it, move on) isn't cluttered by jargon most
+            // admins won't need.
+            return (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-medium text-amber-700 hover:text-amber-900">
+                  Show technical detail
+                </summary>
+                <div className="mt-1.5">{details}</div>
+              </details>
+            )
           })()}
         </div>
       )}
@@ -401,6 +470,31 @@ export default function TimetableTab({
               </button>
             </div>
           </div>
+
+          {view === 'section' && !readOnly && (
+            <div className="flex flex-col gap-1.5">
+              <form onSubmit={handleEditCommand} className="flex items-center gap-2.5 rounded-md border border-slate-300 py-1.5 pl-3.5 pr-1.5">
+                <span className="text-slate-400">✦</span>
+                <input
+                  value={commandText}
+                  onChange={(e) => setCommandText(e.target.value)}
+                  placeholder="Or describe an edit, e.g. move Math to period 2 on Wednesday, or lock Mrs. Sharma's Monday classes"
+                  className="flex-1 py-1 text-sm focus:outline-none"
+                />
+                <button
+                  disabled={commandSubmitting}
+                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {commandSubmitting ? 'Applying…' : 'Apply'}
+                </button>
+              </form>
+              {commandFeedback && (
+                <p className={`text-xs ${commandFeedback.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {commandFeedback.text}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="overflow-x-auto rounded-md border border-slate-200">
             <table className="min-w-full border-collapse text-sm">

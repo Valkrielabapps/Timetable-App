@@ -45,8 +45,16 @@ from app.models.school import (
     TimetableEntry,
 )
 from app.models.user import User
-from app.schemas.timetable import TimetableEntryOut, TimetableEntryUpdate, TimetableOut
+from app.schemas.timetable import (
+    EditCommandRequest,
+    EditCommandResponse,
+    TimetableEntryOut,
+    TimetableEntryUpdate,
+    TimetableOut,
+)
+from app.services.edit_command_parser import parse_edit_command_llm
 from app.services.export import build_excel, build_pdf
+from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import generate_school_timetable
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
@@ -102,6 +110,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         status=timetable.status,
         solver_status=timetable.solver_status,
         error_message=timetable.error_message,
+        error_explanation=timetable.error_explanation,
         entries=entries,
     )
 
@@ -166,6 +175,12 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
             # sentence.
             if result.errors:
                 timetable.error_message = "\n".join(result.errors)
+                # Best-effort — see explain_infeasibility's docstring for
+                # why this never raises and just leaves error_explanation
+                # null on any failure (no API key, network issue, etc.).
+                # Run once here, not on every GET, since this result never
+                # changes for this timetable once computed.
+                timetable.error_explanation = explain_infeasibility(result.errors)
             elif result.status == "infeasible":
                 # _diagnose_infeasibility ran and came up empty — a real
                 # conflict exists, but it's an interaction between several
@@ -320,7 +335,15 @@ def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Dep
         )
 
     data = payload.model_dump(exclude_unset=True)
+    return _apply_entry_update(db, entry, data)
 
+
+def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:
+    """The actual mutation behind PATCH /entries/{id} — factored out so
+    POST /timetables/{id}/edit-command (conversational editing) performs
+    the EXACT same conflict-checked update instead of a second copy of
+    this logic. Callers are responsible for auth/status checks; this just
+    validates the slot and applies the change."""
     if "period_id" in data or "teacher_id" in data or "room_id" in data:
         new_period_id = data.get("period_id", entry.period_id)
         new_teacher_id = data.get("teacher_id", entry.teacher_id)
@@ -374,6 +397,13 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
     if entry.period_id == other.period_id:
         raise HTTPException(status_code=400, detail="These are already in the same period.")
 
+    return _apply_entry_swap(db, entry, other)
+
+
+def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry) -> list[TimetableEntryOut]:
+    """The actual mutation behind POST /entries/{id}/swap-with/{id} —
+    factored out for the same reason as _apply_entry_update above.
+    Callers are responsible for auth/status/locked/same-timetable checks."""
     both_ids = {entry.id, other.id}
     _check_slot_conflict(
         db, entry.timetable_id, entry.class_group_id,
@@ -421,6 +451,118 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
         locked=entry.locked,
         lab_batch=entry.lab_batch,
     )
+
+
+@router.post("/{timetable_id}/edit-command", response_model=EditCommandResponse)
+def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Conversational counterpart to drag-and-drop editing: plain-English
+    text (e.g. "move Grade 8's Math to period 2 on Wednesdays", "lock
+    Mrs. Sharma's Monday classes") is resolved via
+    app/services/edit_command_parser.py into one of the same lock/move/
+    swap operations the PATCH/swap-with endpoints perform, and applied
+    through the exact same conflict-checked mutation functions
+    (_apply_entry_update / _apply_entry_swap below) — this endpoint never
+    mutates anything on its own, it only decides WHICH of those two
+    functions to call and with what arguments.
+
+    Unlike constraint parsing, there's no non-LLM fallback here (see
+    edit_command_parser.py's module docstring for why): if no
+    ANTHROPIC_API_KEY is configured, or the call fails for any reason,
+    this returns 503 telling the admin to use drag-and-drop instead of
+    silently doing nothing. Every id the model returns is re-validated
+    against this timetable's actual entries/periods/teachers before use —
+    a hallucinated id is treated as an ordinary "couldn't resolve that"
+    failure (422), never trusted.
+    """
+    timetable = db.get(Timetable, timetable_id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found")
+    require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    if timetable.status != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This timetable isn't editable right now (status: {timetable.status}).",
+        )
+
+    entries = db.query(TimetableEntry).filter(TimetableEntry.timetable_id == timetable_id).all()
+    if not entries:
+        raise HTTPException(status_code=400, detail="This timetable has no entries to edit yet.")
+
+    class_groups = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == timetable.school_id).all()}
+    subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == timetable.school_id).all()}
+    teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == timetable.school_id).all()}
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == timetable.school_id).all()}
+
+    def _class_group_label(cg) -> str:
+        return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
+
+    entries_context = [
+        {
+            "id": e.id,
+            "class_group_name": _class_group_label(class_groups[e.class_group_id]) if e.class_group_id in class_groups else "?",
+            "subject_name": subjects[e.subject_id].name if e.subject_id in subjects else "?",
+            "teacher_name": teachers[e.teacher_id].name if e.teacher_id in teachers else "?",
+            "day_of_week": periods[e.period_id].day_of_week if e.period_id in periods else None,
+            "order": periods[e.period_id].order if e.period_id in periods else None,
+            "period_label": periods[e.period_id].label if e.period_id in periods else None,
+            "locked": e.locked,
+        }
+        for e in entries
+    ]
+    periods_context = [
+        {"id": p.id, "day_of_week": p.day_of_week, "order": p.order, "label": p.label}
+        for p in periods.values()
+    ]
+    teachers_context = [{"id": t.id, "name": t.name} for t in teachers.values()]
+
+    parsed = parse_edit_command_llm(payload.text, entries_context, periods_context, teachers_context)
+    if parsed is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Conversational editing isn't available right now — try dragging the entry instead.",
+        )
+
+    action = parsed.get("action")
+    description = parsed.get("description") or "Edit applied."
+    unresolved_detail = "Couldn't confidently resolve that — try rephrasing, or use drag-and-drop."
+
+    if action == "unresolved" or action not in ("move", "lock", "unlock", "swap"):
+        raise HTTPException(status_code=422, detail=description or unresolved_detail)
+
+    entry = next((e for e in entries if e.id == parsed.get("entry_id")), None)
+    if entry is None:
+        raise HTTPException(status_code=422, detail=unresolved_detail)
+
+    if action in ("lock", "unlock"):
+        updated = _apply_entry_update(db, entry, {"locked": action == "lock"})
+        return EditCommandResponse(action=action, description=description, entries=[updated])
+
+    if action == "move":
+        if entry.locked:
+            raise HTTPException(status_code=400, detail="That slot is locked — unlock it first.")
+        target_period_id = parsed.get("target_period_id")
+        if target_period_id not in periods:
+            raise HTTPException(status_code=422, detail=unresolved_detail)
+        data = {"period_id": target_period_id}
+        target_teacher_id = parsed.get("target_teacher_id")
+        if target_teacher_id is not None:
+            if target_teacher_id not in teachers:
+                raise HTTPException(status_code=422, detail=unresolved_detail)
+            data["teacher_id"] = target_teacher_id
+        updated = _apply_entry_update(db, entry, data)
+        return EditCommandResponse(action=action, description=description, entries=[updated])
+
+    # action == "swap"
+    other = next((e for e in entries if e.id == parsed.get("other_entry_id")), None)
+    if other is None:
+        raise HTTPException(status_code=422, detail=unresolved_detail)
+    if entry.locked or other.locked:
+        raise HTTPException(status_code=400, detail="Can't swap a locked slot — unlock it first.")
+    if entry.period_id == other.period_id:
+        raise HTTPException(status_code=400, detail="These are already in the same period.")
+    updated = _apply_entry_swap(db, entry, other)
+    return EditCommandResponse(action=action, description=description, entries=updated)
 
 
 _EXPORT_CONTENT_TYPES = {

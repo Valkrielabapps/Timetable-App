@@ -56,4 +56,30 @@ class TimetableOut(BaseModel):
     status: str
     solver_status: str | None
     error_message: str | None
+    # Plain-language rewrite of error_message (see
+    # app/services/infeasibility_explainer.py) — null whenever that
+    # service didn't run or couldn't produce one, in which case the
+    # frontend just shows error_message's bulleted list on its own.
+    error_explanation: str | None = None
+    entries: list[TimetableEntryOut]
+
+
+class EditCommandRequest(BaseModel):
+    """POST /api/timetables/{id}/edit-command — plain-English editing
+    instead of drag-and-drop, e.g. "move Grade 8's Math to period 2 on
+    Wednesdays" or "lock Mrs. Sharma's Monday classes". See
+    app/services/edit_command_parser.py for how this gets resolved."""
+
+    text: str
+
+
+class EditCommandResponse(BaseModel):
+    """`entries` is the one or two rows actually changed (one for a
+    move/lock/unlock, two for a swap) — same shape PATCH .../entries/{id}
+    and POST .../swap-with/{id} already return, so the frontend can patch
+    local state with the exact same applyEntryUpdates(...entries) call
+    either way, regardless of which UI triggered the change."""
+
+    action: str
+    description: str
     entries: list[TimetableEntryOut]

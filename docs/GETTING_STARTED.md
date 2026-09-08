@@ -64,6 +64,17 @@ entry's `assistant_teacher_id` backfills to `NULL` (no assistant set) —
 both match the behavior every row already had before these columns
 existed.
 
+One more, for the plain-language infeasibility explanation feature (see
+ARCHITECTURE.md's "Infeasibility diagnostics" section):
+
+```sql
+ALTER TABLE timetables ADD COLUMN IF NOT EXISTS error_explanation TEXT;
+```
+
+Every existing timetable backfills to `NULL`, which the frontend already
+treats as "no friendly explanation available, show the raw error list" —
+the same as every timetable's behavior before this column existed.
+
 ## 1. Backend
 
 ```bash
@@ -244,3 +255,11 @@ via Resend — see ARCHITECTURE.md's "Auth and multi-tenancy" section and
 its transactional-email writeup for how they work and what they
 deliberately still don't cover (billing receipts, since there's no
 billing yet to describe).
+
+The AI agent's three planned capabilities are all built now: plain-language
+infeasibility explanations, conversational timetable editing, and
+setup-from-document extraction (upload an arbitrary staff list/old
+timetable and let Claude propose teachers/subjects/class groups from it —
+CSV/.xlsx only, PDF not yet supported). See ARCHITECTURE.md's
+"Infeasibility diagnostics," "Manual editing (lock + drag-to-move)," and
+"Setup-from-document extraction" sections.

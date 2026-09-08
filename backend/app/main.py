@@ -21,6 +21,7 @@ from app.routers import (
     periods,
     rooms,
     schools,
+    setup_extraction,
     solver,
     subjects,
     substitutions,
@@ -54,6 +55,7 @@ app.include_router(constraints.router)
 app.include_router(timetables.router)
 app.include_router(solver.router)
 app.include_router(substitutions.router)
+app.include_router(setup_extraction.router)
 
 
 @app.get("/health")

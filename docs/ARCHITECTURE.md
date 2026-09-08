@@ -244,6 +244,30 @@ other variable in this pass is, so if the only real conflict involves a
 batched subject, this pass won't find it rather than risking a wrong
 answer.
 
+**Plain-language explanation.** Everything above produces `list[str]`
+messages that are accurate but still somewhat technical (they name exact
+rows and numbers by design, which is precise but not exactly warm).
+`app/services/infeasibility_explainer.py`'s `explain_infeasibility`
+takes that same list and asks Claude to rewrite it as a short (2-4
+sentence), jargon-free explanation — same never-raises,
+returns-`None`-on-any-failure contract as every other LLM-calling
+service in this app (no `ANTHROPIC_API_KEY` configured, network issue,
+malformed response, whatever). Called exactly once, in
+`_run_generation_job` (`app/routers/timetables.py`) at the moment a
+generation fails with `result.errors` populated, and stored on
+`Timetable.error_explanation` — not regenerated on every
+`GET /api/timetables/{id}` poll, since the frontend polls that endpoint
+repeatedly while a solve runs and the explanation for a given failure
+never changes once computed. `TimetableTab.jsx` shows it as the lead
+sentence when present, with the original raw `error_message` list still
+available underneath behind a "Show technical detail" toggle rather than
+removed — the plain-language version is additive, never a replacement an
+admin could be left without if the LLM call happens to fail. A `null`
+`error_explanation` (no key configured, or this is the generic
+timeout/unattributed-failure message rather than a `result.errors` hit)
+just means the raw list shows by itself, exactly like before this
+existed.
+
 ## Constraint parsing: LLM first, regex fallback
 
 `POST /api/constraints/parse` (`app/routers/constraints.py`) tries Claude
@@ -385,6 +409,43 @@ move/swap surfaces the backend's specific conflict message. Editing is
 section-view-only — "By Teacher" mixes entries from multiple different
 classes, where "move this" doesn't have one obvious meaning.
 
+**Conversational editing.** `POST /api/timetables/{id}/edit-command`
+(same router) is a plain-English alternative to dragging — an admin
+types e.g. "move Grade 8's Math to period 2 on Wednesdays" or "lock Mrs.
+Sharma's Monday classes" into a text box above the grid instead. Rather
+than asking the model to name a class group/subject/day in free text and
+fuzzy-matching that against the database (the way the constraint parsers
+resolve teacher/subject names), `app/services/edit_command_parser.py`
+grounds Claude against the timetable's actual entries and the school's
+actual periods/teachers — each tagged with its own id — and asks it to
+return ids directly, along with an `action` (`move`/`lock`/`unlock`/
+`swap`/`unresolved`). This pushes all the disambiguation (which of
+several weekly Math slots did they mean? does "period 2" mean `order=2`
+or the period labeled "Period 2"?) into the one place with full context
+to resolve it. Every returned id is re-validated against what was
+actually offered before anything is mutated — a hallucinated id is
+treated as an ordinary resolution failure (422), never trusted — and the
+model is explicitly told to return `action="unresolved"` with an
+explanation rather than guess when an instruction is ambiguous (e.g. a
+subject that recurs several times a week with no day/period named to
+narrow it down).
+
+The endpoint itself never mutates a `TimetableEntry` directly: `_apply_entry_update`
+and `_apply_entry_swap` (factored out of the PATCH and swap-with
+endpoints respectively) are the only two functions in this router that
+touch entry data, so a conversational "move" and a drag-and-drop move go
+through the exact same conflict check (`_check_slot_conflict`) and can
+never drift apart on what counts as a double-booking.
+
+Deliberately no non-LLM fallback here, unlike constraint parsing — with
+no `ANTHROPIC_API_KEY` configured, or the call failing for any reason,
+this returns a 503 telling the admin to drag instead of silently doing
+nothing. Constraint parsing's regex fallback works because a handful of
+fixed phrasings cover most real constraint sentences; there's no
+equivalent fixed-pattern shortcut for "which of potentially hundreds of
+existing entries did they mean," so building one wasn't worth it for a
+feature that degrades to "use the grid" when unavailable.
+
 ## Bulk import (CSV / Excel)
 
 Subjects, rooms, teachers, and class groups can each be uploaded as a CSV
@@ -438,6 +499,66 @@ inline after upload. Importing class groups needs to also refresh the
 sidebar's own class-group list (owned by `App.jsx`, not `DataEntryTab.jsx`)
 so a newly bulk-imported section shows up without a manual reload — wired
 via an `onClassGroupsChanged` callback passed down from `App.jsx`.
+
+## Setup-from-document extraction (AI agent capability #3)
+
+Bulk import (above) assumes the admin is willing to reformat their data
+into this app's expected columns. This feature is for the more common
+real case: the admin already has *some* spreadsheet — an old staff list,
+a manually-made timetable export, whatever — in whatever shape it's in,
+and just wants Claude to figure out the teachers/subjects/class groups
+in it. `POST /api/schools/{id}/setup-extraction` (upload) plus
+`POST /api/schools/{id}/setup-extraction/commit` (create), backed by
+`app/services/setup_extractor.py`.
+
+This is deliberately a different, simpler read path than
+`bulk_import.py`'s `parse_rows`: `read_spreadsheet_rows` makes no header
+assumption at all, returning a plain grid of cell strings, because the
+document might not have a conventional header row (e.g. a timetable grid
+with days as columns and teacher names in the body). The grid — capped at
+the first 200 rows, to bound LLM prompt size/cost — is handed to Claude
+as-is via forced tool-use (`record_extracted_setup`), with a system
+prompt instructing it to extract only what's clearly evidenced and leave
+ambiguous cases out (surfaced via a `notes` field) rather than guess.
+
+**Extraction is read-only.** The `/setup-extraction` upload endpoint
+never touches the database — it returns a `SetupExtractionPreview` of
+candidate teachers/subjects/class groups (with teachers' apparent
+subjects, matched by name) for the admin to review. Nothing is created
+until the admin selects which items to keep and calls `/commit`, mirroring
+the "grounded, then re-validated" caution used elsewhere for LLM output in
+this codebase (see Conversational editing, below) — except here the
+"re-validation" is a human, not server-side id checks, since there's no
+existing-record id to check against yet.
+
+`/commit` deliberately doesn't reimplement creation logic: it reshapes the
+admin-confirmed items into the same row-dict shape `bulk_import.py`'s
+`import_subjects`/`import_teachers`/`import_class_groups` already expect
+and calls those directly (subjects first, since `import_teachers` resolves
+`qualified_subjects` by name against subjects that already exist for the
+school) — so upsert-by-name idempotency, "missing name" validation, and
+the created/updated/errors reporting shape all come for free from that
+existing, tested code.
+
+**Scope, v1 (documented limitation, not a silent gap):** CSV and `.xlsx`
+only, matching `bulk_import.py`. PDF upload isn't supported — there's no
+PDF-parsing dependency anywhere in this codebase, and a scanned/PDF staff
+list would need OCR, a different and much less predictable failure mode
+(silently-wrong extracted text) than a spreadsheet read. Left as a known
+future gap.
+
+Follows the same never-raises contract as `llm_constraint_parser.py`,
+`email_service.py`, `infeasibility_explainer.py`, and
+`edit_command_parser.py`: `extract_setup_llm` returns `None` on any
+failure (no API key, no `anthropic` package, network/API error, malformed
+response), which the router turns into a 503 rather than a 500 — "not
+available right now," not a bug.
+
+**UI**: `SetupExtractionPanel.jsx`, added to the Setup section of Data
+Entry alongside `BulkImportPanel`. Upload → preview (every candidate item
+checked by default, admin unchecks anything wrong) → "Create N selected"
+→ summary, reusing the same created/updated/errors summary shape as
+`BulkImportPanel`.
 
 ## Export (PDF / Excel)
 

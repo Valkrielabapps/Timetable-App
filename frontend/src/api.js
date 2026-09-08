@@ -102,6 +102,30 @@ async function uploadFile(path, schoolId, file) {
   return res.json();
 }
 
+// Setup extraction's upload endpoint takes only a file — no school_id
+// form field, since the school is already in the URL path — so it can't
+// reuse uploadFile() above, which always appends school_id to the body.
+async function uploadFileOnly(path, file) {
+  const token = getToken();
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const body = new FormData();
+  body.append("file", file);
+
+  const res = await fetch(`/api${path}`, { method: "POST", headers, body });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const b = await res.json();
+      detail = b.detail ? JSON.stringify(b.detail) : detail;
+    } catch {
+      // not JSON
+    }
+    throw new Error(`${res.status} ${detail}`);
+  }
+  return res.json();
+}
+
 const get = (path) => request(path);
 const post = (path, body) => request(path, { method: "POST", body: JSON.stringify(body) });
 const put = (path, body) => request(path, { method: "PUT", body: JSON.stringify(body) });
@@ -199,6 +223,13 @@ export const api = {
   // way too) — see POST .../entries/{id}/swap-with/{id} in the same router.
   swapTimetableEntries: (entryId, otherEntryId) =>
     post(`/timetables/entries/${entryId}/swap-with/${otherEntryId}`),
+  // Conversational editing — plain-English text resolved server-side
+  // (via Claude, grounded against this timetable's actual entries and
+  // the school's actual periods) into a lock/move/swap, applied through
+  // the same conflict-checked logic as the two calls above. No non-LLM
+  // fallback for this one — see backend/app/services/edit_command_parser.py's
+  // docstring for why; a 503 here means "not configured", not a bug.
+  editTimetableByCommand: (timetableId, text) => post(`/timetables/${timetableId}/edit-command`, { text }),
   // Triggers a browser download of the exported file — see downloadFile
   // above for why this can't just be a plain <a href> anymore.
   downloadTimetableExport: (id, format) =>
@@ -211,6 +242,15 @@ export const api = {
   // "teachers", "class-groups" (matches the router prefix).
   bulkImport: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import`, schoolId, file),
   bulkImportTemplateUrl: (resource) => `/api/${resource}/bulk-import/template`,
+
+  // Setup-from-document extraction — upload an arbitrary spreadsheet
+  // (not in bulk-import's expected column format) and let Claude propose
+  // teachers/subjects/class groups from it. extractSetup() is read-only
+  // (nothing created yet); commitSetupExtraction() actually creates the
+  // admin-reviewed subset. See backend/app/services/setup_extractor.py
+  // and app/routers/setup_extraction.py.
+  extractSetup: (schoolId, file) => uploadFileOnly(`/schools/${schoolId}/setup-extraction`, file),
+  commitSetupExtraction: (schoolId, payload) => post(`/schools/${schoolId}/setup-extraction/commit`, payload),
 
   // Members & invites — see backend/app/core/access.py for the role model
   // (admin/viewer, owner is always an implicit admin) and
