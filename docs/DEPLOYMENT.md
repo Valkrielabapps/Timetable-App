@@ -93,3 +93,42 @@ manages to call it without `GOOGLE_CLIENT_ID` configured.
 same email as an existing email/password account, that Google sign-in
 gets linked to the existing account (not a duplicate) — see
 `google_login()` in `backend/app/routers/auth.py`.
+
+## 3. Running database migrations on deploy
+
+The deployed backend must apply any new Alembic migrations *before* the
+new code starts serving traffic. Otherwise there is a window where code
+that expects a new column is live against a database that doesn't have it
+yet - which is exactly the failure this setup exists to prevent.
+
+On Railway, set this under **Service -> Settings -> Deploy -> Pre-Deploy
+Command**:
+
+```
+alembic upgrade head
+```
+
+Railway runs it after the build and before the new container takes
+traffic, so migrations always land first. It's a no-op when there's
+nothing new to apply, so it costs a second or two on deploys that didn't
+change the schema.
+
+**Don't call `alembic upgrade head` from inside `app/main.py` at startup
+instead.** It looks more convenient - no dashboard setting to remember -
+but if the backend ever runs as more than one instance, they race each
+other trying to migrate the same database simultaneously.
+
+### One-time setup on an existing database
+
+A database that already has the app's tables (created by the old
+`Base.metadata.create_all()` behaviour, before migrations existed) must be
+told it is already at the baseline revision, rather than being asked to
+create tables that exist:
+
+```bash
+alembic stamp head     # records the version WITHOUT running the migration
+```
+
+Use `stamp` only for that one-time case. A database that is genuinely
+empty should get `alembic upgrade head` instead, which creates the schema
+for real.

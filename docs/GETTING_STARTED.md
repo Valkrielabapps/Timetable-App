@@ -7,62 +7,51 @@
 - (Later, for production) PostgreSQL — local dev uses SQLite by default so
   you don't need Postgres installed just to get the app running.
 
-## If you're upgrading from an older copy of this project
+## Database schema changes (migrations)
 
-The database schema changed (added `users`, `schools.owner_id`,
-`class_groups.grade`, `timetables.solver_status` / `timetables.error_message`
-for the async generation job, `timetable_entries.room_id` for room
-assignment, `subjects.required_room_type`, used to match a subject to a
-room when the solver assigns rooms, `teachers.qualified_grades`, used to
-restrict a teacher to specific grades instead of every grade in the
-school, and — most recently — `teachers.is_assistant_eligible` and
-`subject_requirements.assistant_teacher_id`, used to record an optional
-second/assistant teacher on a section's plan).
-SQLite's auto-create-on-startup only creates
-*missing* tables — it won't add new columns to ones that already exist. If
-you already have a `backend/dev.db` from before, **delete it** before
-starting the backend again:
+Schema changes are managed with [Alembic](https://alembic.sqlalchemy.org/).
+Each change to a model in `backend/app/models/` gets a migration file
+committed alongside it in `backend/alembic/versions/`, and applying them
+to any database - yours, your teammate's, or production - is one command:
 
 ```bash
-rm backend/dev.db   # Windows: del backend\dev.db
+cd backend
+alembic upgrade head
 ```
 
-It'll be recreated fresh (empty) on the next `uvicorn` start. This is a
-one-time thing — once you're on the current schema, normal restarts are
-fine.
+It applies only the migrations that database hasn't seen yet (Alembic
+tracks this in an `alembic_version` table), so it's safe to run any time
+and a no-op if you're already current. Run it after every `git pull` that
+touched `backend/app/models/`.
 
-### If you're running against a real (non-SQLite) database
+**This replaces the old process**, which was to hand-run `ALTER TABLE`
+statements copied out of this file, or to delete `dev.db` and lose your
+local data. Neither is necessary any more - and neither is safe now that
+there is a real database behind the deployed app.
 
-The same "only creates missing tables" limitation applies to Postgres —
-`Base.metadata.create_all` will not add `teachers.qualified_grades` to an
-existing `teachers` table. Run this once against your production database
-before deploying this change:
+### When you change a model
 
-```sql
-ALTER TABLE teachers ADD COLUMN qualified_grades JSON DEFAULT '[]'::json;
+```bash
+cd backend
+# 1. edit the model in app/models/
+# 2. generate a migration describing the change
+alembic revision --autogenerate -m "short description of the change"
+# 3. READ the generated file in alembic/versions/ before trusting it
+# 4. apply it locally
+alembic upgrade head
+# 5. commit the migration file together with the model change
 ```
 
-Postgres 11+ backfills existing rows with the default as part of this
-single statement, so every existing teacher ends up with `[]`
-(no restriction — they keep teaching every grade they did before), not
-`NULL`. There's no data loss risk either way: the API tolerates `NULL`
-here (see `TeacherOut.qualified_grades` in `app/schemas/teacher.py`) and
-treats it the same as `[]`.
+Step 3 is not optional. Autogenerate is reliable for added and dropped
+tables and columns, but it cannot recognise a *rename* - it sees a column
+disappear and another appear, and writes a `drop_column` plus an
+`add_column`, which would destroy the data in that column. Renames have to
+be hand-edited into an `alter_column`. It is also imprecise about
+constraint and type changes.
 
-Same deal for the assistant-teacher fields:
-
-```sql
-ALTER TABLE teachers ADD COLUMN IF NOT EXISTS is_assistant_eligible BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE subject_requirements ADD COLUMN IF NOT EXISTS assistant_teacher_id INTEGER REFERENCES teachers(id);
-ALTER TABLE timetable_entries ADD COLUMN IF NOT EXISTS assistant_teacher_id INTEGER REFERENCES teachers(id);
-ALTER TABLE schools ADD COLUMN IF NOT EXISTS grade_order JSON DEFAULT '[]'::json;
-```
-
-Every existing teacher backfills to `is_assistant_eligible = false` (not
-eligible until an admin opts them in) and every existing requirement's/
-entry's `assistant_teacher_id` backfills to `NULL` (no assistant set) —
-both match the behavior every row already had before these columns
-existed.
+Production runs `alembic upgrade head` automatically before new code goes
+live (Railway's pre-deploy command), so a migration committed with its
+model change lands in production without anyone remembering a manual step.
 
 One more, for the plain-language infeasibility explanation feature (see
 ARCHITECTURE.md's "Infeasibility diagnostics" section):
@@ -83,6 +72,7 @@ python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env             # adjust DATABASE_URL etc. if needed
+alembic upgrade head             # create/update the database schema
 uvicorn app.main:app --reload
 ```
 
