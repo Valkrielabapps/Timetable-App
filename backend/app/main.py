@@ -2,6 +2,7 @@
 FastAPI application entrypoint.
 
 Run locally with:
+    alembic upgrade head          # create/update the schema first
     uvicorn app.main:app --reload
 
 Interactive API docs are then available at http://localhost:8000/docs
@@ -11,8 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import Base, engine
-from app.models import school, user  # noqa: F401 - imported so tables register on Base
+from app.models import school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     auth,
     class_groups,
@@ -29,9 +29,17 @@ from app.routers import (
     timetables,
 )
 
-# Creates tables if they don't exist yet. Fine for local dev; production
-# should use Alembic migrations instead (see docs/GETTING_STARTED.md).
-Base.metadata.create_all(bind=engine)
+# No Base.metadata.create_all() here on purpose. The schema is owned by the
+# Alembic migrations in alembic/versions/ and applied with
+# `alembic upgrade head` - locally by hand, in production by Railway's
+# pre-deploy command (see docs/DEPLOYMENT.md).
+#
+# Leaving create_all() in alongside migrations is actively harmful: it only
+# ever creates *missing tables*, so against a database that migrations
+# haven't touched it would silently reconstruct a schema with no
+# alembic_version row - putting the database back outside Alembic's
+# control, and making the next `upgrade head` fail against tables that
+# already exist.
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
 
