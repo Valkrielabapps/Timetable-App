@@ -1,6 +1,10 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Fragment, useEffect, useState } from 'react'
-import { GridBackground, GlowCard } from './Spotlight'
+import { Marquee } from './Marquee'
+import { GridBackground } from './Spotlight'
+import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
+import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
+import shishyaPublicSchoolEntrancePhoto from '../assets/shishya-public-school-entrance.png'
 
 /**
  * Marketing landing page — what an unauthenticated visitor sees before
@@ -28,97 +32,6 @@ import { GridBackground, GlowCard } from './Spotlight'
  *     yet (see the deployment conversation). Swap for a real screenshot
  *     once the app is hosted somewhere presentable.
  */
-
-// Each card leads with the outcome for the institution, not the
-// mechanism behind it (plain English input, a CP-SAT solver, etc.) —
-// people don't shop for a solver, they shop for their term-planning
-// headache going away. The "how" still shows up in the second sentence
-// for anyone who wants it, but it's not the headline.
-const FEATURES = [
-  {
-    title: 'Save weeks of admin work every term',
-    body: 'Type your scheduling rules as plain sentences instead of wrestling with spreadsheet formulas, and get a working timetable in an afternoon.',
-    icon: 'speed',
-  },
-  {
-    title: 'Hand out a schedule with zero clashes',
-    body: 'No teacher double-booked, no class in two places at once. Every timetable is checked against every rule before it ever reaches you.',
-    icon: 'shieldCheck',
-  },
-  {
-    title: 'Go live in a day, not a week',
-    body: 'Already have your teachers, subjects, and sections in a spreadsheet? Upload it and start scheduling right away, instead of re-typing everything by hand.',
-    icon: 'upload',
-  },
-  {
-    title: "Never get stuck guessing what went wrong",
-    body: "When a schedule can't be built, you're told exactly which teacher or section is the problem, so it takes minutes to fix, not hours of trial and error.",
-    icon: 'flag',
-  },
-  {
-    title: 'Adapt without rebuilding from scratch',
-    body: 'Lock in the parts of a schedule that already work and adjust the rest by hand. One change to one class does not mean starting over.',
-    icon: 'sliders',
-  },
-  {
-    title: 'Keep your whole staff on the same page',
-    body: 'Office admins, vice principals, and teachers all see one live schedule, instead of five different spreadsheet versions emailed back and forth.',
-    icon: 'users',
-  },
-]
-
-// Small line-icon set for the feature cards below, drawn in the same
-// stroke style already used for Sidebar.jsx's nav icons (24x24 viewBox,
-// stroke="currentColor", strokeWidth 2, round caps/joins) instead of the
-// Unicode glyphs (✦ ◈ ⇪ ⚑ ⚙ ⌘) this section used before — those read as
-// placeholder characters rather than a real icon system.
-const FEATURE_ICONS = {
-  speed: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
-    </svg>
-  ),
-  shieldCheck: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3l7 3v5c0 5-3.2 8.5-7 10-3.8-1.5-7-5-7-10V6l7-3z" />
-      <path d="M9 12l2 2 4-4" />
-    </svg>
-  ),
-  upload: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 15V4" />
-      <path d="M7 9l5-5 5 5" />
-      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-    </svg>
-  ),
-  flag: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 21V4" />
-      <path d="M5 4h13l-2.5 4L18 12H5" />
-    </svg>
-  ),
-  sliders: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 6h9" />
-      <path d="M17 6h3" />
-      <circle cx="14" cy="6" r="2" />
-      <path d="M4 12h3" />
-      <path d="M11 12h9" />
-      <circle cx="8" cy="12" r="2" />
-      <path d="M4 18h11" />
-      <path d="M19 18h1" />
-      <circle cx="17" cy="18" r="2" />
-    </svg>
-  ),
-  users: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1" />
-      <circle cx="10" cy="8" r="3.5" />
-      <path d="M21 20v-1a4 4 0 0 0-2.5-3.7" />
-      <path d="M15.5 4.3a3.5 3.5 0 0 1 0 6.9" />
-    </svg>
-  ),
-}
 
 const PRICING_TIERS = [
   {
@@ -176,7 +89,7 @@ const fadeUp = {
  * word and loops. Used in the Hero headline so it cycles through
  * "schools" / "colleges" / "institutions" instead of picking just one.
  */
-function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs = 1400 }) {
+function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs = 1400, colorClassName = 'text-indigo-600' }) {
   const [wordIndex, setWordIndex] = useState(0)
   const [charCount, setCharCount] = useState(0)
   const [deleting, setDeleting] = useState(false)
@@ -203,9 +116,9 @@ function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs 
   }, [charCount, deleting, wordIndex, words, typingSpeedMs, deletingSpeedMs, pauseMs])
 
   return (
-    <span className="text-indigo-600">
+    <span className={colorClassName}>
       {words[wordIndex].slice(0, charCount)}
-      <span className="ml-0.5 inline-block w-0.5 animate-pulse bg-indigo-600 align-middle" style={{ height: '0.85em' }} />
+      <span className="ml-0.5 inline-block w-0.5 animate-pulse bg-current align-middle" style={{ height: '0.85em' }} />
     </span>
   )
 }
@@ -216,9 +129,15 @@ export default function LandingPage({ onGetStarted }) {
     <div className="min-h-screen bg-white text-slate-900">
       <LandingNav onGetStarted={onGetStarted} />
       <Hero onGetStarted={onGetStarted} />
-      <Features />
-      <HowItWorks />
-      <Pricing onGetStarted={onGetStarted} />
+      <WorkflowDemo />
+      <TrustBar />
+      <MetricsSection />
+      <WhyChoose />
+      {/* HowItWorks and Pricing removed for now (explicit request) — the
+          component functions/data (STEPS, PRICING_TIERS) are left intact
+          further down this file so they're a one-line add back rather
+          than a rebuild once pricing is settled and this section is
+          wanted again. */}
       <Testimonials />
       <Footer />
     </div>
@@ -227,39 +146,37 @@ export default function LandingPage({ onGetStarted }) {
 
 function LandingNav({ onGetStarted }) {
   return (
-    <div className="sticky top-0 z-30 border-b border-slate-100 bg-white/80 backdrop-blur">
+    <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
       {/* No max-w-6xl/mx-auto here unlike the rest of the page's sections —
           that centers a fixed-width column and leaves equal, growing
           margins on both sides as the viewport widens, which is exactly
           why the logo never actually reached the true left edge like
-          Asana/Docusign's headers do. This bar instead spans the full
-          width with fixed edge padding, so the logo and nav sit close to
-          the real left edge on any screen size. */}
+          Papermark's header does. This bar instead spans the full width
+          with fixed edge padding, so the logo and nav sit close to the
+          real left edge on any screen size. */}
       <div className="flex items-center px-8 py-4 md:px-16 lg:px-28">
-        {/* Logo + nav links grouped together on the left (Asana/Docusign-
-            style layout) instead of the logo/nav/CTA being spread evenly
-            across the bar with justify-between — the nav reads as
-            belonging to the brand mark, not as a separate centered block. */}
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 text-sm font-semibold text-white">
-              T
-            </div>
-            <span className="text-sm font-semibold">Timetable</span>
-          </div>
-          <nav className="hidden items-center gap-8 text-sm text-slate-600 md:flex">
-            <a href="#features" className="hover:text-slate-900">Why Timetable</a>
-            <a href="#how-it-works" className="hover:text-slate-900">How it Works</a>
-            <a href="#pricing" className="hover:text-slate-900">Plans and Pricing</a>
+        {/* Wordmark + nav links grouped together on the left (Papermark-style
+            layout) instead of the logo/nav/CTA being spread evenly across
+            the bar with justify-between — the nav reads as belonging to
+            the brand mark, not as a separate centered block. Plain
+            wordmark now, no icon/box mark — Papermark's own header is just
+            bold text too, no logomark next to it. */}
+        <div className="flex items-center gap-10">
+          <span className="text-[19px] font-bold tracking-tight text-white">Timetablz</span>
+          <nav className="hidden items-center gap-8 text-[15px] text-neutral-300 md:flex">
+            <a href="?page=why" className="hover:text-white">Why Timetablz</a>
+            <a href="?page=pricing" className="hover:text-white">Plans and Pricing</a>
+            <a href="#customers" className="hover:text-white">Customers</a>
+            <a href="?page=support" className="hover:text-white">Support</a>
           </nav>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <button onClick={onGetStarted} className="text-sm font-medium text-slate-600 hover:text-slate-900">
+        <div className="ml-auto flex items-center gap-6">
+          <button onClick={onGetStarted} className="text-[15px] font-medium text-neutral-300 hover:text-white">
             Sign in
           </button>
           <button
             onClick={onGetStarted}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-white px-4 py-2 text-[15px] font-medium text-black hover:bg-neutral-200"
           >
             Get started free
           </button>
@@ -269,52 +186,173 @@ function LandingNav({ onGetStarted }) {
   )
 }
 
+/**
+ * Faint single-stroke line-art scenes for the empty sides of the Hero —
+ * replaces the earlier blurred-glow Spotlight treatment. Both sides are
+ * built around the same subject as the product itself: a printed weekly
+ * timetable pinned to the classroom wall, grid cells and all — not just a
+ * generic classroom. `side="left"` shows a wall clock above a pinned
+ * timetable chart, with a student desk and chair below it; `side="right"`
+ * mirrors it with a teacher's desk whose laptop screen shows the same
+ * grid in miniature, next to a second wall timetable and a stack of
+ * books. Everything is `stroke`-only, no fill, at very low opacity — the
+ * point is background texture, not an illustration anyone reads closely.
+ * Hand-drawn with basic shapes rather than an icon library so it stays a
+ * single dependency-free inline SVG.
+ */
+function HeroSideArt({ side, className = '' }) {
+  const stroke = 'rgba(255,255,255,0.16)'
+  const common = { fill: 'none', stroke, strokeWidth: 1.2, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const gridStroke = { ...common, strokeWidth: 0.8 }
+
+  // A pinned weekly-timetable chart: an outer frame, a heavier header
+  // row, `cols` x `rows` grid cells, and two small "pin" dots at the top
+  // corners as if it's tacked to a board — reused (at different sizes)
+  // on both sides so the two scenes visibly share the same motif.
+  function TimetableChart({ x, y, width, height, cols = 5, rows = 6 }) {
+    const headerH = height / (rows + 1)
+    const colW = width / cols
+    return (
+      <g>
+        <rect x={x} y={y} width={width} height={height} rx="3" {...common} />
+        <line x1={x} y1={y + headerH} x2={x + width} y2={y + headerH} {...common} />
+        {Array.from({ length: rows - 1 }).map((_, i) => (
+          <line
+            key={`row-${i}`}
+            x1={x}
+            y1={y + headerH * (i + 2)}
+            x2={x + width}
+            y2={y + headerH * (i + 2)}
+            {...gridStroke}
+          />
+        ))}
+        {Array.from({ length: cols - 1 }).map((_, i) => (
+          <line
+            key={`col-${i}`}
+            x1={x + colW * (i + 1)}
+            y1={y}
+            x2={x + colW * (i + 1)}
+            y2={y + height}
+            {...gridStroke}
+          />
+        ))}
+        <circle cx={x + 10} cy={y - 6} r="3" {...common} />
+        <circle cx={x + width - 10} cy={y - 6} r="3" {...common} />
+      </g>
+    )
+  }
+
+  return (
+    <svg
+      viewBox="0 0 320 640"
+      className={`pointer-events-none absolute z-0 h-[640px] w-[320px] ${className}`}
+      aria-hidden="true"
+    >
+      {side === 'left' ? (
+        <>
+          {/* Hanging pendant light */}
+          <line x1="250" y1="0" x2="250" y2="70" {...common} />
+          <path d="M225 70 Q250 52 275 70 L268 96 L232 96 Z" {...common} />
+
+          {/* Wall clock */}
+          <circle cx="90" cy="120" r="38" {...common} />
+          <circle cx="90" cy="120" r="2.5" {...common} />
+          <line x1="90" y1="120" x2="90" y2="98" {...common} />
+          <line x1="90" y1="120" x2="106" y2="128" {...common} />
+
+          {/* Pinned weekly timetable chart on the wall */}
+          <TimetableChart x={30} y={195} width={220} height={190} cols={5} rows={6} />
+
+          {/* Student desk + chair beneath it */}
+          <path d="M45 470 L235 470 L220 495 L60 495 Z" {...common} />
+          <line x1="65" y1="495" x2="65" y2="545" {...common} />
+          <line x1="215" y1="495" x2="215" y2="545" {...common} />
+          <path d="M105 470 L105 425 Q105 413 118 413 L138 413 Q151 413 151 425 L151 470" {...common} />
+
+          {/* Floor line */}
+          <line x1="0" y1="560" x2="320" y2="560" {...common} />
+        </>
+      ) : (
+        <>
+          {/* Hanging pendant light */}
+          <line x1="70" y1="0" x2="70" y2="70" {...common} />
+          <path d="M45 70 Q70 52 95 70 L88 96 L52 96 Z" {...common} />
+
+          {/* Second, smaller wall timetable up top */}
+          <TimetableChart x={140} y={110} width={150} height={120} cols={4} rows={5} />
+
+          {/* Teacher's desk */}
+          <path d="M30 460 L270 460 L250 490 L10 490 Z" {...common} />
+          <line x1="35" y1="490" x2="35" y2="560" {...common} />
+          <line x1="245" y1="490" x2="245" y2="560" {...common} />
+
+          {/* Laptop on the desk, screen showing the same timetable grid in miniature */}
+          <path d="M110 396 L210 396 L216 460 L104 460 Z" {...common} />
+          <TimetableChart x={116} y={406} width={88} height={46} cols={4} rows={4} />
+          <path d="M90 460 L230 460 L238 472 L82 472 Z" {...common} />
+
+          {/* Stack of books beside the laptop */}
+          <rect x="20" y="452" width="60" height="9" rx="2" {...common} />
+          <rect x="24" y="443" width="52" height="9" rx="2" {...common} />
+          <rect x="20" y="434" width="60" height="9" rx="2" {...common} />
+
+          {/* Floor line */}
+          <line x1="0" y1="560" x2="320" y2="560" {...common} />
+        </>
+      )}
+    </svg>
+  )
+}
+
 function Hero({ onGetStarted }) {
   return (
-    <section className="relative overflow-hidden">
-      <GridBackground />
-      <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-16 md:pt-24">
-      <div className="grid items-center gap-14 md:grid-cols-2">
+    <section className="relative overflow-hidden bg-black">
+      <GridBackground dark />
+
+      {/* Faint line-art filling the empty sides of the centered hero — the
+          reference the user sent (a hospitality SaaS hero) uses extremely
+          faint single-stroke line drawings of an office scene instead of a
+          blurred glow; this is the same idea adapted to our own subject
+          matter (a classroom on the left, a teacher's desk with a laptop
+          showing a little timetable grid on the right) rather than reusing
+          someone else's illustration. Pure line art, no fill, opacity kept
+          low enough to read as texture rather than content. Hidden below
+          `lg` since there's no room for them once the hero text wraps. */}
+      <HeroSideArt side="left" className="-left-16 top-0 hidden lg:block xl:-left-4" />
+      <HeroSideArt side="right" className="-right-16 top-0 hidden lg:block xl:-right-4" />
+
+      <div className="relative mx-auto max-w-3xl px-6 py-24 text-center md:py-32">
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.6 }}>
           {/* The cycling word sits on its own dedicated line (explicit <br/>,
               not just wrapping wherever it happens to land) so its
               changing width can never push "Instant timetables" onto an
               extra line — see the earlier version of this component for
               the layout-shift bug this avoids. */}
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
+          <h1 className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl">
             Instant timetables
             <br />
-            for <TypingWords words={['schools', 'colleges', 'institutions']} />
+            for <TypingWords words={['schools', 'colleges', 'institutions']} colorClassName="text-white" />
           </h1>
-          <p className="mt-5 max-w-lg text-lg text-slate-500">
+          <p className="mx-auto mt-5 max-w-lg text-lg text-neutral-400">
             Describe your scheduling rules in plain English and get a complete, ready-to-use
             timetable for every section and every teacher, with zero clashes.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={onGetStarted}
-              className="rounded-md bg-indigo-600 px-6 py-3 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-full bg-white px-6 py-3 text-sm font-medium text-black hover:bg-neutral-200"
             >
               Get started free
             </button>
             <a
-              href="#how-it-works"
-              className="rounded-md border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              href="#features"
+              className="rounded-full border border-neutral-600 px-6 py-3 text-sm font-medium text-white hover:bg-neutral-900"
             >
               See how it works
             </a>
           </div>
-          <p className="mt-4 text-xs text-slate-500">No credit card required to try it.</p>
+          <p className="mt-4 text-xs text-neutral-500">No credit card required to try it.</p>
         </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.7, delay: 0.15 }}
-        >
-          <TimetableMockup />
-        </motion.div>
-      </div>
       </div>
     </section>
   )
@@ -332,23 +370,23 @@ function TimetableMockup() {
   const colors = ['bg-indigo-600', 'bg-emerald-600', 'bg-amber-500', 'bg-sky-600', 'bg-violet-600']
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/60">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 shadow-xl shadow-black/40">
       <div className="mb-3 flex items-center gap-1.5">
-        <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-        <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-        <span className="ml-2 text-xs text-slate-500">Grade 8 · Section A</span>
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+        <span className="ml-2 text-xs text-neutral-400">Grade 8 · Section A</span>
       </div>
       <div className="grid grid-cols-[36px_repeat(5,1fr)] gap-1 text-[10px]">
         <div />
         {cols.map((c) => (
-          <div key={c} className="pb-1 text-center font-medium text-slate-500">
+          <div key={c} className="pb-1 text-center font-medium text-neutral-500">
             {c}
           </div>
         ))}
         {rows.map((r, ri) => (
           <Fragment key={r}>
-            <div className="flex items-center text-slate-500">{r}</div>
+            <div className="flex items-center text-neutral-500">{r}</div>
             {cols.map((c, ci) => (
               <motion.div
                 key={`${r}-${c}`}
@@ -367,54 +405,496 @@ function TimetableMockup() {
   )
 }
 
-function Features() {
+// The exact example phrase used throughout docs/GETTING_STARTED.md's walk-
+// through of the Constraints tab ("try typing something like...") — reused
+// here verbatim so the demo below shows the real product's actual copy
+// and workflow, not an invented example.
+const DEMO_CONSTRAINT = 'Priya Sharma can only teach 10 periods a week'
+
+const DEMO_NAV_ITEMS = ['Data Entry', 'Constraints', 'Timetable']
+
+// Shown during the new 'setup' phase — a Data Entry tab was in
+// DEMO_NAV_ITEMS but never actually got a turn in the demo (it only ever
+// toggled between Constraints and Timetable), so the loop looked like it
+// was skipping one of the three real product areas. This gives it one.
+const DEMO_SETUP_ITEMS = ['Grade 8 · Section A — 32 students', 'Mathematics — 6 periods/week', 'Priya Sharma — Mathematics']
+
+/**
+ * Replaces the old text-plus-icon-cards Features() section with a single,
+ * looping, silent product demo — no headline, no body copy, just the
+ * actual workflow (set up a section → type a rule in plain English →
+ * generate → get a clash-free grid) animating on repeat. Modeled on how
+ * roommaster.com and relume.io use a real-interface-driven hero/section
+ * animation instead of a static screenshot or a wall of feature text.
+ *
+ * Kept strictly black/white/grey (no colored badges or traffic-light
+ * dots) to match the rest of the site's Papermark/Griffin-inspired
+ * monochrome theme — the first version of this demo used emerald/indigo/
+ * amber accent colors, which read as inconsistent with everything else
+ * on the page after the black/white pass elsewhere.
+ *
+ * Built as a small state machine (`phase`) driven by chained setTimeouts,
+ * the same pattern as TypingWords above — each phase schedules the next
+ * one, and the final phase resets back to 'setup' so it loops forever.
+ * AnimatePresence handles the cross-fade between phases; ResultGrid's own
+ * staggered cell animation replays every loop because its key changes on
+ * every remount.
+ */
+function WorkflowDemo() {
+  const [phase, setPhase] = useState('setup') // 'setup' | 'typing' | 'added' | 'generating' | 'result'
+  const [charCount, setCharCount] = useState(0)
+  const [setupCount, setSetupCount] = useState(0)
+
+  useEffect(() => {
+    if (phase !== 'setup') return
+    if (setupCount < DEMO_SETUP_ITEMS.length) {
+      const t = setTimeout(() => setSetupCount((c) => c + 1), 500)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setPhase('typing'), 700)
+    return () => clearTimeout(t)
+  }, [phase, setupCount])
+
+  useEffect(() => {
+    if (phase !== 'typing') return
+    if (charCount < DEMO_CONSTRAINT.length) {
+      const t = setTimeout(() => setCharCount((c) => c + 1), 42)
+      return () => clearTimeout(t)
+    }
+    const t = setTimeout(() => setPhase('added'), 750)
+    return () => clearTimeout(t)
+  }, [phase, charCount])
+
+  useEffect(() => {
+    if (phase === 'added') {
+      const t = setTimeout(() => setPhase('generating'), 1300)
+      return () => clearTimeout(t)
+    }
+    if (phase === 'generating') {
+      const t = setTimeout(() => setPhase('result'), 1500)
+      return () => clearTimeout(t)
+    }
+    if (phase === 'result') {
+      const t = setTimeout(() => {
+        setCharCount(0)
+        setSetupCount(0)
+        setPhase('setup')
+      }, 3200)
+      return () => clearTimeout(t)
+    }
+  }, [phase])
+
+  const activeNav =
+    phase === 'setup' ? 'Data Entry' : phase === 'generating' || phase === 'result' ? 'Timetable' : 'Constraints'
+
   return (
     <section id="features" className="mx-auto max-w-6xl px-6 py-24">
-      <motion.div
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl shadow-neutral-900/10">
+        {/* Fake browser chrome — grounds this as "the actual app", the
+            same trick both reference videos use (a real address bar
+            framing the interface being demoed). Grey dots, not the usual
+            red/amber/green traffic lights — same "less decorative, more
+            deliberate" call made on LandingNav's wordmark earlier. */}
+        <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-5 py-3.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+          <div className="ml-3 max-w-xs flex-1 truncate rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[13px] text-neutral-400">
+            timetablz.com
+          </div>
+        </div>
+
+        <div className="flex">
+          <div className="hidden w-48 shrink-0 border-r border-neutral-100 bg-neutral-50/60 p-5 sm:block">
+            {DEMO_NAV_ITEMS.map((item) => (
+              <div
+                key={item}
+                className={`mb-1.5 rounded-md px-3.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
+                  activeNav === item ? 'bg-neutral-900 text-white' : 'text-neutral-500'
+                }`}
+              >
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <div className="relative min-h-[420px] flex-1 p-10">
+            <AnimatePresence mode="wait">
+              {phase === 'setup' && (
+                <motion.div
+                  key="setup"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <p className="mb-3 text-sm font-medium text-neutral-500">Setting up your school</p>
+                  <div className="space-y-2.5">
+                    {DEMO_SETUP_ITEMS.map((item, i) => (
+                      <AnimatePresence key={item}>
+                        {setupCount > i && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="flex items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-700"
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-neutral-900">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                            {item}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {(phase === 'typing' || phase === 'added') && (
+                <motion.div
+                  key="constraints"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <p className="mb-2.5 text-sm font-medium text-neutral-500">Describe a scheduling rule</p>
+                  <div className="rounded-lg border border-neutral-200 bg-white px-5 py-4 text-[15px] text-neutral-800">
+                    {DEMO_CONSTRAINT.slice(0, charCount)}
+                    <span className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-pulse bg-neutral-400 align-middle" />
+                  </div>
+                  <AnimatePresence>
+                    {phase === 'added' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                        Availability rule added
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+
+              {phase === 'generating' && (
+                <motion.div
+                  key="generating"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="flex h-full flex-col items-center justify-center gap-3 py-20"
+                >
+                  <motion.div
+                    className="h-9 w-9 rounded-full border-2 border-neutral-200 border-t-neutral-900"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <p className="text-sm font-medium text-neutral-500">Generating timetable…</p>
+                </motion.div>
+              )}
+
+              {phase === 'result' && (
+                <motion.div
+                  key="result"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <p className="text-sm font-medium text-neutral-500">Grade 8 · Section A</p>
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.3, duration: 0.25 }}
+                      className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-3 py-1 text-[13px] font-medium text-white"
+                    >
+                      Zero clashes
+                    </motion.span>
+                  </div>
+                  <ResultGrid />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * The "generated timetable" grid shown in WorkflowDemo's result phase —
+ * light-theme sibling of TimetableMockup further down this file, sized
+ * and paced for a section that loops every few seconds rather than
+ * playing once on scroll-into-view.
+ */
+function ResultGrid() {
+  const rows = ['P1', 'P2', 'P3', 'P4']
+  const cols = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+  const subjects = ['Math', 'Science', 'English', 'PE', 'Art', 'History']
+  // Solid black/grey blocks (an earlier pass) read as flat/dull rather
+  // than "polished monochrome" once actually in motion — soft tinted
+  // pills (light color fill + matching dark text, a common dashboard
+  // pattern) keep the page's restrained feel while still being pleasant
+  // to look at, each subject visually distinct without a saturated
+  // full-color block.
+  const colors = [
+    { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
+    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+    { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
+    { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100' },
+    { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
+    { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
+  ]
+
+  return (
+    <div className="grid grid-cols-[36px_repeat(5,1fr)] gap-2 text-[11px]">
+      <div />
+      {cols.map((c) => (
+        <div key={c} className="pb-1 text-center font-medium text-neutral-400">
+          {c}
+        </div>
+      ))}
+      {rows.map((r, ri) => (
+        <Fragment key={r}>
+          <div className="flex items-center text-neutral-400">{r}</div>
+          {cols.map((c, ci) => {
+            const subject = subjects[(ri * 5 + ci * 3) % subjects.length]
+            const color = colors[(ri + ci) % colors.length]
+            return (
+              <motion.div
+                key={`${r}-${c}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: (ri * 5 + ci) * 0.03, duration: 0.3 }}
+                className={`${color.bg} ${color.text} ${color.border} rounded-md border px-1.5 py-2 text-center font-semibold`}
+              >
+                {subject}
+              </motion.div>
+            )
+          })}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A single-entry "trust bar," modeled on the logo-row pattern shown in
+ * the RoomMaster-style reference screenshot ("Powering thousands of
+ * hotels worldwide" + a scrolling row of muted grayscale logos) — but
+ * honest about where the product actually is. Shishya Public School,
+ * Dehradun is the real first customer (see the founder conversation this
+ * was built alongside); "Built for schools like" frames it as an
+ * example/design partner instead of implying a customer base ("thousands
+ * worldwide") that doesn't exist yet.
+ *
+ * Reuses the Marquee component built for the feature-highlight strip
+ * elsewhere on the page — with only one real entry, Marquee's built-in
+ * "render the content twice, scroll by exactly one copy's width" trick
+ * still produces a continuous, non-jumpy loop (it just loops the same
+ * logo), which is exactly what was asked for rather than waiting until
+ * there's a real multi-school roster to justify a logo row.
+ *
+ * The circular "SPS" mark is an explicit placeholder monogram, not the
+ * school's real logo (no logo file has been provided yet) — swap the
+ * `<div>` below for an `<img>` once the actual logo is available.
+ */
+function TrustBar() {
+  const logoItem = (
+    <div className="flex items-center gap-3 px-8">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold tracking-tight text-slate-400">
+        SPS
+      </div>
+      <div className="text-left">
+        <div className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-400">
+          Shishya Public School
+        </div>
+        <div className="text-xs text-slate-400">Dehradun</div>
+      </div>
+    </div>
+  )
+
+  return (
+    <section className="border-t border-slate-100 bg-white py-16">
+      <div className="mx-auto max-w-3xl px-6 text-center">
+        <p className="font-serif text-2xl text-slate-700 md:text-3xl">Built for schools like</p>
+      </div>
+      <div className="mt-10 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+        <Marquee items={logoItem} speed={16} />
+      </div>
+    </section>
+  )
+}
+
+// ⚠️ PLACEHOLDER METRICS — NOT REAL. Timetablz has exactly one real
+// customer (Shishya Public School, Dehradun; see TrustBar) as of when
+// this was written. These numbers were requested explicitly as
+// stand-in/mockup content while the site isn't live yet, with an explicit
+// plan to replace them with real figures once there's an actual school
+// roster to report on (see the founder conversation this was built
+// alongside). DO NOT ship this section to production without swapping
+// these for real, verifiable numbers first — publishing fabricated
+// customer/usage counts on a live site is a false-advertising risk, not
+// just a copy nitpick.
+const CAPABILITY_STATS = [
+  { n: '01', label: 'Schools serviced', value: '100+', unit: 'across India' },
+  { n: '02', label: 'Teachers scheduled', value: '1,000+', unit: 'and counting' },
+  { n: '03', label: 'Students scheduled', value: '10,000+', unit: 'every term' },
+  { n: '04', label: 'Hours saved', value: '200+', unit: 'per school, per term' },
+]
+
+/**
+ * A big-number stats section modeled on Papermark's "Total deal value
+ * running through Papermark. $55,000,000,000" pattern. See the loud
+ * comment on CAPABILITY_STATS above — these are placeholder numbers, not
+ * real usage data, by explicit instruction while the site is still
+ * pre-launch. Swap the headline number and the four columns for real
+ * figures before this section ever reaches production.
+ */
+function MetricsSection() {
+  return (
+    <section className="border-t border-neutral-100 bg-white px-6 py-24">
+      <div className="mx-auto max-w-6xl">
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={fadeUp}
+          transition={{ duration: 0.5 }}
+        >
+          <p className="text-2xl text-neutral-900 md:text-3xl">
+            Students already being scheduled with Timetablz.
+          </p>
+          <p className="mt-4 text-7xl font-semibold tracking-tight text-neutral-900 tabular-nums md:text-8xl">
+            10,000+
+          </p>
+        </motion.div>
+
+        <div className="mt-10 text-[13px] uppercase tracking-wide text-neutral-500">
+          100+ schools across India trust Timetablz
+        </div>
+
+        {/* Stacks with horizontal divider rules below `lg` (a vertical-line
+            grid only reads cleanly with all four in a single row — see
+            Papermark's reference, which is a desktop-width screenshot),
+            switches to Papermark's vertical-line-between-columns layout
+            at `lg` via divide-x instead of a gap. */}
+        <div className="mt-8 divide-y divide-neutral-200 border-t border-neutral-200 pt-8 lg:grid lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
+          {CAPABILITY_STATS.map((stat, i) => (
+            <motion.div
+              key={stat.n}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, amount: 0.3 }}
+              variants={fadeUp}
+              transition={{ duration: 0.4, delay: i * 0.08 }}
+              className="py-6 first:pt-0 lg:py-0 lg:px-8 lg:first:pl-0"
+            >
+              <p className="text-[13px] text-neutral-400">{stat.n}</p>
+              <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-neutral-900">{stat.label}</p>
+              <p className="mt-4 text-4xl font-semibold tracking-tight text-neutral-900 tabular-nums">
+                {stat.value}
+                <span className="ml-1 text-sm font-normal normal-case text-neutral-400">{stat.unit}</span>
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * A black/white/grey riff on the "Why hoteliers choose roommaster" pattern
+ * from the reference screenshots: a serif headline, then a stack of large
+ * soft rounded cards (some half-width, one full-width) each pairing a
+ * short claim with a small supporting visual and a couple of floating
+ * pill badges. Kept deliberately restrained relative to the reference —
+ * one or two badges per card, muted geometry instead of a colorful
+ * illustration — after earlier attempts at "decorative product graphics"
+ * on this page read as cluttered (see FloatingTimetableCard's removal
+ * further up the file's history). No invented performance numbers (no
+ * "35% RevPAR"-style stat) since there's no usage data yet to back one —
+ * see this file's top docstring on the same principle for pricing/
+ * testimonials.
+ */
+function WhyChoose() {
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-24">
+      <motion.h2
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, amount: 0.3 }}
         variants={fadeUp}
         transition={{ duration: 0.5 }}
-        className="mx-auto mb-14 max-w-2xl text-center"
+        className="mx-auto max-w-3xl text-center font-serif text-4xl font-medium leading-tight tracking-tight text-neutral-900 md:text-5xl"
       >
-        <h2 className="text-3xl font-semibold tracking-tight">Everything the job actually needs</h2>
-        <p className="mt-3 text-slate-500">
-          Not a generic scheduler with "school" bolted on, but built around how Indian schools and colleges
-          actually plan a term.
-        </p>
-      </motion.div>
+        Why schools choose Timetablz
+      </motion.h2>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((f, i) => (
-          <motion.div
-            key={f.title}
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.3 }}
-            variants={fadeUp}
-            transition={{ duration: 0.4, delay: (i % 3) * 0.08 }}
-            whileHover={{ y: -4 }}
-            className="h-full"
-          >
-            {/* h-full here (and on the motion.div above) so the visible
-                bordered box actually fills the row height the CSS grid
-                already stretches its wrapper to, instead of just sizing
-                to its own text — otherwise a card with less copy than
-                its row-mates left its border sitting short of where the
-                row actually ends, making rows look ragged whenever card
-                lengths weren't hand-tuned to match exactly. */}
-            <GlowCard className="flex h-full flex-col rounded-xl border border-slate-200 p-6 transition-shadow hover:shadow-lg hover:shadow-slate-200/60">
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white">
-                {FEATURE_ICONS[f.icon]}
-              </div>
-              <h3 className="font-medium">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-slate-500">{f.body}</p>
-            </GlowCard>
-          </motion.div>
-        ))}
+      <div className="mt-14 grid gap-6 md:grid-cols-2">
+        <WhyCard title="Turns weeks of work into an afternoon">
+          Type your scheduling rules as plain sentences instead of wrestling with spreadsheet formulas — the
+          solver builds every section's timetable at once.
+        </WhyCard>
+        <WhyCard title="Built around how schools actually run">
+          Not a generic scheduler with "school" bolted on — periods, sections, subject-load limits, and
+          teacher availability are first-class from day one.
+        </WhyCard>
+      </div>
+
+      <div className="mt-6">
+        <WhyCard wide title="One connected workflow">
+          Data entry, constraints, generation, fine-tuning, and export all live in one place — no juggling a
+          spreadsheet, a messaging thread, and a printed draft separately.
+        </WhyCard>
+      </div>
+
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <WhyCard title="No training manual required">
+          If you can describe a rule in a sentence, you can use it — most admins are comfortable within their
+          first session.
+        </WhyCard>
+        <WhyCard title="Works wherever you're planning">
+          Browser-based, no installs — pull it up on a laptop in the staff room or a tablet during a
+          scheduling meeting.
+        </WhyCard>
       </div>
     </section>
+  )
+}
+
+/**
+ * Text-only for now, deliberately — the earlier version paired each card
+ * with a small abstract SVG/mockup visual, but those are coming out until
+ * the rest of the site's UI is settled, per the plan to swap in real
+ * product photography once it exists rather than keep placeholder
+ * graphics around. `wide` just shortens the min-height for the full-width
+ * card so it doesn't look like empty space now that there's no visual
+ * filling the lower half.
+ */
+function WhyCard({ title, wide = false, children }) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.25 }}
+      variants={fadeUp}
+      transition={{ duration: 0.5 }}
+      className={`rounded-3xl border border-neutral-100 bg-neutral-50 p-8 md:p-10 ${wide ? 'min-h-[160px]' : 'min-h-[200px]'}`}
+    >
+      <h3 className="font-serif text-2xl font-medium text-neutral-900">{title}</h3>
+      <p className="mt-3 max-w-md text-[15px] leading-relaxed text-neutral-500">{children}</p>
+    </motion.div>
   )
 }
 
@@ -524,9 +1004,61 @@ function Pricing({ onGetStarted }) {
   )
 }
 
+// Different width ratios per tile (narrow/medium/wide) to match the
+// uneven-column photo-grid look from the Papermark reference, rather than
+// three equal boxes. Also a distinct dark gradient tone per tile, used as
+// a stand-in for tiles that don't have a real photo yet — varying the
+// gradient at least keeps those from reading as one flat repeated block.
+// All three tiles now carry a real Shishya Public School photo (see the
+// comment on the third entry — confirmed with the founder that the
+// TESTIMONIALS quote text is still illustrative/placeholder, not
+// something this school actually said). Pairing a real, identifiable
+// photo with an invented quote would read as putting words in their
+// mouth, so every photo tile overrides the quote with a plain factual
+// caption instead (see the `image` check in the render below) rather
+// than reusing TESTIMONIALS[i].quote/role. Note the entrance photo here
+// and the third tile's photo are the same shot the founder uploaded
+// twice — left as-is per the literal request, worth swapping one out for
+// a distinct angle later if that's noticeable in the row.
+const TESTIMONIAL_TILE_STYLES = [
+  {
+    flex: 'md:flex-[1]',
+    gradient: 'from-neutral-800 to-neutral-950',
+    image: shishyaPublicSchoolGatePhoto,
+    caption: 'Shishya Public School, Dehradun',
+    subcaption: 'Campus gate',
+  },
+  {
+    flex: 'md:flex-[1.2]',
+    gradient: 'from-neutral-700 to-neutral-950',
+    image: shishyaPublicSchoolEntrancePhoto,
+    caption: 'Shishya Public School, Dehradun',
+    subcaption: 'Main building',
+  },
+  {
+    flex: 'md:flex-[1.6]',
+    gradient: 'from-neutral-800 via-neutral-900 to-black',
+    image: shishyaPublicSchoolPhoto,
+    caption: 'Shishya Public School, Dehradun',
+    subcaption: 'One of the first schools using Timetablz',
+  },
+]
+
+/**
+ * Papermark-style "Real impact for real teams" photo-tile layout, applied
+ * to this page's existing (already-honest — see TESTIMONIALS above,
+ * role-only attribution, no invented names/schools) testimonials.
+ *
+ * The reference uses real photos of real customers/teams. Two of the
+ * three tiles still don't have one (no photography of any other customer,
+ * and no image-generation tool available in this session), so those stay
+ * a plain dark gradient rather than a stock photo standing in for a real
+ * one — swap each remaining gradient div for a real photo once one
+ * exists, the overlay/quote positioning already works with either.
+ */
 function Testimonials() {
   return (
-    <section className="bg-slate-50/60 py-24">
+    <section id="customers" className="bg-black py-24">
       <div className="mx-auto max-w-6xl px-6">
         <motion.h2
           initial="hidden"
@@ -534,37 +1066,143 @@ function Testimonials() {
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="mb-14 text-center text-3xl font-semibold tracking-tight"
+          className="mb-10 font-serif text-3xl font-medium tracking-tight text-white md:text-4xl"
         >
           What schools are saying
         </motion.h2>
-        <div className="grid gap-6 md:grid-cols-3">
-          {TESTIMONIALS.map((t, i) => (
-            <motion.div
-              key={t.role + i}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, amount: 0.3 }}
-              variants={fadeUp}
-              transition={{ duration: 0.4, delay: i * 0.1 }}
-              className="rounded-xl border border-slate-200 bg-white p-6"
-            >
-              <p className="text-sm leading-relaxed text-slate-600">"{t.quote}"</p>
-              <p className="mt-4 text-xs font-medium text-slate-500">{t.role}</p>
-            </motion.div>
-          ))}
+        <div className="flex flex-col gap-4 md:flex-row">
+          {TESTIMONIALS.map((t, i) => {
+            const style = TESTIMONIAL_TILE_STYLES[i % TESTIMONIAL_TILE_STYLES.length]
+            return (
+              // Hover motion is plain CSS (`group`/`group-hover:`), not a
+              // framer-motion `whileHover` — this div already has a
+              // `transition` prop driving its scroll-into-view fade/rise,
+              // and framer applies one `transition` config to every
+              // animation state including hover, which would wrongly
+              // delay the hover response by `i * 0.1`s too. Keeping hover
+              // as separate CSS transitions sidesteps that entirely.
+              <motion.div
+                key={t.role + i}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, amount: 0.3 }}
+                variants={fadeUp}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+                className={`group relative min-h-[380px] flex-1 cursor-default overflow-hidden rounded-xl shadow-lg shadow-black/0 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-black/40 ${style.flex}`}
+              >
+                {/* The "photo" (a real one where available, a gradient
+                    stand-in otherwise) zooms in slightly on hover — the
+                    same subtle Ken Burns-style effect Papermark's photo
+                    tiles use — while the overlay and text stay put so the
+                    caption/quote never jitters. */}
+                {style.image ? (
+                  <img
+                    src={style.image}
+                    alt={style.caption}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+                  />
+                ) : (
+                  <div
+                    className={`absolute inset-0 bg-gradient-to-br ${style.gradient} transition-transform duration-500 ease-out group-hover:scale-110`}
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent transition-colors duration-300 group-hover:from-black/95" />
+                <div className="absolute bottom-0 left-0 right-0 p-6 transition-transform duration-300 ease-out group-hover:-translate-y-1">
+                  {style.image ? (
+                    <>
+                      <p className="text-[15px] font-medium leading-snug text-white">{style.caption}</p>
+                      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-neutral-400 opacity-80 transition-opacity duration-300 group-hover:opacity-100">
+                        {style.subcaption}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[15px] font-medium leading-snug text-white">"{t.quote}"</p>
+                      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-neutral-400 opacity-80 transition-opacity duration-300 group-hover:opacity-100">
+                        {t.role}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       </div>
     </section>
   )
 }
 
+// Every link here goes somewhere real — an in-page anchor already used
+// elsewhere on this page, a mailto, or one of the two legal pages built
+// in LegalPage.jsx/PrivacyPolicyPage.jsx/TermsOfServicePage.jsx.
+// Deliberately NOT padded out with Papermark's full column count (Use
+// Cases, Alternatives, a blog, a help center, comparison pages, ...) —
+// this site doesn't have any of that content, and a footer full of links
+// to pages that don't exist would look broken rather than substantial.
+const FOOTER_COLUMNS = [
+  {
+    // "How it works" link removed along with that section (see the render
+    // comment above HowItWorks) — add back once it's wanted again. Pricing
+    // now points at the standalone PricingPage.jsx (`?page=pricing`)
+    // instead of the removed in-page `#pricing` anchor.
+    heading: 'Product',
+    links: [
+      { label: 'Why Timetablz', href: '?page=why' },
+      { label: 'Pricing', href: '?page=pricing' },
+    ],
+  },
+  {
+    // No "Contact us" mailto here yet — the business email/domain hasn't
+    // been decided (see the founder conversation on domain naming), and a
+    // mailto to a made-up address would silently bounce. Add it back once
+    // that's settled.
+    heading: 'Company',
+    links: [
+      { label: 'Customers', href: '#customers' },
+      { label: 'Support', href: '?page=support' },
+    ],
+  },
+  {
+    heading: 'Legal',
+    links: [
+      { label: 'Privacy Policy', href: '?page=privacy' },
+      { label: 'Terms of Service', href: '?page=terms' },
+    ],
+  },
+]
+
 function Footer() {
   return (
-    <footer className="border-t border-slate-100 py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-xs text-slate-500 md:flex-row">
-        <span>© {new Date().getFullYear()} Timetable. All rights reserved.</span>
-        <span>Made for schools & colleges, not spreadsheets.</span>
+    <footer className="border-t border-white/10 bg-black py-16 text-neutral-400">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
+          <div>
+            <span className="text-[17px] font-bold tracking-tight text-white">Timetablz</span>
+            <p className="mt-3 max-w-[220px] text-sm leading-relaxed">
+              Instant, clash-free timetables for schools and colleges.
+            </p>
+          </div>
+
+          {FOOTER_COLUMNS.map((col) => (
+            <div key={col.heading}>
+              <p className="text-sm font-semibold text-white">{col.heading}</p>
+              <ul className="mt-4 space-y-3 text-sm">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <a href={link.href} className="hover:text-white">
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-14 border-t border-white/10 pt-6 text-xs">
+          © {new Date().getFullYear()} Timetablz. All rights reserved.
+        </div>
       </div>
     </footer>
   )

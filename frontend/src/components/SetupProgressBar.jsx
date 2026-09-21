@@ -36,7 +36,7 @@ export default function SetupProgressBar({ progress, onNavigate }) {
     >
       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
         <div
-          className="h-full rounded-full bg-indigo-600 transition-all"
+          className="h-full rounded-full bg-neutral-900 transition-all"
           style={{ width: `${(doneRequiredCount / requiredSteps.length) * 100}%` }}
         />
       </div>

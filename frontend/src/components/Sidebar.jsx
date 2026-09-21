@@ -174,7 +174,7 @@ export default function Sidebar({
   return (
     <aside className="flex w-68 flex-none flex-col gap-4 border-r border-slate-200 bg-white p-3.5" style={{ width: 272 }}>
       <div className="flex items-center gap-2.5 px-1">
-        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-indigo-600 text-sm font-semibold text-slate-900">
+        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-neutral-900 text-sm font-semibold text-slate-900">
           {schoolName?.[0]?.toUpperCase() || 'S'}
         </div>
         <div className="min-w-0">
@@ -234,7 +234,7 @@ export default function Sidebar({
           <button
             onClick={() => onGoToDataEntry('subjects')}
             className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium ${
-              activeDataEntrySubView === 'subjects' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-600 hover:bg-slate-50'
+              activeDataEntrySubView === 'subjects' ? 'bg-neutral-100 text-neutral-900' : 'text-slate-600 hover:bg-slate-50'
             }`}
             title="What the school teaches — not tied to any one section"
           >
@@ -247,7 +247,7 @@ export default function Sidebar({
           <button
             onClick={() => onGoToDataEntry('teachers')}
             className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium ${
-              activeDataEntrySubView === 'teachers' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-600 hover:bg-slate-50'
+              activeDataEntrySubView === 'teachers' ? 'bg-neutral-100 text-neutral-900' : 'text-slate-600 hover:bg-slate-50'
             }`}
             title="Who teaches, and which subjects they cover — not tied to any one section"
           >
@@ -262,7 +262,7 @@ export default function Sidebar({
           <button
             onClick={() => onGoToDataEntry('setup')}
             className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium ${
-              activeDataEntrySubView === 'setup' ? 'bg-indigo-50 text-indigo-900' : 'text-slate-600 hover:bg-slate-50'
+              activeDataEntrySubView === 'setup' ? 'bg-neutral-100 text-neutral-900' : 'text-slate-600 hover:bg-slate-50'
             }`}
             title="Periods and rooms — the school's foundational, one-time setup"
           >
@@ -294,7 +294,7 @@ export default function Sidebar({
           {!readOnly && onReorderGrades && orderableGradeKeys.length > 1 && (
             <button
               onClick={() => setReorderMode((v) => !v)}
-              className={`text-xs ${reorderMode ? 'font-medium text-indigo-600' : 'text-slate-400 hover:text-slate-700'}`}
+              className={`text-xs ${reorderMode ? 'font-medium text-neutral-900' : 'text-slate-400 hover:text-slate-700'}`}
               title="Reorder grades"
             >
               {reorderMode ? 'Done' : 'Reorder'}
@@ -326,14 +326,14 @@ export default function Sidebar({
             <button
               type="button"
               onClick={() => setAddMode('single')}
-              className={`rounded px-2 py-0.5 font-medium ${addMode === 'single' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+              className={`rounded px-2 py-0.5 font-medium ${addMode === 'single' ? 'bg-neutral-900 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
             >
               One
             </button>
             <button
               type="button"
               onClick={() => setAddMode('range')}
-              className={`rounded px-2 py-0.5 font-medium ${addMode === 'range' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
+              className={`rounded px-2 py-0.5 font-medium ${addMode === 'range' ? 'bg-neutral-900 text-white' : 'text-slate-500 hover:bg-slate-200'}`}
             >
               Range
             </button>
@@ -361,7 +361,7 @@ export default function Sidebar({
               />
               <button
                 disabled={submittingSection}
-                className="rounded bg-indigo-600 py-1 text-xs font-medium text-white disabled:opacity-60"
+                className="rounded bg-neutral-900 py-1 text-xs font-medium text-white disabled:opacity-60"
               >
                 {submittingSection ? 'Adding…' : 'Add section'}
               </button>
@@ -430,7 +430,7 @@ export default function Sidebar({
                       disabled={orderableGradeKeys.indexOf(grade) === 0}
                       title={`Move "${grade}" up`}
                       aria-label={`Move ${grade} up`}
-                      className="text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                      className="text-slate-400 hover:text-neutral-900 disabled:opacity-30 disabled:hover:text-slate-400"
                     >
                       ▲
                     </button>
@@ -442,7 +442,7 @@ export default function Sidebar({
                       disabled={orderableGradeKeys.indexOf(grade) === orderableGradeKeys.length - 1}
                       title={`Move "${grade}" down`}
                       aria-label={`Move ${grade} down`}
-                      className="text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                      className="text-slate-400 hover:text-neutral-900 disabled:opacity-30 disabled:hover:text-slate-400"
                     >
                       ▼
                     </button>
@@ -457,7 +457,7 @@ export default function Sidebar({
                       }}
                       title={`Rename "${grade}" (applies to all its sections)`}
                       aria-label={`Rename ${grade}`}
-                      className="opacity-0 text-slate-300 hover:text-indigo-600 group-hover:opacity-100 focus:opacity-100"
+                      className="opacity-0 text-slate-300 hover:text-neutral-900 group-hover:opacity-100 focus:opacity-100"
                     >
                       ✎
                     </button>
@@ -513,10 +513,10 @@ export default function Sidebar({
                           <motion.div
                             layoutId="sidebar-active-pill"
                             transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-                            className="absolute inset-0 rounded border-l-2 border-indigo-600 bg-indigo-50"
+                            className="absolute inset-0 rounded border-l-2 border-neutral-900 bg-neutral-100"
                           />
                         )}
-                        <span className={`relative z-10 ${selected ? 'font-medium text-indigo-900' : 'text-slate-600'}`}>
+                        <span className={`relative z-10 ${selected ? 'font-medium text-neutral-900' : 'text-slate-600'}`}>
                           Section {cg.name}
                         </span>
                         {!readOnly && (
@@ -529,7 +529,7 @@ export default function Sidebar({
                                 }}
                                 title={`Edit Section ${cg.name}`}
                                 aria-label={`Edit Section ${cg.name}`}
-                                className="text-slate-300 hover:text-indigo-600 focus:opacity-100"
+                                className="text-slate-300 hover:text-neutral-900 focus:opacity-100"
                               >
                                 ✎
                               </button>
@@ -608,13 +608,13 @@ function GradeRenameForm({ initialValue, onSave, onCancel }) {
           if (e.key === 'Escape') onCancel()
         }}
         onFocus={(e) => e.target.select()}
-        className="min-w-0 flex-1 rounded border border-indigo-400 px-1.5 py-0.5 text-sm focus:outline-none"
+        className="min-w-0 flex-1 rounded border border-neutral-400 px-1.5 py-0.5 text-sm focus:outline-none"
       />
       <button
         onClick={handleSave}
         disabled={saving}
         title="Save"
-        className="text-slate-400 hover:text-indigo-600 disabled:opacity-50"
+        className="text-slate-400 hover:text-neutral-900 disabled:opacity-50"
       >
         ✓
       </button>
@@ -651,7 +651,7 @@ function SectionEditForm({ classGroup, allGrades, onSave, onCancel }) {
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded bg-indigo-50/60 px-2 py-1.5">
+    <div className="flex flex-col gap-1 rounded bg-neutral-100/60 px-2 py-1.5">
       <label htmlFor={`edit-grade-${classGroup.id}`} className="sr-only">Grade</label>
       <input
         id={`edit-grade-${classGroup.id}`}
@@ -661,7 +661,7 @@ function SectionEditForm({ classGroup, allGrades, onSave, onCancel }) {
         onChange={(e) => setGrade(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && onCancel()}
         placeholder="Grade"
-        className="rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-indigo-500 focus:outline-none"
+        className="rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-neutral-900 focus:outline-none"
       />
       <datalist id={listId}>
         {allGrades.map((g) => (
@@ -681,7 +681,7 @@ function SectionEditForm({ classGroup, allGrades, onSave, onCancel }) {
           if (e.key === 'Escape') onCancel()
         }}
         placeholder="Section name"
-        className="rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-indigo-500 focus:outline-none"
+        className="rounded border border-slate-300 px-1.5 py-0.5 text-xs focus:border-neutral-900 focus:outline-none"
       />
       <div className="flex justify-end gap-2 pt-0.5">
         <button onClick={onCancel} disabled={saving} className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50">
@@ -690,7 +690,7 @@ function SectionEditForm({ classGroup, allGrades, onSave, onCancel }) {
         <button
           onClick={handleSave}
           disabled={saving || !name.trim()}
-          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+          className="text-xs font-medium text-neutral-900 hover:text-neutral-700 disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>

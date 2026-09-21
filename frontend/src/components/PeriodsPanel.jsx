@@ -59,7 +59,7 @@ export default function PeriodsPanel({ schoolId, periods, onCreate, onDelete, re
           <select
             value={dayOfWeek}
             onChange={(e) => setDayOfWeek(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
           >
             {DAY_NAMES.map((d, i) => (
               <option key={i} value={i}>
@@ -72,15 +72,15 @@ export default function PeriodsPanel({ schoolId, periods, onCreate, onDelete, re
             onChange={(e) => setOrder(e.target.value)}
             placeholder="Order (1, 2, 3…)"
             type="number"
-            className="w-36 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="w-36 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
           />
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Label (e.g. 9:00-9:45)"
-            className="flex-1 min-w-[160px] rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="flex-1 min-w-[160px] rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
           />
-          <button className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+          <button className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
             Add
           </button>
         </form>

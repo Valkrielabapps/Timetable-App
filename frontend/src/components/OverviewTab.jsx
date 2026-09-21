@@ -49,7 +49,7 @@ export default function OverviewTab({ classGroup, onNavigate, progress }) {
         <div className="flex items-center gap-3">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-indigo-600 transition-all"
+              className="h-full rounded-full bg-neutral-900 transition-all"
               style={{ width: `${(doneRequiredCount / requiredSteps.length) * 100}%` }}
             />
           </div>
@@ -70,7 +70,7 @@ export default function OverviewTab({ classGroup, onNavigate, progress }) {
           </p>
           <button
             onClick={() => onNavigate('timetable')}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
           >
             {steps.find((s) => s.key === 'generate')?.done ? 'Review timetable' : 'Build the timetable'}
           </button>
@@ -105,8 +105,8 @@ export default function OverviewTab({ classGroup, onNavigate, progress }) {
 function StepRow({ index, step, current, onClick, big }) {
   if (big) {
     return (
-      <div className="flex flex-col items-start gap-3 rounded-lg border border-indigo-600 bg-indigo-50/60 p-5">
-        <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+      <div className="flex flex-col items-start gap-3 rounded-lg border border-neutral-900 bg-neutral-100/60 p-5">
+        <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
           Do this next
         </span>
         <div>
@@ -115,7 +115,7 @@ function StepRow({ index, step, current, onClick, big }) {
         </div>
         <button
           onClick={onClick}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
         >
           Continue
         </button>
@@ -126,7 +126,7 @@ function StepRow({ index, step, current, onClick, big }) {
   return (
     <div
       className={`flex items-center gap-4 rounded-lg border p-4 ${
-        current ? 'border-indigo-600 bg-indigo-50/60' : 'border-slate-200'
+        current ? 'border-neutral-900 bg-neutral-100/60' : 'border-slate-200'
       }`}
     >
       <div
@@ -134,7 +134,7 @@ function StepRow({ index, step, current, onClick, big }) {
           step.done
             ? 'bg-emerald-600 text-white'
             : current
-              ? 'bg-indigo-600 text-white'
+              ? 'bg-neutral-900 text-white'
               : 'bg-slate-100 text-slate-400'
         }`}
       >
@@ -150,7 +150,7 @@ function StepRow({ index, step, current, onClick, big }) {
             </span>
           )}
           {current && (
-            <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+            <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
               Do this next
             </span>
           )}
@@ -162,7 +162,7 @@ function StepRow({ index, step, current, onClick, big }) {
         onClick={onClick}
         className={`flex-none rounded-md px-3 py-1.5 text-sm font-medium ${
           current
-            ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+            ? 'bg-neutral-900 text-white hover:bg-neutral-700'
             : 'border border-slate-300 text-slate-700 hover:bg-slate-50'
         }`}
       >

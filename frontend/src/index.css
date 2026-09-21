@@ -1,7 +1,23 @@
+/* Fraunces (serif display) for big headlines — pairs with the black/white
+   Griffin-style Hero redesign in LandingPage.jsx, which looked mismatched
+   using the browser's plain default system font. Inter (sans) replaces
+   that same default everywhere else, for a more deliberate, less generic
+   look than "ui-sans-serif, system-ui" without touching every component
+   individually — both are set as the site's font-serif/font-sans via the
+   @theme override below, so existing `font-sans`/`font-serif` utility
+   classes (and the sans default already implied everywhere) just pick
+   these up automatically. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", ui-serif, Georgia, serif;
+}
 
 body {
   margin: 0;
+  font-family: var(--font-sans);
 }
 
 /* Brand-themed browser surfaces: without these, text selection and the

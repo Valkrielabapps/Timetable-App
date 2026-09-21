@@ -472,7 +472,7 @@ export default function DataEntryTab({
       {subView === 'plan' ? (
         <button
           onClick={() => onSubViewChange('subjects')}
-          className="w-fit text-xs font-medium text-indigo-600 hover:underline"
+          className="w-fit text-xs font-medium text-neutral-900 hover:underline"
         >
           ← Manage school subjects &amp; teachers
         </button>
@@ -487,7 +487,7 @@ export default function DataEntryTab({
                 onClick={() => onSubViewChange(v.id)}
                 className={`-mb-px border-b-2 px-3 py-2 font-medium ${
                   subView === v.id
-                    ? 'border-indigo-600 text-indigo-700'
+                    ? 'border-neutral-900 text-neutral-700'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -736,7 +736,7 @@ function PlanSection({
         <p className="mb-2">No subjects yet — add some on the Subjects page first.</p>
         <button
           onClick={onGoToSubjects}
-          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
         >
           Go to Subjects
         </button>
@@ -789,7 +789,7 @@ function PlanSection({
         )}
       </div>
 
-      <div className="rounded-md border border-indigo-200 bg-indigo-50/60 p-4 text-sm text-slate-600">
+      <div className="rounded-md border border-neutral-200 bg-neutral-100/60 p-4 text-sm text-slate-600">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-1.5">
             <strong>{totalWeeklyPeriods}</strong> total periods/week for
@@ -800,7 +800,7 @@ function PlanSection({
                   id="active-section-select"
                   value={activeSectionId ?? ''}
                   onChange={(e) => onActiveSectionChange(Number(e.target.value))}
-                  className="rounded-md border border-indigo-300 bg-white px-2 py-1 text-sm font-medium text-indigo-700 focus:border-indigo-500 focus:outline-none"
+                  className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm font-medium text-neutral-700 focus:border-neutral-900 focus:outline-none"
                 >
                   {classGroups.map((cg) => (
                     <option key={cg.id} value={cg.id}>
@@ -902,7 +902,7 @@ function PlanSection({
                       onSetPreferredTeacher(subject.id, e.target.value ? Number(e.target.value) : null)
                     }
                     title="Which teacher covers this section — pinning one speeds up generation for large schools"
-                    className="rounded border border-indigo-200 bg-indigo-50/40 px-1.5 py-1 text-xs text-indigo-700 hover:bg-indigo-50"
+                    className="rounded border border-neutral-200 bg-neutral-100/40 px-1.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
                   >
                     <option value="">Any (let solver choose)</option>
                     {qualifiedTeachers.map((t) => (
@@ -993,7 +993,7 @@ function SectionSubjectPicker({ subjects, selectedSubjectIds, onToggleSubject, o
         <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
           <button
             onClick={onDone}
-            className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             Continue to periods/week →
           </button>
@@ -1027,7 +1027,7 @@ function CopyTargetPicker({ otherSections, copyTargetIds, onCopyTargetIdsChange,
     <div className="absolute left-0 top-full z-10 mt-1 w-64 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500">Copy to which sections?</span>
-        <button type="button" onClick={toggleAll} className="text-xs font-medium text-indigo-600 hover:underline">
+        <button type="button" onClick={toggleAll} className="text-xs font-medium text-neutral-900 hover:underline">
           {allSelected ? 'Clear' : 'Select all'}
         </button>
       </div>
@@ -1051,7 +1051,7 @@ function CopyTargetPicker({ otherSections, copyTargetIds, onCopyTargetIdsChange,
           type="button"
           onClick={onConfirm}
           disabled={copying || copyTargetIds.length === 0}
-          className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
           {copying ? 'Copying…' : `Copy to ${copyTargetIds.length || ''} section${copyTargetIds.length === 1 ? '' : 's'}`}
         </button>

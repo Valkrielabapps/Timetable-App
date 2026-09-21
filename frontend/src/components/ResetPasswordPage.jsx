@@ -53,7 +53,7 @@ export default function ResetPasswordPage({ token, onReset }) {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
           </div>
 
@@ -66,7 +66,7 @@ export default function ResetPasswordPage({ token, onReset }) {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-1 rounded-md bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="mt-1 rounded-md bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {submitting ? 'Resetting…' : 'Reset password'}
           </button>

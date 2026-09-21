@@ -171,7 +171,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
                   setMode('login')
                   setForgotSubmitted(false)
                 }}
-                className="mt-3 block w-full text-indigo-600 underline underline-offset-2 hover:text-indigo-700"
+                className="mt-3 block w-full text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
               >
                 Back to sign in
               </button>
@@ -186,7 +186,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@school.edu"
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
                 />
               </div>
 
@@ -209,14 +209,14 @@ export default function AuthPage({ onAuthenticated, onBack }) {
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={loading}
-                className="mt-1 rounded-md bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="mt-1 rounded-md bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
               >
                 {loading ? 'Sending…' : 'Send reset link'}
               </motion.button>
               <button
                 type="button"
                 onClick={() => setMode('login')}
-                className="text-center text-sm text-indigo-600 underline underline-offset-2 hover:text-indigo-700"
+                className="text-center text-sm text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
               >
                 Back to sign in
               </button>
@@ -256,7 +256,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
                 />
               </motion.div>
             )}
@@ -269,7 +269,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@school.edu"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
           </div>
           <div>
@@ -281,7 +281,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
             {isLogin && (
               <button
@@ -290,7 +290,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
                   setMode('forgot')
                   setError(null)
                 }}
-                className="mt-1 text-xs text-indigo-600 underline underline-offset-2 hover:text-indigo-700"
+                className="mt-1 text-xs text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
               >
                 Forgot password?
               </button>
@@ -316,7 +316,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="mt-1 rounded-md bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="mt-1 rounded-md bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {loading ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}
           </motion.button>
@@ -327,7 +327,7 @@ export default function AuthPage({ onAuthenticated, onBack }) {
           <button
             type="button"
             onClick={() => setMode(isLogin ? 'signup' : 'login')}
-            className="text-indigo-600 underline underline-offset-2 hover:text-indigo-700"
+            className="text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
           >
             {isLogin ? 'Sign up' : 'Sign in'}
           </button>

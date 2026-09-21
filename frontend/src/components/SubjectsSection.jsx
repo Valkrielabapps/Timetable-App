@@ -114,18 +114,18 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
       </div>
 
       {!readOnly && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-100/40 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h5 className="text-sm font-semibold text-indigo-900">Import subjects</h5>
-              <p className="mt-0.5 text-xs text-indigo-700/80">
+              <h5 className="text-sm font-semibold text-neutral-900">Import subjects</h5>
+              <p className="mt-0.5 text-xs text-neutral-700/80">
                 Upload a spreadsheet instead of adding subjects one at a time.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowImport((v) => !v)}
-              className="flex-none text-xs font-medium text-indigo-700 hover:underline"
+              className="flex-none text-xs font-medium text-neutral-700 hover:underline"
             >
               {showImport ? 'Hide' : 'Show'}
             </button>

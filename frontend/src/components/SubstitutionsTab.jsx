@@ -215,7 +215,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
           <button
             onClick={() => setView('new')}
             className={`px-4 py-2 rounded font-medium transition-colors ${
-              view === 'new' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              view === 'new' ? 'bg-neutral-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             New Substitutions
@@ -223,7 +223,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
           <button
             onClick={() => setView('history')}
             className={`px-4 py-2 rounded font-medium transition-colors ${
-              view === 'history' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              view === 'history' ? 'bg-neutral-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             History
@@ -244,7 +244,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                   setAbsentTeacherIds([])
                   setSubstitutions({})
                 }}
-                className="w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="w-full rounded border-gray-300 shadow-sm focus:border-neutral-900 focus:ring-neutral-900"
               >
                 {DAY_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>{name}</option>
@@ -264,7 +264,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                         type="checkbox"
                         checked={absentTeacherIds.includes(t.id)}
                         onChange={() => toggleAbsentTeacher(t.id)}
-                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                        className="rounded border-gray-300 text-neutral-900 focus:ring-neutral-900 h-4 w-4"
                       />
                       <span className="text-gray-700">{t.name}</span>
                     </label>
@@ -282,7 +282,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                 {emptySlots.length > 0 && (
                   <button
                     onClick={saveSubstitutions}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded shadow-sm hover:bg-indigo-700 font-medium transition-colors"
+                    className="bg-neutral-900 text-white px-4 py-2 rounded shadow-sm hover:bg-neutral-700 font-medium transition-colors"
                   >
                     Save & View Summary
                   </button>
@@ -319,7 +319,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                           <select
                             value={currentPick || ''}
                             onChange={(e) => handleSubstituteChange(entry.id, e.target.value)}
-                            className="w-full rounded border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            className="w-full rounded border-gray-300 shadow-sm focus:border-neutral-900 focus:ring-neutral-900"
                           >
                             <option value="">-- Assign Substitute --</option>
                             {suggested.length > 0 && (
@@ -379,7 +379,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                       
                       return (
                         <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
-                          <div className="font-semibold text-indigo-700">{classGroup?.grade} {classGroup?.name}</div>
+                          <div className="font-semibold text-neutral-700">{classGroup?.grade} {classGroup?.name}</div>
                           <div className="text-gray-600 mb-2">{period?.label || `Period ${period?.order}`}</div>
                           <div className="flex items-center gap-2">
                             <span className="text-red-600 line-through truncate" title={absent?.name}>{absent?.name}</span>

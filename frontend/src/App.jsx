@@ -5,6 +5,11 @@ import LandingPage from './components/LandingPage'
 import AuthPage from './components/AuthPage'
 import AcceptInvitePage from './components/AcceptInvitePage'
 import ResetPasswordPage from './components/ResetPasswordPage'
+import PrivacyPolicyPage from './components/PrivacyPolicyPage'
+import TermsOfServicePage from './components/TermsOfServicePage'
+import PricingPage from './components/PricingPage'
+import SupportPage from './components/SupportPage'
+import WhyTimetablzPage from './components/WhyTimetablzPage'
 import Sidebar from './components/Sidebar'
 import FirstRunWelcome from './components/FirstRunWelcome'
 import OverviewTab from './components/OverviewTab'
@@ -125,7 +130,24 @@ function App() {
   // true once one of those is clicked, revealing AuthPage. Reset to false
   // on logout so signing out lands back on the marketing page, not a bare
   // login form.
-  const [showAuth, setShowAuth] = useState(false)
+  //
+  // Also seeded from `?start=auth` on initial load — PricingPage's CTAs
+  // are a real navigation (full page reload, no client router — see
+  // legalPage below), not a same-page state flip, so a "Get started"
+  // click there has to encode the intent in the URL it navigates to
+  // rather than just calling setShowAuth(true) directly.
+  const [showAuth, setShowAuth] = useState(
+    () => new URLSearchParams(window.location.search).get('start') === 'auth'
+  )
+
+  // Drop `?start=auth` once read above — same reasoning as
+  // handleInviteAccepted/handlePasswordReset below (replaceState, not a
+  // real navigation, so it doesn't re-trigger on a later refresh/back).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('start') === 'auth') {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [])
 
   // This app has no client-side router (see AcceptInvitePage.jsx's
   // docstring) — an invite link is just `?invite=<token>` on the same
@@ -139,6 +161,13 @@ function App() {
   // `?reset=<token>` on the same URL, checked once on load.
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'))
   const [resetHandled, setResetHandled] = useState(false)
+
+  // Same "no client-side router, so read it once from the URL" pattern as
+  // inviteToken/resetToken above — LandingPage.jsx's footer links to
+  // `?page=privacy` / `?page=terms` with a plain <a>, which triggers a
+  // real navigation (full reload) rather than a route change, so this
+  // only needs to be read on initial mount, not watched afterwards.
+  const [legalPage] = useState(() => new URLSearchParams(window.location.search).get('page'))
 
   // On load, if a token is already stored, validate it via /auth/me instead
   // of bouncing straight to the login screen.
@@ -485,6 +514,42 @@ function App() {
     allRequirements,
   })
 
+  // Public, no-auth-required pages — checked before the invite/reset/
+  // session logic below since they don't depend on any of it (a signed-
+  // out visitor, or someone with an unrelated ?invite=/?reset= link still
+  // in their address bar, should see the legal page they clicked through
+  // to, not get routed into an unrelated flow first).
+  if (legalPage === 'privacy') {
+    return <PrivacyPolicyPage onBack={() => window.location.assign(window.location.pathname)} />
+  }
+  if (legalPage === 'terms') {
+    return <TermsOfServicePage onBack={() => window.location.assign(window.location.pathname)} />
+  }
+  if (legalPage === 'pricing') {
+    return (
+      <PricingPage
+        onBack={() => window.location.assign(window.location.pathname)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+      />
+    )
+  }
+  if (legalPage === 'support') {
+    return (
+      <SupportPage
+        onBack={() => window.location.assign(window.location.pathname)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+      />
+    )
+  }
+  if (legalPage === 'why') {
+    return (
+      <WhyTimetablzPage
+        onBack={() => window.location.assign(window.location.pathname)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+      />
+    )
+  }
+
   if (inviteToken && !inviteHandled) {
     return <AcceptInvitePage token={inviteToken} onAccepted={handleInviteAccepted} />
   }
@@ -604,7 +669,7 @@ function App() {
                         <motion.span
                           layoutId="tab-active-pill"
                           transition={{ type: 'spring', stiffness: 500, damping: 40 }}
-                          className="absolute inset-0 rounded-md bg-indigo-600"
+                          className="absolute inset-0 rounded-md bg-neutral-900"
                         />
                       )}
                       <span className="relative z-10">{t.label}</span>
@@ -629,7 +694,7 @@ function App() {
           ) : schools.length === 0 ? (
             <button
               onClick={() => setAddSchoolOpen(true)}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
             >
               Create your school
             </button>
@@ -785,7 +850,7 @@ function App() {
                   onClick={() => setNewInstitutionType(opt.value)}
                   className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium ${
                     newInstitutionType === opt.value
-                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                      ? 'border-neutral-900 bg-neutral-900 text-white'
                       : 'border-slate-300 text-slate-600 hover:bg-slate-50'
                   }`}
                 >
@@ -807,7 +872,7 @@ function App() {
               value={newSchoolName}
               onChange={(e) => setNewSchoolName(e.target.value)}
               placeholder={newInstitutionType === 'college' ? 'e.g. Riverside College of Engineering' : 'e.g. Riverside Public School'}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -824,7 +889,7 @@ function App() {
               <button
                 type="submit"
                 disabled={!newSchoolName.trim() || creatingSchool}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
               >
                 {creatingSchool ? 'Creating…' : 'Create school'}
               </button>

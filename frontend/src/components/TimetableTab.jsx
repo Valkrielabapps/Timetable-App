@@ -282,13 +282,13 @@ export default function TimetableTab({
       <div className="inline-flex w-fit rounded-md border border-slate-300 p-0.5 text-xs">
         <button
           onClick={() => setPage('schedule')}
-          className={`rounded px-3 py-1.5 font-medium ${page === 'schedule' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+          className={`rounded px-3 py-1.5 font-medium ${page === 'schedule' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
         >
           Schedule
         </button>
         <button
           onClick={() => setPage('substitutions')}
-          className={`rounded px-3 py-1.5 font-medium ${page === 'substitutions' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+          className={`rounded px-3 py-1.5 font-medium ${page === 'substitutions' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
         >
           Substitutions
         </button>
@@ -317,7 +317,7 @@ export default function TimetableTab({
             whileTap={{ scale: 0.98 }}
             onClick={handleGenerate}
             disabled={isGenerating}
-            className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {isGenerating ? 'Generating…' : 'Generate Timetable'}
           </motion.button>
@@ -426,13 +426,13 @@ export default function TimetableTab({
               <div className="inline-flex rounded-md border border-slate-300 p-0.5 text-xs">
                 <button
                   onClick={() => setView('section')}
-                  className={`rounded px-3 py-1 ${view === 'section' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+                  className={`rounded px-3 py-1 ${view === 'section' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
                 >
                   By Section
                 </button>
                 <button
                   onClick={() => setView('teacher')}
-                  className={`rounded px-3 py-1 ${view === 'teacher' ? 'bg-indigo-600 text-white' : 'text-slate-600'}`}
+                  className={`rounded px-3 py-1 ${view === 'teacher' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
                 >
                   By Teacher
                 </button>
@@ -483,7 +483,7 @@ export default function TimetableTab({
                 />
                 <button
                   disabled={commandSubmitting}
-                  className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
                   {commandSubmitting ? 'Applying…' : 'Apply'}
                 </button>

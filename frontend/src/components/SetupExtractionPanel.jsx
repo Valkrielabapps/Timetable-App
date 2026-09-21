@@ -111,7 +111,7 @@ export default function SetupExtractionPanel({ schoolId, onImported }) {
           {file && <span className="max-w-[200px] truncate text-sm text-slate-500">{file.name}</span>}
           <button
             disabled={!file || extracting}
-            className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {extracting ? 'Reading…' : 'Extract'}
           </button>
@@ -157,7 +157,7 @@ export default function SetupExtractionPanel({ schoolId, onImported }) {
             <button
               onClick={handleCommit}
               disabled={committing || selectedCount === 0}
-              className="rounded-md bg-indigo-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
             >
               {committing ? 'Creating…' : `Create ${selectedCount} selected`}
             </button>

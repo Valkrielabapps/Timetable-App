@@ -161,11 +161,11 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
       </AnimatePresence>
 
       {!readOnly && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-100/40 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h5 className="text-sm font-semibold text-indigo-900">Import teachers</h5>
-              <p className="mt-0.5 text-xs text-indigo-700/80">
+              <h5 className="text-sm font-semibold text-neutral-900">Import teachers</h5>
+              <p className="mt-0.5 text-xs text-neutral-700/80">
                 Upload a spreadsheet instead of adding teachers one at a time. Add subjects first
                 — teacher rows are matched against subject names that already exist.
               </p>
@@ -173,7 +173,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
             <button
               type="button"
               onClick={() => setShowImport((v) => !v)}
-              className="flex-none text-xs font-medium text-indigo-700 hover:underline"
+              className="flex-none text-xs font-medium text-neutral-700 hover:underline"
             >
               {showImport ? 'Hide' : 'Show'}
             </button>
@@ -231,7 +231,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                       onClick={() => setEditingTeacherId(teacher.id)}
                       title={`Edit ${teacher.name}`}
                       aria-label={`Edit ${teacher.name}`}
-                      className="opacity-0 text-slate-300 hover:text-indigo-600 group-hover:opacity-100 focus:opacity-100"
+                      className="opacity-0 text-slate-300 hover:text-neutral-900 group-hover:opacity-100 focus:opacity-100"
                     >
                       ✎
                     </button>
@@ -263,7 +263,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.85 }}
                       transition={{ duration: 0.15 }}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-xs text-white"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-2.5 py-1 text-xs text-white"
                     >
                       {s.name}
                       {!readOnly && (
@@ -482,7 +482,7 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-indigo-50/60 p-3 sm:flex-row sm:items-end sm:gap-3">
+    <div className="flex flex-col gap-2 rounded-md bg-neutral-100/60 p-3 sm:flex-row sm:items-end sm:gap-3">
       <div className="flex flex-col gap-1">
         <label htmlFor={`edit-teacher-name-${teacher.id}`} className="text-xs font-medium text-slate-500">
           Name
@@ -495,7 +495,7 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
           onChange={(e) => setName(e.target.value)}
           onFocus={(e) => e.target.select()}
           onKeyDown={(e) => e.key === 'Escape' && onCancel()}
-          className="w-40 rounded border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+          className="w-40 rounded border border-slate-300 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none disabled:opacity-60"
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -509,7 +509,7 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
           disabled={saving}
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && onCancel()}
-          className="w-48 rounded border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+          className="w-48 rounded border border-slate-300 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none disabled:opacity-60"
         />
       </div>
       <div className="flex flex-col gap-1">
@@ -527,7 +527,7 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
             if (e.key === 'Enter') handleSave()
             if (e.key === 'Escape') onCancel()
           }}
-          className="w-28 rounded border border-slate-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none disabled:opacity-60"
+          className="w-28 rounded border border-slate-300 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none disabled:opacity-60"
         />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -544,7 +544,7 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
           type="button"
           onClick={handleSave}
           disabled={!name.trim() || saving}
-          className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -632,7 +632,7 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Teacher name"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
             />
           </div>
 
@@ -708,7 +708,7 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
             </button>
             <button
               disabled={!name.trim() || submitting}
-              className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
             >
               {submitting ? 'Adding…' : 'Add teacher'}
             </button>
