@@ -42,6 +42,23 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_model: str = "claude-haiku-4-5-20251001"
 
+    # Sentry DSN for error tracking. Unset by default, which disables Sentry
+    # entirely (see app/core/observability.py) - so local dev, tests and CI
+    # never report anything, and a missing DSN is a supported state rather
+    # than a misconfiguration.
+    sentry_dsn: str | None = None
+
+    # Tags every event so production errors are distinguishable from anything
+    # reported by a developer machine that happens to have a DSN set.
+    sentry_environment: str = "development"
+
+    # Fraction of requests traced for performance monitoring, 0.0-1.0.
+    # Defaults to 0 (errors only): traces consume the same quota as errors on
+    # Sentry's free tier, and this app's slow path (timetable generation) is
+    # already a deliberate background job rather than something a trace would
+    # explain.
+    sentry_traces_sample_rate: float = 0.0
+
     # Google Cloud OAuth 2.0 Client ID (Web application type), used to
     # verify the ID token Google's Sign-In button hands back to the
     # frontend. Must match the client ID configured in the frontend

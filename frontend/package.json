@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@sentry/react": "^10.75.0",
     "framer-motion": "^11.11.17",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

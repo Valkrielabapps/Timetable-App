@@ -132,3 +132,51 @@ alembic stamp head     # records the version WITHOUT running the migration
 Use `stamp` only for that one-time case. A database that is genuinely
 empty should get `alembic upgrade head` instead, which creates the schema
 for real.
+
+## 4. Error tracking (Sentry)
+
+Optional but strongly recommended once the app has real users: without it,
+a production crash is only visible if someone happens to read Railway's
+logs, and an error on a background thread leaves no trace at all beyond a
+string in the database.
+
+Sentry is disabled unless a DSN is set, so nothing here affects local
+development or CI.
+
+1. Sign up at [sentry.io](https://sentry.io) with the shared account. The
+   free tier covers 5,000 errors/month but only **one user seat**, so use
+   the common login rather than inviting each other individually.
+2. Create **two** projects - they get separate DSNs:
+   - one **FastAPI** (Python) project for the backend
+   - one **React** project for the frontend
+3. Backend: in Railway, set
+   ```
+   SENTRY_DSN=<the FastAPI project's DSN>
+   SENTRY_ENVIRONMENT=production
+   ```
+4. Frontend: in Vercel, set
+   ```
+   VITE_SENTRY_DSN=<the React project's DSN>
+   ```
+   Vite inlines `VITE_` variables at build time, so this needs a
+   **redeploy** to take effect, not just a save.
+
+### Verifying it works
+
+- **Backend:** log in, then hit `GET /api/debug/boom` on the deployed API.
+  It deliberately raises, and the error should appear in Sentry within a
+  few seconds. That endpoint is temporary and should be deleted from
+  `app/main.py` once you have confirmed it.
+- **Frontend:** open the deployed site's browser console and run
+  `setTimeout(() => { throw new Error('Sentry test') })`. Sentry's global
+  handler catches it; no code change needed.
+
+### What is deliberately not sent
+
+Both sides are configured to omit personal data - `send_default_pii` is
+off, request bodies are never attached, and `Authorization`/`Cookie`
+headers are scrubbed before an event leaves the process (see
+`backend/app/core/observability.py` and `frontend/src/observability.js`).
+JWTs here stay valid for a week, so a crash report is not somewhere they
+can be allowed to appear. `backend/tests/test_observability.py` asserts
+this rather than leaving it to inspection.
