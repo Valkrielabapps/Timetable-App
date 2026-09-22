@@ -5,6 +5,7 @@ Settings are loaded from environment variables (or a local .env file, see
 backend/.env.example). Using pydantic-settings means every setting is
 validated and typed instead of read ad-hoc with os.environ.get().
 """
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -95,6 +96,33 @@ class Settings(BaseSettings):
     # purpose — this is a bearer link that could leak via a forwarded
     # email or shared inbox, so it shouldn't stay usable indefinitely.
     password_reset_expire_minutes: int = 60
+
+
+    @field_validator(
+        "anthropic_api_key",
+        "sentry_dsn",
+        "google_client_id",
+        "resend_api_key",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, value):
+        """Treat an empty env var as unset rather than as an empty string.
+
+        .env.example ships each of these as `KEY=` so it is obvious they
+        exist, which means anyone who copies it gets "" rather than None.
+        Every consumer of these settings tests them for falsiness so the
+        behaviour was already correct, but "" is not None, and code (and
+        tests) that reasonably check `is None` would disagree with code that
+        checks `if not ...` about whether the feature is configured.
+
+        Normalising here means there is exactly one representation of
+        "not configured" regardless of whether the variable is absent,
+        empty, or whitespace.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 settings = Settings()

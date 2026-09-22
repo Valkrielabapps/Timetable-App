@@ -54,3 +54,31 @@ def test_scrub_tolerates_events_without_a_request():
     """Errors from the background solver thread have no HTTP request attached."""
     event = {"exception": {"values": []}}
     assert _scrub(event, None) == event
+
+
+def test_blank_env_vars_are_normalised_to_none():
+    """`KEY=` in .env means unset, not an empty string.
+
+    .env.example ships every optional key that way, so this is the common
+    case rather than an edge one - without normalising, `is None` and
+    `if not ...` disagree about whether a feature is configured.
+    """
+    from app.core.config import Settings
+
+    s = Settings(
+        anthropic_api_key="",
+        sentry_dsn="   ",
+        google_client_id="",
+        resend_api_key="",
+    )
+    assert s.anthropic_api_key is None
+    assert s.sentry_dsn is None
+    assert s.google_client_id is None
+    assert s.resend_api_key is None
+
+
+def test_real_values_are_left_alone():
+    from app.core.config import Settings
+
+    s = Settings(anthropic_api_key="sk-ant-real-key")
+    assert s.anthropic_api_key == "sk-ant-real-key"
