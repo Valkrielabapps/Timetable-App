@@ -163,13 +163,24 @@ development or CI.
 
 ### Verifying it works
 
-- **Backend:** log in, then hit `GET /api/debug/boom` on the deployed API.
-  It deliberately raises, and the error should appear in Sentry within a
-  few seconds. That endpoint is temporary and should be deleted from
-  `app/main.py` once you have confirmed it.
+- **Backend:** there is no deliberate error route (a temporary one was
+  used during setup and removed). To re-check it, add a route that raises,
+  deploy, hit it, then take it out again - or just wait for the next real
+  error, since the integration is verified and nothing about it is
+  conditional on a particular route.
 - **Frontend:** open the deployed site's browser console and run
   `setTimeout(() => { throw new Error('Sentry test') })`. Sentry's global
   handler catches it; no code change needed.
+
+**Ad blockers block frontend errors.** Brave Shields (on by default, and
+also on in private windows), uBlock Origin and similar block Sentry's
+ingest domain outright - the request fails with `ERR_BLOCKED_BY_CLIENT`
+and the error is simply never reported. This affects real users, not just
+testing: frontend coverage has a genuine hole in it that backend coverage
+does not. To test locally, drop Brave's Shields for the site or use a
+browser without blocking extensions. To close the hole properly, Sentry
+supports tunnelling events through your own domain so they look like
+ordinary API calls.
 
 ### What is deliberately not sent
 
