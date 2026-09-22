@@ -1,0 +1,45 @@
+name: CI
+
+# Was mirror-to-deploy-repo.yml, which ran these same two suites and then
+# pushed main to arpithdavid/Timetable-App because that was the repo
+# Railway and Vercel deployed from. Both now build directly from this
+# repository, so the mirror job has been removed and its deploy repo
+# retired; the test suites it gated are the part worth keeping.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Run backend test suite
+        run: pytest -q
+        working-directory: backend
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Run frontend test suite
+        run: npm test
+        working-directory: frontend
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
