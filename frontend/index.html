@@ -2,9 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Favicon — a plain "T" monogram (see public/favicon.svg), replacing
+         the leftover default Vite-template icon (an unrelated purple
+         gradient blob) that shipped before anyone had set a real one.
+         Both an .svg (crisp on modern browsers) and .ico/.png fallbacks
+         (older browsers, and platforms that don't support SVG favicons)
+         are wired up so the tab icon works everywhere. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Timetablz</title>
+
+    <title>Timetablz — Instant Timetables for Schools and Colleges</title>
+    <meta
+      name="description"
+      content="Describe your scheduling rules in plain English and get a complete, clash-free timetable for every section and every teacher — built for Indian schools and colleges."
+    />
+
+    <!-- Open Graph + Twitter card tags — without these, a Timetablz link
+         pasted into WhatsApp, Slack, iMessage, or Twitter/X shows up as
+         bare text with no preview card at all. og:url intentionally left
+         out here since it would need to be hardcoded to a specific
+         domain that isn't finalized yet; add it once the production URL
+         is settled. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Timetablz" />
+    <meta property="og:title" content="Timetablz — Instant Timetables for Schools and Colleges" />
+    <meta
+      property="og:description"
+      content="Describe your scheduling rules in plain English and get a complete, clash-free timetable for every section and every teacher."
+    />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Timetablz — Instant Timetables for Schools and Colleges" />
+    <meta
+      name="twitter:description"
+      content="Describe your scheduling rules in plain English and get a complete, clash-free timetable for every section and every teacher."
+    />
+    <meta name="twitter:image" content="/og-image.png" />
   </head>
   <body>
     <div id="root"></div>

@@ -1,13 +1,17 @@
 <!--
-  PLACEHOLDER GUIDE — replace every [BRACKETED] value before publishing:
-  [PRODUCT_NAME]      — final product/brand name
-  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as [PRODUCT_NAME]"
-  [WEBSITE_URL]       — e.g. https://yourname.com
+  PLACEHOLDER GUIDE — replace every remaining [BRACKETED] value before
+  publishing. [PRODUCT_NAME] and [PLAN_NAMES/PRICES] below are now filled
+  in (Timetablz; Free/Pro/Business synced with frontend/src/components/
+  PricingPage.jsx — re-sync this if those prices ever change). Still
+  open, deferred pending real business decisions:
+  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as Timetablz"
+  [WEBSITE_URL]       — e.g. https://yourname.com (domain not finalized yet)
   [SUPPORT_EMAIL]     — e.g. hello@yourname.com or support@yourname.com
   [BUSINESS_ADDRESS]  — your registered/current-account address
   [JURISDICTION]      — e.g. "the courts of [City], India"
   [EFFECTIVE_DATE]    — the date you actually publish this
-  [PLAN_NAMES/PRICES] — keep in sync with whatever the pricing page shows
+  [FREE TRIAL / PILOT PERIOD length, and the refund policy in Section 8]
+                      — a real business decision, not yet made
 
   This is a starting draft, not a substitute for review by a lawyer
   before you go live and start accepting payments. Pay particular
@@ -20,7 +24,7 @@
 
 **Effective date: [EFFECTIVE_DATE]**
 
-These Terms of Service ("**Terms**") govern your access to and use of [PRODUCT_NAME] (the "**Service**"), provided by [LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
+These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by [LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
 ## 1. Who may use the Service
 
@@ -56,7 +60,7 @@ We may suspend or terminate accounts that violate these Terms.
 
 ## 6. Plans and pricing
 
-The Service is offered under the pricing plans described on our website at [WEBSITE_URL] ([PLAN_NAMES/PRICES]), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are exclusive of applicable taxes (e.g. GST), which will be added at checkout or invoicing.
+The Service is offered under the pricing plans described on our website at [WEBSITE_URL] (Free, Pro at ₹4,999 + GST per month, and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are exclusive of applicable taxes (e.g. GST), which will be added at checkout or invoicing.
 
 ## 7. Payment and billing
 

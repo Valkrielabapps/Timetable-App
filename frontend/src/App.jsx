@@ -10,6 +10,8 @@ import TermsOfServicePage from './components/TermsOfServicePage'
 import PricingPage from './components/PricingPage'
 import SupportPage from './components/SupportPage'
 import WhyTimetablzPage from './components/WhyTimetablzPage'
+import AboutPage from './components/AboutPage'
+import CustomersPage from './components/CustomersPage'
 import Sidebar from './components/Sidebar'
 import FirstRunWelcome from './components/FirstRunWelcome'
 import OverviewTab from './components/OverviewTab'
@@ -544,6 +546,22 @@ function App() {
   if (legalPage === 'why') {
     return (
       <WhyTimetablzPage
+        onBack={() => window.location.assign(window.location.pathname)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+      />
+    )
+  }
+  if (legalPage === 'about') {
+    return (
+      <AboutPage
+        onBack={() => window.location.assign(window.location.pathname)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+      />
+    )
+  }
+  if (legalPage === 'customers') {
+    return (
+      <CustomersPage
         onBack={() => window.location.assign(window.location.pathname)}
         onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
       />

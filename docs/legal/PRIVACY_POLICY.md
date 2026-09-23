@@ -1,9 +1,10 @@
 <!--
-  PLACEHOLDER GUIDE — replace every [BRACKETED] value before publishing:
-  [PRODUCT_NAME]     — final product/brand name
-  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as [PRODUCT_NAME]"
+  PLACEHOLDER GUIDE — replace every remaining [BRACKETED] value before
+  publishing. [PRODUCT_NAME] is now filled in (Timetablz). Still open,
+  deferred pending real business decisions:
+  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as Timetablz"
                          (update to the LLP's name if/when you convert)
-  [WEBSITE_URL]      — e.g. https://yourname.com
+  [WEBSITE_URL]      — e.g. https://yourname.com (domain not finalized yet)
   [SUPPORT_EMAIL]    — e.g. hello@yourname.com or privacy@yourname.com
   [BUSINESS_ADDRESS] — your registered/current-account address
   [EFFECTIVE_DATE]   — the date you actually publish this
@@ -18,7 +19,7 @@
 
 **Effective date: [EFFECTIVE_DATE]**
 
-[LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**") operates [PRODUCT_NAME] (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
+[LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
 
 By using the Service, you agree to the collection and use of information as described in this policy. If you do not agree, please do not use the Service.
 

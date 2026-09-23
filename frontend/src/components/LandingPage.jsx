@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Fragment, useEffect, useState } from 'react'
 import { Marquee } from './Marquee'
-import { GridBackground } from './Spotlight'
 import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
 import shishyaPublicSchoolEntrancePhoto from '../assets/shishya-public-school-entrance.png'
@@ -126,11 +125,10 @@ function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs 
 
 export default function LandingPage({ onGetStarted }) {
   return (
-    <div className="min-h-screen bg-white text-slate-900">
+    <div className="min-h-screen bg-white text-neutral-900">
       <LandingNav onGetStarted={onGetStarted} />
       <Hero onGetStarted={onGetStarted} />
       <WorkflowDemo />
-      <TrustBar />
       <MetricsSection />
       <WhyChoose />
       {/* HowItWorks and Pricing removed for now (explicit request) — the
@@ -166,7 +164,8 @@ function LandingNav({ onGetStarted }) {
           <nav className="hidden items-center gap-8 text-[15px] text-neutral-300 md:flex">
             <a href="?page=why" className="hover:text-white">Why Timetablz</a>
             <a href="?page=pricing" className="hover:text-white">Plans and Pricing</a>
-            <a href="#customers" className="hover:text-white">Customers</a>
+            <a href="?page=customers" className="hover:text-white">Customers</a>
+            <a href="?page=about" className="hover:text-white">About</a>
             <a href="?page=support" className="hover:text-white">Support</a>
           </nav>
         </div>
@@ -307,8 +306,6 @@ function HeroSideArt({ side, className = '' }) {
 function Hero({ onGetStarted }) {
   return (
     <section className="relative overflow-hidden bg-black">
-      <GridBackground dark />
-
       {/* Faint line-art filling the empty sides of the centered hero — the
           reference the user sent (a hospitality SaaS hero) uses extremely
           faint single-stroke line drawings of an office scene instead of a
@@ -353,6 +350,50 @@ function Hero({ onGetStarted }) {
           </div>
           <p className="mt-4 text-xs text-neutral-500">No credit card required to try it.</p>
         </motion.div>
+      </div>
+
+      {/* Matches Papermark's actual bottom bar exactly now, per explicit
+          correction: no label text at all, a revolving/scrolling row of
+          customer names (their logos, our text), and an "Our Customers"
+          button pinned to the right — not centered, static text. With
+          one real school instead of six logos, the single name is
+          repeated several times in the scrolling track (separated by a
+          small dot) rather than looping one lonely item across the full
+          width, which is what produced the empty-looking gaps before;
+          this way the marquee track is actually full, same trick real
+          sites use when they don't have enough distinct logos yet to
+          fill a scroll. "Our Customers" links to the dedicated
+          CustomersPage.jsx (`?page=customers`), same as Papermark's own
+          button does for them. Content spans the full page width now
+          (no `max-w-6xl`/`mx-auto` cap) rather than sitting in a
+          narrower centered column with black margins either side, and
+          the bar itself is `neutral-900` (a visibly grey shade) instead
+          of the near-black `neutral-950` it was, both per explicit
+          feedback that the narrower/blacker version looked congested. */}
+      <div className="relative border-t border-white/10 bg-neutral-900 py-5">
+        <div className="flex items-center gap-6 px-6 sm:px-10 lg:px-16">
+          <div className="min-w-0 flex-1 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+            <Marquee
+              items={
+                <span className="flex items-center gap-6 px-3 text-sm font-bold uppercase tracking-wide text-neutral-300">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Fragment key={i}>
+                      <span>Shishya Public School, Dehradun</span>
+                      <span className="text-neutral-600">•</span>
+                    </Fragment>
+                  ))}
+                </span>
+              }
+              speed={26}
+            />
+          </div>
+          <a
+            href="?page=customers"
+            className="shrink-0 rounded-md border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/5"
+          >
+            Our Customers
+          </a>
+        </div>
       </div>
     </section>
   )
@@ -417,7 +458,7 @@ const DEMO_NAV_ITEMS = ['Data Entry', 'Constraints', 'Timetable']
 // DEMO_NAV_ITEMS but never actually got a turn in the demo (it only ever
 // toggled between Constraints and Timetable), so the loop looked like it
 // was skipping one of the three real product areas. This gives it one.
-const DEMO_SETUP_ITEMS = ['Grade 8 · Section A — 32 students', 'Mathematics — 6 periods/week', 'Priya Sharma — Mathematics']
+const DEMO_SETUP_ITEMS = ['Grade 8 · Section A (32 students)', 'Mathematics (6 periods/week)', 'Priya Sharma · Mathematics']
 
 /**
  * Replaces the old text-plus-icon-cards Features() section with a single,
@@ -489,7 +530,7 @@ function WorkflowDemo() {
 
   return (
     <section id="features" className="mx-auto max-w-6xl px-6 py-24">
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl shadow-neutral-900/10">
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         {/* Fake browser chrome — grounds this as "the actual app", the
             same trick both reference videos use (a real address bar
             framing the interface being demoed). Grey dots, not the usual
@@ -640,20 +681,21 @@ function ResultGrid() {
   const rows = ['P1', 'P2', 'P3', 'P4']
   const cols = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
   const subjects = ['Math', 'Science', 'English', 'PE', 'Art', 'History']
-  // Solid black/grey blocks (an earlier pass) read as flat/dull rather
-  // than "polished monochrome" once actually in motion — soft tinted
-  // pills (light color fill + matching dark text, a common dashboard
-  // pattern) keep the page's restrained feel while still being pleasant
-  // to look at, each subject visually distinct without a saturated
-  // full-color block.
-  const colors = [
-    { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
-    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
-    { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
-    { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100' },
-    { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
-    { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
-  ]
+  // Round-robin subject color coding, one very lightly tinted color per
+  // subject (bg-*-50, not -100) — the rest of WorkflowDemo (sidebar,
+  // buttons, badges, spinner) stayed black/white/neutral per explicit
+  // "keep the edgy black and white theme" feedback; this grid is the one
+  // deliberate exception, since each subject reading at a glance the way
+  // a real printed timetable uses color is worth the one departure from
+  // the page's monochrome rule elsewhere.
+  const SUBJECT_COLORS = {
+    Math: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
+    Science: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+    English: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
+    PE: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100' },
+    Art: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
+    History: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
+  }
 
   return (
     <div className="grid grid-cols-[36px_repeat(5,1fr)] gap-2 text-[11px]">
@@ -668,14 +710,14 @@ function ResultGrid() {
           <div className="flex items-center text-neutral-400">{r}</div>
           {cols.map((c, ci) => {
             const subject = subjects[(ri * 5 + ci * 3) % subjects.length]
-            const color = colors[(ri + ci) % colors.length]
+            const color = SUBJECT_COLORS[subject]
             return (
               <motion.div
                 key={`${r}-${c}`}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: (ri * 5 + ci) * 0.03, duration: 0.3 }}
-                className={`${color.bg} ${color.text} ${color.border} rounded-md border px-1.5 py-2 text-center font-semibold`}
+                className={`rounded-md border px-1.5 py-2 text-center font-semibold ${color.bg} ${color.text} ${color.border}`}
               >
                 {subject}
               </motion.div>
@@ -687,57 +729,9 @@ function ResultGrid() {
   )
 }
 
-/**
- * A single-entry "trust bar," modeled on the logo-row pattern shown in
- * the RoomMaster-style reference screenshot ("Powering thousands of
- * hotels worldwide" + a scrolling row of muted grayscale logos) — but
- * honest about where the product actually is. Shishya Public School,
- * Dehradun is the real first customer (see the founder conversation this
- * was built alongside); "Built for schools like" frames it as an
- * example/design partner instead of implying a customer base ("thousands
- * worldwide") that doesn't exist yet.
- *
- * Reuses the Marquee component built for the feature-highlight strip
- * elsewhere on the page — with only one real entry, Marquee's built-in
- * "render the content twice, scroll by exactly one copy's width" trick
- * still produces a continuous, non-jumpy loop (it just loops the same
- * logo), which is exactly what was asked for rather than waiting until
- * there's a real multi-school roster to justify a logo row.
- *
- * The circular "SPS" mark is an explicit placeholder monogram, not the
- * school's real logo (no logo file has been provided yet) — swap the
- * `<div>` below for an `<img>` once the actual logo is available.
- */
-function TrustBar() {
-  const logoItem = (
-    <div className="flex items-center gap-3 px-8">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-bold tracking-tight text-slate-400">
-        SPS
-      </div>
-      <div className="text-left">
-        <div className="text-sm font-semibold uppercase tracking-[0.1em] text-slate-400">
-          Shishya Public School
-        </div>
-        <div className="text-xs text-slate-400">Dehradun</div>
-      </div>
-    </div>
-  )
-
-  return (
-    <section className="border-t border-slate-100 bg-white py-16">
-      <div className="mx-auto max-w-3xl px-6 text-center">
-        <p className="font-serif text-2xl text-slate-700 md:text-3xl">Built for schools like</p>
-      </div>
-      <div className="mt-10 [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
-        <Marquee items={logoItem} speed={16} />
-      </div>
-    </section>
-  )
-}
-
 // ⚠️ PLACEHOLDER METRICS — NOT REAL. Timetablz has exactly one real
-// customer (Shishya Public School, Dehradun; see TrustBar) as of when
-// this was written. These numbers were requested explicitly as
+// customer (Shishya Public School, Dehradun; see Hero's trust strip) as
+// of when this was written. These numbers were requested explicitly as
 // stand-in/mockup content while the site isn't live yet, with an explicit
 // plan to replace them with real figures once there's an actual school
 // roster to report on (see the founder conversation this was built
@@ -827,6 +821,311 @@ function MetricsSection() {
  * see this file's top docstring on the same principle for pricing/
  * testimonials.
  */
+/**
+ * "Why schools choose Timetablz" — rebuilt a third time after actually
+ * reading relume.ai's live DOM (getComputedStyle/getBoundingClientRect
+ * on the real elements, not eyeballing screenshots or video frames).
+ * That inspection found the earlier two rebuilds were both wrong about
+ * what the section even is:
+ *
+ * - It is NOT scroll-scrubbed. Every image has `transform: none` inline
+ *   and there is no scroll listener touching it — it's a plain static
+ *   card, same as any other section on the page.
+ * - Each card ("icon-tagline_card") is a light neutral card
+ *   (rgb(241,240,238), 16px radius) with a bold, fully-saturated solid
+ *   color image area on top (measured: rgb(255,159,255), a hot pink —
+ *   not a pale tint) and an icon + heading + body row below.
+ * - Inside that colored area sits a genuinely fine grid: 1.5px lines
+ *   every 15px, drawn at low opacity in a slightly lighter shade of the
+ *   same hue (rgba(255,223,255,0.5) inside a group at opacity .3) — not
+ *   the loose 40px+ line grid used in the last two attempts.
+ * - The screenshots themselves cascade in a straight diagonal staircase
+ *   (measured delta: +45px right, -77px up per step going back in the
+ *   stack), each one flat — no rotation, no box-shadow, only a small
+ *   ~4.5px corner radius. The front-most tile sits lowest/left; each
+ *   tile behind it is offset up-right and rendered at a lower z-index.
+ *
+ * Reproduced here as three static cards (Relume's own row is static
+ * too), one per reason, each with a bold-accent image area holding a
+ * diagonal 3-tile cascade built the same way, and an icon+heading+body
+ * row beneath. Relume's tiles are real screenshots of real customer
+ * sites; Timetablz doesn't have a library of those, so the two front
+ * tiles render actual compact mockups of the product's own screens
+ * (reusing the subject-color palette ResultGrid uses elsewhere on this
+ * page) and the back-most barely-visible sliver is a plain color block,
+ * matching how little of Relume's own back tiles are visible anyway.
+ */
+// All three cards cycle through the same three product screens, just
+// starting at a different point in the rotation, so the row as a whole
+// is always mid-motion rather than all three changing in lockstep —
+// the "always something visibly happening" quality Relume's own homepage
+// has elsewhere (its hero canvas continuously cycles between different
+// real site builds), even though this particular static card of theirs
+// doesn't animate on its own.
+const SCREEN_TYPES = ['dataEntry', 'constraints', 'timetable']
+
+const WHY_POINTS = [
+  {
+    heading: 'Turns weeks of work into an afternoon',
+    body: "Type your scheduling rules as plain sentences instead of wrestling with spreadsheet formulas. The solver builds every section's timetable at once.",
+    startIndex: 0,
+    accent: 'indigo',
+    icon: 'clock',
+  },
+  {
+    heading: 'Built around how schools actually run',
+    body: 'Not a generic scheduler with "school" bolted on. Periods, sections, subject-load limits, and teacher availability are first-class from day one.',
+    startIndex: 1,
+    accent: 'emerald',
+    icon: 'building',
+  },
+  {
+    heading: 'One connected workflow',
+    body: 'Data entry, constraints, generation, fine-tuning, and export all live in one place. No juggling a spreadsheet, a messaging thread, and a printed draft separately.',
+    startIndex: 2,
+    accent: 'amber',
+    icon: 'link',
+  },
+]
+
+// Bold, fully-saturated per-point colors (measured Relume equivalent:
+// rgb(255,159,255) solid, not a pale bg-*-50/100 tint) plus a lighter
+// tint of the same hue for the grid lines and the back-most cascade
+// tile, and the usual light tint/text pairing for the icon chip in the
+// card body below the image.
+const ACCENT_STYLES = {
+  indigo: { solid: 'bg-indigo-500', hex: '#6366f1', gridRgba: 'rgba(255,255,255,0.35)', backTile: 'bg-indigo-300', tint: 'bg-indigo-100', text: 'text-indigo-600' },
+  emerald: { solid: 'bg-emerald-500', hex: '#10b981', gridRgba: 'rgba(255,255,255,0.35)', backTile: 'bg-emerald-300', tint: 'bg-emerald-100', text: 'text-emerald-600' },
+  amber: { solid: 'bg-amber-500', hex: '#f59e0b', gridRgba: 'rgba(255,255,255,0.35)', backTile: 'bg-amber-300', tint: 'bg-amber-100', text: 'text-amber-600' },
+}
+
+// Same very light subject tints ResultGrid uses lower down this page,
+// kept as its own small copy since that one is scoped inside
+// ResultGrid's own function body.
+const SCREEN_SUBJECT_COLORS = {
+  Math: { bg: 'bg-indigo-50', text: 'text-indigo-700' },
+  Science: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  English: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  PE: { bg: 'bg-sky-50', text: 'text-sky-700' },
+}
+
+const POINT_ICONS = {
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </>
+  ),
+  building: (
+    <>
+      <path d="M4 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16" />
+      <path d="M14 21V9a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v12" />
+      <path d="M8 8h0M8 12h0M8 16h0" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M9 15l6-6" />
+      <path d="M11 5l1-1a3.5 3.5 0 0 1 5 5l-1 1" />
+      <path d="M13 19l-1 1a3.5 3.5 0 0 1-5-5l1-1" />
+    </>
+  ),
+}
+
+// One compact mockup per screen type, sized to sit inside a small
+// cascade tile (no browser chrome, no address bar — Relume's own tiles
+// are raw screenshots with nothing framing them, so these match that
+// rather than the browser-window treatment earlier drafts added).
+function MiniScreen({ type, accent }) {
+  if (type === 'dataEntry') {
+    const teachers = [
+      ['Priya Sharma', 'Mathematics'],
+      ['Arjun Mehta', 'Science'],
+    ]
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-semibold text-neutral-900">Teachers</p>
+        {teachers.map(([name, subject]) => (
+          <div key={name} className="flex items-center gap-1.5 rounded bg-neutral-50 px-1.5 py-1">
+            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${ACCENT_STYLES[accent].solid} text-[7px] font-semibold text-white`}>
+              {name.split(' ').map((n) => n[0]).join('')}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-medium text-neutral-800">{name}</p>
+              <p className="truncate text-[8px] text-neutral-400">{subject}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (type === 'constraints') {
+    return (
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-semibold text-neutral-900">Constraints</p>
+        <div className="rounded bg-neutral-50 px-1.5 py-1.5 text-[8.5px] leading-snug text-neutral-600">
+          "Priya can only teach mornings"
+        </div>
+        <div className="flex flex-wrap gap-1">
+          <span className="rounded-full border border-neutral-200 px-1.5 py-0.5 text-[7.5px] text-neutral-500">No back-to-back PE</span>
+        </div>
+      </div>
+    )
+  }
+
+  // 'timetable'
+  const grid = [
+    ['Math', 'Science'],
+    ['English', 'PE'],
+  ]
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-semibold text-neutral-900">Grade 8 · Section A</p>
+      <div className="grid grid-cols-2 gap-1">
+        {grid.flat().map((subject, i) => {
+          const s = SCREEN_SUBJECT_COLORS[subject]
+          return (
+            <div key={i} className={`rounded px-1.5 py-1.5 text-center text-[8.5px] font-medium ${s.bg} ${s.text}`}>
+              {subject}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Base (stacked) and hover (spread) positions for the three cascade
+// tiles, as percentages of the stage box. Hovering fans the stack apart
+// — the back tile slides further up-right, the front tile further
+// down-left — a concrete, tactile bit of interactivity on top of the
+// content auto-cycling below, rather than motion for its own sake.
+const TILE_LAYOUT = {
+  back: {
+    rest: { left: '36%', top: '8%', width: '62%', height: '42%' },
+    hover: { left: '46%', top: '0%', width: '58%', height: '40%' },
+  },
+  mid: {
+    rest: { left: '20%', top: '24%', width: '64%', height: '44%' },
+    hover: { left: '16%', top: '22%', width: '62%', height: '42%' },
+  },
+  front: {
+    rest: { left: '3%', top: '45%', width: '70%', height: '48%' },
+    hover: { left: '-5%', top: '52%', width: '68%', height: '46%' },
+  },
+}
+
+// The image area: a bold solid-accent field, a fine 15px-pitch grid
+// drawn on top (matching the measured Relume grid exactly, scaled to
+// this container, and slowly panning so the field never sits perfectly
+// still), and a diagonal three-tile cascade — back-most tile a plain
+// color block, then two screen mockups, flat (no rotation, no shadow),
+// tight ~5px corners. The two content tiles auto-cycle through all
+// three product screens on a loop, crossfading, and the whole stack
+// fans apart on hover.
+function CascadeStage({ startIndex, accent }) {
+  const a = ACCENT_STYLES[accent]
+  const [cycle, setCycle] = useState(startIndex)
+  const [hovered, setHovered] = useState(false)
+
+  useEffect(() => {
+    const id = setInterval(() => setCycle((v) => (v + 1) % SCREEN_TYPES.length), 3200)
+    return () => clearInterval(id)
+  }, [])
+
+  const back = SCREEN_TYPES[cycle]
+  const mid = SCREEN_TYPES[(cycle + 1) % SCREEN_TYPES.length]
+  const front = SCREEN_TYPES[(cycle + 2) % SCREEN_TYPES.length]
+
+  return (
+    <div
+      className="relative aspect-[5/4] overflow-hidden rounded-t-2xl bg-neutral-900"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px)',
+          backgroundSize: '15px 15px',
+        }}
+        animate={{ backgroundPosition: ['0px 0px', '15px 15px'] }}
+        transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+      />
+
+      <motion.div
+        className={`absolute rounded-[5px] ${a.backTile} opacity-90`}
+        animate={hovered ? TILE_LAYOUT.back.hover : TILE_LAYOUT.back.rest}
+        transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      />
+
+      <motion.div
+        className="absolute overflow-hidden rounded-[5px] bg-white text-left"
+        animate={hovered ? TILE_LAYOUT.mid.hover : TILE_LAYOUT.mid.rest}
+        transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      >
+        <AnimatePresence>
+          <motion.div
+            key={mid}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 p-2.5"
+          >
+            <MiniScreen type={mid} accent={accent} />
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+
+      <motion.div
+        className="absolute overflow-hidden rounded-[5px] bg-white text-left"
+        animate={hovered ? TILE_LAYOUT.front.hover : TILE_LAYOUT.front.rest}
+        transition={{ type: 'spring', stiffness: 220, damping: 24 }}
+      >
+        <AnimatePresence>
+          <motion.div
+            key={front}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 p-3"
+          >
+            <MiniScreen type={front} accent={accent} />
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  )
+}
+
+function WhyCard({ point, index }) {
+  const a = ACCENT_STYLES[point.accent]
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.3 }}
+      variants={fadeUp}
+      transition={{ duration: 0.5, delay: index * 0.1 }}
+      className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50"
+    >
+      <CascadeStage startIndex={point.startIndex} accent={point.accent} />
+      <div className="p-7">
+        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${a.tint}`}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={a.text}>
+            {POINT_ICONS[point.icon]}
+          </svg>
+        </span>
+        <h3 className="mt-4 font-serif text-xl font-medium text-neutral-900">{point.heading}</h3>
+        <p className="mt-2 text-[14.5px] leading-relaxed text-neutral-500">{point.body}</p>
+      </div>
+    </motion.div>
+  )
+}
+
 function WhyChoose() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24">
@@ -841,60 +1140,12 @@ function WhyChoose() {
         Why schools choose Timetablz
       </motion.h2>
 
-      <div className="mt-14 grid gap-6 md:grid-cols-2">
-        <WhyCard title="Turns weeks of work into an afternoon">
-          Type your scheduling rules as plain sentences instead of wrestling with spreadsheet formulas — the
-          solver builds every section's timetable at once.
-        </WhyCard>
-        <WhyCard title="Built around how schools actually run">
-          Not a generic scheduler with "school" bolted on — periods, sections, subject-load limits, and
-          teacher availability are first-class from day one.
-        </WhyCard>
-      </div>
-
-      <div className="mt-6">
-        <WhyCard wide title="One connected workflow">
-          Data entry, constraints, generation, fine-tuning, and export all live in one place — no juggling a
-          spreadsheet, a messaging thread, and a printed draft separately.
-        </WhyCard>
-      </div>
-
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <WhyCard title="No training manual required">
-          If you can describe a rule in a sentence, you can use it — most admins are comfortable within their
-          first session.
-        </WhyCard>
-        <WhyCard title="Works wherever you're planning">
-          Browser-based, no installs — pull it up on a laptop in the staff room or a tablet during a
-          scheduling meeting.
-        </WhyCard>
+      <div className="mt-14 grid gap-8 md:grid-cols-3">
+        {WHY_POINTS.map((point, i) => (
+          <WhyCard key={point.heading} point={point} index={i} />
+        ))}
       </div>
     </section>
-  )
-}
-
-/**
- * Text-only for now, deliberately — the earlier version paired each card
- * with a small abstract SVG/mockup visual, but those are coming out until
- * the rest of the site's UI is settled, per the plan to swap in real
- * product photography once it exists rather than keep placeholder
- * graphics around. `wide` just shortens the min-height for the full-width
- * card so it doesn't look like empty space now that there's no visual
- * filling the lower half.
- */
-function WhyCard({ title, wide = false, children }) {
-  return (
-    <motion.div
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.25 }}
-      variants={fadeUp}
-      transition={{ duration: 0.5 }}
-      className={`rounded-3xl border border-neutral-100 bg-neutral-50 p-8 md:p-10 ${wide ? 'min-h-[160px]' : 'min-h-[200px]'}`}
-    >
-      <h3 className="font-serif text-2xl font-medium text-neutral-900">{title}</h3>
-      <p className="mt-3 max-w-md text-[15px] leading-relaxed text-neutral-500">{children}</p>
-    </motion.div>
   )
 }
 
@@ -1159,7 +1410,8 @@ const FOOTER_COLUMNS = [
     // that's settled.
     heading: 'Company',
     links: [
-      { label: 'Customers', href: '#customers' },
+      { label: 'About', href: '?page=about' },
+      { label: 'Customers', href: '?page=customers' },
       { label: 'Support', href: '?page=support' },
     ],
   },

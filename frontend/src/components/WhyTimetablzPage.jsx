@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { GridBackground } from './Spotlight'
 
 /**
  * Standalone "Why Timetablz" page — reached via `?page=why` (same
@@ -123,7 +122,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-black/95 backdrop-blur">
+      <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <button onClick={onBack} className="text-[17px] font-bold tracking-tight text-white">
             Timetablz
@@ -147,7 +146,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
           Built to <em className="text-neutral-400">adapt</em> to how your school actually schedules
         </h1>
         <p className="mt-4 max-w-xl text-neutral-400">
-          One connected workflow, from a blank slate to a clash-free timetable — here's what actually
+          One connected workflow, from a blank slate to a clash-free timetable. Here's what actually
           happens at each step.
         </p>
       </div>
@@ -196,8 +195,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
           </div>
 
           <div className="hidden lg:block">
-            <div className="sticky top-24 flex h-[70vh] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-neutral-950/60">
-              <GridBackground dark className="opacity-100" />
+            <div className="sticky top-24 flex h-[70vh] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-neutral-950/60">
               <StepVisual activeStep={activeStep} />
             </div>
           </div>

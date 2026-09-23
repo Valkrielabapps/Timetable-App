@@ -1,17 +1,18 @@
 /* Fraunces (serif display) for big headlines — pairs with the black/white
    Griffin-style Hero redesign in LandingPage.jsx, which looked mismatched
-   using the browser's plain default system font. Inter (sans) replaces
-   that same default everywhere else, for a more deliberate, less generic
-   look than "ui-sans-serif, system-ui" without touching every component
-   individually — both are set as the site's font-serif/font-sans via the
-   @theme override below, so existing `font-sans`/`font-serif` utility
-   classes (and the sans default already implied everywhere) just pick
-   these up automatically. */
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap");
+   using the browser's plain default system font. Instrument Sans replaces
+   that default everywhere else — deliberately not Inter/Geist/Space
+   Grotesk, the three sans fonts every AI-generated SaaS landing page
+   reaches for by default; Instrument Sans reads just as clean but doesn't
+   carry that same generic-template tell. Both are set as the site's
+   font-serif/font-sans via the @theme override below, so existing
+   `font-sans`/`font-serif` utility classes (and the sans default already
+   implied everywhere) just pick these up automatically. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Instrument+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", ui-serif, Georgia, serif;
 }
 
@@ -22,17 +23,19 @@ body {
 
 /* Brand-themed browser surfaces: without these, text selection and the
    keyboard focus ring fall back to the browser's default blue, which reads
-   as unfinished against the indigo palette used everywhere else. Additive
-   only — elements that already set their own focus treatment (most inputs
-   use `focus:outline-none` plus a border-color change) are unaffected,
-   since a utility class's specificity wins over this tag-level rule. */
+   as unfinished against the black/white/neutral palette used everywhere
+   else (this used to be indigo, a leftover from before the black/white
+   rebrand — fixed here to match). Additive only — elements that already
+   set their own focus treatment (most inputs use `focus:outline-none`
+   plus a border-color change) are unaffected, since a utility class's
+   specificity wins over this tag-level rule. */
 ::selection {
-  background-color: #c7d2fe; /* indigo-200 */
-  color: #1e1b4b; /* indigo-950, keeps selected text readable */
+  background-color: #d4d4d4; /* neutral-300 */
+  color: #171717; /* neutral-900, keeps selected text readable */
 }
 
 :focus-visible {
-  outline: 2px solid #6366f1; /* indigo-500 */
+  outline: 2px solid #171717; /* neutral-900 */
   outline-offset: 2px;
 }
 
