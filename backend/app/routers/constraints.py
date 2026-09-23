@@ -305,6 +305,16 @@ def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current
     db.commit()
 
 
+# How firm a parsed rule is, as (is_hard, weight). Weights are only
+# compared against each other, so the absolute numbers matter less than the
+# gap between them: a strong preference should outrank several mild ones.
+_STRENGTH = {
+    "required": (True, 1),
+    "strong_preference": (False, 5),
+    "preference": (False, 1),
+}
+
+
 @dataclass
 class _ResolvedConstraint:
     """What a piece of constraint text resolved to, ready to become a row.
@@ -319,6 +329,8 @@ class _ResolvedConstraint:
     description: str
     source_text: str | None
     parsed_by: str | None
+    is_hard: bool
+    weight: int
 
 
 @dataclass
@@ -536,12 +548,18 @@ def _apply_parsed_constraint(
         if matched_class_groups:
             parameters["class_group_ids"] = [cg.id for cg in matched_class_groups]
 
+    # An unhedged sentence is a requirement; only explicit preference
+    # language relaxes a rule, so an unrecognised strength falls back to hard
+    # rather than quietly making something optional.
+    is_hard, weight = _STRENGTH.get(parsed.strength, (True, 1))
     return _ResolvedConstraint(
         db_type=db_type,
         parameters=parameters,
         description=parsed.description,
         source_text=source_text,
         parsed_by=parsed.parsed_by,
+        is_hard=is_hard,
+        weight=weight,
     )
 
 
@@ -617,7 +635,8 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
         school_id=payload.school_id,
         type=resolved.db_type,
         parameters=resolved.parameters,
-        is_hard=True,
+        is_hard=resolved.is_hard,
+        weight=resolved.weight,
         description=resolved.description,
         source_text=resolved.source_text,
         parsed_by=resolved.parsed_by,
@@ -668,7 +687,8 @@ def parse_and_create_constraints_batch(
             school_id=payload.school_id,
             type=item.db_type,
             parameters=item.parameters,
-            is_hard=True,
+            is_hard=item.is_hard,
+            weight=item.weight,
             description=item.description,
             source_text=item.source_text,
             parsed_by=item.parsed_by,
@@ -704,6 +724,8 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
     resolved = _resolve_constraint_text(db, constraint.school_id, payload.text)
     constraint.type = resolved.db_type
     constraint.parameters = resolved.parameters
+    constraint.is_hard = resolved.is_hard
+    constraint.weight = resolved.weight
     constraint.description = resolved.description
     # A reword replaces the rule, so the recorded input replaces it too -
     # keeping the original would attribute the new type to text that never

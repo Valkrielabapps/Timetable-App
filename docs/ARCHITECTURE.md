@@ -1520,3 +1520,44 @@ order by created_at desc;
 Rows with `parsed_by = 'regex'` are noise for this purpose. Rows with
 `source_text is null` were created directly through `POST /api/constraints`
 with an already-resolved type, so no sentence exists behind them.
+
+
+## Soft constraints (preferences)
+
+`Constraint.is_hard = False` makes a rule a preference: the solver avoids
+breaking it, but will break it rather than fail to produce a timetable.
+`weight` says how much it minds. Both columns existed long before anything
+read them - every "prefer Math in the morning" was stored and silently
+dropped.
+
+Two mechanisms, because the hard versions are enforced two different ways:
+
+- **Placement and day rules** (`no_subject_period`, `require_subject_day`,
+  ...) are enforced by *never creating the variable* for a banned period.
+  There is nothing to penalise in that shape, so the soft version takes the
+  opposite route: the variable is built, and choosing it costs the
+  constraint's weight (`req_discouraged_periods`). A soft "prefer X in the
+  first period" discourages every period that is not the first - the same
+  statement from the other side.
+- **Everything else** (`max_consecutive_periods`, `subject_sequence`,
+  `min_gap_between_subjects`) is a `model.Add(expr <= bound)`. `_at_most`
+  relaxes it with a slack variable instead, so exceeding the bound is
+  possible but each unit over costs the weight. Relaxing rather than
+  dropping matters: a preference the solver cannot fully honour should
+  still pull the answer as close as it can.
+
+The penalties are summed into a single `model.Minimize`, **added only if
+something soft exists**. A school with only hard rules gets exactly the
+previous behaviour - no objective, so the solver returns the first feasible
+timetable rather than searching for the best one.
+
+The parser maps natural hedging to this: "must/never" -> required,
+"prefer/ideally/where possible" -> preference, "really should" -> strong
+preference (see `_STRENGTH` in `app/routers/constraints.py`). An unhedged
+sentence is a requirement - only explicit preference language relaxes a
+rule.
+
+Not yet covered: `workload_limit` and `availability` are written onto the
+`Teacher` row rather than read from the constraints table, so they have no
+soft form. And nothing yet reports *which* preferences a finished timetable
+broke - the solver knows, but the result doesn't carry it.

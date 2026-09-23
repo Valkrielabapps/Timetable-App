@@ -43,6 +43,12 @@ const SCOPABLE_TYPES = new Set([
  * and consecutive-period limits ("no more than 2 PE periods in a row") —
  * and silently falls back to a regex parser if no API key is configured or
  * the call fails, so constraint entry never just breaks. Each saved
+ * A constraint is either a rule (is_hard) or a preference. A preference is
+ * applied as a weighted penalty rather than a hard requirement: the solver
+ * avoids breaking it, but will if that is the only way to fit everything in.
+ * Badged on the card, because a preference that looks identical to a rule
+ * sets up exactly the wrong expectation about what the timetable guarantees.
+ *
  * constraint comes back with `enforced` so the card can honestly say
  * whether the solver actually applies it, regardless of which parser
  * produced it.
@@ -320,8 +326,16 @@ function ConstraintCard({
   return (
     <div className="w-72 rounded-lg border border-slate-200 p-3.5">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        <span className="flex flex-wrap items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
           {TYPE_LABELS[c.type] || c.type}
+          {c.is_hard === false && (
+            <span
+              className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-sky-800"
+              title="The timetable will avoid breaking this, but may do so if there is no other way to fit everything in."
+            >
+              Preference
+            </span>
+          )}
         </span>
         {!readOnly && (
           <div className="flex items-center gap-2">

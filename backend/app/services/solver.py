@@ -54,6 +54,28 @@ class TimetableSolveResult:
     locked_keys: set[tuple[int, int, int, int]] = field(default_factory=set)
 
 
+def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
+    """Add `expr <= bound`, hard or soft depending on the Constraint row.
+
+    A hard rule is a plain Add. A soft one is relaxed by a slack variable -
+    the timetable may exceed the bound, but every unit over it costs the
+    constraint's weight, so the solver trades violations off against each
+    other rather than refusing to produce anything.
+
+    Relaxing rather than dropping matters: a preference the solver cannot
+    fully honour should still pull the answer as close as it can get, which
+    is the difference between "PE ran four in a row instead of three" and
+    "the preference was ignored entirely".
+    """
+    if constraint.is_hard:
+        model.Add(expr <= bound)
+        return
+    weight = constraint.weight if isinstance(constraint.weight, int) and constraint.weight > 0 else 1
+    slack = model.NewIntVar(0, 1000, name)
+    model.Add(expr <= bound + slack)
+    penalties.append(weight * slack)
+
+
 def _runs_by_day(all_periods: list[Period]) -> list[list[Period]]:
     """Each day's teaching periods, split into consecutive runs at breaks.
 
@@ -294,15 +316,22 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             Constraint.type.in_(
                 ["no_subject_period", "require_subject_period", "no_subject_day", "require_subject_day"]
             ),
-            Constraint.is_hard.is_(True),
         )
         .all()
     )
     req_restricted_periods: dict[int, set[int]] = {}
     req_required_periods: dict[int, set[int] | None] = {}
+    # Soft placement preferences, as period_id -> accumulated penalty weight.
+    # Hard restrictions are enforced by never creating the variable at all,
+    # which leaves nothing to penalise - so a preference has to take the
+    # opposite route: build the variable, then make choosing it cost
+    # something. Weights accumulate when several preferences discourage the
+    # same slot, so two mild objections outweigh one strong one.
+    req_discouraged_periods: dict[int, dict[int, int]] = {}
     for req in requirements:
         restricted: set[int] = set()
         required: set[int] | None = None
+        discouraged: dict[int, int] = {}
         for c in placement_constraints:
             p = c.parameters or {}
             if not _applies_to(p, req):
@@ -317,14 +346,31 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 if not isinstance(day_of_week, int):
                     continue
                 matched = period_ids_by_day.get(day_of_week, set())
-            if c.type in ("no_subject_period", "no_subject_day"):
-                restricted |= matched
-            else:
-                required = matched if required is None else (required & matched)
+            bans = c.type in ("no_subject_period", "no_subject_day")
+            if c.is_hard:
+                if bans:
+                    restricted |= matched
+                else:
+                    required = matched if required is None else (required & matched)
+                continue
+
+            # Soft. "Avoid these periods" discourages the matched set;
+            # "prefer these periods" discourages everything else, which is
+            # the same statement from the other side.
+            weight = c.weight if isinstance(c.weight, int) and c.weight > 0 else 1
+            target = matched if bans else {p.id for p in periods} - matched
+            for period_id in target:
+                discouraged[period_id] = discouraged.get(period_id, 0) + weight
+
         if required is not None:
             required -= restricted  # a ban always wins over a same-subject requirement
         req_restricted_periods[req.id] = restricted
         req_required_periods[req.id] = required
+        # A hard ban already removes the variable, so paying a penalty for it
+        # too would be double-counting something that cannot happen.
+        req_discouraged_periods[req.id] = {
+            pid: w for pid, w in discouraged.items() if pid not in restricted
+        }
 
     errors = []
     model = cp_model.CpModel()
@@ -535,6 +581,21 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             locked_keys.add(result_key)
             locked_rooms[result_key] = le.room_id
 
+    # Weighted cost of every soft constraint this timetable violates,
+    # minimised at the end. Empty when a school has only hard rules, in
+    # which case no objective is added at all and the solver behaves exactly
+    # as it did before soft constraints existed - it stops at the first
+    # feasible answer instead of proving one optimal.
+    penalties: list = []
+
+    # Soft placement preferences: the variable exists (unlike a hard ban),
+    # so scheduling into a discouraged period is allowed but costs its
+    # weight.
+    for req in requirements:
+        for period_id, weight in req_discouraged_periods.get(req.id, {}).items():
+            for var in req_period_vars[req.id].get(period_id, []):
+                penalties.append(weight * var)
+
     # Each requirement must be met exactly (periods_per_week times).
     for req in requirements:
         model.Add(sum(requirement_vars[req.id]) == req.periods_per_week)
@@ -563,7 +624,6 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "max_consecutive_periods",
-            Constraint.is_hard.is_(True),
         )
         .all()
     )
@@ -588,7 +648,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         v for wp in window for v in teacher_period_vars.get((teacher_id, wp.id), [])
                     ]
                     if window_vars:
-                        model.Add(sum(window_vars) <= max_consecutive)
+                        _at_most(
+                            model, penalties, sum(window_vars), max_consecutive, c,
+                            f"over_consec_t{teacher_id}_c{c.id}_s{start}",
+                        )
             continue
 
         for req in requirements:
@@ -602,7 +665,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                     window = day_periods[start:start + max_consecutive + 1]
                     window_vars = [v for wp in window for v in per_period_vars.get(wp.id, [])]
                     if window_vars:
-                        model.Add(sum(window_vars) <= max_consecutive)
+                        _at_most(
+                            model, penalties, sum(window_vars), max_consecutive, c,
+                            f"over_consec_r{req.id}_c{c.id}_s{start}",
+                        )
 
     # "subject_sequence" Constraint rows: forbid second_subject_id from
     # being scheduled in the period immediately after first_subject_id, on
@@ -616,7 +682,6 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "subject_sequence",
-            Constraint.is_hard.is_(True),
         )
         .all()
     )
@@ -641,7 +706,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         first_vars = req_period_vars.get(req1.id, {}).get(period.id, [])
                         second_vars = req_period_vars.get(req2.id, {}).get(next_period.id, [])
                         if first_vars and second_vars:
-                            model.Add(sum(first_vars) + sum(second_vars) <= 1)
+                            _at_most(
+                                model, penalties, sum(first_vars) + sum(second_vars), 1, c,
+                                f"seq_c{c.id}_cg{cg_id}_p{period.id}",
+                            )
 
     # "min_gap_between_subjects" Constraint rows: forbid first_subject_id
     # and second_subject_id from landing within min_gap periods of each
@@ -658,7 +726,6 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "min_gap_between_subjects",
-            Constraint.is_hard.is_(True),
         )
         .all()
     )
@@ -685,7 +752,17 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                             continue
                         p2_vars = req_period_vars.get(req2.id, {}).get(p2.id, [])
                         if p2_vars:
-                            model.Add(sum(p1_vars) + sum(p2_vars) <= 1)
+                            _at_most(
+                                model, penalties, sum(p1_vars) + sum(p2_vars), 1, c,
+                                f"gap_c{c.id}_cg{cg_id}_p{p1.id}_{p2.id}",
+                            )
+
+    # Only added when something soft exists. A school with only hard rules
+    # gets the previous behaviour exactly - the solver returns the first
+    # feasible timetable rather than searching for the best one, which is
+    # both faster and the reason "optimal" keeps meaning what it used to.
+    if penalties:
+        model.Minimize(sum(penalties))
 
     solver = cp_model.CpSolver()
     # Use every core the machine has, up to a reasonable cap — CP-SAT's

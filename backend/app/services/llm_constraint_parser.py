@@ -107,6 +107,18 @@ _TOOL_SCHEMA = {
             },
             "max_consecutive": {"type": ["integer", "null"], "description": "For max_consecutive_periods — the max number of back-to-back periods allowed."},
             "min_gap": {"type": ["integer", "null"], "description": "For min_gap_between_subjects — the minimum number of periods that must separate the two subjects on the same day."},
+            "strength": {
+                "type": ["string", "null"],
+                "enum": ["required", "strong_preference", "preference", None],
+                "description": (
+                    "How firm the rule is. 'required' for must/cannot/never language - the "
+                    "timetable is invalid if it is broken. 'preference' for prefer/ideally/"
+                    "try to/where possible - the timetable should avoid it but may break it "
+                    "if there is no alternative. 'strong_preference' for emphatic preference "
+                    "language like 'really should' or 'strongly prefer'. Default to 'required' "
+                    "when the sentence is a flat statement with no hedging."
+                ),
+            },
             "description": {
                 "type": "string",
                 "description": "A short, human-readable one-sentence summary of the rule, for display in a UI card.",
@@ -132,6 +144,10 @@ class ParsedConstraint:
     mode: str | None = None
     max_consecutive: int | None = None
     min_gap: int | None = None
+    # "required" | "strong_preference" | "preference". Maps to is_hard and
+    # weight in app/routers/constraints.py. None means the model didn't say,
+    # which is treated as required - a rule nobody hedged is a rule.
+    strength: str | None = None
     # Which parser produced this - see Constraint.parsed_by for why it is
     # worth recording. Set by the callers below rather than defaulted here,
     # so a new code path can't silently claim to be the LLM.
@@ -176,6 +192,7 @@ def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) ->
         second_subject_name=data.get("second_subject_name"),
         class_group_name=data.get("class_group_name"),
         max_periods_per_week=data.get("max_periods_per_week"),
+        strength=data.get("strength"),
         day_of_week=data.get("day_of_week"),
         position=data.get("position"),
         mode=data.get("mode"),
