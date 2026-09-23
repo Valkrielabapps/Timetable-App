@@ -1487,3 +1487,36 @@ success/"preferred teacher"/ready states, amber for warnings, red for
 destructive actions/errors. Adding color meant giving the *interactive*
 parts of the app a personality, not recoloring the states that already
 carry meaning through color.
+
+
+## Measuring which constraint phrasings we fail to understand
+
+`Constraint` records three things beyond the rule itself:
+
+- `source_text` - what the admin actually typed. `description` is the
+  *parser's* summary, which is the wrong end of the problem when the
+  question is which inputs we mishandle.
+- `parsed_by` - `"llm"` or `"regex"`. Without it a `scheduling_rule` row is
+  uninterpretable: one produced by the regex fallback says nothing about
+  what Claude can or cannot handle, and the fallback ran for every
+  constraint entered before `ANTHROPIC_API_KEY` was configured.
+- `created_at` - so a query can be scoped to "since Claude was turned on".
+
+`scheduling_rule` is the catch-all for rules that parse fine but map to no
+constraint type the solver implements: recorded, shown in the UI, and not
+applied. Which phrasings land there is the evidence for whether to add
+constraint types one at a time or build a general filter-based mechanism -
+a decision worth making from data rather than from guesses about what
+schools type.
+
+```sql
+select source_text, type, created_at
+from constraints
+where type = 'scheduling_rule'
+  and parsed_by = 'llm'
+order by created_at desc;
+```
+
+Rows with `parsed_by = 'regex'` are noise for this purpose. Rows with
+`source_text is null` were created directly through `POST /api/constraints`
+with an already-resolved type, so no sentence exists behind them.

@@ -30,6 +30,11 @@ class ConstraintOut(BaseModel):
     is_hard: bool
     weight: int
     description: str | None
+    # What the admin typed, and which parser read it. Exposed so the
+    # "which phrasings are we failing to understand" question can be
+    # answered from the API rather than needing database access.
+    source_text: str | None = None
+    parsed_by: str | None = None
     # Whether this specific constraint row is actually applied by the
     # solver (not just "is this type supported in general" — e.g. an
     # availability constraint with no matched teacher/day is still

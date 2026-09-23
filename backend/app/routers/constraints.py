@@ -183,6 +183,8 @@ def _to_out(db: Session, constraint: Constraint) -> ConstraintOut:
         is_hard=constraint.is_hard,
         weight=constraint.weight,
         description=constraint.description,
+        source_text=constraint.source_text,
+        parsed_by=constraint.parsed_by,
         enforced=_is_enforced(constraint),
         conflicts=conflicts,
     )
@@ -304,6 +306,22 @@ def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current
 
 
 @dataclass
+class _ResolvedConstraint:
+    """What a piece of constraint text resolved to, ready to become a row.
+
+    A named shape rather than a tuple because it grew past three fields once
+    `source_text` and `parsed_by` were recorded, and `(str, dict, str, str,
+    str)` at three call sites is a positional-argument bug waiting to happen.
+    """
+
+    db_type: str
+    parameters: dict
+    description: str
+    source_text: str | None
+    parsed_by: str | None
+
+
+@dataclass
 class _ResolutionData:
     """Everything needed to turn a ParsedConstraint's *names* (teacher_name,
     subject_name, ...) into this school's actual row ids — fetched once
@@ -362,10 +380,19 @@ def _parse_text_to_constraint(text: str, data: _ResolutionData) -> ParsedConstra
     if parsed is None:
         legacy = regex_parser.parse_constraint(text, data.teacher_names, data.subject_names)
         parsed = _adapt_legacy(legacy)
+        # Tagged here rather than inside _adapt_legacy, which has several
+        # return points and would need the same line on each.
+        parsed.parsed_by = "regex"
     return parsed
 
 
-def _apply_parsed_constraint(db: Session, school_id: int, parsed: ParsedConstraint, data: _ResolutionData) -> tuple[str, dict, str]:
+def _apply_parsed_constraint(
+    db: Session,
+    school_id: int,
+    parsed: ParsedConstraint,
+    data: _ResolutionData,
+    source_text: str | None = None,
+) -> _ResolvedConstraint:
     """
     Turns one already-parsed ParsedConstraint into (db_type, parameters,
     description) — the second half of what used to be
@@ -509,10 +536,16 @@ def _apply_parsed_constraint(db: Session, school_id: int, parsed: ParsedConstrai
         if matched_class_groups:
             parameters["class_group_ids"] = [cg.id for cg in matched_class_groups]
 
-    return db_type, parameters, parsed.description
+    return _ResolvedConstraint(
+        db_type=db_type,
+        parameters=parameters,
+        description=parsed.description,
+        source_text=source_text,
+        parsed_by=parsed.parsed_by,
+    )
 
 
-def _resolve_constraint_text(db: Session, school_id: int, text: str) -> tuple[str, dict, str]:
+def _resolve_constraint_text(db: Session, school_id: int, text: str) -> _ResolvedConstraint:
     """
     Shared by both POST /parse (new constraint) and PUT /{id}/reparse
     (editing an existing one's text in place): turns plain-English text
@@ -523,10 +556,10 @@ def _resolve_constraint_text(db: Session, school_id: int, text: str) -> tuple[st
     """
     data = _load_resolution_data(db, school_id)
     parsed = _parse_text_to_constraint(text, data)
-    return _apply_parsed_constraint(db, school_id, parsed, data)
+    return _apply_parsed_constraint(db, school_id, parsed, data, source_text=text)
 
 
-def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> list[tuple[str, dict, str]]:
+def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> list[_ResolvedConstraint]:
     """
     Batch counterpart to _resolve_constraint_text, used by POST
     /api/constraints/batch: turns a whole block of text — several rules
@@ -552,9 +585,21 @@ def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> l
     )
     if not parsed_list:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
-        parsed_list = [_parse_text_to_constraint(line, data) for line in lines]
+        # The per-line fallback knows exactly which line produced which rule,
+        # so each row records its own sentence rather than the whole paste.
+        return [
+            _apply_parsed_constraint(db, school_id, _parse_text_to_constraint(line, data), data, source_text=line)
+            for line in lines
+        ]
 
-    return [_apply_parsed_constraint(db, school_id, parsed, data) for parsed in parsed_list]
+    # The batch model splits the block itself, so there is no per-rule
+    # sentence to attribute - every row records the paste it came from.
+    for parsed in parsed_list:
+        parsed.parsed_by = "llm"
+    return [
+        _apply_parsed_constraint(db, school_id, parsed, data, source_text=text)
+        for parsed in parsed_list
+    ]
 
 
 @router.post("/parse", response_model=ConstraintParseResponse, status_code=201)
@@ -566,14 +611,16 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
     # realistic overspend is one authenticated client looping, not anonymous
     # abuse. Generous enough that entering rules by hand never trips it.
     check_quota(f"llm:{current_user.id}", limit=60, window_seconds=3600)
-    db_type, parameters, description = _resolve_constraint_text(db, payload.school_id, payload.text)
+    resolved = _resolve_constraint_text(db, payload.school_id, payload.text)
 
     constraint = Constraint(
         school_id=payload.school_id,
-        type=db_type,
-        parameters=parameters,
+        type=resolved.db_type,
+        parameters=resolved.parameters,
         is_hard=True,
-        description=description,
+        description=resolved.description,
+        source_text=resolved.source_text,
+        parsed_by=resolved.parsed_by,
     )
     db.add(constraint)
     db.commit()
@@ -616,13 +663,15 @@ def parse_and_create_constraints_batch(
         )
 
     created = []
-    for db_type, parameters, description in resolved:
+    for item in resolved:
         constraint = Constraint(
             school_id=payload.school_id,
-            type=db_type,
-            parameters=parameters,
+            type=item.db_type,
+            parameters=item.parameters,
             is_hard=True,
-            description=description,
+            description=item.description,
+            source_text=item.source_text,
+            parsed_by=item.parsed_by,
         )
         db.add(constraint)
         created.append(constraint)
@@ -652,10 +701,15 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
         raise HTTPException(status_code=404, detail="Constraint not found")
     require_school_access(db, current_user, constraint.school_id, min_role="admin")
 
-    db_type, parameters, description = _resolve_constraint_text(db, constraint.school_id, payload.text)
-    constraint.type = db_type
-    constraint.parameters = parameters
-    constraint.description = description
+    resolved = _resolve_constraint_text(db, constraint.school_id, payload.text)
+    constraint.type = resolved.db_type
+    constraint.parameters = resolved.parameters
+    constraint.description = resolved.description
+    # A reword replaces the rule, so the recorded input replaces it too -
+    # keeping the original would attribute the new type to text that never
+    # produced it.
+    constraint.source_text = resolved.source_text
+    constraint.parsed_by = resolved.parsed_by
     db.commit()
     db.refresh(constraint)
 

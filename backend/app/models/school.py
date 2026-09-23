@@ -8,7 +8,7 @@ schema assuming a fixed structure.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, UniqueConstraint
+    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 
@@ -214,6 +214,17 @@ class Constraint(Base):
     is_hard = Column(Boolean, default=True)
     weight = Column(Integer, default=1)  # relevant for soft constraints only
     description = Column(Text, nullable=True)  # human-readable, shown in the UI
+
+    # What the admin actually typed, before any parsing. `description` is the
+    # parser's *summary*, which is the wrong end of the problem when the
+    # question is "which phrasings do we fail to understand" - that needs the
+    # input, not our interpretation of it.
+    source_text = Column(Text, nullable=True)
+    # "llm" or "regex" (or null for rows predating this). Without it a
+    # scheduling_rule row is uninterpretable: one produced by the regex
+    # fallback says nothing about what Claude can or can't handle.
+    parsed_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
 
     school = relationship("School", back_populates="constraints")
 

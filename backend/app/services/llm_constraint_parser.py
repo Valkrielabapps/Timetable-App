@@ -132,6 +132,10 @@ class ParsedConstraint:
     mode: str | None = None
     max_consecutive: int | None = None
     min_gap: int | None = None
+    # Which parser produced this - see Constraint.parsed_by for why it is
+    # worth recording. Set by the callers below rather than defaulted here,
+    # so a new code path can't silently claim to be the LLM.
+    parsed_by: str | None = None
 
 
 # The batch tool's "constraints" array reuses this exact per-item shape
@@ -164,6 +168,7 @@ def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) ->
     required tool field."""
     return ParsedConstraint(
         type=data.get("type", "scheduling_rule"),
+        parsed_by="llm",
         description=data.get("description") or fallback_description,
         teacher_name=data.get("teacher_name"),
         subject_name=data.get("subject_name"),
