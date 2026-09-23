@@ -10,9 +10,12 @@ Interactive API docs are then available at http://localhost:8000/docs
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.observability import init_sentry
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.models import school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     auth,
@@ -47,6 +50,12 @@ from app.routers import (
 init_sentry()
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
+
+# slowapi reads the limiter off app.state; the middleware is what makes the
+# @limiter.limit decorators in the routers take effect.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

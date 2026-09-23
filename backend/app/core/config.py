@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # it tracks the current Haiku 4.5 snapshot rather than pinning one.
     llm_model: str = "claude-haiku-4-5"
 
+    # Rate limiting, on by default. Turned off in the test suite (see
+    # tests/conftest.py), which signs up dozens of users from one client and
+    # would otherwise spend most of its run being throttled. Also an operational
+    # escape hatch: if a limit turns out to be set too low for a real school,
+    # this buys time to retune it without a rollback.
+    rate_limit_enabled: bool = True
+
     # Sentry DSN for error tracking. Unset by default, which disables Sentry
     # entirely (see app/core/observability.py) - so local dev, tests and CI
     # never report anything, and a missing DSN is a supported state rather

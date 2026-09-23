@@ -28,11 +28,12 @@ change.
 import threading
 
 import sentry_sdk
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.access import require_school_access
+from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import SessionLocal, get_db
 from app.models.school import (
@@ -490,6 +491,9 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
             status_code=400,
             detail=f"This timetable isn't editable right now (status: {timetable.status}).",
         )
+    # Sends the timetable's entries as context on every call, so this is a
+    # larger prompt than constraint parsing and worth its own allowance.
+    check_quota(f"llm-edit:{current_user.id}", limit=40, window_seconds=3600)
 
     entries = db.query(TimetableEntry).filter(TimetableEntry.timetable_id == timetable_id).all()
     if not entries:

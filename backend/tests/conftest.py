@@ -25,6 +25,11 @@ _tmp_db_fd, _tmp_db_path = tempfile.mkstemp(suffix=".db")
 os.close(_tmp_db_fd)
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db_path}"
 
+# This suite signs up dozens of users from a single client, which the real
+# limits (5 signups/hour per IP) would throttle almost immediately. The limiter
+# itself is covered directly in tests/test_rate_limit.py, which re-enables it.
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 

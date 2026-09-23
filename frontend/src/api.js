@@ -22,6 +22,47 @@ export function setToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/**
+ * Turn a failed response into an Error worth showing a user.
+ *
+ * Shared by every call below, which previously each had their own copy of
+ * this block. Beyond the duplication, that meant a 429 surfaced as the raw
+ * `429 "Too many requests..."` - status code and JSON quotes included - in
+ * whatever toast the caller rendered.
+ *
+ * 429 is singled out because it is the one failure the user can actually do
+ * something about: wait. Retry-After (set by backend/app/core/rate_limit.py)
+ * says how long, so say so rather than making them guess.
+ */
+async function toError(res) {
+  let detail = res.statusText;
+  try {
+    const body = await res.json();
+    if (body.detail) {
+      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    }
+  } catch {
+    // response wasn't JSON; fall back to statusText
+  }
+
+  if (res.status === 429) {
+    const seconds = parseInt(res.headers.get("Retry-After") || "", 10);
+    const wait = Number.isFinite(seconds)
+      ? seconds < 60
+        ? ` Try again in ${seconds} seconds.`
+        : ` Try again in ${Math.ceil(seconds / 60)} minutes.`
+      : "";
+    const error = new Error(`${detail}${wait}`);
+    error.status = 429;
+    error.retryAfter = Number.isFinite(seconds) ? seconds : null;
+    return error;
+  }
+
+  const error = new Error(`${res.status} ${detail}`);
+  error.status = res.status;
+  return error;
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const headers = { "Content-Type": "application/json", ...options.headers };
@@ -29,18 +70,7 @@ async function request(path, options = {}) {
 
   const res = await fetch(`/api${path}`, { ...options, headers });
 
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      detail = body.detail ? JSON.stringify(body.detail) : detail;
-    } catch {
-      // response wasn't JSON; fall back to statusText
-    }
-    const error = new Error(`${res.status} ${detail}`);
-    error.status = res.status;
-    throw error;
-  }
+  if (!res.ok) throw await toError(res);
   if (res.status === 204) return null;
   return res.json();
 }
@@ -56,16 +86,7 @@ async function downloadFile(path, filename) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`/api${path}`, { headers });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const b = await res.json();
-      detail = b.detail ? JSON.stringify(b.detail) : detail;
-    } catch {
-      // not JSON
-    }
-    throw new Error(`${res.status} ${detail}`);
-  }
+  if (!res.ok) throw await toError(res);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -89,16 +110,7 @@ async function uploadFile(path, schoolId, file) {
   body.append("file", file);
 
   const res = await fetch(`/api${path}`, { method: "POST", headers, body });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const b = await res.json();
-      detail = b.detail ? JSON.stringify(b.detail) : detail;
-    } catch {
-      // not JSON
-    }
-    throw new Error(`${res.status} ${detail}`);
-  }
+  if (!res.ok) throw await toError(res);
   return res.json();
 }
 
@@ -113,16 +125,7 @@ async function uploadFileOnly(path, file) {
   body.append("file", file);
 
   const res = await fetch(`/api${path}`, { method: "POST", headers, body });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const b = await res.json();
-      detail = b.detail ? JSON.stringify(b.detail) : detail;
-    } catch {
-      // not JSON
-    }
-    throw new Error(`${res.status} ${detail}`);
-  }
+  if (!res.ok) throw await toError(res);
   return res.json();
 }
 

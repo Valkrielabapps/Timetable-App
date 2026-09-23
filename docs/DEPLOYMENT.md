@@ -191,3 +191,46 @@ headers are scrubbed before an event leaves the process (see
 JWTs here stay valid for a week, so a crash report is not somewhere they
 can be allowed to appear. `backend/tests/test_observability.py` asserts
 this rather than leaving it to inspection.
+
+## 5. Rate limits
+
+Configured in `backend/app/core/rate_limit.py` and applied in the routers.
+Set `RATE_LIMIT_ENABLED=false` to turn everything off - an escape hatch if
+a limit turns out to be too low for a real school, so it can be retuned
+without a rollback.
+
+| Endpoint | Limit | Keyed on |
+|---|---|---|
+| `POST /api/auth/login` | 10/min, **10/hour per email** | IP + email |
+| `POST /api/auth/signup` | 5/hour | IP |
+| `POST /api/auth/google` | 20/min | IP |
+| `POST /api/auth/forgot-password` | 10/hour, **3/hour per email** | IP + email |
+| `POST /api/auth/reset-password` | 10/hour | IP |
+| `GET /api/invites/{token}` | 30/hour | IP |
+| `POST /api/invites/{token}/accept` | 20/hour | IP |
+| `POST /api/constraints/parse` | 60/hour | user |
+| `POST /api/constraints/batch` | 20/hour | user |
+| `POST /api/setup-extraction` | 10/hour | user |
+| `POST /api/timetables/{id}/edit-command` | 40/hour | user |
+
+**Why two keys on the auth routes.** `frontend/vercel.json` proxies
+`/api/*` through Vercel, so every request reaches this backend from a
+Vercel edge IP; the client IP is read from `X-Forwarded-For` instead. That
+header can be forged by anything hitting the Railway URL directly, and
+Railway offers no practical way to reject non-Vercel traffic on this plan -
+so the IP limit throttles ordinary abuse but is not a defence against a
+determined attacker. The per-email quotas are what actually stop
+credential stuffing, since rotating IPs is the whole point of that attack
+and an email quota holds regardless of where a request claims to be from.
+
+**Why the LLM endpoints are keyed per user.** Each call spends Anthropic
+credit. They are already authenticated, so the realistic overspend is one
+client looping - not anonymous abuse - and the user id is the meaningful
+key. The limits scale with what a call costs: a document extraction is
+worth roughly ten constraint parses.
+
+Both mechanisms are in-memory and therefore **per process**. With more
+than one backend instance each would enforce its own allowance and the
+effective limit would multiply by the instance count; Redis is the fix at
+that point - the same threshold at which the background solver thread in
+`routers/timetables.py` needs a real task queue.

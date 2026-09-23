@@ -11,11 +11,12 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import check_quota, limiter
 from app.core.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.core.config import settings
 from app.core.database import get_db
@@ -37,7 +38,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=201)
-def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/hour")
+def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
@@ -56,7 +58,11 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
+    # Keyed on the email as well as the IP: rotating IPs is the whole point
+    # of credential stuffing, and an IP limit alone does nothing against it.
+    check_quota(f"login:{payload.email.lower()}", limit=10, window_seconds=3600)
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
@@ -66,7 +72,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/google", response_model=TokenResponse)
-def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+def google_login(request: Request, payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     if not settings.google_client_id:
         # Fails loudly rather than silently accepting an unverifiable
         # token — better than pretending Google sign-in works when the
@@ -121,7 +128,8 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/forgot-password", status_code=202)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")
+def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
     Always returns the same generic response whether or not an account
     with this email exists, and regardless of whether the email actually
@@ -135,6 +143,11 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
     complete a reset — see PasswordResetToken's docstring for why that's
     intentional rather than an edge case to reject.
     """
+    # Per-email as well as per-IP: without this, someone can flood one
+    # person's inbox from rotating IPs, on our Resend quota and our
+    # sending reputation.
+    check_quota(f"forgot:{payload.email.lower()}", limit=3, window_seconds=3600)
+
     user = db.query(User).filter(User.email == payload.email).first()
     if user:
         token = PasswordResetToken(
@@ -149,7 +162,8 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
 
 
 @router.post("/reset-password", response_model=TokenResponse)
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/hour")
+def reset_password(request: Request, payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
     Unlike forgot_password, this endpoint's response DOES reveal whether
     the token was valid — that's fine here (unlike the email-enumeration

@@ -20,6 +20,9 @@ anthropic==0.69.0
 # Error tracking. Inert unless SENTRY_DSN is set (see app/core/observability.py),
 # so local dev and CI are unaffected by having it installed.
 sentry-sdk[fastapi]==2.69.2
+# Rate limiting (app/core/rate_limit.py). In-memory, so limits are per
+# process - fine for one backend instance, needs Redis beyond that.
+slowapi==0.1.10
 google-auth==2.35.0
 requests==2.32.3
 openpyxl==3.1.5

@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.access import require_school_access
+from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import ClassGroup, Constraint, Period, Subject, Teacher
@@ -552,6 +553,10 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
     """Take plain-English constraint text, parse it (see
     _resolve_constraint_text), and save it as a new Constraint row."""
     require_school_access(db, current_user, payload.school_id, min_role="admin")
+    # Per-user, not per-IP: this spends Anthropic credit per call, and the
+    # realistic overspend is one authenticated client looping, not anonymous
+    # abuse. Generous enough that entering rules by hand never trips it.
+    check_quota(f"llm:{current_user.id}", limit=60, window_seconds=3600)
     db_type, parameters, description = _resolve_constraint_text(db, payload.school_id, payload.text)
 
     constraint = Constraint(
@@ -591,6 +596,9 @@ def parse_and_create_constraints_batch(
     with something already saved."
     """
     require_school_access(db, current_user, payload.school_id, min_role="admin")
+    # Tighter than /parse: a batch sends a whole pasted block in one prompt,
+    # so each call costs several times what a single-sentence parse does.
+    check_quota(f"llm-batch:{current_user.id}", limit=20, window_seconds=3600)
     resolved = _resolve_constraints_batch_text(db, payload.school_id, payload.text)
     if not resolved:
         raise HTTPException(

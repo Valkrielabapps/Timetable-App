@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.access import require_school_access
+from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
@@ -33,6 +34,10 @@ async def extract_setup(
     scope (CSV/.xlsx only, first 200 rows).
     """
     require_school_access(db, current_user, school_id, min_role="admin")
+    # The most expensive LLM call in the app - a whole document per
+    # request, not a sentence. Deliberately low: a school sets itself up
+    # once, so a legitimate admin never approaches this.
+    check_quota(f"llm-extract:{current_user.id}", limit=10, window_seconds=3600)
     content = await file.read()
     try:
         rows = read_spreadsheet_rows(file.filename, content)

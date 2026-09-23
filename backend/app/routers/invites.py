@@ -8,9 +8,10 @@ SchoolInvite.token / schools.create_invite) is the only credential these
 need; anyone without it can't look anything up, and it's long enough that
 guessing one isn't practical.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import limiter
 from app.core.auth import create_access_token, hash_password, verify_password
 from app.core.database import get_db
 from app.models.school import School, SchoolInvite, SchoolMembership
@@ -22,7 +23,8 @@ router = APIRouter(prefix="/api/invites", tags=["invites"])
 
 
 @router.get("/{token}", response_model=InvitePreviewOut)
-def preview_invite(token: str, db: Session = Depends(get_db)):
+@limiter.limit("30/hour")
+def preview_invite(request: Request, token: str, db: Session = Depends(get_db)):
     invite = db.query(SchoolInvite).filter(SchoolInvite.token == token).first()
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
@@ -36,7 +38,11 @@ def preview_invite(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/{token}/accept", response_model=TokenResponse)
-def accept_invite(token: str, payload: AcceptInviteRequest, db: Session = Depends(get_db)):
+# An invite token is unguessable, but this endpoint also verifies a password
+# for an existing account - so without a limit it is a second login endpoint
+# with no throttling on it.
+@limiter.limit("20/hour")
+def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db: Session = Depends(get_db)):
     """
     Accepting always requires a password — either to set one for a
     brand-new account (invite.email has never signed up: `name` and
