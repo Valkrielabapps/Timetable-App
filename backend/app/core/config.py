@@ -41,7 +41,12 @@ class Settings(BaseSettings):
     # LLM parser just understands a much wider range of phrasing and
     # constraint types.
     anthropic_api_key: str | None = None
-    llm_model: str = "claude-haiku-4-5-20251001"
+
+    # Overridable via the LLM_MODEL env var, so a model can be swapped (e.g.
+    # to claude-sonnet-5 if Haiku's parsing turns out too shallow for real
+    # constraint phrasing) without a deploy. Unversioned alias on purpose:
+    # it tracks the current Haiku 4.5 snapshot rather than pinning one.
+    llm_model: str = "claude-haiku-4-5"
 
     # Sentry DSN for error tracking. Unset by default, which disables Sentry
     # entirely (see app/core/observability.py) - so local dev, tests and CI
