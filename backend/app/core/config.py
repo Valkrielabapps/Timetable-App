@@ -5,6 +5,7 @@ Settings are loaded from environment variables (or a local .env file, see
 backend/.env.example). Using pydantic-settings means every setting is
 validated and typed instead of read ad-hoc with os.environ.get().
 """
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +43,23 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_model: str = "claude-haiku-4-5-20251001"
 
+    # Sentry DSN for error tracking. Unset by default, which disables Sentry
+    # entirely (see app/core/observability.py) - so local dev, tests and CI
+    # never report anything, and a missing DSN is a supported state rather
+    # than a misconfiguration.
+    sentry_dsn: str | None = None
+
+    # Tags every event so production errors are distinguishable from anything
+    # reported by a developer machine that happens to have a DSN set.
+    sentry_environment: str = "development"
+
+    # Fraction of requests traced for performance monitoring, 0.0-1.0.
+    # Defaults to 0 (errors only): traces consume the same quota as errors on
+    # Sentry's free tier, and this app's slow path (timetable generation) is
+    # already a deliberate background job rather than something a trace would
+    # explain.
+    sentry_traces_sample_rate: float = 0.0
+
     # Google Cloud OAuth 2.0 Client ID (Web application type), used to
     # verify the ID token Google's Sign-In button hands back to the
     # frontend. Must match the client ID configured in the frontend
@@ -78,6 +96,33 @@ class Settings(BaseSettings):
     # purpose — this is a bearer link that could leak via a forwarded
     # email or shared inbox, so it shouldn't stay usable indefinitely.
     password_reset_expire_minutes: int = 60
+
+
+    @field_validator(
+        "anthropic_api_key",
+        "sentry_dsn",
+        "google_client_id",
+        "resend_api_key",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, value):
+        """Treat an empty env var as unset rather than as an empty string.
+
+        .env.example ships each of these as `KEY=` so it is obvious they
+        exist, which means anyone who copies it gets "" rather than None.
+        Every consumer of these settings tests them for falsiness so the
+        behaviour was already correct, but "" is not None, and code (and
+        tests) that reasonably check `is None` would disagree with code that
+        checks `if not ...` about whether the feature is configured.
+
+        Normalising here means there is exactly one representation of
+        "not configured" regardless of whether the variable is absent,
+        empty, or whitespace.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 settings = Settings()

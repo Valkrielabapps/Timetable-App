@@ -27,6 +27,7 @@ change.
 """
 import threading
 
+import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -204,6 +205,11 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
 
         db.commit()
     except Exception as exc:  # noqa: BLE001 - background job, must not crash silently
+        # Report before the traceback is flattened into error_message below.
+        # This runs on a background thread with no HTTP response to carry the
+        # failure, so without this the only surviving trace of a solver crash
+        # is str(exc) in a database column nobody is watching.
+        sentry_sdk.capture_exception(exc)
         db.rollback()
         timetable = db.get(Timetable, timetable_id)
         if timetable is not None:

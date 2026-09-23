@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.observability import init_sentry
 from app.models import school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     auth,
@@ -40,6 +41,10 @@ from app.routers import (
 # alembic_version row - putting the database back outside Alembic's
 # control, and making the next `upgrade head` fail against tables that
 # already exist.
+
+# Before the app is constructed, so anything that fails during startup is
+# still reported. No-op unless SENTRY_DSN is set.
+init_sentry()
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
 
