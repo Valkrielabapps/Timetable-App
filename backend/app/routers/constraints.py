@@ -321,7 +321,7 @@ class _ResolutionData:
     class_group_labels: list[str]
     # (day_of_week, order, label) per period, for the LLM prompt's timetable
     # structure summary - see _period_summary in llm_constraint_parser.py.
-    periods: list[tuple[int, int, str | None]]
+    periods: list[tuple[int, int, str | None, bool]]
 
 
 def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
@@ -344,7 +344,7 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
         teacher_names=[t.name for t in teachers],
         subject_names=[s.name for s in subjects],
         class_group_labels=list(label_to_class_groups.keys()),
-        periods=[(p.day_of_week, p.order, p.label) for p in periods],
+        periods=[(p.day_of_week, p.order, p.label, p.is_break) for p in periods],
     )
 
 

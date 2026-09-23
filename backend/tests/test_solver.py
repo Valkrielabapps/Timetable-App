@@ -329,3 +329,60 @@ def test_multi_constraint_conflict_is_named(db_session):
     assert "Math must be in the first period" in message
     assert "PE must be in the first period" in message
     assert "can't all be satisfied together" in message
+
+
+def test_break_periods_are_never_scheduled_into(db_session):
+    """A period marked is_break exists in the day's ordering - so "the period
+    after lunch" resolves - but nothing is ever taught in it."""
+    db = db_session
+    school = _make_school_with_periods(db, days=5, periods_per_day=4)
+
+    # Make the 2nd period of every day a break.
+    break_period_ids = []
+    for period in db.query(Period).filter(Period.school_id == school.id, Period.order == 2).all():
+        period.is_break = True
+        period.label = "Lunch"
+        break_period_ids.append(period.id)
+    db.commit()
+
+    subject = Subject(school_id=school.id, name="Math")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+
+    teacher = Teacher(school_id=school.id, name="Priya Sharma", qualified_subject_ids=[subject.id])
+    db.add(teacher)
+    db.commit()
+
+    class_group = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(class_group)
+    db.commit()
+    db.refresh(class_group)
+
+    db.add(SubjectRequirement(class_group_id=class_group.id, subject_id=subject.id, periods_per_week=5))
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+
+    assert result.status in ("optimal", "feasible"), result.errors
+    assert len(result.assignments) == 5
+    scheduled = {a["period_id"] for a in result.assignments}
+    assert scheduled.isdisjoint(break_period_ids), "A lesson was scheduled during a break"
+
+
+def test_a_school_of_only_breaks_reports_nothing_to_schedule(db_session):
+    """Rather than looking like a school with no periods at all, which would
+    send the admin to add periods they already have."""
+    db = db_session
+    school = _make_school_with_periods(db, days=1, periods_per_day=2)
+    for period in db.query(Period).filter(Period.school_id == school.id).all():
+        period.is_break = True
+    db.commit()
+
+    subject = Subject(school_id=school.id, name="Math")
+    db.add(subject)
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status == "no_periods"
+    assert any("break" in e.lower() for e in result.errors)

@@ -187,7 +187,7 @@ _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 _GENERIC_LABEL = re.compile(r"^\s*(p|period)?\s*\d+\s*$", re.IGNORECASE)
 
 
-def _period_summary(periods: list[tuple[int, int, str | None]]) -> str:
+def _period_summary(periods: list[tuple[int, int, str | None, bool]]) -> str:
     """Describe the school's week compactly enough to be worth sending.
 
     Without this the model has no idea what "the last period" or "period 3"
@@ -204,9 +204,9 @@ def _period_summary(periods: list[tuple[int, int, str | None]]) -> str:
     if not periods:
         return ""
 
-    by_day: dict[int, list[tuple[int, str | None]]] = {}
-    for day, order, label in periods:
-        by_day.setdefault(day, []).append((order, label))
+    by_day: dict[int, list[tuple[int, str | None, bool]]] = {}
+    for day, order, label, is_break in periods:
+        by_day.setdefault(day, []).append((order, label, is_break))
 
     days = sorted(by_day)
     day_names = [_DAY_NAMES[d] if 0 <= d < 7 else f"day {d}" for d in days]
@@ -232,8 +232,13 @@ def _period_summary(periods: list[tuple[int, int, str | None]]) -> str:
     # times the tokens for the same fact.
     slots: dict[tuple[int, str], set[int]] = {}
     for day in days:
-        for order, label in by_day[day]:
-            if label and not _GENERIC_LABEL.match(label):
+        for order, label, is_break in by_day[day]:
+            # A break is worth naming even without a label - it is the thing
+            # "after lunch" and "before the break" resolve against, and the
+            # model needs to know nothing is ever scheduled in it.
+            if is_break:
+                slots.setdefault((order, f"{label or 'Break'} (a break - nothing is scheduled then)"), set()).add(day)
+            elif label and not _GENERIC_LABEL.match(label):
                 slots.setdefault((order, label), set()).add(day)
 
     named = []
@@ -253,7 +258,7 @@ def _grounding_system_prompt(
     teacher_names: list[str],
     subject_names: list[str],
     class_group_labels: list[str],
-    periods: list[tuple[int, int, str | None]] | None = None,
+    periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> str:
     """The "only use exact names from these lists" grounding instructions
     shared by both the single-constraint and batch prompts — factored out
@@ -283,7 +288,7 @@ def parse_constraint_llm(
     teacher_names: list[str],
     subject_names: list[str],
     class_group_labels: list[str],
-    periods: list[tuple[int, int, str | None]] | None = None,
+    periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> ParsedConstraint | None:
     """Returns None (never raises) if the LLM path can't be used right
     now — no key configured, or the call/response failed for any reason.
@@ -324,7 +329,7 @@ def parse_constraints_batch_llm(
     teacher_names: list[str],
     subject_names: list[str],
     class_group_labels: list[str],
-    periods: list[tuple[int, int, str | None]] | None = None,
+    periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> list[ParsedConstraint] | None:
     """Batch counterpart to parse_constraint_llm — extracts every distinct
     constraint from a whole block of text (e.g. several rules pasted or

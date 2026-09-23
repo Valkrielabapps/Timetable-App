@@ -170,6 +170,7 @@ export const api = {
   // Periods
   listPeriods: (schoolId) => get(`/periods?school_id=${schoolId}`),
   createPeriod: (data) => post("/periods", data),
+  updatePeriod: (id, data) => put(`/periods/${id}`, data),
   deletePeriod: (id) => del(`/periods/${id}`),
 
   // Teachers

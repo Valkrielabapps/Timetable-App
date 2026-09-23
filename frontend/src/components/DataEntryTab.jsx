@@ -212,6 +212,11 @@ export default function DataEntryTab({
       setPeriods((prev) => [...prev, created])
       return created
     },
+    async update(id, data) {
+      const updated = await api.updatePeriod(id, data)
+      setPeriods((prev) => prev.map((p) => (p.id === id ? updated : p)))
+      return updated
+    },
     async delete(id) {
       await api.deletePeriod(id)
       setPeriods((prev) => prev.filter((p) => p.id !== id))
@@ -592,6 +597,7 @@ function SetupSection({ schoolId, periods, onPeriodsChanged, rooms, onRoomsChang
             schoolId={schoolId}
             periods={periods}
             onCreate={onPeriodsChanged.create}
+            onUpdate={onPeriodsChanged.update}
             onDelete={onPeriodsChanged.delete}
             readOnly={readOnly}
           />

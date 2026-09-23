@@ -8,8 +8,8 @@ staying compact, since a naive version enumerates 40 rows per call.
 from app.services.llm_constraint_parser import _grounding_system_prompt, _period_summary
 
 
-def _week(days=5, per_day=8, label=lambda d, o: f"Period {o}"):
-    return [(d, o, label(d, o)) for d in range(days) for o in range(1, per_day + 1)]
+def _week(days=5, per_day=8, label=lambda d, o: f"Period {o}", is_break=lambda d, o: False):
+    return [(d, o, label(d, o), is_break(d, o)) for d in range(days) for o in range(1, per_day + 1)]
 
 
 def test_states_the_period_range_so_first_and_last_resolve():
@@ -47,7 +47,7 @@ def test_a_label_on_some_days_names_those_days():
 
 
 def test_irregular_weeks_get_a_per_day_breakdown():
-    week = [(0, o, None) for o in range(1, 9)] + [(5, o, None) for o in range(1, 5)]
+    week = [(0, o, None, False) for o in range(1, 9)] + [(5, o, None, False) for o in range(1, 5)]
     summary = _period_summary(week)
     assert "Monday: 8" in summary and "Saturday: 4" in summary
 

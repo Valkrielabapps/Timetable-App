@@ -54,6 +54,37 @@ class TimetableSolveResult:
     locked_keys: set[tuple[int, int, int, int]] = field(default_factory=set)
 
 
+def _runs_by_day(all_periods: list[Period]) -> list[list[Period]]:
+    """Each day's teaching periods, split into consecutive runs at breaks.
+
+    "No more than 3 periods back to back" should not be tripped by periods
+    either side of lunch - they aren't back to back, there is a break in
+    between. Filtering breaks out of the list would make periods 3 and 5
+    look adjacent and do exactly that, so the split happens here and the
+    max-consecutive constraints below iterate runs rather than whole days.
+
+    A day with no breaks yields exactly one run, which is the previous
+    behaviour.
+    """
+    by_day: dict[int, list[Period]] = {}
+    for p in all_periods:
+        by_day.setdefault(p.day_of_week, []).append(p)
+
+    runs: list[list[Period]] = []
+    for day_periods in by_day.values():
+        current: list[Period] = []
+        for period in sorted(day_periods, key=lambda p: p.order):
+            if period.is_break:
+                if current:
+                    runs.append(current)
+                    current = []
+            else:
+                current.append(period)
+        if current:
+            runs.append(current)
+    return runs
+
+
 def _class_group_label(cg: ClassGroup) -> str:
     return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
 
@@ -188,11 +219,27 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         shown in the UI, but not applied. Free-text rules that don't match
         any of the specific types above land here.
     """
-    periods = db.query(Period).filter(Period.school_id == school_id).all()
-    if not periods:
+    all_periods = db.query(Period).filter(Period.school_id == school_id).all()
+    if not all_periods:
         return TimetableSolveResult(
             status="no_periods",
             errors=["This school has no periods defined yet. Add periods before generating a timetable."],
+        )
+
+    # Breaks (lunch, assembly) occupy a slot in the day but are never taught
+    # in, so every variable and constraint below is built over teaching
+    # periods only. They still matter structurally, which is why the full
+    # list is kept: _runs_by_day uses it to split a day at its breaks, so a
+    # teacher scheduled either side of lunch isn't counted as having taught
+    # back-to-back.
+    periods = [p for p in all_periods if not p.is_break]
+    if not periods:
+        return TimetableSolveResult(
+            status="no_periods",
+            errors=[
+                "Every period in this school is marked as a break, so there is nothing to timetable. "
+                "Unmark at least one period to generate."
+            ],
         )
 
     # Group periods by day so "first period" / "last period" constraints
@@ -204,6 +251,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     first_period_ids = {min(day_periods, key=lambda p: p.order).id for day_periods in periods_by_day.values()}
     last_period_ids = {max(day_periods, key=lambda p: p.order).id for day_periods in periods_by_day.values()}
     sorted_periods_by_day = {day: sorted(day_periods, key=lambda p: p.order) for day, day_periods in periods_by_day.items()}
+    # Teaching runs, split at breaks. Used by the constraints that care
+    # about adjacency (max-consecutive, subject-sequence) rather than about
+    # distance, which reads period.order and so already counts breaks.
+    teaching_runs = _runs_by_day(all_periods)
 
     class_groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
     requirements: list[SubjectRequirement] = []
@@ -528,7 +579,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             # is scheduled at all, any subject/class — uses
             # teacher_period_vars (already AddAtMostOne'd to 0-or-1 per
             # period) instead of one requirement's per-period vars.
-            for day_periods in sorted_periods_by_day.values():
+            for day_periods in teaching_runs:
                 if len(day_periods) <= max_consecutive:
                     continue
                 for start in range(len(day_periods) - max_consecutive):
@@ -544,9 +595,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             if not _applies_to(p, req):
                 continue
             per_period_vars = req_period_vars.get(req.id, {})
-            for day_periods in sorted_periods_by_day.values():
+            for day_periods in teaching_runs:
                 if len(day_periods) <= max_consecutive:
-                    continue  # can't possibly exceed the cap on this day
+                    continue  # can't possibly exceed the cap in this run
                 for start in range(len(day_periods) - max_consecutive):
                     window = day_periods[start:start + max_consecutive + 1]
                     window_vars = [v for wp in window for v in per_period_vars.get(wp.id, [])]
@@ -584,7 +635,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 req2 = req_by_class_subject.get((cg_id, second_subject_id))
                 if not req1 or not req2:
                     continue  # this class group doesn't have both subjects; nothing to constrain
-                for day_periods in sorted_periods_by_day.values():
+                for day_periods in teaching_runs:
                     for i in range(len(day_periods) - 1):
                         period, next_period = day_periods[i], day_periods[i + 1]
                         first_vars = req_period_vars.get(req1.id, {}).get(period.id, [])
@@ -705,8 +756,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         if not errors and status_name == "infeasible":
             errors = errors + _diagnose_constraint_conflicts(
                 db, school_id, requirements, teachers, teachers_by_id, periods,
-                periods_by_day, first_period_ids, last_period_ids, period_ids_by_day,
-                class_groups_by_id, subjects_by_id, class_groups,
+                periods_by_day, teaching_runs, first_period_ids, last_period_ids,
+                period_ids_by_day, class_groups_by_id, subjects_by_id, class_groups,
             )
 
     return TimetableSolveResult(status=status_name, assignments=assignments, locked_keys=locked_keys, errors=errors)
@@ -820,6 +871,10 @@ def _diagnose_constraint_conflicts(
     teachers_by_id: dict[int, Teacher],
     periods: list[Period],
     periods_by_day: dict[int, list[Period]],
+    # Teaching runs split at breaks - the diagnosis has to model adjacency
+    # the same way the real solve does, or it reports conflicts that the
+    # generator never actually hit.
+    teaching_runs: list[list[Period]],
     first_period_ids: set[int],
     last_period_ids: set[int],
     period_ids_by_day: dict[int, set[int]],
@@ -992,7 +1047,7 @@ def _diagnose_constraint_conflicts(
             if isinstance(max_consecutive, int) and max_consecutive >= 1:
                 teacher_id = p.get("teacher_id")
                 if teacher_id is not None:
-                    for day_periods in sorted_periods_by_day.values():
+                    for day_periods in teaching_runs:
                         if len(day_periods) <= max_consecutive:
                             continue
                         for start in range(len(day_periods) - max_consecutive):
@@ -1006,7 +1061,7 @@ def _diagnose_constraint_conflicts(
                         if not _applies_to(p, req):
                             continue
                         per_period_vars = req_period_vars.get(req.id, {})
-                        for day_periods in sorted_periods_by_day.values():
+                        for day_periods in teaching_runs:
                             if len(day_periods) <= max_consecutive:
                                 continue
                             for start in range(len(day_periods) - max_consecutive):
@@ -1026,7 +1081,7 @@ def _diagnose_constraint_conflicts(
                     req2 = req_by_class_subject.get((cg_id, second_subject_id))
                     if not req1 or not req2:
                         continue
-                    for day_periods in sorted_periods_by_day.values():
+                    for day_periods in teaching_runs:
                         for i in range(len(day_periods) - 1):
                             period, next_period = day_periods[i], day_periods[i + 1]
                             first_vars = req_period_vars.get(req1.id, {}).get(period.id, [])

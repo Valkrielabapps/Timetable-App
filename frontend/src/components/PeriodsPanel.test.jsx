@@ -33,6 +33,7 @@ describe('PeriodsPanel', () => {
       day_of_week: 0,
       order: 3,
       label: '11:00-11:45',
+      is_break: false,
     })
   })
 
@@ -60,5 +61,51 @@ describe('PeriodsPanel', () => {
       // The read-only list itself should still render normally.
       expect(screen.getByText(/Monday · #1/)).toBeInTheDocument()
     })
+  })
+})
+
+describe('PeriodsPanel breaks', () => {
+  const WITH_BREAK = [
+    { id: 1, day_of_week: 0, order: 1, label: '9:00-9:45', is_break: false },
+    { id: 2, day_of_week: 0, order: 2, label: 'Lunch', is_break: true },
+  ]
+
+  it('marks a break visibly, so it is obvious nothing is taught then', () => {
+    render(
+      <PeriodsPanel schoolId={1} periods={WITH_BREAK} onCreate={vi.fn()} onDelete={vi.fn()} onUpdate={vi.fn()} />,
+    )
+    expect(screen.getByText('Break', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('creates a period as a break when the box is ticked', async () => {
+    const onCreate = vi.fn().mockResolvedValue({})
+    render(<PeriodsPanel schoolId={7} periods={[]} onCreate={onCreate} onDelete={vi.fn()} onUpdate={vi.fn()} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/Order/), { target: { value: '4' } })
+    fireEvent.click(screen.getByLabelText('Break'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ is_break: true, order: 4 }))
+  })
+
+  it('toggles an existing period between teaching and break', () => {
+    const onUpdate = vi.fn().mockResolvedValue({})
+    render(
+      <PeriodsPanel schoolId={1} periods={WITH_BREAK} onCreate={vi.fn()} onDelete={vi.fn()} onUpdate={onUpdate} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as break' }))
+    expect(onUpdate).toHaveBeenCalledWith(1, { is_break: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as teaching' }))
+    expect(onUpdate).toHaveBeenCalledWith(2, { is_break: false })
+  })
+
+  it('hides the break controls from viewers', () => {
+    render(
+      <PeriodsPanel schoolId={1} periods={WITH_BREAK} onCreate={vi.fn()} onDelete={vi.fn()} onUpdate={vi.fn()} readOnly />,
+    )
+    expect(screen.queryByRole('button', { name: /Mark as/ })).not.toBeInTheDocument()
+    // the badge still shows - a viewer should see which slots are breaks
+    expect(screen.getByText('Break', { selector: 'span' })).toBeInTheDocument()
   })
 })

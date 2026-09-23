@@ -64,6 +64,27 @@ Every existing timetable backfills to `NULL`, which the frontend already
 treats as "no friendly explanation available, show the raw error list" —
 the same as every timetable's behavior before this column existed.
 
+## Break periods
+
+A period can be marked as a **break** (lunch, assembly, games) in the
+Periods panel. A break is a real `Period` row with `is_break = true`, not a
+gap in the numbering, and that is deliberate:
+
+- nothing is ever scheduled into it (`app/services/solver.py` builds its
+  variables over teaching periods only);
+- it still occupies a slot, so "the period after lunch" refers to
+  something;
+- it **interrupts a run** - a teacher scheduled either side of lunch has
+  not taught back-to-back, so `_runs_by_day` splits each day at its breaks
+  and the max-consecutive and subject-sequence constraints iterate those
+  runs rather than whole days;
+- the constraint parser is told it exists, so rules phrased around it
+  ("no PE right after lunch") can resolve to a period at all.
+
+Distance-based constraints (`min_gap_between_subjects`) already measure in
+`Period.order`, so a break naturally counts toward the gap without any
+special handling.
+
 ## 1. Backend
 
 ```bash

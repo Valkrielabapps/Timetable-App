@@ -60,7 +60,14 @@ class Period(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
     day_of_week = Column(Integer, nullable=False)  # 0 = Monday ... 6 = Sunday
     order = Column(Integer, nullable=False)  # position within the day
-    label = Column(String, nullable=True)  # e.g. "Period 3" or "9:00-9:45"
+    label = Column(String, nullable=True)  # e.g. "Period 3", "9:00-9:45", "Lunch"
+    # A slot in the day that exists in the ordering but is never taught in -
+    # lunch, assembly, games. Kept as a Period rather than a gap in `order`
+    # so "the period after lunch" resolves to something, and so a teacher's
+    # back-to-back run is correctly interrupted by it (see
+    # app/services/solver.py, which splits each day into runs at breaks
+    # rather than treating periods 3 and 5 as adjacent).
+    is_break = Column(Boolean, nullable=False, default=False, server_default="false")
 
     school = relationship("School", back_populates="periods")
 
