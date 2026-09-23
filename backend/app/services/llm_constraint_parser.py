@@ -22,6 +22,7 @@ Design choices:
     entirely. This is a deliberate availability-over-purity tradeoff.
 """
 import logging
+import re
 from dataclasses import dataclass, field
 
 from app.core.config import settings
@@ -178,16 +179,99 @@ def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) ->
     )
 
 
-def _grounding_system_prompt(teacher_names: list[str], subject_names: list[str], class_group_labels: list[str]) -> str:
+_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+# A label carrying no information beyond its position - "Period 3", "P3", "3".
+# Anything else (e.g. "Lunch", "Assembly", "Games") is worth naming in the
+# prompt, because it is the only way a rule phrased around it can be resolved.
+_GENERIC_LABEL = re.compile(r"^\s*(p|period)?\s*\d+\s*$", re.IGNORECASE)
+
+
+def _period_summary(periods: list[tuple[int, int, str | None]]) -> str:
+    """Describe the school's week compactly enough to be worth sending.
+
+    Without this the model has no idea what "the last period" or "period 3"
+    refer to - it sees teachers, subjects and class groups, and has to guess
+    at the shape of the timetable those sit in.
+
+    Deliberately a summary, not the rows: a school with 8 periods across 5
+    days has 40 Period rows, and enumerating them costs several hundred
+    tokens per parse to say what two sentences say. Irregular weeks (days
+    with different period counts) fall back to a per-day breakdown, and any
+    label that isn't just a number is listed individually - a period named
+    "Lunch" is exactly the thing rules get phrased around.
+    """
+    if not periods:
+        return ""
+
+    by_day: dict[int, list[tuple[int, str | None]]] = {}
+    for day, order, label in periods:
+        by_day.setdefault(day, []).append((order, label))
+
+    days = sorted(by_day)
+    day_names = [_DAY_NAMES[d] if 0 <= d < 7 else f"day {d}" for d in days]
+    counts = {d: len(by_day[d]) for d in days}
+
+    if len(set(counts.values())) == 1:
+        n = counts[days[0]]
+        structure = (
+            f"Teaching days: {', '.join(day_names)}. "
+            f"{n} periods per day, numbered 1 to {n} "
+            f"(so \"first period\" = 1 and \"last period\" = {n})."
+        )
+    else:
+        breakdown = "; ".join(f"{_DAY_NAMES[d] if 0 <= d < 7 else d}: {counts[d]}" for d in days)
+        structure = (
+            f"Teaching days: {', '.join(day_names)}. "
+            f"Periods differ by day - {breakdown}. "
+            "\"Last period\" means the highest-numbered period on the day in question."
+        )
+
+    # Collapse labels that sit at the same slot every day - a school with a
+    # lunch period has one on all five days, and saying so five times is five
+    # times the tokens for the same fact.
+    slots: dict[tuple[int, str], set[int]] = {}
+    for day in days:
+        for order, label in by_day[day]:
+            if label and not _GENERIC_LABEL.match(label):
+                slots.setdefault((order, label), set()).add(day)
+
+    named = []
+    for (order, label), on_days in sorted(slots.items()):
+        if on_days == set(days):
+            named.append(f'period {order} is "{label}" every day')
+        else:
+            where = ", ".join(_DAY_NAMES[d] if 0 <= d < 7 else str(d) for d in sorted(on_days))
+            named.append(f'period {order} is "{label}" on {where}')
+    if named:
+        structure += " Named periods: " + "; ".join(named) + "."
+
+    return structure
+
+
+def _grounding_system_prompt(
+    teacher_names: list[str],
+    subject_names: list[str],
+    class_group_labels: list[str],
+    periods: list[tuple[int, int, str | None]] | None = None,
+) -> str:
     """The "only use exact names from these lists" grounding instructions
     shared by both the single-constraint and batch prompts — factored out
     so the two can't quietly drift apart on how strict that matching rule
-    is worded."""
+    is worded.
+
+    `periods` is what lets positional phrasing resolve at all: without it the
+    model is told who teaches what, but nothing about the shape of the week
+    those lessons sit in, so "the last period" or "period 3" are guesses.
+    Optional because the regex-era callers (and the tests) don't supply it,
+    and a missing timetable structure should degrade the prompt rather than
+    break it."""
     return (
         f"Known teachers: {teacher_names}\n"
         f"Known subjects: {subject_names}\n"
-        f"Known class groups (grades and sections): {class_group_labels}\n\n"
-        "Only reference names that appear verbatim in these lists; if a name in the "
+        f"Known class groups (grades and sections): {class_group_labels}\n"
+        + (f"{_period_summary(periods)}\n\n" if periods else "\n")
+        + "Only reference names that appear verbatim in these lists; if a name in the "
         "text doesn't clearly match one of them, use null rather than guessing. "
         "If a rule doesn't fit any of the specific constraint types, use "
         "type='scheduling_rule' and just fill in description."
@@ -199,6 +283,7 @@ def parse_constraint_llm(
     teacher_names: list[str],
     subject_names: list[str],
     class_group_labels: list[str],
+    periods: list[tuple[int, int, str | None]] | None = None,
 ) -> ParsedConstraint | None:
     """Returns None (never raises) if the LLM path can't be used right
     now — no key configured, or the call/response failed for any reason.
@@ -217,7 +302,7 @@ def parse_constraint_llm(
         system_prompt = (
             "You extract a single structured school-timetabling constraint from one "
             "sentence written by a school admin. Use the record_constraint tool.\n\n"
-            + _grounding_system_prompt(teacher_names, subject_names, class_group_labels)
+            + _grounding_system_prompt(teacher_names, subject_names, class_group_labels, periods)
         )
         response = client.messages.create(
             model=settings.llm_model,
@@ -239,6 +324,7 @@ def parse_constraints_batch_llm(
     teacher_names: list[str],
     subject_names: list[str],
     class_group_labels: list[str],
+    periods: list[tuple[int, int, str | None]] | None = None,
 ) -> list[ParsedConstraint] | None:
     """Batch counterpart to parse_constraint_llm — extracts every distinct
     constraint from a whole block of text (e.g. several rules pasted or
@@ -269,7 +355,7 @@ def parse_constraints_batch_llm(
             "one entry, and do not skip any rule just because it's vague; use "
             "type='scheduling_rule' for anything that doesn't fit a specific "
             "type rather than dropping it.\n\n"
-            + _grounding_system_prompt(teacher_names, subject_names, class_group_labels)
+            + _grounding_system_prompt(teacher_names, subject_names, class_group_labels, periods)
         )
         response = client.messages.create(
             model=settings.llm_model,

@@ -319,12 +319,16 @@ class _ResolutionData:
     teacher_names: list[str]
     subject_names: list[str]
     class_group_labels: list[str]
+    # (day_of_week, order, label) per period, for the LLM prompt's timetable
+    # structure summary - see _period_summary in llm_constraint_parser.py.
+    periods: list[tuple[int, int, str | None]]
 
 
 def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
     teachers = db.query(Teacher).filter(Teacher.school_id == school_id).all()
     subjects = db.query(Subject).filter(Subject.school_id == school_id).all()
     class_groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+    periods = db.query(Period).filter(Period.school_id == school_id).all()
 
     label_to_class_groups: dict[str, list[ClassGroup]] = {}
     for grade in sorted({cg.grade for cg in class_groups if cg.grade}):
@@ -340,6 +344,7 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
         teacher_names=[t.name for t in teachers],
         subject_names=[s.name for s in subjects],
         class_group_labels=list(label_to_class_groups.keys()),
+        periods=[(p.day_of_week, p.order, p.label) for p in periods],
     )
 
 
@@ -351,7 +356,9 @@ def _parse_text_to_constraint(text: str, data: _ResolutionData) -> ParsedConstra
     (app/services/constraint_parser.py) — via _adapt_legacy, since that
     parser predates the unified output shape — so constraint entry never
     just breaks because of an LLM/network issue."""
-    parsed = parse_constraint_llm(text, data.teacher_names, data.subject_names, data.class_group_labels)
+    parsed = parse_constraint_llm(
+        text, data.teacher_names, data.subject_names, data.class_group_labels, data.periods
+    )
     if parsed is None:
         legacy = regex_parser.parse_constraint(text, data.teacher_names, data.subject_names)
         parsed = _adapt_legacy(legacy)
@@ -540,7 +547,9 @@ def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> l
     """
     data = _load_resolution_data(db, school_id)
 
-    parsed_list = parse_constraints_batch_llm(text, data.teacher_names, data.subject_names, data.class_group_labels)
+    parsed_list = parse_constraints_batch_llm(
+        text, data.teacher_names, data.subject_names, data.class_group_labels, data.periods
+    )
     if not parsed_list:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         parsed_list = [_parse_text_to_constraint(line, data) for line in lines]
