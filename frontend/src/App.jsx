@@ -60,7 +60,6 @@ function App() {
   // switches for free.
   const [subjects, setSubjects] = useState([])
   const [periods, setPeriods] = useState([])
-  const [rooms, setRooms] = useState([])
   // Constraints — same reasoning as subjects/periods/rooms above: lifted
   // here instead of fetched independently by ConstraintsTab (which
   // unmounts on every tab switch) and *again* by useSetupProgress (for
@@ -223,12 +222,11 @@ function App() {
       // at all just because Team isn't something a viewer can see anyway
       // (App.jsx only adds the Team tab for `role === 'admin'`).
       const isAdmin = schools.find((s) => s.id === schoolId)?.role === 'admin'
-      const [cg, t, s, p, rm, c, mem, inv, tts, reqs] = await Promise.all([
+      const [cg, t, s, p, c, mem, inv, tts, reqs] = await Promise.all([
         api.listClassGroups(schoolId),
         api.listTeachers(schoolId),
         api.listSubjects(schoolId),
         api.listPeriods(schoolId),
-        api.listRooms(schoolId),
         api.listConstraints(schoolId),
         isAdmin ? api.listMembers(schoolId) : Promise.resolve([]),
         isAdmin ? api.listInvites(schoolId) : Promise.resolve([]),
@@ -239,7 +237,6 @@ function App() {
       setTeachers(t)
       setSubjects(s)
       setPeriods(p)
-      setRooms(rm)
       setConstraints(c)
       setMembers(mem)
       setInvites(inv)
@@ -462,7 +459,6 @@ function App() {
     setTeachers([])
     setSubjects([])
     setPeriods([])
-    setRooms([])
     setConstraints([])
     setMembers([])
     setInvites([])
@@ -781,8 +777,6 @@ function App() {
                     setTeachers={setTeachers}
                     periods={periods}
                     setPeriods={setPeriods}
-                    rooms={rooms}
-                    setRooms={setRooms}
                     classGroups={classGroups}
                     allRequirements={allRequirements}
                     setAllRequirements={setAllRequirements}

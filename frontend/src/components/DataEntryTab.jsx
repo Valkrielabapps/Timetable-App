@@ -3,6 +3,7 @@ import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import PeriodsPanel from './PeriodsPanel'
 import RoomsPanel from './RoomsPanel'
+import { useRoomMutations, useRooms } from '../hooks/useSchoolData'
 import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
@@ -74,8 +75,6 @@ export default function DataEntryTab({
   setTeachers,
   periods,
   setPeriods,
-  rooms,
-  setRooms,
   classGroups,
   // Every SubjectRequirement in the school, owned by App.jsx (same
   // reasoning as subjects/teachers/periods/rooms above — this component
@@ -223,17 +222,11 @@ export default function DataEntryTab({
     },
   }
 
-  const roomsApi = {
-    async create(data) {
-      const created = await api.createRoom(data)
-      setRooms((prev) => [...prev, created])
-      return created
-    },
-    async delete(id) {
-      await api.deleteRoom(id)
-      setRooms((prev) => prev.filter((r) => r.id !== id))
-    },
-  }
+  // Rooms are the first resource off App.jsx's lifted state: fetched and
+  // cached by React Query here rather than arriving as props from a
+  // ten-endpoint load, and mutations invalidate only the rooms key.
+  const { data: rooms = [] } = useRooms(schoolId)
+  const roomsApi = useRoomMutations(schoolId)
 
   const teachersApi = {
     async update(id, data) {
