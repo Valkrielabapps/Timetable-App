@@ -58,3 +58,80 @@ export function useRoomMutations(schoolId) {
     delete: (id) => remove.mutateAsync(id),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Timetables
+// ---------------------------------------------------------------------------
+
+export function useTimetables(schoolId) {
+  return useQuery({
+    queryKey: keys.timetables(schoolId),
+    queryFn: () => api.listTimetables(schoolId),
+    enabled: schoolId != null,
+  })
+}
+
+/**
+ * One timetable, polled while the solver is still working on it.
+ *
+ * Generation runs as a background job on the server (see the module
+ * docstring in backend/app/routers/timetables.py), so the row appears with
+ * status="generating" and flips to "draft" or "failed" later. This replaces
+ * a hand-rolled setInterval + ref + manual clear in App.jsx: the interval
+ * here is derived from the data, so it starts and stops on its own and
+ * cannot leak past an unmount or a school switch.
+ */
+export function useTimetable(timetableId) {
+  return useQuery({
+    queryKey: keys.timetable(timetableId),
+    queryFn: () => api.getTimetable(timetableId),
+    enabled: timetableId != null,
+    // `false` stops the polling. Returning the interval straight from the
+    // status means a reload mid-generation resumes polling with no special
+    // case for it - the query just sees "generating" and carries on.
+    refetchInterval: (query) => (query.state.data?.status === 'generating' ? 1500 : false),
+    // TimetableTab unmounts on every tab switch, so polling pauses while the
+    // admin is elsewhere. A row still marked "generating" is therefore
+    // untrustworthy the moment they come back and must be re-read; a
+    // finished one is not, and re-fetching it would pull hundreds of entry
+    // rows on every tab switch - and would also discard the entry patches
+    // applied by useApplyEntryUpdates below.
+    staleTime: (query) => (query.state.data?.status === 'generating' ? 0 : 30_000),
+  })
+}
+
+export function useGenerateTimetable(schoolId) {
+  const queryClient = useQueryClient()
+  const generate = useMutation({
+    mutationFn: () => api.generateTimetable(schoolId),
+    onSuccess: (created) => {
+      // Seed the cache with the row the server just returned so the polling
+      // query starts from it rather than waiting a round trip to discover a
+      // timetable it was already handed.
+      queryClient.setQueryData(keys.timetable(created.id), created)
+      queryClient.invalidateQueries({ queryKey: keys.timetables(schoolId) })
+    },
+  })
+  return { generate: () => generate.mutateAsync(), isGenerating: generate.isPending }
+}
+
+/**
+ * Patch specific entries into the cached timetable after a lock/move/swap.
+ *
+ * Deliberately not an invalidation. PATCH and swap return exactly the rows
+ * that changed, and re-fetching a school-wide timetable (hundreds of rows)
+ * to reflect one lock toggle is what used to make that toggle take 5-10
+ * seconds to show its new state.
+ */
+export function useApplyEntryUpdates(timetableId) {
+  const queryClient = useQueryClient()
+  return (...updated) => {
+    queryClient.setQueryData(keys.timetable(timetableId), (prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        entries: prev.entries.map((e) => updated.find((u) => u.id === e.id) ?? e),
+      }
+    })
+  }
+}

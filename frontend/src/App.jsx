@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api, getToken, setToken } from './api'
 import LandingPage from './components/LandingPage'
@@ -87,19 +87,12 @@ function App() {
   // undercount any section the admin hasn't happened to open yet, which
   // defeats the point of a workload warning.
   const [allRequirements, setAllRequirements] = useState([])
-  // The generated timetable, and whether a generation is in progress —
-  // same reasoning as everything above: TimetableTab gets unmounted on
-  // every tab switch, so state (and an in-flight fetch meant to recover
-  // it) kept only inside it is unreliable — a slow/flaky request on the
-  // way back could still show "no timetable" even though a fetch was
-  // attempted. Owning it here means it's fetched once and simply exists
-  // from then on, regardless of how many times TimetableTab mounts and
-  // unmounts. Polling for an in-progress generation is also owned here so
-  // it keeps running even while the admin is on a different tab, instead
-  // of only resuming once they happen to come back to Timetable.
-  const [timetable, setTimetable] = useState(null)
-  const [generating, setGenerating] = useState(false)
-  const timetablePollRef = useRef(null)
+  // The timetable is no longer lifted here. It used to be, because
+  // TimetableTab unmounts on every tab switch and state kept inside it was
+  // lost each time; React Query's cache survives the unmount instead, so
+  // the tab can own its own data again (see useTimetable in
+  // hooks/useSchoolData.js, which also replaces the polling that lived
+  // here).
   const [tab, setTab] = useState('overview')
   // Which of Data Entry's three sub-pages (subjects/teachers/plan) is
   // active — lifted up here rather than kept local to DataEntryTab so
@@ -222,7 +215,7 @@ function App() {
       // at all just because Team isn't something a viewer can see anyway
       // (App.jsx only adds the Team tab for `role === 'admin'`).
       const isAdmin = schools.find((s) => s.id === schoolId)?.role === 'admin'
-      const [cg, t, s, p, c, mem, inv, tts, reqs] = await Promise.all([
+      const [cg, t, s, p, c, mem, inv, reqs] = await Promise.all([
         api.listClassGroups(schoolId),
         api.listTeachers(schoolId),
         api.listSubjects(schoolId),
@@ -230,7 +223,6 @@ function App() {
         api.listConstraints(schoolId),
         isAdmin ? api.listMembers(schoolId) : Promise.resolve([]),
         isAdmin ? api.listInvites(schoolId) : Promise.resolve([]),
-        api.listTimetables(schoolId),
         api.listAllRequirements(schoolId),
       ])
       setClassGroups(cg)
@@ -241,14 +233,6 @@ function App() {
       setMembers(mem)
       setInvites(inv)
       setAllRequirements(reqs)
-      // No `created_at` on TimetableOut — ids are assigned in creation
-      // order, so the highest id is the most recently generated one.
-      const latestTimetable = tts.length > 0 ? tts.reduce((a, b) => (b.id > a.id ? b : a)) : null
-      setTimetable(latestTimetable)
-      if (latestTimetable?.status === 'generating') {
-        setGenerating(true)
-        pollTimetableUntilDone(latestTimetable.id)
-      }
       setError(null)
       setSelectedClassGroupId((prev) =>
         cg.some((c) => c.id === prev) ? prev : cg[0]?.id ?? null
@@ -286,31 +270,6 @@ function App() {
     } catch (err) {
       setError(err.message)
     }
-  }
-
-  function stopTimetablePolling() {
-    if (timetablePollRef.current) {
-      clearInterval(timetablePollRef.current)
-      timetablePollRef.current = null
-    }
-  }
-
-  function pollTimetableUntilDone(timetableId) {
-    stopTimetablePolling()
-    timetablePollRef.current = setInterval(async () => {
-      try {
-        const updated = await api.getTimetable(timetableId)
-        setTimetable(updated)
-        if (updated.status !== 'generating') {
-          stopTimetablePolling()
-          setGenerating(false)
-        }
-      } catch (err) {
-        stopTimetablePolling()
-        setGenerating(false)
-        setError(err.message)
-      }
-    }, 1500)
   }
 
   async function submitAddSchool(e) {
@@ -463,8 +422,6 @@ function App() {
     setMembers([])
     setInvites([])
     setAllRequirements([])
-    setTimetable(null)
-    setGenerating(false)
     setShowAuth(false)
     setSchoolsReady(false)
     setSchoolDataReady(false)
@@ -804,11 +761,6 @@ function App() {
                       teachers={teachers}
                       periods={periods}
                       constraints={constraints}
-                      timetable={timetable}
-                      setTimetable={setTimetable}
-                      generating={generating}
-                      setGenerating={setGenerating}
-                      onPollUntilDone={pollTimetableUntilDone}
                       readOnly={isViewer}
                     />
                   ) : (

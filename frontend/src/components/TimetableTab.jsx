@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { api } from '../api'
+import {
+  useApplyEntryUpdates,
+  useGenerateTimetable,
+  useTimetable,
+  useTimetables,
+} from '../hooks/useSchoolData'
 import SubstitutionsTab from './SubstitutionsTab'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -80,11 +86,6 @@ export default function TimetableTab({
   // tab — so there's nothing left here that a remount can lose.
   periods,
   constraints = [],
-  timetable,
-  setTimetable,
-  generating,
-  setGenerating,
-  onPollUntilDone,
   readOnly = false,
 }) {
   // Constraints saved on the Constraints tab that the solver doesn't
@@ -139,21 +140,25 @@ export default function TimetableTab({
     if (!stillValid) setSelectedTeacherId(teachers[0]?.id ?? null)
   }, [teachers, selectedTeacherId])
 
+  // The latest timetable for this school, polled by useTimetable while the
+  // solver is still working. Replaces App.jsx's setInterval + ref: the
+  // interval is derived from the row's status, so it stops on its own and
+  // resumes by itself after a reload mid-generation.
+  const { data: timetableList = [] } = useTimetables(schoolId)
+  // No created_at on TimetableOut - ids are assigned in creation order, so
+  // the highest id is the most recent.
+  const latestTimetableId =
+    timetableList.length > 0 ? timetableList.reduce((a, b) => (b.id > a.id ? b : a)).id : null
+  const { data: timetable = null } = useTimetable(latestTimetableId)
+  const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
+  const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
+
   async function handleGenerate() {
-    setGenerating(true)
     setError(null)
-    setTimetable(null)
     try {
-      const created = await api.generateTimetable(schoolId)
-      setTimetable(created)
-      if (created.status === 'generating') {
-        onPollUntilDone(created.id)
-      } else {
-        setGenerating(false)
-      }
+      await generate()
     } catch (err) {
       setError(err.message)
-      setGenerating(false)
     }
   }
 
@@ -164,16 +169,6 @@ export default function TimetableTab({
   // seconds to show its new state (a school-wide timetable can be
   // hundreds of rows; PATCH/swap already return the exact row(s) that
   // changed, so there's nothing else here that could have gone stale).
-  function applyEntryUpdates(...updated) {
-    setTimetable((prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        entries: prev.entries.map((e) => updated.find((u) => u.id === e.id) ?? e),
-      }
-    })
-  }
-
   async function handleEditCommand(e) {
     e.preventDefault()
     const text = commandText.trim()
@@ -273,7 +268,7 @@ export default function TimetableTab({
   const isSelectedTeacherAssisting = (e) =>
     view === 'teacher' && e.assistant_teacher_id === selectedTeacherId && e.teacher_id !== selectedTeacherId
 
-  const isGenerating = generating || timetable?.status === 'generating'
+  const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
   const failed = !isGenerating && timetable?.status === 'failed'
   const solved = !isGenerating && timetable?.status === 'draft'
 

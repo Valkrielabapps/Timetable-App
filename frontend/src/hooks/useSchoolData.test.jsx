@@ -1,10 +1,16 @@
 import React from 'react'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../api'
-import { useRoomMutations, useRooms } from './useSchoolData'
+import {
+  useApplyEntryUpdates,
+  useGenerateTimetable,
+  useRoomMutations,
+  useRooms,
+  useTimetable,
+} from './useSchoolData'
 
 vi.mock('../api', () => ({
   api: {
@@ -12,6 +18,9 @@ vi.mock('../api', () => ({
     createRoom: vi.fn(),
     deleteRoom: vi.fn(),
     listTeachers: vi.fn(),
+    listTimetables: vi.fn(),
+    getTimetable: vi.fn(),
+    generateTimetable: vi.fn(),
   },
 }))
 
@@ -107,5 +116,114 @@ describe('useRoomMutations', () => {
     const { result } = renderHook(() => useRoomMutations(7), { wrapper: Wrapper })
 
     await expect(result.current.create({ school_id: 7, name: 'x' })).rejects.toThrow('409 duplicate')
+  })
+})
+
+describe('useTimetable polling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  // Fake timers leak into later describes otherwise, and waitFor depends on
+  // real ones - the failure looks like a broken assertion, not a timer bug.
+  afterEach(() => vi.useRealTimers())
+
+  it('keeps polling while the solver is still working', async () => {
+    // Generation is a background job on the server, so the row appears as
+    // "generating" and flips later. This replaces a hand-rolled setInterval.
+    api.getTimetable.mockResolvedValue({ id: 3, status: 'generating', entries: [] })
+    const { Wrapper } = wrapper()
+    const { result } = renderHook(() => useTimetable(3), { wrapper: Wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getTimetable).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1600)
+    await waitFor(() => expect(api.getTimetable).toHaveBeenCalledTimes(2))
+  })
+
+  it('stops polling once the timetable is done', async () => {
+    api.getTimetable.mockResolvedValue({ id: 3, status: 'draft', entries: [] })
+    const { Wrapper } = wrapper()
+    const { result } = renderHook(() => useTimetable(3), { wrapper: Wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const callsWhenDone = api.getTimetable.mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.getTimetable).toHaveBeenCalledTimes(callsWhenDone)
+  })
+
+  it('stops as soon as a poll returns a finished timetable', async () => {
+    api.getTimetable
+      .mockResolvedValueOnce({ id: 3, status: 'generating', entries: [] })
+      .mockResolvedValue({ id: 3, status: 'draft', entries: [] })
+    const { Wrapper } = wrapper()
+    const { result } = renderHook(() => useTimetable(3), { wrapper: Wrapper })
+
+    await waitFor(() => expect(result.current.data?.status).toBe('generating'))
+    await vi.advanceTimersByTimeAsync(1600)
+    await waitFor(() => expect(result.current.data?.status).toBe('draft'))
+
+    const settled = api.getTimetable.mock.calls.length
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.getTimetable).toHaveBeenCalledTimes(settled)
+  })
+
+  it('does not poll when there is no timetable yet', () => {
+    const { Wrapper } = wrapper()
+    renderHook(() => useTimetable(null), { wrapper: Wrapper })
+    expect(api.getTimetable).not.toHaveBeenCalled()
+  })
+})
+
+describe('useApplyEntryUpdates', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('patches the returned entries without re-fetching', async () => {
+    // Re-fetching a school-wide timetable to reflect one lock toggle is what
+    // made that toggle take 5-10 seconds.
+    api.getTimetable.mockResolvedValue({
+      id: 3,
+      status: 'draft',
+      entries: [
+        { id: 1, locked: false },
+        { id: 2, locked: false },
+      ],
+    })
+    const { Wrapper, client } = wrapper()
+    const { result } = renderHook(
+      () => ({ tt: useTimetable(3), apply: useApplyEntryUpdates(3) }),
+      { wrapper: Wrapper },
+    )
+    await waitFor(() => expect(result.current.tt.isSuccess).toBe(true))
+    const callsBefore = api.getTimetable.mock.calls.length
+
+    result.current.apply({ id: 2, locked: true })
+
+    const cached = client.getQueryData(['timetable', 3])
+    expect(cached.entries.find((e) => e.id === 2).locked).toBe(true)
+    // Untouched entries keep their state - the patch is targeted, not a
+    // wholesale replace.
+    expect(cached.entries.find((e) => e.id === 1).locked).toBe(false)
+    expect(api.getTimetable).toHaveBeenCalledTimes(callsBefore)
+  })
+})
+
+describe('useGenerateTimetable', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('seeds the cache so polling starts from the returned row', async () => {
+    api.generateTimetable.mockResolvedValue({ id: 9, status: 'generating', entries: [] })
+    api.getTimetable.mockResolvedValue({ id: 9, status: 'generating', entries: [] })
+    api.listTimetables.mockResolvedValue([{ id: 9 }])
+
+    const { Wrapper } = wrapper()
+    const { result } = renderHook(() => useGenerateTimetable(7), { wrapper: Wrapper })
+    const created = await result.current.generate()
+
+    expect(created.id).toBe(9)
+    expect(api.generateTimetable).toHaveBeenCalledWith(7)
   })
 })
