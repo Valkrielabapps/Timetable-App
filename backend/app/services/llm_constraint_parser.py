@@ -42,7 +42,8 @@ logger = logging.getLogger(__name__)
 #                               class_group_name) or a teacher (their whole
 #                               schedule, any subject/class — set
 #                               teacher_name instead of subject_name)
-#   min_gap_between_subjects  - first_subject_name and second_subject_name
+#   min_gap_between_subjects  - SYMMETRIC spacing. first_subject_name and
+#                               second_subject_name
 #                               must be separated by at least min_gap
 #                               periods on the same day, for the same class
 #                               (e.g. "leave at least 1 period between PE
@@ -52,7 +53,9 @@ logger = logging.getLogger(__name__)
 #                               (mode=exclude) be scheduled on a given day
 #                               of the week (e.g. "No PE on Fridays"),
 #                               optionally scoped via class_group_name
-#   subject_sequence          - second_subject_name must not be scheduled
+#   subject_sequence          - DIRECTIONAL, and the right choice for
+#                               "X can't immediately follow Y":
+#                               second_subject_name must not be scheduled
 #                               in the period immediately after
 #                               first_subject_name, for the same class
 #                               (e.g. "Math can't immediately follow PE"),
@@ -106,7 +109,17 @@ _TOOL_SCHEMA = {
                 "description": "For subject_period_position and subject_day_position: 'require' if the sentence says the subject MUST/SHOULD be there, 'exclude' if it says the subject must NOT/CAN'T/SHOULDN'T be there.",
             },
             "max_consecutive": {"type": ["integer", "null"], "description": "For max_consecutive_periods — the max number of back-to-back periods allowed."},
-            "min_gap": {"type": ["integer", "null"], "description": "For min_gap_between_subjects — the minimum number of periods that must separate the two subjects on the same day."},
+            "min_gap": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For min_gap_between_subjects only: how many periods must SEPARATE the two "
+                    "subjects. 1 means at least one period in between, so periods 1 and 3 are "
+                    "allowed but 1 and 2 are not. Do NOT use min_gap=1 to express 'X can't come "
+                    "straight after Y' - that is directional, and subject_sequence says it "
+                    "exactly; min_gap would also forbid the reverse order, which the sentence "
+                    "did not ask for."
+                ),
+            },
             "strength": {
                 "type": ["string", "null"],
                 "enum": ["required", "strong_preference", "preference", None],

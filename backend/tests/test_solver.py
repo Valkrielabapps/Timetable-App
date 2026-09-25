@@ -386,3 +386,115 @@ def test_a_school_of_only_breaks_reports_nothing_to_schedule(db_session):
     result = generate_school_timetable(db, school.id)
     assert result.status == "no_periods"
     assert any("break" in e.lower() for e in result.errors)
+
+
+def test_min_gap_of_one_forbids_adjacent_periods(db_session):
+    """"Hindi can't immediately follow Eng Lit" parses to min_gap=1, and used
+    to do nothing: the solver forbade only a difference of 0, which one class
+    group can never have anyway. The rule showed as enforced while the
+    generated timetable ignored it.
+
+    Deliberately given exactly two slots, so the two subjects have nowhere to
+    go except adjacent to each other - the result is infeasible if the rule
+    bites and feasible if it doesn't. With more slots the solver is free to
+    separate them by chance, which is why the first version of this test
+    passed against the bug it was written for.
+    """
+    db = db_session
+    school = _make_school_with_periods(db, days=1, periods_per_day=2)
+
+    first = Subject(school_id=school.id, name="Eng Lit")
+    second = Subject(school_id=school.id, name="Hindi")
+    db.add_all([first, second])
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    db.add(Teacher(school_id=school.id, name="Anjali", qualified_subject_ids=[first.id, second.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=first.id, periods_per_week=1))
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=second.id, periods_per_week=1))
+    db.add(Constraint(
+        school_id=school.id,
+        type="min_gap_between_subjects",
+        parameters={"first_subject_id": first.id, "second_subject_id": second.id, "min_gap": 1},
+        is_hard=True,
+    ))
+    db.commit()
+
+    assert generate_school_timetable(db, school.id).status == "infeasible"
+
+
+def test_min_gap_of_one_is_satisfiable_with_a_period_between(db_session):
+    """The control: three slots leave exactly one valid arrangement."""
+    db = db_session
+    school = _make_school_with_periods(db, days=1, periods_per_day=3)
+
+    first = Subject(school_id=school.id, name="Eng Lit")
+    second = Subject(school_id=school.id, name="Hindi")
+    db.add_all([first, second])
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    db.add(Teacher(school_id=school.id, name="Anjali", qualified_subject_ids=[first.id, second.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=first.id, periods_per_week=1))
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=second.id, periods_per_week=1))
+    db.add(Constraint(
+        school_id=school.id,
+        type="min_gap_between_subjects",
+        parameters={"first_subject_id": first.id, "second_subject_id": second.id, "min_gap": 1},
+        is_hard=True,
+    ))
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school.id).all()}
+    placed = {a["subject_id"]: periods[a["period_id"]].order for a in result.assignments}
+    # Three slots and a required gap leave exactly one arrangement: the two
+    # ends, whatever the helper's period numbering starts at.
+    assert abs(placed[first.id] - placed[second.id]) == 2
+
+
+def test_min_gap_of_two_leaves_two_periods_between(db_session):
+    db = db_session
+    school = _make_school_with_periods(db, days=1, periods_per_day=6)
+
+    first = Subject(school_id=school.id, name="PE")
+    second = Subject(school_id=school.id, name="Maths")
+    db.add_all([first, second])
+    db.commit()
+    db.refresh(first)
+    db.refresh(second)
+
+    db.add(Teacher(school_id=school.id, name="T", qualified_subject_ids=[first.id, second.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=first.id, periods_per_week=1))
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=second.id, periods_per_week=1))
+    db.add(Constraint(
+        school_id=school.id,
+        type="min_gap_between_subjects",
+        parameters={"first_subject_id": first.id, "second_subject_id": second.id, "min_gap": 2},
+        is_hard=True,
+    ))
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school.id).all()}
+    placed = {a["subject_id"]: periods[a["period_id"]].order for a in result.assignments}
+    assert abs(placed[first.id] - placed[second.id]) >= 3

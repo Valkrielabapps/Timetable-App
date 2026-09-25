@@ -748,7 +748,16 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                     if not p1_vars:
                         continue
                     for p2 in day_periods:
-                        if abs(p1.order - p2.order) >= min_gap:
+                        # min_gap counts the periods that must SEPARATE the two
+                        # subjects, so min_gap=1 means at least one period in
+                        # between - orders 1 and 3, a difference of 2. Testing
+                        # `>= min_gap` made min_gap=1 forbid only a difference
+                        # of 0, which one class group can never have anyway
+                        # (AddAtMostOne per class/period above) - so the most
+                        # natural phrasing of this rule, "X can't immediately
+                        # follow Y", silently did nothing while the UI reported
+                        # it as enforced.
+                        if abs(p1.order - p2.order) > min_gap:
                             continue
                         p2_vars = req_period_vars.get(req2.id, {}).get(p2.id, [])
                         if p2_vars:
@@ -1184,7 +1193,10 @@ def _diagnose_constraint_conflicts(
                             if not p1_vars:
                                 continue
                             for p2 in day_periods:
-                                if abs(p1.order - p2.order) >= min_gap:
+                                # Same off-by-one fix as the main model - these
+                                # two must agree, or the diagnosis describes a
+                                # constraint the solve did not actually apply.
+                                if abs(p1.order - p2.order) > min_gap:
                                     continue
                                 p2_vars = req_period_vars.get(req2.id, {}).get(p2.id, [])
                                 if p2_vars:
