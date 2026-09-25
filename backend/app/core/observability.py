@@ -50,6 +50,28 @@ def _scrub(event, _hint):
     return event
 
 
+def log_llm_availability() -> None:
+    """Say at startup whether Claude is actually wired up.
+
+    Every LLM call site falls back to a regex parser (or a 503) when no key
+    is configured, and does so silently by design - a flaky API shouldn't
+    block constraint entry. The cost is that "the key never reached the
+    container" and "the model misread the sentence" look identical from the
+    outside: constraints just quietly come back worse.
+
+    One line in the deploy log removes that ambiguity.
+    """
+    if settings.anthropic_api_key:
+        logger.info("ANTHROPIC_API_KEY configured; LLM parsing enabled (model=%s)", settings.llm_model)
+    else:
+        logger.warning(
+            "ANTHROPIC_API_KEY not set - constraint parsing, edit commands, setup "
+            "extraction and infeasibility explanations will all use their non-LLM "
+            "fallbacks. This is a supported state, not an error, but it is almost "
+            "never what is wanted in production."
+        )
+
+
 def init_sentry() -> bool:
     """Initialise Sentry if a DSN is configured. Returns whether it did.
 
