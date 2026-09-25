@@ -21,6 +21,9 @@ import TimetableTab from './components/TimetableTab'
 import TeamTab from './components/TeamTab'
 import SetupProgressBar from './components/SetupProgressBar'
 import { useSetupProgress } from './hooks/useSetupProgress'
+import { useQueryClient } from '@tanstack/react-query'
+
+import { useTimetables } from './hooks/useSchoolData'
 
 // Substitutions used to be its own tab here, but it's really a sibling
 // view of the generated schedule (same data — entries, periods, teachers
@@ -40,6 +43,7 @@ const BASE_TABS = [
  * individual tab components so this file doesn't become a god-component.
  */
 function App() {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState(null)
   const [checkingSession, setCheckingSession] = useState(true)
 
@@ -408,7 +412,12 @@ function App() {
   }
 
   function handleLogout() {
-    stopTimetablePolling()
+    // Replaces the old stopTimetablePolling() call. Clearing rather than just
+    // stopping matters now that data lives in the query cache: without this,
+    // the next person to log in on this browser would briefly see the
+    // previous user's schools and timetables from cache before their own
+    // requests resolved.
+    queryClient.clear()
     setToken(null)
     setUser(null)
     setSchools([])
@@ -452,6 +461,16 @@ function App() {
   // unconditionally (rules-of-hooks) — before login or without a
   // selected section, schoolId/classGroupId are null and the hook just
   // never fires its fetch.
+  // Setup progress needs to know whether a draft timetable exists. The
+  // timetable itself now lives in TimetableTab, but this is the same query
+  // key, so React Query serves both from one request rather than each
+  // fetching its own copy.
+  const { data: schoolTimetables = [] } = useTimetables(selectedSchoolId)
+  const latestTimetable =
+    schoolTimetables.length > 0
+      ? schoolTimetables.reduce((a, b) => (b.id > a.id ? b : a))
+      : null
+
   const setupProgress = useSetupProgress({
     schoolId: selectedClassGroup ? selectedSchoolId : null,
     classGroupId: selectedClassGroupId,
@@ -465,7 +484,7 @@ function App() {
     subjects,
     teachers,
     constraints,
-    hasTimetable: timetable?.status === 'draft',
+    hasTimetable: latestTimetable?.status === 'draft',
     allRequirements,
   })
 
