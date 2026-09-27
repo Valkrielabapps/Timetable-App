@@ -49,6 +49,11 @@ logger = logging.getLogger(__name__)
 #                               (e.g. "leave at least 1 period between PE
 #                               and Math"), optionally scoped via
 #                               class_group_name
+#   max_subject_periods_per_day - caps how many times one subject can
+#                               appear in a single day for a class (e.g.
+#                               "both PE periods can't be on the same
+#                               day" -> max_per_day=1), optionally scoped
+#                               via class_group_name
 #   subject_day_position      - a subject must (mode=require) or must not
 #                               (mode=exclude) be scheduled on a given day
 #                               of the week (e.g. "No PE on Fridays"),
@@ -76,6 +81,7 @@ _TOOL_SCHEMA = {
                     "subject_day_position",
                     "max_consecutive_periods",
                     "min_gap_between_subjects",
+                    "max_subject_periods_per_day",
                     "subject_sequence",
                     "scheduling_rule",
                 ],
@@ -120,6 +126,14 @@ _TOOL_SCHEMA = {
                     "did not ask for."
                 ),
             },
+            "max_per_day": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For max_subject_periods_per_day - the most times this subject may appear "
+                    "in one day for a class. Omit (null) when the sentence just says the "
+                    "periods can't share a day, which means 1."
+                ),
+            },
             "strength": {
                 "type": ["string", "null"],
                 "enum": ["required", "strong_preference", "preference", None],
@@ -157,6 +171,7 @@ class ParsedConstraint:
     mode: str | None = None
     max_consecutive: int | None = None
     min_gap: int | None = None
+    max_per_day: int | None = None
     # "required" | "strong_preference" | "preference". Maps to is_hard and
     # weight in app/routers/constraints.py. None means the model didn't say,
     # which is treated as required - a rule nobody hedged is a rule.
@@ -205,6 +220,7 @@ def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) ->
         second_subject_name=data.get("second_subject_name"),
         class_group_name=data.get("class_group_name"),
         max_periods_per_week=data.get("max_periods_per_week"),
+        max_per_day=data.get("max_per_day"),
         strength=data.get("strength"),
         day_of_week=data.get("day_of_week"),
         position=data.get("position"),

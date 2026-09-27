@@ -46,6 +46,9 @@ def _is_enforced(constraint: Constraint) -> bool:
         max_consecutive = p.get("max_consecutive")
         has_target = "subject_id" in p or "teacher_id" in p
         return has_target and isinstance(max_consecutive, int) and max_consecutive >= 1
+    if constraint.type == "max_subject_periods_per_day":
+        max_per_day = p.get("max_per_day")
+        return "subject_id" in p and isinstance(max_per_day, int) and max_per_day >= 1
     if constraint.type == "min_gap_between_subjects":
         min_gap = p.get("min_gap")
         return "first_subject_id" in p and "second_subject_id" in p and isinstance(min_gap, int) and min_gap >= 1
@@ -510,6 +513,20 @@ def _apply_parsed_constraint(
             parameters = {"subject_id": matched_subject.id}
         elif matched_teacher:
             parameters = {"teacher_id": matched_teacher.id}
+
+    elif parsed.type == "max_subject_periods_per_day":
+        # "Both PE periods can't be on the same day" - a cap on how many times
+        # one subject may appear in a single day for a class group. Defaults to
+        # 1, which is what the phrasing almost always means; the model only
+        # sends a number when the sentence gives one ("no more than 2 Maths a
+        # day").
+        if matched_subject:
+            parameters = {
+                "subject_id": matched_subject.id,
+                "max_per_day": parsed.max_per_day if (parsed.max_per_day and parsed.max_per_day >= 1) else 1,
+            }
+            if matched_class_groups:
+                parameters["class_group_ids"] = [cg.id for cg in matched_class_groups]
 
     elif parsed.type == "min_gap_between_subjects":
         if matched_first_subject and matched_second_subject and parsed.min_gap and parsed.min_gap >= 1:

@@ -498,3 +498,103 @@ def test_min_gap_of_two_leaves_two_periods_between(db_session):
     periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school.id).all()}
     placed = {a["subject_id"]: periods[a["period_id"]].order for a in result.assignments}
     assert abs(placed[first.id] - placed[second.id]) >= 3
+
+
+def test_subject_periods_are_spread_across_days(db_session):
+    """"Both PE periods cannot be on the same day" - max_per_day=1.
+
+    Two days of two periods each and two PE lessons: without the rule the
+    solver is free to put both on Monday, so this asserts the split rather
+    than a particular pair of slots."""
+    db = db_session
+    school = _make_school_with_periods(db, days=2, periods_per_day=2)
+
+    subject = Subject(school_id=school.id, name="PE")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+
+    db.add(Teacher(school_id=school.id, name="Coach", qualified_subject_ids=[subject.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=subject.id, periods_per_week=2))
+    db.add(Constraint(
+        school_id=school.id,
+        type="max_subject_periods_per_day",
+        parameters={"subject_id": subject.id, "max_per_day": 1},
+        is_hard=True,
+    ))
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school.id).all()}
+    days = [periods[a["period_id"]].day_of_week for a in result.assignments]
+    assert len(set(days)) == 2, f"both PE periods landed on the same day: {days}"
+
+
+def test_per_day_cap_is_infeasible_when_there_is_only_one_day(db_session):
+    """The rule genuinely bites: one day, two lessons, cap of one."""
+    db = db_session
+    school = _make_school_with_periods(db, days=1, periods_per_day=3)
+
+    subject = Subject(school_id=school.id, name="PE")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+
+    db.add(Teacher(school_id=school.id, name="Coach", qualified_subject_ids=[subject.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=subject.id, periods_per_week=2))
+    db.add(Constraint(
+        school_id=school.id,
+        type="max_subject_periods_per_day",
+        parameters={"subject_id": subject.id, "max_per_day": 1},
+        is_hard=True,
+    ))
+    db.commit()
+
+    assert generate_school_timetable(db, school.id).status == "infeasible"
+
+
+def test_a_per_day_cap_above_one_still_caps(db_session):
+    """"No more than 2 Maths a day" across a week with room to overflow."""
+    db = db_session
+    school = _make_school_with_periods(db, days=2, periods_per_day=4)
+
+    subject = Subject(school_id=school.id, name="Maths")
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+
+    db.add(Teacher(school_id=school.id, name="T", qualified_subject_ids=[subject.id]))
+    cg = ClassGroup(school_id=school.id, grade="Grade 8", name="A")
+    db.add(cg)
+    db.commit()
+    db.refresh(cg)
+
+    db.add(SubjectRequirement(class_group_id=cg.id, subject_id=subject.id, periods_per_week=4))
+    db.add(Constraint(
+        school_id=school.id,
+        type="max_subject_periods_per_day",
+        parameters={"subject_id": subject.id, "max_per_day": 2},
+        is_hard=True,
+    ))
+    db.commit()
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school.id).all()}
+    per_day = {}
+    for a in result.assignments:
+        day = periods[a["period_id"]].day_of_week
+        per_day[day] = per_day.get(day, 0) + 1
+    assert all(n <= 2 for n in per_day.values()), per_day

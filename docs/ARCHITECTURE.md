@@ -1561,3 +1561,25 @@ Not yet covered: `workload_limit` and `availability` are written onto the
 `Teacher` row rather than read from the constraints table, so they have no
 soft form. And nothing yet reports *which* preferences a finished timetable
 broke - the solver knows, but the result doesn't carry it.
+
+
+## max_subject_periods_per_day
+
+Caps how many times one subject may appear in a single day for a class
+group. "Both PE periods cannot be on the same day" is `max_per_day = 1`.
+
+Added because it turned up in the `scheduling_rule` data, which is exactly
+what that bucket is for. Claude parsed the sentence correctly and even
+resolved the subject id - it simply had no type that could express the
+rule, so it used the catch-all and the constraint was recorded, displayed,
+and ignored.
+
+None of the existing types cover it. `max_consecutive_periods` caps
+back-to-back runs within a day, not the day's total; `min_gap_between_
+subjects` is about two *different* subjects; `subject_day_position` names
+one specific day rather than spreading across all of them.
+
+Worth noting for the next one of these: the whole round trip - a user typed
+a rule, it landed unenforced, the phrasing was recoverable from
+`source_text`, and `parsed_by` proved Claude rather than the regex fallback
+had seen it - is the Phase 2 loop working as designed.

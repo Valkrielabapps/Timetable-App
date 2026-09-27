@@ -10,6 +10,7 @@ const TYPE_LABELS = {
   require_subject_day: 'Subject day restriction',
   max_consecutive_periods: 'Consecutive periods limit',
   min_gap_between_subjects: 'Subject spacing',
+  max_subject_periods_per_day: 'Periods per day limit',
   subject_sequence: 'Subject sequencing',
   scheduling_rule: 'Scheduling rule',
 }
@@ -31,6 +32,7 @@ const SCOPABLE_TYPES = new Set([
   'require_subject_day',
   'max_consecutive_periods',
   'min_gap_between_subjects',
+  'max_subject_periods_per_day',
   'subject_sequence',
 ])
 

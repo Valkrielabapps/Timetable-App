@@ -670,6 +670,38 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                             f"over_consec_r{req.id}_c{c.id}_s{start}",
                         )
 
+    # "max_subject_periods_per_day" Constraint rows: cap how many times one
+    # subject can land in a single day for a class group. "Both PE periods
+    # can't be on the same day" is max_per_day=1 - a spread-across-the-week
+    # rule, which none of the other types express: max_consecutive caps
+    # back-to-back runs, and min_gap is about two *different* subjects.
+    per_day_constraints = (
+        db.query(Constraint)
+        .filter(
+            Constraint.school_id == school_id,
+            Constraint.type == "max_subject_periods_per_day",
+        )
+        .all()
+    )
+    for c in per_day_constraints:
+        p = c.parameters or {}
+        max_per_day = p.get("max_per_day")
+        if not isinstance(max_per_day, int) or max_per_day < 1:
+            continue
+        for req in requirements:
+            if not _applies_to(p, req):
+                continue
+            per_period_vars = req_period_vars.get(req.id, {})
+            for day_periods in sorted_periods_by_day.values():
+                day_vars = [v for dp in day_periods for v in per_period_vars.get(dp.id, [])]
+                # Nothing to cap if the day can't even hold more than the limit.
+                if len(day_vars) <= max_per_day:
+                    continue
+                _at_most(
+                    model, penalties, sum(day_vars), max_per_day, c,
+                    f"per_day_r{req.id}_c{c.id}_d{day_periods[0].day_of_week}",
+                )
+
     # "subject_sequence" Constraint rows: forbid second_subject_id from
     # being scheduled in the period immediately after first_subject_id, on
     # the same day, for the same class group. Requirements are unique per
