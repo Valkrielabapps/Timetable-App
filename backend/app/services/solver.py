@@ -18,6 +18,8 @@ from ortools.sat.python import cp_model
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.services.constraint_ir import IRError, rule_from_dict
+from app.services.constraint_ir_compiler import Atom, SchoolIndex, compile_rules
 from app.models.school import (
     ClassGroup,
     Constraint,
@@ -52,6 +54,12 @@ class TimetableSolveResult:
     # TimetableEntry rows locked=True again, so a lock "sticks" across
     # regenerations instead of needing to be re-applied by hand each time.
     locked_keys: set[tuple[int, int, int, int]] = field(default_factory=set)
+    # Rules that did not make it into the model, with a reason - a rule naming
+    # a teacher who has since left, or one stored in a shape that no longer
+    # validates. Distinct from `errors`: the timetable was still produced, so
+    # this is not a failure, but a rule silently doing nothing while the UI
+    # reports it as enforced is the failure mode the IR exists to end.
+    warnings: list[str] = field(default_factory=list)
 
 
 def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
@@ -74,6 +82,79 @@ def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
     slack = model.NewIntVar(0, 1000, name)
     model.Add(expr <= bound + slack)
     penalties.append(weight * slack)
+
+
+def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
+    """Label -> the class groups it names, for resolving an IR rule's names.
+
+    A label is either a whole grade ("Grade 8", every section in it) or one
+    section ("Grade 8 - A"), which is the same two-level naming the constraint
+    router already shows the parser - so a rule can say either and mean it.
+    """
+    labels: dict[str, list[int]] = {}
+    for grade in sorted({cg.grade for cg in class_groups if cg.grade}):
+        labels[grade] = [cg.id for cg in class_groups if cg.grade == grade]
+    for cg in class_groups:
+        labels[_class_group_label(cg)] = [cg.id]
+    return labels
+
+
+def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id) -> list[Atom]:
+    """Flatten the model's decision variables into what a selector can filter.
+
+    The IR compiler needs one list of variables tagged with the class group,
+    subject, teacher and slot each stands for. Everything here already exists
+    in the model; this only labels it.
+
+    Lab batches are the one case where a variable is not simply "a lesson":
+    one class session runs as several simultaneous batches, so the session
+    occupies the class's slot once while two or three teachers are busy.
+    `occupies_class` / `occupies_teacher` keep those two counts from
+    contaminating each other - without them, "this class has at most 6 periods
+    a day" would count a split lab three times, and "this teacher has at most
+    6" would miss the batch they taught.
+    """
+    atoms: list[Atom] = []
+
+    for (req_id, teacher_id, period_id), var in x.items():
+        req = requirements_by_id.get(req_id)
+        period = periods_by_id.get(period_id)
+        if req is None or period is None:
+            continue
+        atoms.append(Atom(
+            var=var, requirement_id=req_id, class_group_id=req.class_group_id,
+            subject_id=req.subject_id, teacher_id=teacher_id, period_id=period_id,
+            day_of_week=period.day_of_week, order=period.order,
+        ))
+
+    for (req_id, period_id), var in batch_occ.items():
+        req = requirements_by_id.get(req_id)
+        period = periods_by_id.get(period_id)
+        if req is None or period is None:
+            continue
+        atoms.append(Atom(
+            var=var, requirement_id=req_id, class_group_id=req.class_group_id,
+            subject_id=req.subject_id, teacher_id=None, period_id=period_id,
+            day_of_week=period.day_of_week, order=period.order,
+            occupies_class=True, occupies_teacher=False,
+        ))
+
+    for (req_id, period_id, _batch), teacher_vars in batch_x.items():
+        req = requirements_by_id.get(req_id)
+        period = periods_by_id.get(period_id)
+        if req is None or period is None:
+            continue
+        for teacher_id, var in teacher_vars:
+            atoms.append(Atom(
+                var=var, requirement_id=req_id, class_group_id=req.class_group_id,
+                subject_id=req.subject_id, teacher_id=teacher_id, period_id=period_id,
+                day_of_week=period.day_of_week, order=period.order,
+                # The class's slot is reserved once by the session's `occ`
+                # variable, which is counted below - not once per batch here.
+                occupies_class=False, occupies_teacher=True,
+            ))
+
+    return atoms
 
 
 def _runs_by_day(all_periods: list[Period]) -> list[list[Period]]:
@@ -373,6 +454,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         }
 
     errors = []
+    # Rules that could not be applied — see TimetableSolveResult.warnings.
+    warnings: list[str] = []
     model = cp_model.CpModel()
 
     # x[(requirement_id, teacher_id, period_id)] = this requirement's
@@ -397,6 +480,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
 
     subjects_by_id = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
     class_groups_by_id = {c.id: c for c in class_groups}
+    requirements_by_id = {r.id: r for r in requirements}
+    periods_by_id = {p.id: p for p in periods}
 
     # batch_x[(req_id, period_id, batch_index)] = list of (teacher_id, var)
     # — the lab-batch-splitting counterpart to `x` above. See the
@@ -404,6 +489,11 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # instead of reusing `x` directly (each batch needs its own teacher
     # choice, all tied to the same "does a session happen here" variable).
     batch_x: dict[tuple[int, int, int], list[tuple[int, cp_model.IntVar]]] = {}
+    # batch_occ[(req_id, period_id)] = "does a session happen here" — the
+    # variable that reserves the class group's slot for a split lab. Kept
+    # separately from batch_x because for IR rules it is the class's lesson,
+    # while batch_x's per-teacher vars are the teachers' assignments.
+    batch_occ: dict[tuple[int, int], cp_model.IntVar] = {}
 
     def _batch_count(req: SubjectRequirement) -> int:
         subject = subjects_by_id.get(req.subject_id)
@@ -511,6 +601,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 continue  # not enough free teachers to staff every batch at this period
 
             occ = model.NewBoolVar(f"occ_r{req.id}_p{period.id}")
+            batch_occ[(req.id, period.id)] = occ
             requirement_vars[req.id].append(occ)
             class_group_period_vars.setdefault((req.class_group_id, period.id), []).append(occ)
             req_period_vars[req.id].setdefault(period.id, []).append(occ)
@@ -798,6 +889,46 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                                 f"gap_c{c.id}_cg{cg_id}_p{p1.id}_{p2.id}",
                             )
 
+    # ------------------------------------------------------------------
+    # Generic IR rules (Constraint.type == "ir")
+    # ------------------------------------------------------------------
+    # Everything above is one block of code per named constraint type, which
+    # is why there were only ever nine of them: a tenth rule shape meant a
+    # tenth block here. An IR rule is a selector and a scope over the same
+    # variables, so the shapes are data and this is one call regardless of
+    # how many there are. See app/services/constraint_ir.py.
+    #
+    # The two kinds coexist deliberately. Migrating the nine legacy types
+    # into IR at the same time as introducing it would put every rule that
+    # currently works at risk of the new path's bugs, for no gain the day it
+    # ships; they can be retired once the IR has run against real schools.
+    ir_constraints = (
+        db.query(Constraint)
+        .filter(Constraint.school_id == school_id, Constraint.type == "ir")
+        .all()
+    )
+    if ir_constraints:
+        atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id)
+        index = SchoolIndex(
+            subject_ids={s.name: s.id for s in subjects_by_id.values()},
+            teacher_ids={t.name: t.id for t in teachers},
+            class_group_ids=_class_group_labels(class_groups),
+        )
+        rules = []
+        for c in ir_constraints:
+            try:
+                rules.append((f"c{c.id}", rule_from_dict(c.parameters or {})))
+            except IRError as exc:
+                # A stored rule that no longer validates is a bug in whatever
+                # wrote it, not something the admin can act on mid-solve - but
+                # it must not pass silently either, or it joins the population
+                # of rules that claim to be enforced and do nothing.
+                warnings.append(
+                    f"{c.description or 'A rule'} was not applied because it is "
+                    f"not a valid rule: {exc}."
+                )
+        warnings.extend(compile_rules(model, penalties, atoms, rules, index))
+
     # Only added when something soft exists. A school with only hard rules
     # gets the previous behaviour exactly - the solver returns the first
     # feasible timetable rather than searching for the best one, which is
@@ -878,7 +1009,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 period_ids_by_day, class_groups_by_id, subjects_by_id, class_groups,
             )
 
-    return TimetableSolveResult(status=status_name, assignments=assignments, locked_keys=locked_keys, errors=errors)
+    return TimetableSolveResult(
+        status=status_name, assignments=assignments, locked_keys=locked_keys,
+        errors=errors, warnings=warnings,
+    )
 
 
 def _diagnose_infeasibility(
