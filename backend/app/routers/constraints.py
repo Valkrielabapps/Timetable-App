@@ -11,7 +11,10 @@ from app.models.school import ClassGroup, Constraint, Period, Subject, Teacher
 from app.models.user import User
 from app.schemas.constraint import (
     ConstraintBatchParseRequest,
+    ConstraintConfirmRequest,
     ConstraintCreate,
+    ConstraintInterpretRequest,
+    ConstraintInterpretResponse,
     ConstraintOut,
     ConstraintParseRequest,
     ConstraintParseResponse,
@@ -19,11 +22,14 @@ from app.schemas.constraint import (
     ConstraintUpdate,
 )
 from app.services import constraint_parser as regex_parser
+from app.services.constraint_ir import IRError, referenced_names, rule_from_dict, rule_to_dict
+from app.services.constraint_ir_english import render as render_rule
 from app.services.llm_constraint_parser import (
     ParsedConstraint,
     parse_constraint_llm,
     parse_constraints_batch_llm,
 )
+from app.services.llm_ir_parser import parse_rule_llm
 
 router = APIRouter(prefix="/api/constraints", tags=["constraints"])
 
@@ -34,6 +40,17 @@ def _is_enforced(constraint: Constraint) -> bool:
     (ConstraintOut.enforced) and the /parse endpoint agree, instead of two
     copies of this logic drifting apart."""
     p = constraint.parameters or {}
+    if constraint.type == "ir":
+        # An IR rule is compiled and run by the solver whatever its shape, so
+        # "is this applied" reduces to "is it still a valid rule". The names it
+        # references were checked against the school when it was confirmed; if
+        # one is deleted later the solver reports it on the timetable rather
+        # than here, since this function has no school to check against.
+        try:
+            rule_from_dict(p)
+        except IRError:
+            return False
+        return True
     if constraint.type == "workload_limit":
         return "teacher_id" in p and "max_periods_per_week" in p
     if constraint.type == "availability":
@@ -774,3 +791,133 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
 
     out = _to_out(db, constraint)
     return ConstraintParseResponse(constraint=out, enforced=out.enforced)
+
+
+# ---------------------------------------------------------------------------
+# The general rule representation
+# ---------------------------------------------------------------------------
+#
+# Deliberately separate endpoints rather than a change to /parse. The nine
+# named types still work exactly as they did, so nothing in production moves
+# until a client calls these - which is what lets the IR be exercised against
+# real schools without putting every rule that already works behind the new
+# path's bugs.
+#
+# The split into interpret-then-confirm is not a UI nicety either. With nine
+# fixed types, a rule the parser couldn't place landed in `scheduling_rule` and
+# sat in the UI marked unenforced, so a misreading was visible. The IR removes
+# that signal: nearly any sentence yields a valid rule, so a misread one
+# becomes a constraint the solver applies faithfully while the timetable is
+# quietly wrong. Rendering the rule back into English and having a person agree
+# to it is what replaces the signal.
+
+
+def _unknown_names(rule, data: _ResolutionData) -> list[str]:
+    """Names in a rule that this school doesn't have.
+
+    Checked here, before the rule is ever shown, so "there is no Mr. Verma on
+    staff" reaches the admin while they are still looking at the sentence they
+    typed - rather than at solve time, where it becomes a warning on a
+    timetable that has already been generated.
+    """
+    found = referenced_names(rule)
+    missing = []
+    missing += [n for n in sorted(found["subject"]) if n not in data.subject_by_name]
+    missing += [n for n in sorted(found["teacher"]) if n not in data.teacher_by_name]
+    missing += [n for n in sorted(found["class_group"]) if n not in data.label_to_class_groups]
+    return missing
+
+
+@router.post("/interpret", response_model=ConstraintInterpretResponse)
+def interpret_constraint(
+    payload: ConstraintInterpretRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read one sentence into a rule and say what it was understood to mean.
+
+    Saves nothing. The response is either a rule plus the English to confirm,
+    or a reason it could not be read - which the parser is given a tool to say
+    rather than having to guess. See app/services/llm_ir_parser.py.
+    """
+    require_school_access(db, current_user, payload.school_id, min_role="admin")
+    check_quota(f"llm:{current_user.id}", limit=60, window_seconds=3600)
+
+    data = _load_resolution_data(db, payload.school_id)
+    result = parse_rule_llm(
+        payload.text, data.teacher_names, data.subject_names,
+        data.class_group_labels, data.periods,
+    )
+
+    if result is None:
+        # No key, or the call failed. Saying so beats falling back to the regex
+        # parser here: this endpoint's contract is "what did you understand",
+        # and a regex guess dressed up as an interpretation is the opposite of
+        # what the confirmation step is for.
+        raise HTTPException(
+            status_code=503,
+            detail="Rule interpretation is unavailable right now. Try again shortly.",
+        )
+
+    if result.unclear is not None:
+        u = result.unclear
+        return ConstraintInterpretResponse(
+            understood=False, reason=u.reason, explanation=u.explanation,
+            question=u.question, readings=u.readings,
+        )
+
+    return ConstraintInterpretResponse(
+        understood=True,
+        sentence=result.sentence,
+        rule=rule_to_dict(result.rule),
+        unknown_names=_unknown_names(result.rule, data),
+    )
+
+
+@router.post("/confirm", response_model=ConstraintOut, status_code=201)
+def confirm_constraint(
+    payload: ConstraintConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save a rule the admin has been shown and accepted.
+
+    Takes the rule itself rather than re-parsing the text, so the rule that is
+    stored is the one they read. Re-parsing could return something different,
+    and then the sentence they agreed to would not be the rule in the database.
+    """
+    require_school_access(db, current_user, payload.school_id, min_role="admin")
+
+    try:
+        rule = rule_from_dict(payload.rule)
+    except IRError as exc:
+        raise HTTPException(status_code=422, detail=f"Not a valid rule: {exc}") from None
+
+    data = _load_resolution_data(db, payload.school_id)
+    missing = _unknown_names(rule, data)
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"This rule mentions {', '.join(missing)}, which this school "
+                f"doesn't have. Add them on the Data tab, or reword the rule."
+            ),
+        )
+
+    is_hard, weight = _STRENGTH.get(rule.strength, (True, 1))
+    constraint = Constraint(
+        school_id=payload.school_id,
+        type="ir",
+        parameters=rule_to_dict(rule),
+        is_hard=is_hard,
+        weight=weight,
+        # The confirmed sentence, not the parser's own summary - it is what the
+        # admin agreed to, so it is what the UI should keep showing them.
+        description=render_rule(rule),
+        source_text=payload.source_text,
+        parsed_by="llm-ir",
+    )
+    db.add(constraint)
+    db.commit()
+    db.refresh(constraint)
+    return _to_out(db, constraint)

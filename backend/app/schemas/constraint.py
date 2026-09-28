@@ -79,3 +79,58 @@ class ConstraintParseResponse(BaseModel):
     # only workload_limit constraints with a matched teacher are). Lets the
     # UI be honest about which parsed rules actually affect generation.
     enforced: bool
+
+
+# ---------------------------------------------------------------------------
+# The general rule representation (see app/services/constraint_ir.py)
+# ---------------------------------------------------------------------------
+
+
+class ConstraintInterpretRequest(BaseModel):
+    school_id: int
+    text: str
+
+
+class ConstraintInterpretResponse(BaseModel):
+    """What one sentence was understood to mean, BEFORE anything is saved.
+
+    Split from the old parse-and-save because the IR removed the signal that
+    used to make a misreading visible. With nine fixed types, a rule the parser
+    couldn't place landed in `scheduling_rule` and sat in the UI marked
+    unenforced. With the IR, almost anything produces a valid rule - so a
+    misread sentence becomes a constraint that the solver applies faithfully
+    and the timetable is wrong with nothing anywhere to show it.
+
+    `sentence` is the rule rendered back into English. It is not a nicety: it
+    is the only thing the admin can check, and confirming it is what turns a
+    guess into an instruction.
+    """
+
+    # Exactly one of these two paths is populated.
+    understood: bool
+    # --- when understood ---
+    sentence: str | None = None
+    rule: dict[str, Any] | None = None
+    # Names the rule used that this school doesn't have. Non-empty means it
+    # cannot be saved as-is, whatever else looks right.
+    unknown_names: list[str] = []
+    # --- when not understood ---
+    reason: str | None = None
+    explanation: str | None = None
+    question: str | None = None
+    readings: list[str] = []
+
+
+class ConstraintConfirmRequest(BaseModel):
+    """Save a rule the admin has just been shown and accepted.
+
+    Takes the rule back rather than re-parsing the text: re-parsing could
+    return something different from what was displayed, and then the sentence
+    they agreed to would not be the rule that was stored.
+    """
+
+    school_id: int
+    rule: dict[str, Any]
+    # Kept so "which phrasings do we read well" stays answerable - see
+    # Constraint.source_text.
+    source_text: str
