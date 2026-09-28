@@ -1,0 +1,33 @@
+ID	TYPED	PROBLEM	WHY	RIGHT HANDLING	SOURCE
+T001	Maths twice a week for Grade 1.	Ambiguous	'Twice a week' vs 'twice a day': Periods per week is setup data, not max_subject_periods_per_day.	Map to setup requirement or ask	Catalogue trap
+T002	Priya should have less than 28 periods.	Ambiguous	'Less than' vs 'no more than': Less than 28 = max 27; no more than 28 = max 28.	Exact boundary	Catalogue trap
+T003	Don't put PE right before Maths.	Ambiguous	'After PE' direction: Same as Maths can't follow PE: first=PE, second=Maths.	subject_sequence with correct order	Catalogue trap
+T004	Maths and PE shouldn't be next to each other.	Ambiguous	'Next to each other' is symmetric: Forbids both orders.	min_gap_between_subjects, min_gap=1	Catalogue trap
+T005	No double English.	Ambiguous	Same subject back to back: One subject, consecutive -> max_consecutive_periods=1, not min_gap.	max_consecutive_periods	Catalogue trap
+T006	Library in the 8th period.	Ambiguous	'Last period' depends on the day: 8th is only 'last' if the day has 8 periods (Saturday may have 4).	Prefer position=last only if they said last	Catalogue trap
+T007	Mrs. Rao doesn't work weekends.	Ambiguous	'Weekend': Only days the school runs matter (usually Saturday).	Expand to school days only	Catalogue trap
+T008	Maths only in the morning.	Ambiguous	'Morning' / 'afternoon': Needs the break position to know where morning ends.	Map using breaks, or ask	Catalogue trap
+T009	CS on Monday for Grade 6.	Ambiguous	'CS' abbreviation: Computer Science or Communication Skills? SST vs Social Science too.	Match against known subject list	Catalogue trap
+T010	KS sir off Friday.	Ambiguous	Titles and nicknames: Initials may match 2 teachers.	Ask if not unique	Catalogue trap
+T011	8th has Maths first.	Ambiguous	Grade vs section: All of Grade 8 or only one section?	Default to whole grade, confirm	Catalogue trap
+T012	Juniors don't have PE first period.	Ambiguous	Group words: Juniors = which grades? Varies by school.	Needs school-specific mapping	Catalogue trap
+T013	Arjun only comes on Monday.	Ambiguous	'Only' flips meaning: Means unavailable on every other day, not available on Monday.	Expand to unavailable days	Catalogue trap
+T014	It's not that PE can't be on Friday.	Not a rule	Double negative: Means PE is allowed on Friday - no rule.	Don't create a constraint	Catalogue trap
+T015	Mr. Khan has lab duty, so he's busy.	Too vague	Reason sounds like a rule: When? Missing day/period.	Ask for the slot	Catalogue trap
+T016	Try to keep Maths first.	Ambiguous	Soft vs hard: 'Try' means soft, can be broken.	strength=soft	Catalogue trap
+T017	No PE Friday and Maths first for 10.	Parsing trap (split)	Two rules, one sentence: Two constraints with different scopes.	Split	Catalogue trap
+T018	No PE Friday - no wait, Thursday.	Parsing trap (use corrected value)	Correction: Keep only the corrected day.	Use last value	Catalogue trap
+T019	Can we not have PE on Friday?	Parsing trap (treat as rule)	Question that's a rule: It's a request, not a real question.	Create the rule	Catalogue trap
+T020	Can Mrs. Rao take 8 periods Monday?	Not a rule	Real question: Not a rule.	Don't create a constraint	Catalogue trap
+T021	Max 30 periods.	Ambiguous	Per-teacher vs school-wide cap: For one teacher or for every teacher?	Ask if no name given and context unclear	Catalogue trap
+T022	Priya max 20 hours a week.	Ambiguous	Hours vs periods: Periods are often 40 min, so 20 hours is about 30 periods.	Confirm units	Catalogue trap
+T023	Maths first every day / no Maths first on Monday.	Contradictory	Contradiction: Both can't hold.	Flag conflict	Catalogue trap
+T024	Make the timetable balanced and nice for everyone	Too vague	Not specific enough to enforce	Ask what 'balanced' means	Catalogue C097
+T025	Mr. Verma can't come on Tuesday (no Mr. Verma on staff)	Unknown reference	Refers to a teacher/subject/class that doesn't exist in setup	Return null for the teacher and ask which teacher is meant; don't guess	Catalogue C099
+T026	all 10th sections maths same time, rao mam will take all 4	Impossible	Putting 4 sections in one slot needs 4 Maths teachers at once. The rule is only impossible in combination with the setup data (one teacher for all four).	Flag the clash with setup; ask whether to combine the sections in the hall or assign more teachers	Claude Opus 5.5 (this chat)
+T027	Priya ma'am only comes MWF, but needs 30 periods a week	Impossible	3 days x 8 periods = 24 slots at most, so 30 periods cannot fit. Availability and load are each valid alone; the arithmetic between them is not.	Flag the capacity gap and ask which rule gives way	Pasted set 1
+T028	9A PE on mon means art also mon. no art on mondays for 9A. and 9A PE has to be every day	Contradictory	PE daily forces PE on Monday, which forces Art on Monday, which is banned. Any two rules are fine; only the chain of three fails.	Report all three rules together, not just the last one entered	Claude Opus 5.5 (this chat)
+T029	teacher availability more imp than subject order, subject order more imp than maths first rule, maths first more imp than teacher availability	Contradictory	The priority ranking is a cycle, so no consistent order exists (extends C089).	Ask which link in the cycle to drop	Claude Opus 5.5 (this chat)
+T030	Give Mr. Khan some good classes this year so he doesn't quit	Too vague	Good classes has no measurable meaning (better-behaved, senior, fewer periods, fewer last periods?), and the reason is not a rule.	Ask what makes a class good and turn the answer into an assignment or load rule	Pasted set 1
+T031	only 12th can use physics lab in the afternoon	Ambiguous	Either afternoons are reserved for Grade 12 (others use mornings), or Grade 12 may use the lab only in afternoons. The two readings block opposite groups.	Ask which reading is meant	Claude Opus 5.5 (this chat)
+T032	Grade 8 needs no free period on Friday	Ambiguous	Unclear whether every Grade 8 section or one section is meant, and whether Library, Clubs or activity periods count as free periods.	Confirm the scope and ask what counts as a free period	Pasted set 2
