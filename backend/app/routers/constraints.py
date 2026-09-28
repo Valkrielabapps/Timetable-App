@@ -37,7 +37,7 @@ def _is_enforced(constraint: Constraint) -> bool:
     if constraint.type == "workload_limit":
         return "teacher_id" in p and "max_periods_per_week" in p
     if constraint.type == "availability":
-        return "teacher_id" in p and "day_of_week" in p
+        return "teacher_id" in p and ("day_of_week" in p or p.get("period_orders"))
     if constraint.type in ("no_subject_period", "require_subject_period"):
         return "subject_id" in p and p.get("position") in ("first", "last")
     if constraint.type in ("no_subject_day", "require_subject_day"):
@@ -419,8 +419,11 @@ def _apply_parsed_constraint(
 
     Types and how they're wired:
       - workload_limit    -> Teacher.max_periods_per_week
-      - availability      -> adds the matched day's periods to
-                             Teacher.unavailable_period_ids
+      - availability      -> adds the matched periods to
+                             Teacher.unavailable_period_ids. The match is
+                             day_of_week (whole day), period_orders (those
+                             periods on every day), or both (those periods
+                             on that day).
       - subject_period_position (mode=require|exclude) -> stored as
                              Constraint(type="require_subject_period" or
                              "no_subject_period", parameters={subject_id,
@@ -470,16 +473,33 @@ def _apply_parsed_constraint(
         matched_teacher.max_periods_per_week = parsed.max_periods_per_week
         parameters = {"teacher_id": matched_teacher.id, "max_periods_per_week": parsed.max_periods_per_week}
 
-    elif parsed.type == "availability" and matched_teacher and parsed.day_of_week is not None:
-        day_period_ids = [
-            p.id for p in db.query(Period).filter(
-                Period.school_id == school_id,
-                Period.day_of_week == parsed.day_of_week,
-            ).all()
-        ]
+    elif parsed.type == "availability" and matched_teacher and (
+        parsed.day_of_week is not None or parsed.period_orders
+    ):
+        # Three shapes, and the difference between them is not cosmetic:
+        # "away on Tuesday" frees eight slots, "can't take first period on
+        # Tuesday" frees one, and "never takes the last period" frees one a
+        # day. Until period_orders existed only the first was sayable, so the
+        # second arrived as the first and quietly cost the teacher the day -
+        # while the UI reported it as enforced. See
+        # docs/research/constraint-catalogue.tsv R005.
+        query = db.query(Period).filter(Period.school_id == school_id)
+        if parsed.day_of_week is not None:
+            query = query.filter(Period.day_of_week == parsed.day_of_week)
+        if parsed.period_orders:
+            query = query.filter(Period.order.in_(parsed.period_orders))
+        matched_period_ids = [p.id for p in query.all()]
+
         existing = set(matched_teacher.unavailable_period_ids or [])
-        matched_teacher.unavailable_period_ids = sorted(existing | set(day_period_ids))
-        parameters = {"teacher_id": matched_teacher.id, "day_of_week": parsed.day_of_week}
+        matched_teacher.unavailable_period_ids = sorted(existing | set(matched_period_ids))
+        parameters = {"teacher_id": matched_teacher.id}
+        if parsed.day_of_week is not None:
+            parameters["day_of_week"] = parsed.day_of_week
+        if parsed.period_orders:
+            # Recorded even when it matched nothing, so a rule naming period 9
+            # in an 8-period school reads as "asked for 9, blocked nothing"
+            # rather than looking like a whole-day rule that did nothing.
+            parameters["period_orders"] = sorted(parsed.period_orders)
 
     elif parsed.type == "subject_period_position":
         db_type = {"exclude": "no_subject_period", "require": "require_subject_period"}.get(parsed.mode, "scheduling_rule")

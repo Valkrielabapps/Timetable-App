@@ -68,3 +68,24 @@ def test_grounding_prompt_includes_structure_when_given_periods():
     prompt = _grounding_system_prompt(["Iyer"], ["Math"], ["Grade 8"], _week())
     assert "Teaching days" in prompt
     assert "Known teachers" in prompt
+
+
+def test_reading_rules_ride_on_every_prompt():
+    """The sentence-reading block is derived from docs/research/
+    constraint-traps.tsv - cases where a principal's phrasing forks and the
+    model picked the wrong branch. It has to reach the prompt, not just the
+    repo."""
+    prompt = _grounding_system_prompt(["Mrs. Rao"], ["Maths"], ["Grade 8"])
+    assert "How to read the sentence:" in prompt
+    # The inversion trap specifically: "only comes Monday" read as an
+    # availability rule for Monday is the opposite of what was said.
+    assert "UNAVAILABILITY rule for every" in prompt
+
+
+def test_reading_rules_stay_cheap_enough_to_send_every_time():
+    """This block is on the critical path of every parse call, so it pays for
+    itself only while it is short. If it grows past roughly a page it wants
+    splitting by constraint type instead."""
+    from app.services.llm_constraint_parser import _READING_RULES
+
+    assert len(_READING_RULES) < 1600

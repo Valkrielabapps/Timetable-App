@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 
 # Constraint types this parser (and the solver) understand:
 #   workload_limit          - caps a teacher's periods/week
-#   availability             - a teacher is unavailable on a given day
+#   availability             - a teacher is unavailable. Scoped by
+#                               day_of_week (whole day), by period_orders
+#                               (those periods, every day), or by both
+#                               (those periods on that day)
 #   subject_period_position  - a subject must (mode=require) or must not
 #                               (mode=exclude) be in the first/last period
 #                               of the day, optionally scoped to one grade
@@ -108,6 +111,22 @@ _TOOL_SCHEMA = {
             },
             "max_periods_per_week": {"type": ["integer", "null"], "description": "For workload_limit."},
             "day_of_week": {"type": ["integer", "null"], "description": "0=Monday .. 6=Sunday. For availability and subject_day_position."},
+            "period_orders": {
+                "type": ["array", "null"],
+                "items": {"type": "integer"},
+                "description": (
+                    "For availability: the specific period numbers the teacher is "
+                    "unavailable for, using the numbering given in the timetable "
+                    "structure above. Set this whenever the sentence names periods or a "
+                    "time of day rather than the whole day - 'can't take the first "
+                    "period on Tuesdays' is [1] with day_of_week=1, and 'leaves after "
+                    "the 5th period' is [6, 7, 8] in an 8-period school. Leave null ONLY "
+                    "when the teacher is away for the entire day, because null means "
+                    "every period of that day is blocked. If periods are named but no "
+                    "day is, leave day_of_week null and the rule applies to those "
+                    "periods on every day."
+                ),
+            },
             "position": {"type": ["string", "null"], "enum": ["first", "last", None], "description": "For subject_period_position."},
             "mode": {
                 "type": ["string", "null"],
@@ -156,6 +175,41 @@ _TOOL_SCHEMA = {
 }
 
 
+# Sentence-reading decisions that a school admin makes without noticing and a
+# model gets wrong without being told. Every line here is one row of
+# docs/research/constraint-traps.tsv - cases collected by writing rules the way
+# principals actually write them and recording where the reading forks.
+#
+# Only the traps whose right answer is the same in every school are here.
+# School-specific ones ("juniors" = which grades?) belong in the ask-the-user
+# path, not in a prompt that would have to guess.
+#
+# Kept deliberately short: this rides on every parse call, so each line has to
+# earn its tokens by covering a mistake that actually happened.
+_READING_RULES = """How to read the sentence:
+- "only comes on X" / "only works Mondays" is an UNAVAILABILITY rule for every
+  other working day, not an availability rule for X. Getting this backwards
+  inverts the constraint, so expand it to the days the teacher is away.
+- "less than N" means a maximum of N-1. "no more than N" / "up to N" means N.
+- "twice a week" is how many periods the class gets, which is setup data, not a
+  per-day cap. Only use max_subject_periods_per_day for "... in a day".
+- "the 8th period" is a period number, not necessarily the last period of the
+  day - some days are shorter. Only use position='last' if they said last (or
+  named a number that is last on every day of this school's week).
+- "weekend" means only the days this school actually runs, usually Saturday.
+- A sentence that corrects itself ("Friday - no wait, Thursday") keeps only the
+  corrected value.
+- "Can we not have PE on Friday?" is a request, so record the rule. "Can Mrs.
+  Rao take 8 periods on Monday?" is a genuine question about the timetable, so
+  record nothing.
+- "It's not that PE can't be on Friday" is a double negative that states no
+  rule. Don't invent one.
+- A reason with no slot ("Mr. Khan has lab duty, so he's busy") is not yet a
+  rule - there is nothing to block. Use scheduling_rule and say what's missing.
+- One sentence can hold two rules with different scopes ("No PE Friday and
+  Maths first for Grade 10"). In batch mode, split them."""
+
+
 @dataclass
 class ParsedConstraint:
     type: str
@@ -167,6 +221,11 @@ class ParsedConstraint:
     class_group_name: str | None = None
     max_periods_per_week: int | None = None
     day_of_week: int | None = None
+    # Which periods within the day an availability rule covers, by
+    # Period.order. None means the whole day - see the router's availability
+    # branch, where that distinction is the difference between freeing one
+    # slot and freeing seven.
+    period_orders: list[int] | None = None
     position: str | None = None
     mode: str | None = None
     max_consecutive: int | None = None
@@ -203,6 +262,33 @@ _BATCH_TOOL_SCHEMA = {
 }
 
 
+def _int_list(value) -> list[int] | None:
+    """Coerce a tool-call field that should be a list of integers.
+
+    The model is asked for an array of period numbers and almost always sends
+    one, but a bare int or a list of numeric strings are the kinds of thing
+    that turn up occasionally - and this value reaches a SQL IN clause, so
+    "almost always" is not the right bar. Anything that isn't a whole number is
+    dropped rather than guessed at; an empty result becomes None, which the
+    router reads as "no period scoping", not "no periods".
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, str)):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return None
+    out = []
+    for item in value:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int):
+            out.append(item)
+        elif isinstance(item, str) and item.strip().lstrip("-").isdigit():
+            out.append(int(item.strip()))
+    return out or None
+
+
 def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) -> ParsedConstraint:
     """Shared by parse_constraint_llm and parse_constraints_batch_llm —
     turns one record_constraint-shaped dict (single call's `tool_use.input`
@@ -223,6 +309,7 @@ def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) ->
         max_per_day=data.get("max_per_day"),
         strength=data.get("strength"),
         day_of_week=data.get("day_of_week"),
+        period_orders=_int_list(data.get("period_orders")),
         position=data.get("position"),
         mode=data.get("mode"),
         max_consecutive=data.get("max_consecutive"),
@@ -330,7 +417,8 @@ def _grounding_system_prompt(
         + "Only reference names that appear verbatim in these lists; if a name in the "
         "text doesn't clearly match one of them, use null rather than guessing. "
         "If a rule doesn't fit any of the specific constraint types, use "
-        "type='scheduling_rule' and just fill in description."
+        "type='scheduling_rule' and just fill in description.\n\n"
+        + _READING_RULES
     )
 
 
