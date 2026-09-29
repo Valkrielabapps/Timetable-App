@@ -106,6 +106,11 @@ def _when(sel: Selector) -> str:
     parts = []
     if sel.period_orders:
         parts.append(f"in {_periods(sel.period_orders)}")
+    if sel.period_positions:
+        # "of the day" rather than "of the week": these resolve per day, so on
+        # a short Saturday it is that day's last period, not the week's.
+        which = _join([f"the {p} period of the day" for p in sel.period_positions], "or")
+        parts.append(f"in {which}")
     if sel.days:
         parts.append(f"on {_days(sel.days)}")
     return " ".join(parts)
@@ -169,7 +174,7 @@ def _scope_time(scope: tuple[str, ...], sel: Selector) -> str:
     Suppressed when the selector already names days, so "Mrs. Rao has no
     periods on Saturday" doesn't become "...in the week on Saturday".
     """
-    if sel.days or sel.period_orders:
+    if sel.days or sel.period_orders or sel.period_positions:
         return ""
     if "period" in scope:
         return "in every period"

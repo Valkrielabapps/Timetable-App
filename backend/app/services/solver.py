@@ -913,6 +913,17 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
             teacher_ids={t.name: t.id for t in teachers},
             class_group_ids=_class_group_labels(class_groups),
+            # Taken from teaching periods only, and per day, so "the last
+            # period" on a half-day Saturday is that day's last rather than the
+            # week's - and never lands on lunch.
+            first_order_by_day={
+                day: min(p.order for p in day_periods)
+                for day, day_periods in periods_by_day.items()
+            },
+            last_order_by_day={
+                day: max(p.order for p in day_periods)
+                for day, day_periods in periods_by_day.items()
+            },
         )
         rules = []
         for c in ir_constraints:

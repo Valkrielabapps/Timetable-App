@@ -18,7 +18,7 @@ exists is reported by name rather than quietly matching nothing.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ortools.sat.python import cp_model
 
@@ -77,6 +77,11 @@ class SchoolIndex:
     subject_ids: dict[str, int]
     teacher_ids: dict[str, int]
     class_group_ids: dict[str, list[int]]
+    # The first and last TEACHING period of each day, by day_of_week. Per day
+    # rather than school-wide because a half-day Saturday has a different last
+    # period from a full Tuesday, and a rule about "the last period" means both.
+    first_order_by_day: dict[int, int] = field(default_factory=dict)
+    last_order_by_day: dict[int, int] = field(default_factory=dict)
 
     def unknown(self, kind: str, name: str) -> bool:
         table = {"subject": self.subject_ids, "teacher": self.teacher_ids,
@@ -138,6 +143,15 @@ def _resolve(sel: Selector, index: SchoolIndex) -> dict:
         out["days"] = set(sel.days)
     if sel.period_orders is not None:
         out["period_orders"] = set(sel.period_orders)
+    if sel.period_positions is not None:
+        # Resolved to concrete (day, order) pairs here rather than compared
+        # position-by-position later, so a day's own length decides what its
+        # last period is.
+        slots = set()
+        for position in sel.period_positions:
+            table = index.first_order_by_day if position == "first" else index.last_order_by_day
+            slots.update((day, order) for day, order in table.items())
+        out["position_slots"] = slots
     return out
 
 
@@ -161,6 +175,9 @@ def _matches(atom: Atom, resolved: dict, ignore_time: bool = False) -> bool:
             return False
         if "period_orders" in resolved and atom.order not in resolved["period_orders"]:
             return False
+        if "position_slots" in resolved:
+            if (atom.day_of_week, atom.order) not in resolved["position_slots"]:
+                return False
     return True
 
 

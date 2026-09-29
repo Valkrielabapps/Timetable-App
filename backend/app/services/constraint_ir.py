@@ -81,7 +81,8 @@ STRENGTHS = ("required", "strong_preference", "preference")
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-_SELECTOR_FIELDS = ("subjects", "not_subjects", "teachers", "class_groups", "days", "period_orders")
+_SELECTOR_FIELDS = ("subjects", "not_subjects", "teachers", "class_groups", "days",
+                    "period_orders", "period_positions")
 
 
 class IRError(ValueError):
@@ -122,6 +123,12 @@ class Selector:
     class_groups: tuple[str, ...] | None = None
     days: tuple[int, ...] | None = None
     period_orders: tuple[int, ...] | None = None
+    # "first" / "last", resolved per day when the rule is compiled. A period
+    # NUMBER is not the same thing: the 8th period is only the last one on days
+    # that have eight, and a school with a half-day Saturday has two different
+    # answers. Catalogue trap T006 is exactly this, and a model asked only for
+    # numbers reaches for -1 to mean it.
+    period_positions: tuple[str, ...] | None = None
 
     def is_empty(self) -> bool:
         return all(getattr(self, f) is None for f in _SELECTOR_FIELDS)
@@ -168,6 +175,25 @@ def _as_int_tuple(value, field_name: str, low: int, high: int) -> tuple[int, ...
     return tuple(dict.fromkeys(out)) or None
 
 
+def _positions_from(value) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        raise IRError("selector.period_positions must be a list of 'first' or 'last'")
+    out = []
+    for item in value:
+        name = str(item).strip().lower()
+        if name not in ("first", "last"):
+            raise IRError(
+                f"selector.period_positions must be 'first' or 'last', got {item!r}"
+            )
+        if name not in out:
+            out.append(name)
+    return tuple(out) or None
+
+
 def selector_from_dict(data: dict | None) -> Selector:
     if data is None:
         return Selector()
@@ -185,6 +211,7 @@ def selector_from_dict(data: dict | None) -> Selector:
         # Period numbering is per school; 30 is a ceiling no real school reaches,
         # here to catch a model answering with minutes or a clock time.
         period_orders=_as_int_tuple(data.get("period_orders"), "selector.period_orders", 0, 30),
+        period_positions=_positions_from(data.get("period_positions")),
     )
     if sel.subjects and sel.not_subjects and set(sel.subjects) & set(sel.not_subjects):
         both = sorted(set(sel.subjects) & set(sel.not_subjects))

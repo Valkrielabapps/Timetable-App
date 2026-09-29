@@ -30,6 +30,8 @@ can fall back exactly as it does today.
 """
 from __future__ import annotations
 
+import html
+import json
 import logging
 from dataclasses import dataclass, field
 
@@ -86,10 +88,21 @@ _SELECTOR_SCHEMA = {
         "period_orders": {
             "type": ["array", "null"], "items": {"type": "integer"},
             "description": (
-                "Period numbers, using the numbering in the timetable structure "
-                "above. Use for 'the first period', 'period 3', 'the last two "
-                "periods', or a time of day resolved against the break "
-                "positions."
+                "Period NUMBERS, using the numbering in the timetable structure "
+                "above. Use for 'period 3', 'the first two periods', or a time "
+                "of day worked out from where the breaks fall. Never negative - "
+                "for 'the last period' use period_positions instead."
+            ),
+        },
+        "period_positions": {
+            "type": ["array", "null"],
+            "items": {"type": "string", "enum": ["first", "last"]},
+            "description": (
+                "Use for 'the first period' or 'the last period' when the "
+                "sentence says exactly that. This resolves per day, which "
+                "matters when days differ in length: on a half-day Saturday the "
+                "last period is the 4th, not the 8th. Prefer this over a number "
+                "whenever the words are 'first' or 'last'."
             ),
         },
     },
@@ -146,11 +159,18 @@ _RULE_TOOL = {
             "scope": _SCOPE_SCHEMA,
             "selector": _SELECTOR_SCHEMA,
             "relation": {
-                "type": ["string", "null"], "enum": ["<=", ">=", "==", None],
+                "type": ["string", "null"],
+                # Words, not <= >= ==. Those are exactly the characters that get
+                # HTML-escaped or quote-mangled in transit, and in the third
+                # evaluation run they cost 8 of 13 invalid rules: '&lt;=',
+                # '<="', '{"<=":"value"}'. The model had understood each rule
+                # and could not spell the operator.
+                "enum": ["at_most", "at_least", "exactly", None],
                 "description": (
-                    "For count. '<=' for caps ('no more than 6'), '>=' for "
-                    "minimums ('at least one'), '==' for exact ('never' is '==' "
-                    "with 0). 'less than 6' is '<=' with 5."
+                    "For count. 'at_most' for caps ('no more than 6'), "
+                    "'at_least' for minimums ('at least one'), 'exactly' for an "
+                    "exact number - and 'never' is 'exactly' with value 0. "
+                    "Note 'less than 6' means at_most 5."
                 ),
             },
             "value": {"type": ["integer", "null"], "description": "For count: the number."},
@@ -491,6 +511,21 @@ Rules that sound vague and are not. Say these, don't refuse them:
 "if eng and math are both there that day, english must come before maths"
   form=adjacency scope=["class_group"] first={subjects:["English"]} second={subjects:["Maths"]} must_precede=true
 
+"Don't give the same teacher the last period every day"
+  form=count scope=["teacher"] selector={period_positions:["last"]} relation="at_most" value=2 strength="preference"
+  (period_positions, not a number - the last period is the 8th on a full day
+  and the 4th on a half-day Saturday)
+
+"Don't keep tests or Maths just before lunch"
+  form=count scope=["class_group"] selector={subjects:["Maths"],period_orders:[5]} relation="exactly" value=0
+  (the timetable structure above says where lunch is, so "just before lunch" is
+  a period number. A break is not a subject and cannot go in a selector.)
+
+"same grade sections should have roughly same number of free gaps"
+  form=balance scope=[] across=["class_group"] selector={class_groups:["Grade 9"]} max_spread=2 strength="preference"
+  (a dimension being evened out goes in `across` and NOT in `scope` - putting
+  it in both asks to even out the days within each day)
+
 "Make the timetable balanced and nice for everyone"
   report_unclear, reason="too_vague" - "balanced" has no measurable meaning
   here. Note the contrast with "spread evenly through the week", which names
@@ -646,10 +681,10 @@ _SELECTOR_ALIASES = {
 
 _RELATION_ALIASES = {
     "at_most": "<=", "max": "<=", "maximum": "<=", "no_more_than": "<=",
-    "less_than_or_equal": "<=", "lte": "<=",
+    "less_than_or_equal": "<=", "lte": "<=", "<=": "<=", "=<": "<=", "<": "<=",
     "at_least": ">=", "min": ">=", "minimum": ">=", "no_fewer_than": ">=",
-    "greater_than_or_equal": ">=", "gte": ">=",
-    "equal": "==", "equals": "==", "exactly": "==", "eq": "==",
+    "greater_than_or_equal": ">=", "gte": ">=", ">=": ">=", "=>": ">=", ">": ">=",
+    "equal": "==", "equals": "==", "exactly": "==", "eq": "==", "==": "==", "=": "==",
 }
 
 _BUCKET_RELATION_ALIASES = {
@@ -702,19 +737,64 @@ def _normalise_selector(value, seen: list[str]):
             v = [v]
         if name in ("days", "period_orders") and isinstance(v, (int, str)):
             v = [v]
+        if name == "period_positions" and isinstance(v, str):
+            v = [v]
+        if name == "period_orders" and isinstance(v, (list, tuple)):
+            # Negative indexing: a model sending -1 has read "the last period"
+            # and guessed at the notation, which is a near miss rather than a
+            # mistake. -1 is the last, -2 the one before it - but only -1 has an
+            # unambiguous name here, so anything further is dropped rather than
+            # guessed at.
+            positive = [x for x in v if not (isinstance(x, int) and x < 0)]
+            if any(x == -1 for x in v if isinstance(x, int)):
+                _note(seen, "period_orders -1 -> period_positions ['last']")
+                out.setdefault("period_positions", []).append("last")
+            if len(positive) != len(v):
+                dropped = [x for x in v if isinstance(x, int) and x < -1]
+                if dropped:
+                    _note(seen, f"period_orders {dropped} dropped (no name for them)")
+            if not positive:
+                continue
+            v = positive
         out[name] = v
     return out
+
+
+def _unmangle(raw: str) -> str:
+    """Strip the damage an operator picks up in transit.
+
+    The third evaluation run produced '&lt;=', '<="', '=="' and
+    '{"<=":"value"}' as relation values - the model had read each rule
+    correctly and could not get the characters through intact. The schema now
+    asks for words instead, which removes the cause; this stays for anything
+    that still arrives mangled, since a rule lost to an escaped angle bracket
+    is the worst possible reason to lose one.
+    """
+    text = html.unescape(raw).strip()
+    # A whole JSON object where a string was expected: take the first key.
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and parsed:
+                text = str(next(iter(parsed)))
+        except ValueError:
+            pass
+    return text.strip().strip('"\'' + "`").strip()
 
 
 def _normalise_relation(value, seen: list[str], aliases, field_name: str):
     if not isinstance(value, str):
         return value
     raw = value.strip()
-    name = raw.lower().replace(" ", "_").replace("-", "_")
+    cleaned = _unmangle(raw)
+    if cleaned != raw:
+        _note(seen, f"{field_name} {raw!r} unmangled to {cleaned!r}")
+    name = cleaned.lower().replace(" ", "_").replace("-", "_")
     if name in aliases:
-        _note(seen, f"{field_name} {raw!r} -> {aliases[name]!r}")
+        if aliases[name] != cleaned:
+            _note(seen, f"{field_name} {cleaned!r} -> {aliases[name]!r}")
         return aliases[name]
-    return raw
+    return cleaned
 
 
 def _rule_payload(data: dict, seen: list[str] | None = None) -> dict:
