@@ -262,3 +262,78 @@ def test_legacy_constraints_still_work_alongside_ir_rules(db):
     # which only happens if both rules reached the model.
     both = generate_school_timetable(db, school.id)
     assert both.status == "infeasible"
+
+
+def test_the_new_forms_reach_the_real_solver(db):
+    """balance, span and exists_over compile against a real school, not just
+    the synthetic board in test_constraint_ir_forms.py.
+
+    Solved twice, because a rule that never reached the model would leave the
+    solver free to produce the same answer by chance. Three Maths periods over
+    two days with a balance of 0 has exactly one shape.
+    """
+    school = _school(db, days=2, per_day=3)
+    cg = _class_group(db, school)
+    maths = _subject(db, school, "Maths")
+    _teacher(db, school, "Rao", [maths.id])
+    _require(db, cg, maths, 2)
+
+    before = generate_school_timetable(db, school.id)
+    assert before.status in ("optimal", "feasible"), before.errors
+    assert not before.warnings
+
+    _ir(db, school, {"form": "balance", "scope": ["teacher"], "across": ["day"],
+                     "max_spread": 0},
+        description="Spread Rao's classes evenly")
+
+    after = generate_school_timetable(db, school.id)
+    assert after.status in ("optimal", "feasible"), after.errors
+    assert not after.warnings, after.warnings
+    used = _periods_used(after, db, school, "Maths")
+    per_day = {}
+    for day, _order in used:
+        per_day[day] = per_day.get(day, 0) + 1
+    assert per_day == {0: 1, 1: 1}, used
+
+
+def test_a_span_rule_compiles_against_a_real_school(db):
+    """Span needs first/last position variables, which is the most machinery of
+    any form - worth proving it survives contact with real Period rows rather
+    than the board's tidy 1..4."""
+    school = _school(db, days=1, per_day=4)
+    cg = _class_group(db, school)
+    maths = _subject(db, school, "Maths")
+    _teacher(db, school, "Rao", [maths.id])
+    _require(db, cg, maths, 2)
+
+    _ir(db, school, {"form": "span", "scope": ["teacher", "day"], "max_idle": 0},
+        description="No gaps in the middle of Rao's day")
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    assert not result.warnings, result.warnings
+    orders = sorted(o for _day, o in _periods_used(result, db, school, "Maths"))
+    assert orders[1] - orders[0] == 1, f"expected them back to back, got {orders}"
+
+
+def test_an_exists_over_rule_compiles_against_a_real_school(db):
+    """The field that was in the IR, in the tool schema and in the IR tests,
+    and never connected in the mapping - so rules meaning "some day" silently
+    became "every day". Worth an end-to-end test of its own."""
+    school = _school(db, days=2, per_day=3)
+    cg = _class_group(db, school)
+    maths = _subject(db, school, "Maths")
+    _teacher(db, school, "Rao", [maths.id])
+    _require(db, cg, maths, 3)
+
+    _ir(db, school, {"form": "count", "scope": ["teacher", "day"],
+                     "exists_over": ["day"], "relation": "<=", "value": 1},
+        description="Rao gets at least one light day")
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    assert not result.warnings, result.warnings
+    per_day = {}
+    for day, _order in _periods_used(result, db, school, "Maths"):
+        per_day[day] = per_day.get(day, 0) + 1
+    assert min(per_day.values()) <= 1, per_day

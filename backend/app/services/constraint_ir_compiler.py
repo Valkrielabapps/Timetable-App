@@ -24,6 +24,7 @@ from ortools.sat.python import cp_model
 
 from .constraint_ir import (
     Adjacency,
+    Balance,
     Bucket,
     Conditional,
     Count,
@@ -31,6 +32,7 @@ from .constraint_ir import (
     Rule,
     Run,
     Selector,
+    Span,
 )
 
 # How firmly a rule is meant, as the penalty weight a violation costs. Only
@@ -234,7 +236,35 @@ def _relate(model, penalties, expr, relation: str, value: int, weight: int | Non
 # ---------------------------------------------------------------------------
 
 
+def _count_expr(model, group, resolved, form: Count, name: str):
+    """The quantity one group's constraint applies to, and whether it exists.
+
+    Returns (expression, has_anything). `distinct` counts kinds rather than
+    lessons, which needs an indicator per kind - used ⇔ at least one of that
+    kind is scheduled.
+    """
+    selected = [a for a in group if _matches(a, resolved)]
+    if not form.distinct:
+        return (sum(a.var for a in selected) if selected else 0), bool(selected)
+
+    keyer = {"subject": lambda a: a.subject_id,
+             "teacher": lambda a: a.teacher_id,
+             "class_group": lambda a: a.class_group_id,
+             "day": lambda a: a.day_of_week}[form.distinct]
+    by_kind: dict = {}
+    for atom in selected:
+        by_kind.setdefault(keyer(atom), []).append(atom.var)
+    indicators = []
+    for kind, vars_ in by_kind.items():
+        used = model.NewBoolVar(f"{name}_has{kind}")
+        model.AddMaxEquality(used, vars_)
+        indicators.append(used)
+    return (sum(indicators) if indicators else 0), bool(indicators)
+
+
 def _count(model, penalties, atoms, form: Count, index, weight, tag: str) -> None:
+    if form.exists_over:
+        return _count_exists(model, penalties, atoms, form, index, weight, tag)
     resolved = _resolve(form.selector, index)
     pool = _pool(atoms, _side(form.scope, form.selector))
 
@@ -251,33 +281,170 @@ def _count(model, penalties, atoms, form: Count, index, weight, tag: str) -> Non
         return
 
     for key, group in _group(members, form.scope).items():
-        selected = [a.var for a in group if _matches(a, resolved)]
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
 
-        if form.distinct:
-            keyer = {"subject": lambda a: a.subject_id,
-                     "teacher": lambda a: a.teacher_id,
-                     "class_group": lambda a: a.class_group_id}[form.distinct]
-            by_kind: dict = {}
-            for atom in group:
-                if _matches(atom, resolved):
-                    by_kind.setdefault(keyer(atom), []).append(atom.var)
-            indicators = []
-            for kind, vars_ in by_kind.items():
-                used = model.NewBoolVar(f"{name}_has{kind}")
-                # used == 1 exactly when at least one of those lessons happens.
-                model.AddMaxEquality(used, vars_)
-                indicators.append(used)
-            if not indicators and form.relation in ("<=",):
-                continue
-            _relate(model, penalties, sum(indicators) if indicators else 0,
-                    form.relation, form.value, weight, name)
+        expr, present = _count_expr(model, group, resolved, form, name)
+        if not present and form.relation == "<=":
+            continue  # nothing to cap
+        _relate(model, penalties, expr, form.relation, form.value, weight, name)
+
+
+def _count_exists(model, penalties, atoms, form: Count, index, weight, tag: str) -> None:
+    """A count that one group has to satisfy rather than all of them.
+
+    "Every teacher needs at least one light day" is universal over teachers and
+    existential over days. So the scope splits: the dimensions not named in
+    exists_over form the outer groups, each of which must contain at least one
+    inner group where the relation holds.
+
+    Each inner group gets a reified indicator - true only when that group
+    really does satisfy the relation - and the outer group requires at least
+    one of them. Reification in both directions matters: an indicator that
+    could be true without the relation holding would let every outer group pass
+    for free.
+    """
+    resolved = _resolve(form.selector, index)
+    pool = _pool(atoms, _side(form.scope, form.selector))
+    members = [a for a in pool if _matches(a, resolved, ignore_time=True)]
+    if not members:
+        return
+
+    outer_dims = tuple(d for d in form.scope if d not in form.exists_over)
+    inner_dims = tuple(d for d in form.scope if d in form.exists_over)
+
+    for outer_key, outer_group in _group(members, outer_dims).items():
+        name = f"ir_{tag}_{'_'.join(str(k) for k in outer_key)}"
+        indicators = []
+        for inner_key, inner_group in _group(outer_group, inner_dims).items():
+            slug = f"{name}_{'_'.join(str(k) for k in inner_key)}"
+            expr, _ = _count_expr(model, inner_group, resolved, form, slug)
+            holds = model.NewBoolVar(f"{slug}_holds")
+            if form.relation == "<=":
+                model.Add(expr <= form.value).OnlyEnforceIf(holds)
+                model.Add(expr >= form.value + 1).OnlyEnforceIf(holds.Not())
+            elif form.relation == ">=":
+                model.Add(expr >= form.value).OnlyEnforceIf(holds)
+                model.Add(expr <= form.value - 1).OnlyEnforceIf(holds.Not())
+            else:
+                model.Add(expr == form.value).OnlyEnforceIf(holds)
+                model.Add(expr != form.value).OnlyEnforceIf(holds.Not())
+            indicators.append(holds)
+
+        if not indicators:
+            continue
+        _relate(model, penalties, sum(indicators), ">=", 1, weight, f"{name}_exists")
+
+
+def _balance(model, penalties, atoms, form: Balance, index, weight, tag: str) -> None:
+    """Keep the counts across `across` close to each other, per scope group.
+
+    Every other form asks about one group at a time; this asks about the
+    relationship between them, which is why it needs the max and the min as
+    variables rather than a bound per group.
+
+    Buckets with no atoms at all are still included with a count of zero: a
+    teacher who could be given lessons on Friday and is given none is exactly
+    the imbalance "spread evenly through the week" is about, and skipping empty
+    buckets would make that case invisible.
+    """
+    resolved = _resolve(form.selector, index)
+    pool = _pool(atoms, _side(form.scope, form.selector))
+    members = [a for a in pool if _matches(a, resolved)]
+    if not members:
+        return
+
+    # The buckets to even out are taken across the whole rule, not per group,
+    # so a group missing a day entirely still has that day counted as zero.
+    all_buckets = {tuple(_SCOPE_KEY[d](a) for d in form.across) for a in members}
+    if len(all_buckets) < 2:
+        return  # nothing to be uneven between
+
+    for key, group in _group(members, form.scope).items():
+        name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
+        by_bucket: dict[tuple, list] = {b: [] for b in all_buckets}
+        for atom in group:
+            by_bucket[tuple(_SCOPE_KEY[d](atom) for d in form.across)].append(atom.var)
+
+        counts = []
+        for i, (_bucket, vars_) in enumerate(sorted(by_bucket.items(), key=lambda kv: str(kv[0]))):
+            c = model.NewIntVar(0, max(1, len(vars_)), f"{name}_b{i}")
+            model.Add(c == (sum(vars_) if vars_ else 0))
+            counts.append(c)
+
+        ceiling = max(1, len(group))
+        highest = model.NewIntVar(0, ceiling, f"{name}_max")
+        lowest = model.NewIntVar(0, ceiling, f"{name}_min")
+        model.AddMaxEquality(highest, counts)
+        model.AddMinEquality(lowest, counts)
+        _relate(model, penalties, highest - lowest, "<=", form.max_spread, weight, f"{name}_spread")
+
+
+def _span(model, penalties, atoms, form: Span, index, weight, tag: str) -> None:
+    """How far a group's day stretches, and how much of it is idle.
+
+    Counts say how much someone teaches; this says how long they are held
+    there, which no count can distinguish. Needs the position of the first and
+    last lesson as variables.
+
+    Only bites on days the group teaches at all. A teacher who is not in has no
+    span, and constraining one would quietly forbid days off.
+    """
+    resolved = _resolve(form.selector, index)
+    pool = _pool(atoms, _side(form.scope, form.selector))
+    members = [a for a in pool if _matches(a, resolved)]
+    if not members:
+        return
+
+    for key, group in _group(members, form.scope).items():
+        name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
+        by_order: dict[int, list] = {}
+        for atom in group:
+            by_order.setdefault(atom.order, []).append(atom.var)
+        orders = sorted(by_order)
+        if len(orders) < 2:
             continue
 
-        if not selected and form.relation == "<=":
-            continue  # nothing to cap
-        _relate(model, penalties, sum(selected) if selected else 0,
-                form.relation, form.value, weight, name)
+        low, high = orders[0], orders[-1]
+        occupied = {}
+        for order in orders:
+            flag = model.NewBoolVar(f"{name}_o{order}")
+            model.AddMaxEquality(flag, by_order[order])
+            occupied[order] = flag
+
+        # first/last as positions. An unoccupied slot is pushed out of range in
+        # the direction that cannot win the min or the max, so the extremes
+        # land on real lessons.
+        #
+        # A day with nothing scheduled needs no special case: first lands on
+        # the last slot, last on the first, and the span comes out zero or
+        # negative, satisfying any bound. That is the right answer - a teacher
+        # who is not in has no span, and a rule that bit here would forbid days
+        # off.
+        first = model.NewIntVar(low, high, f"{name}_first")
+        last = model.NewIntVar(low, high, f"{name}_last")
+        first_terms, last_terms = [], []
+        for order in orders:
+            fi = model.NewIntVar(low, high, f"{name}_fi{order}")
+            model.Add(fi == order).OnlyEnforceIf(occupied[order])
+            model.Add(fi == high).OnlyEnforceIf(occupied[order].Not())
+            first_terms.append(fi)
+
+            la = model.NewIntVar(low, high, f"{name}_la{order}")
+            model.Add(la == order).OnlyEnforceIf(occupied[order])
+            model.Add(la == low).OnlyEnforceIf(occupied[order].Not())
+            last_terms.append(la)
+        model.AddMinEquality(first, first_terms)
+        model.AddMaxEquality(last, last_terms)
+
+        if form.max_span is not None:
+            # Inclusive: periods 2 to 5 is a span of 4.
+            _relate(model, penalties, last - first + 1, "<=", form.max_span, weight,
+                    f"{name}_span")
+
+        if form.max_idle is not None:
+            taught = sum(occupied.values())
+            _relate(model, penalties, last - first + 1 - taught, "<=", form.max_idle,
+                    weight, f"{name}_idle")
 
 
 def _runs_within(group: list[Atom]) -> list[list[Atom]]:
@@ -392,6 +559,22 @@ def _adjacency(model, penalties, atoms, form: Adjacency, index, weight, tag: str
                     miss = model.NewBoolVar(f"{name}_miss_{atom.period_id}")
                     model.Add(sum(a.var for a in following) + miss >= atom.var)
                     penalties.append(weight * miss)
+            continue
+
+        if form.must_precede:
+            # Ordering without adjacency: wherever both are on a day, `first`
+            # comes earlier. Expressed as forbidding every pair in the wrong
+            # order, which needs no extra variables and leaves the solver free
+            # to choose the distance - unlike must_follow, which would force
+            # them into neighbouring periods.
+            for a in firsts:
+                for b in seconds:
+                    if a.day_of_week != b.day_of_week or a.var is b.var:
+                        continue
+                    if b.order < a.order:
+                        _relate(model, penalties, a.var + b.var, "<=", 1, weight,
+                                f"{name}_order_{a.period_id}_{b.period_id}"
+                                f"_{a.requirement_id}_{b.requirement_id}")
             continue
 
         for a in firsts:
@@ -532,6 +715,8 @@ _COMPILERS = {
     Run: _run,
     Adjacency: _adjacency,
     Bucket: _bucket,
+    Balance: _balance,
+    Span: _span,
     Conditional: _conditional,
 }
 

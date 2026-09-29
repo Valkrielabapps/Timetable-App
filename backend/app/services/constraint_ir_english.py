@@ -30,6 +30,7 @@ from __future__ import annotations
 from .constraint_ir import (
     DAY_NAMES,
     Adjacency,
+    Balance,
     Bucket,
     Conditional,
     Count,
@@ -37,6 +38,7 @@ from .constraint_ir import (
     Rule,
     Run,
     Selector,
+    Span,
 )
 
 # ---------------------------------------------------------------------------
@@ -194,21 +196,39 @@ def _amount(relation: str, value: int, noun: str) -> str:
     return f"exactly {value} {shown}"
 
 
+# What one group of an existentially-quantified dimension is called.
+_EXISTS_NOUN = {"day": "day", "period": "period", "class_group": "class",
+                "teacher": "teacher", "subject": "subject"}
+
+
 def _render_count(form: Count, suppress_time: bool = False) -> str:
     sel = form.selector
     subject, used = _scope_subject(form.scope, sel)
     time = "" if suppress_time else _scope_time(form.scope, sel)
+    if form.exists_over:
+        # An existential dimension replaces its own time phrase rather than
+        # being added to it: "on at least one day ... on any day" says two
+        # opposite things in one sentence.
+        which = _join([_EXISTS_NOUN.get(d, d) for d in form.exists_over], "and")
+        if ("day" in form.exists_over and time == "on any day") or \
+           ("period" in form.exists_over and time == "in every period"):
+            time = f"on at least one {which}"
+        else:
+            time = f"{time} on at least one {which}".strip()
 
     if form.distinct:
         unit = {"subject": "different subjects", "teacher": "different teachers",
-                "class_group": "different classes"}[form.distinct]
+                "class_group": "different classes", "day": "different days"}[form.distinct]
         amount = _amount(form.relation, form.value, unit)
         # "different subjects" already reads as a count, so the lesson noun is
         # dropped - but any filter narrowing *which* lessons are counted still
         # has to be said.
         narrowing = " ".join(p for p in (_whose(sel, used), _when(sel)) if p)
         tail = f" among {narrowing}" if _whose(sel, used) else (f" {_when(sel)}" if sel.days or sel.period_orders else "")
-        sentence = f"{subject} has {amount}{tail}"
+        # "has at most 3 different days" reads as an inventory of days rather
+        # than a working pattern, which is the opposite of what it constrains.
+        verb = "has lessons on" if form.distinct == "day" else "has"
+        sentence = f"{subject} {verb} {amount}{tail}"
     else:
         whose = _whose(sel, used)
         noun = _lesson_noun(sel)
@@ -226,7 +246,8 @@ def _render_count(form: Count, suppress_time: bool = False) -> str:
     for universal in ("every class", "every teacher"):
         if sentence.startswith(f"{universal} has no "):
             rest = sentence[len(f"{universal} has no "):]
-            return f"no {universal[len('every '):]} has {rest}"
+            sentence = f"no {universal[len('every ')::]} has {rest}"
+            break
     return sentence
 
 
@@ -260,6 +281,15 @@ def _render_adjacency(form: Adjacency) -> str:
     if form.must_follow:
         return f"for {subject}, {second} come in the period straight after {first}"
 
+    if form.must_precede:
+        # Said as "somewhere later" rather than just "after", because "after"
+        # is what people say when they mean the very next period, and that is a
+        # much stricter rule.
+        return (
+            f"for {subject}, on any day both appear, {first} come somewhere "
+            f"earlier in the day than {second}"
+        )
+
     if form.min_gap == 1:
         if form.directional:
             return f"for {subject}, {second} never come in the period straight after {first}"
@@ -289,6 +319,44 @@ def _render_bucket(form: Bucket) -> str:
     return f"for {subject}, {first} and {second} never fall on the same {unit}"
 
 
+_ACROSS_NOUN = {"day": "the days of the week", "period": "the periods of the day",
+                "class_group": "the classes", "teacher": "the teachers",
+                "subject": "the subjects"}
+
+
+def _render_balance(form: Balance) -> str:
+    subject, used = _scope_subject(form.scope, form.selector)
+    lessons = _describe_lessons(form.selector, used)
+    across = _join([_ACROSS_NOUN.get(d, d) for d in form.across])
+    if form.max_spread == 0:
+        return f"{subject} has the same number of {lessons} across {across}"
+    return (
+        f"{subject} has {lessons} spread across {across}, with at most "
+        f"{form.max_spread} {_plural(form.max_spread, 'period')} between the "
+        f"fullest and the emptiest"
+    )
+
+
+def _render_span(form: Span) -> str:
+    subject, used = _scope_subject(form.scope, form.selector)
+    lessons = _describe_lessons(form.selector, used)
+    clauses = []
+    if form.max_span is not None:
+        clauses.append(
+            f"{lessons} fall within {form.max_span} consecutive periods, "
+            f"whichever {form.max_span} those are"
+        )
+    if form.max_idle is not None:
+        if form.max_idle == 0:
+            clauses.append("there are no free periods between the first and the last")
+        else:
+            clauses.append(
+                f"there are at most {form.max_idle} free "
+                f"{_plural(form.max_idle, 'period')} between the first and the last"
+            )
+    return f"on any day {subject} teaches, {_join(clauses)}"
+
+
 def _render_conditional(form: Conditional) -> str:
     condition = _render_count(form.when)
     if isinstance(form.then, Count) and form.then.scope == form.when.scope:
@@ -308,6 +376,10 @@ def render_form(form: Form) -> str:
         return _render_adjacency(form)
     if isinstance(form, Bucket):
         return _render_bucket(form)
+    if isinstance(form, Balance):
+        return _render_balance(form)
+    if isinstance(form, Span):
+        return _render_span(form)
     if isinstance(form, Conditional):
         return _render_conditional(form)
     raise TypeError(f"cannot render {type(form).__name__}")

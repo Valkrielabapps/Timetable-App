@@ -217,6 +217,17 @@ class Count:
     how many *different* subjects appear, not how many lessons - which is what
     "at most 6 different subjects a day" and "no teacher more than 6 sections"
     are asking for.
+
+    `exists_over` names the dimensions of `scope` that only ONE group has to
+    satisfy, the rest staying universal. Without it every scope is "for all",
+    and a whole family of rules has no way to be said at all:
+
+        "every teacher needs at least one light day, 4 periods or less"
+          scope=["teacher","day"], exists_over=["day"], "<=" 4
+
+    Read as: for each teacher (universal), there is some day (existential) on
+    which they teach at most 4. Leaving exists_over empty would say every day,
+    which is a different and much harsher rule.
     """
 
     scope: tuple[str, ...]
@@ -224,6 +235,7 @@ class Count:
     relation: str
     value: int
     distinct: str | None = None
+    exists_over: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -267,6 +279,11 @@ class Adjacency:
     # inverse of a forbidden adjacency, where the two must be adjacent and in
     # this order. min_gap is ignored when this is set.
     must_follow: bool = False
+    # Ordering without adjacency: `second` must come later than `first`, at any
+    # distance. "if eng and math are both there that day, english must come
+    # before maths" is this and not must_follow, which would wrongly force them
+    # into neighbouring periods. min_gap is ignored when this is set.
+    must_precede: bool = False
 
 
 @dataclass(frozen=True)
@@ -287,6 +304,54 @@ class Bucket:
 
 
 @dataclass(frozen=True)
+class Balance:
+    """Even out how matching lessons fall across `across`, per group in `scope`.
+
+    Every other form asks a question about one group at a time. This one asks
+    about the relationship between groups, which is why it cannot be a count:
+    "spread Mr. Khan's classes evenly through the week" says nothing about any
+    particular day, only that no day should be far from the others.
+
+        scope=["teacher"], across=["day"], max_spread=2
+        -> for each teacher, their busiest day and their quietest differ by at
+           most 2 periods
+
+    max_spread=0 means exactly equal, which is what "the same number of free
+    gaps" asks for and is usually too strict to be a requirement - most rules
+    of this shape arrive hedged, and belong as preferences.
+    """
+
+    scope: tuple[str, ...]
+    across: tuple[str, ...]
+    selector: Selector
+    max_spread: int
+
+
+@dataclass(frozen=True)
+class Span:
+    """How stretched out a group's teaching is within a day.
+
+    Counts say how much someone teaches; this says how long they are held
+    there. A teacher with three periods at 9am, noon and 3pm has the same count
+    as one teaching three in a row and a very different day, and no count,
+    run, adjacency or bucket can tell them apart.
+
+        max_span  - last period minus first, inclusive. "All their classes
+                    within 4 continuous periods, which 4 doesn't matter."
+        max_idle  - free periods between the first and last. "Don't leave
+                    teachers with 3 free periods in the middle of the day."
+
+    Only applies on days the group teaches at all: a teacher who is not in has
+    no span, rather than a span of zero that a minimum would fail.
+    """
+
+    scope: tuple[str, ...]
+    selector: Selector
+    max_span: int | None = None
+    max_idle: int | None = None
+
+
+@dataclass(frozen=True)
 class Conditional:
     """`then` is enforced only in the groups where `when` holds.
 
@@ -298,10 +363,10 @@ class Conditional:
 
     scope: tuple[str, ...]
     when: Count
-    then: Count | Run | Adjacency | Bucket
+    then: Count | Run | Adjacency | Bucket | Balance | Span
 
 
-Form = Count | Run | Adjacency | Bucket | Conditional
+Form = Count | Run | Adjacency | Bucket | Balance | Span | Conditional
 
 
 @dataclass(frozen=True)
@@ -363,20 +428,37 @@ def _count_from_dict(data: dict) -> Count:
     distinct = data.get("distinct")
     if distinct is not None:
         distinct = str(distinct).strip().lower()
-        # Counting distinct teachers or class groups is what "at most 2
-        # different teachers for 8A Maths" and "no teacher more than 6
-        # sections" need; distinct days would be a spread rule, which is a
-        # bucket, so it is not offered here.
-        if distinct not in ("subject", "teacher", "class_group"):
+        # "day" belongs here as much as the others: "give part-time teachers
+        # all their classes in 3 days" counts how many different days get used.
+        # It was left out of the first version for no reason that survived
+        # contact with the catalogue.
+        if distinct not in ("subject", "teacher", "class_group", "day"):
             raise IRError(
-                f"distinct must be subject, teacher or class_group, got {distinct!r}"
+                f"distinct must be subject, teacher, class_group or day, got {distinct!r}"
             )
+    scope = _scope_from(data.get("scope"))
+    exists_over = _scope_from(data.get("exists_over"))
+    outside = [d for d in exists_over if d not in scope]
+    if outside:
+        raise IRError(
+            f"exists_over can only name dimensions that are in scope; "
+            f"{', '.join(outside)} is not"
+        )
+    if exists_over and set(exists_over) == set(scope):
+        # Every dimension existential means "somewhere in the school this holds
+        # once", which no scheduling rule means and which would make almost any
+        # timetable satisfy it.
+        raise IRError(
+            "exists_over cannot cover the whole scope - something has to be "
+            "universal for the rule to say anything"
+        )
     return Count(
-        scope=_scope_from(data.get("scope")),
+        scope=scope,
         selector=selector_from_dict(data.get("selector")),
         relation=relation,
         value=_int_from(data.get("value"), "value", 0, 500),
         distinct=distinct,
+        exists_over=exists_over,
     )
 
 
@@ -405,17 +487,62 @@ def _run_from_dict(data: dict) -> Run:
 
 def _adjacency_from_dict(data: dict) -> Adjacency:
     must_follow = bool(data.get("must_follow", False))
+    must_precede = bool(data.get("must_precede", False))
+    if must_follow and must_precede:
+        raise IRError(
+            "a rule cannot both require the next period and only require a later "
+            "one - must_follow is the stricter of the two, so pick one"
+        )
+    positional = must_follow or must_precede
     adj = Adjacency(
         scope=_scope_from(data.get("scope")),
         first=selector_from_dict(data.get("first")),
         second=selector_from_dict(data.get("second")),
-        min_gap=1 if must_follow else _int_from(data.get("min_gap", 1), "min_gap", 1, 30),
+        min_gap=1 if positional else _int_from(data.get("min_gap", 1), "min_gap", 1, 30),
         directional=bool(data.get("directional", False)),
         must_follow=must_follow,
+        must_precede=must_precede,
     )
     if adj.first.is_empty() or adj.second.is_empty():
         raise IRError("an adjacency rule needs both sides to say which lessons they mean")
     return adj
+
+
+def _balance_from_dict(data: dict) -> Balance:
+    across = _scope_from(data.get("across"), allow_empty=False)
+    scope = _scope_from(data.get("scope"))
+    overlap = [d for d in across if d in scope]
+    if overlap:
+        # Evening out days *within* each day is meaningless, and is what a
+        # scope that repeats the across dimension asks for.
+        raise IRError(
+            f"a balance rule cannot even out {', '.join(overlap)} while also "
+            f"grouping by it - remove it from one of scope or across"
+        )
+    return Balance(
+        scope=scope,
+        across=across,
+        selector=selector_from_dict(data.get("selector")),
+        max_spread=_int_from(data.get("max_spread", 1), "max_spread", 0, 100),
+    )
+
+
+def _span_from_dict(data: dict) -> Span:
+    max_span = data.get("max_span")
+    max_idle = data.get("max_idle")
+    if max_span is None and max_idle is None:
+        raise IRError("a span rule needs max_span or max_idle")
+    span = Span(
+        scope=_scope_from(data.get("scope"), allow_empty=False),
+        selector=selector_from_dict(data.get("selector")),
+        max_span=None if max_span is None else _int_from(max_span, "max_span", 1, 30),
+        max_idle=None if max_idle is None else _int_from(max_idle, "max_idle", 0, 30),
+    )
+    if "day" not in span.scope:
+        # A span that ran across days would measure from Monday's first period
+        # to Friday's last, which is not a thing anybody is asking to limit.
+        raise IRError("a span rule has to be measured within a day, so scope must include 'day'")
+    return span
 
 
 def _bucket_from_dict(data: dict) -> Bucket:
@@ -457,6 +584,8 @@ _FORM_PARSERS = {
     "run": _run_from_dict,
     "adjacency": _adjacency_from_dict,
     "bucket": _bucket_from_dict,
+    "balance": _balance_from_dict,
+    "span": _span_from_dict,
     "conditional": _conditional_from_dict,
 }
 
@@ -499,6 +628,8 @@ def _form_to_dict(form: Form) -> dict:
         }
         if form.distinct:
             out["distinct"] = form.distinct
+        if form.exists_over:
+            out["exists_over"] = list(form.exists_over)
         return out
     if isinstance(form, Run):
         out = {"form": "run", "scope": list(form.scope), "selector": selector_to_dict(form.selector)}
@@ -516,6 +647,7 @@ def _form_to_dict(form: Form) -> dict:
             "min_gap": form.min_gap,
             "directional": form.directional,
             "must_follow": form.must_follow,
+            "must_precede": form.must_precede,
         }
     if isinstance(form, Bucket):
         return {
@@ -526,6 +658,25 @@ def _form_to_dict(form: Form) -> dict:
             "dimension": form.dimension,
             "relation": form.relation,
         }
+    if isinstance(form, Balance):
+        return {
+            "form": "balance",
+            "scope": list(form.scope),
+            "across": list(form.across),
+            "selector": selector_to_dict(form.selector),
+            "max_spread": form.max_spread,
+        }
+    if isinstance(form, Span):
+        out = {
+            "form": "span",
+            "scope": list(form.scope),
+            "selector": selector_to_dict(form.selector),
+        }
+        if form.max_span is not None:
+            out["max_span"] = form.max_span
+        if form.max_idle is not None:
+            out["max_idle"] = form.max_idle
+        return out
     if isinstance(form, Conditional):
         return {
             "form": "conditional",
@@ -556,7 +707,7 @@ def referenced_names(rule: Rule) -> dict[str, set[str]]:
 
     def visit(form: Form) -> None:
         selectors: tuple[Selector, ...]
-        if isinstance(form, (Count, Run)):
+        if isinstance(form, (Count, Run, Balance, Span)):
             selectors = (form.selector,)
         elif isinstance(form, (Adjacency, Bucket)):
             selectors = (form.first, form.second)

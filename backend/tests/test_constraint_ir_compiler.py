@@ -81,6 +81,36 @@ class Board:
         assert status == cp_model.INFEASIBLE, \
             f"expected these to clash, but the solver placed them: {placements}"
 
+    def _solve_exactly(self, placements):
+        """Pin the whole timetable: these placements and nothing else.
+
+        Needed by any rule the solver could satisfy by ADDING a lesson rather
+        than moving one. "All this teacher's periods within a span of 2" is
+        broken by lessons in periods 1 and 4 - but only if 2 and 3 stay empty,
+        and left free the solver will simply fill them and satisfy the rule.
+        The same is true of must_follow, which is happy to schedule a second
+        lesson in the period it needs rather than move the one that is there.
+
+        assert_impossible on a partly-free board silently passes for those
+        rules whether or not they reached the model.
+        """
+        wanted = set(placements)
+        for key, atom in self.by_key.items():
+            self.model.Add(atom.var == (1 if key in wanted else 0))
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 5
+        return solver.Solve(self.model)
+
+    def assert_exactly_possible(self, *placements):
+        status = self._solve_exactly(placements)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE), \
+            f"expected this exact timetable to be allowed: {placements}"
+
+    def assert_exactly_impossible(self, *placements):
+        status = self._solve_exactly(placements)
+        assert status == cp_model.INFEASIBLE, \
+            f"expected this exact timetable to be refused, but it was allowed: {placements}"
+
 
 # ---------------------------------------------------------------------------
 # count

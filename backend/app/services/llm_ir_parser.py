@@ -120,16 +120,26 @@ _RULE_TOOL = {
         "properties": {
             "form": {
                 "type": "string",
-                "enum": ["count", "run", "adjacency", "bucket", "conditional"],
+                "enum": ["count", "run", "adjacency", "bucket", "balance", "span",
+                         "conditional"],
                 "description": (
                     "count: how many matching periods there may be (also how you "
                     "say 'never' - relation '==' with value 0 - and 'at least "
                     "once' - relation '>=' with value 1). Most rules are counts.\n"
                     "run: how many matching periods may sit back to back, or that "
                     "they must come as a block.\n"
-                    "adjacency: how close two DIFFERENT sets of lessons may be.\n"
+                    "adjacency: how close two DIFFERENT sets of lessons may be, or "
+                    "which order they come in.\n"
                     "bucket: whether two sets share a day, or must happen at the "
                     "same time as each other.\n"
+                    "balance: keep counts EVEN across days or classes - for "
+                    "'spread evenly', 'roughly the same', 'don't bunch'. Use this "
+                    "rather than a count when the sentence compares groups to each "
+                    "other instead of capping any one of them.\n"
+                    "span: how stretched a day is - how far apart the first and "
+                    "last period are, or how many free periods sit between them. "
+                    "For 'don't leave gaps in the middle', 'all within 4 "
+                    "continuous periods'.\n"
                     "conditional: apply a rule only where another count holds."
                 ),
             },
@@ -145,11 +155,74 @@ _RULE_TOOL = {
             },
             "value": {"type": ["integer", "null"], "description": "For count: the number."},
             "distinct": {
-                "type": ["string", "null"], "enum": ["subject", "teacher", "class_group", None],
+                "type": ["string", "null"],
+                "enum": ["subject", "teacher", "class_group", "day", None],
                 "description": (
                     "For count, when the sentence counts KINDS rather than "
                     "periods: 'at most 6 different subjects a day' is "
-                    "distinct='subject'. Leave null to count periods."
+                    "distinct='subject', and 'all their classes in 3 days' is "
+                    "distinct='day'. Leave null to count periods."
+                ),
+            },
+            "exists_over": {
+                "type": ["array", "null"],
+                "items": {"type": "string",
+                          "enum": ["teacher", "class_group", "subject", "day", "period"]},
+                "description": (
+                    "For count. Names the scope dimensions that only ONE group has "
+                    "to satisfy, instead of all of them. 'Every teacher needs at "
+                    "least one light day of 4 periods or less' is "
+                    "scope=['teacher','day'], exists_over=['day'], '<=' 4 - for "
+                    "each teacher, SOME day is light. Without it the rule would "
+                    "say every day must be light, which is far harsher. Only use "
+                    "for 'at least one', 'some day', 'one of the'; leave null "
+                    "otherwise. It cannot cover the whole scope."
+                ),
+            },
+            "across": {
+                "type": ["array", "null"],
+                "items": {"type": "string",
+                          "enum": ["teacher", "class_group", "subject", "day", "period"]},
+                "description": (
+                    "For balance: the dimension to even out, usually ['day']. "
+                    "Must not also appear in scope."
+                ),
+            },
+            "max_spread": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For balance: how many periods the fullest bucket may exceed "
+                    "the emptiest. 0 means exactly equal. Use 1 or 2 for vague "
+                    "wording like 'evenly' or 'roughly the same' - and set "
+                    "strength to a preference, because an exact balance is rarely "
+                    "achievable alongside everything else."
+                ),
+            },
+            "max_span": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For span: how many periods may separate the first and last, "
+                    "inclusive. 'All his periods within 4 continuous periods, "
+                    "which 4 doesn't matter' is 4."
+                ),
+            },
+            "max_idle": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For span: how many free periods may sit BETWEEN the first and "
+                    "last. Free periods before the first or after the last don't "
+                    "count - those are arriving late or leaving early, not gaps in "
+                    "the middle. 'Don't leave teachers with 3 free periods in the "
+                    "middle of the day' is 2."
+                ),
+            },
+            "must_precede": {
+                "type": ["boolean", "null"],
+                "description": (
+                    "For adjacency: true when `second` must come LATER IN THE DAY "
+                    "than `first`, at any distance. 'English must come before "
+                    "Maths' is this, not must_follow - must_follow would force "
+                    "them into neighbouring periods, which was not asked for."
                 ),
             },
             "max_consecutive": {
@@ -375,8 +448,53 @@ Informal rules reduce the same way. These all sound harder than they are:
     when={scope:["teacher","day"],selector:{teachers:["Mrs. Rao"],class_groups:["Grade 12"]},relation:">=",value:1}
     then={form:"count",scope:["teacher","day"],selector:{teachers:["Mrs. Rao"],class_groups:["Grade 10"]},relation:"==",value:0}
 
+Rules that sound vague and are not. Say these, don't refuse them:
+
+"rao mam son is in 9B, she shouldnt teach 9B"
+  form=count scope=[] selector={teachers:["Mrs. Rao"],class_groups:["Grade 9 - B"]} relation="==" value=0
+
+"English every day for primary"
+  form=count scope=["class_group","day"] selector={subjects:["English"],class_groups:["Grade 1"]} relation=">=" value=1
+  (one per grade named; "every day" is scope, not a filter)
+
+"Students should never have a free period"
+  form=count scope=["class_group","period"] selector={} relation=">=" value=1
+  (every class, in every slot, has at least one lesson)
+
+"No more than 3 of Maths, Science and English in a day"
+  form=count scope=["class_group","day"] selector={subjects:["Maths","Science","English"]} relation="<=" value=3
+  (several subjects in one selector are ORed, so this counts them together -
+  count periods unless the sentence says "different subjects")
+
+"each science teacher atleast one board class (10th or 12th)"
+  form=count scope=["teacher"] selector={teachers:["Mr. Khan"],class_groups:["Grade 10","Grade 12"]} relation=">=" value=1
+
+"every teacher needs atleast one light day mon to fri, 4 periods or less"
+  form=count scope=["teacher","day"] exists_over=["day"] selector={days:[0,1,2,3,4]} relation="<=" value=4 strength="preference"
+  (exists_over is what makes this "some day" rather than "every day")
+
+"Spread Mr. Khan's classes evenly through the week"
+  form=balance scope=["teacher"] across=["day"] selector={teachers:["Mr. Khan"]} max_spread=1 strength="preference"
+
+"same grade sections should have roughly same number of free gaps"
+  form=balance scope=[] across=["class_group"] selector={class_groups:["Grade 9"]} max_spread=2 strength="preference"
+
+"Don't leave teachers with 3 free periods in the middle of the day"
+  form=span scope=["teacher","day"] max_idle=2 strength="preference"
+
+"iyer sir is part time, on the days he comes all his periods shd be within 4 continuous periods"
+  form=span scope=["teacher","day"] selector={teachers:["Mr. Iyer"]} max_span=4
+
+"Try to give part-time teachers all their classes in 3 days"
+  form=count scope=["teacher"] selector={teachers:["Mr. Iyer"]} distinct="day" relation="<=" value=3 strength="preference"
+
+"if eng and math are both there that day, english must come before maths"
+  form=adjacency scope=["class_group"] first={subjects:["English"]} second={subjects:["Maths"]} must_precede=true
+
 "Make the timetable balanced and nice for everyone"
-  report_unclear, reason="too_vague" - "balanced" has no measurable meaning here.
+  report_unclear, reason="too_vague" - "balanced" has no measurable meaning
+  here. Note the contrast with "spread evenly through the week", which names
+  what to even out and is a balance rule.
 
 "chem lab - need 1 perod gap between 2 practicals, suresh has to clean n set up"
   report_unclear, reason="not_supported" - this is about a room, which cannot
@@ -484,7 +602,122 @@ class IRParse:
     sentence: str = ""
 
 
-def _rule_payload(data: dict) -> dict:
+# ---------------------------------------------------------------------------
+# Normalising what a model actually sends
+# ---------------------------------------------------------------------------
+#
+# A JSON schema says what is allowed; it does not stop a model sending
+# something near it. The second evaluation run lost 16 rules to the validator,
+# several of them verbatim examples from this file's own prompt, which is the
+# clearest possible sign that rejecting a near-miss is the wrong response to
+# one.
+#
+# So the IR stays strict and this layer absorbs the variation. Every
+# substitution is logged, because the useful output of this is not the rescued
+# rule - it is finding out which wordings a model reaches for, so the schema
+# can be renamed to match rather than translated forever.
+
+_SCOPE_ALIASES = {
+    "teachers": "teacher", "staff": "teacher",
+    "class": "class_group", "classes": "class_group", "class_groups": "class_group",
+    "section": "class_group", "sections": "class_group",
+    "grade": "class_group", "grades": "class_group",
+    "subjects": "subject",
+    "days": "day", "weekday": "day", "day_of_week": "day",
+    "periods": "period", "slot": "period", "slots": "period", "period_order": "period",
+}
+
+# "week" is the absence of "day", not a dimension. A model reaching for it has
+# understood the rule correctly and guessed at the vocabulary, so dropping it
+# gives exactly the weekly total that was meant.
+_SCOPE_DROP = {"week", "weekly", "term", "year", "school", "overall", "total"}
+
+_SELECTOR_ALIASES = {
+    "subject": "subjects", "subject_names": "subjects",
+    "not_subject": "not_subjects", "exclude_subjects": "not_subjects",
+    "except_subjects": "not_subjects", "other_than": "not_subjects",
+    "teacher": "teachers", "teacher_names": "teachers",
+    "class_group": "class_groups", "class_group_names": "class_groups",
+    "classes": "class_groups", "sections": "class_groups", "grades": "class_groups",
+    "day": "days", "days_of_week": "days", "weekdays": "days",
+    "period": "period_orders", "periods": "period_orders",
+    "period_order": "period_orders", "period_numbers": "period_orders",
+}
+
+_RELATION_ALIASES = {
+    "at_most": "<=", "max": "<=", "maximum": "<=", "no_more_than": "<=",
+    "less_than_or_equal": "<=", "lte": "<=",
+    "at_least": ">=", "min": ">=", "minimum": ">=", "no_fewer_than": ">=",
+    "greater_than_or_equal": ">=", "gte": ">=",
+    "equal": "==", "equals": "==", "exactly": "==", "eq": "==",
+}
+
+_BUCKET_RELATION_ALIASES = {
+    "same_day": "same", "same_period": "same", "same_time": "same", "together": "same",
+    "different_day": "different", "different_period": "different",
+    "differ": "different", "apart": "different", "not_same": "different",
+}
+
+
+def _note(seen: list[str], message: str) -> None:
+    seen.append(message)
+
+
+def _normalise_scope(value, seen: list[str]):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return value
+    out = []
+    for item in value:
+        name = str(item).strip().lower().replace(" ", "_")
+        if name in _SCOPE_DROP:
+            _note(seen, f"scope {item!r} dropped (absence of 'day' already means the week)")
+            continue
+        if name in _SCOPE_ALIASES:
+            _note(seen, f"scope {item!r} -> {_SCOPE_ALIASES[name]!r}")
+            name = _SCOPE_ALIASES[name]
+        if name not in out:
+            out.append(name)
+    return out
+
+
+def _normalise_selector(value, seen: list[str]):
+    """Rename near-miss selector keys, and drop the nulls a model pads with."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    for key, v in value.items():
+        if v in (None, [], ""):
+            continue
+        name = str(key).strip().lower()
+        if name in _SELECTOR_ALIASES:
+            _note(seen, f"selector {key!r} -> {_SELECTOR_ALIASES[name]!r}")
+            name = _SELECTOR_ALIASES[name]
+        # A single name sent unwrapped is unambiguous, so wrap it rather than
+        # refusing a rule over a pair of brackets.
+        if name in ("subjects", "not_subjects", "teachers", "class_groups") and isinstance(v, str):
+            v = [v]
+        if name in ("days", "period_orders") and isinstance(v, (int, str)):
+            v = [v]
+        out[name] = v
+    return out
+
+
+def _normalise_relation(value, seen: list[str], aliases, field_name: str):
+    if not isinstance(value, str):
+        return value
+    raw = value.strip()
+    name = raw.lower().replace(" ", "_").replace("-", "_")
+    if name in aliases:
+        _note(seen, f"{field_name} {raw!r} -> {aliases[name]!r}")
+        return aliases[name]
+    return raw
+
+
+def _rule_payload(data: dict, seen: list[str] | None = None) -> dict:
     """Map the flat tool input onto the IR's nested shape.
 
     The tool is flat because a model fills a flat object more reliably than a
@@ -492,70 +725,96 @@ def _rule_payload(data: dict) -> dict:
     reusing `relation` so the two can't be confused when a bucket rule and a
     count rule appear in the same conversation.
     """
+    seen = seen if seen is not None else []
+    form = str(data.get("form") or "").strip().lower()
     payload = {
-        "form": data.get("form"),
-        "scope": data.get("scope") or [],
+        "form": form or None,
+        "scope": _normalise_scope(data.get("scope"), seen),
         "strength": data.get("strength") or "required",
         "description": data.get("description") or "",
     }
-    form = payload["form"]
-
     if form == "count":
         payload.update({
-            "selector": data.get("selector") or {},
-            "relation": data.get("relation"),
+            "selector": _normalise_selector(data.get("selector"), seen),
+            "relation": _normalise_relation(data.get("relation"), seen, _RELATION_ALIASES, "relation"),
             "value": data.get("value"),
             "distinct": data.get("distinct"),
+            # Normalised through the same aliases as scope, so "days" here and
+            # "day" there can't end up naming different things and silently
+            # turning an existential rule back into a universal one.
+            "exists_over": _normalise_scope(data.get("exists_over"), seen),
         })
     elif form == "run":
+        max_consecutive = data.get("max_consecutive")
+        block_size = data.get("block_size")
+        # block_size=1 is not a block, it is the opposite of one. A model that
+        # sends it has read "no double periods" and reached for the wrong
+        # field; the IR would refuse it, so say what was meant instead.
+        if block_size == 1:
+            _note(seen, "block_size 1 -> max_consecutive 1 (a block of one is not a block)")
+            block_size, max_consecutive = None, max_consecutive or 1
         payload.update({
-            "selector": data.get("selector") or {},
-            "max_consecutive": data.get("max_consecutive"),
-            "block_size": data.get("block_size"),
+            "selector": _normalise_selector(data.get("selector"), seen),
+            "max_consecutive": max_consecutive,
+            "block_size": block_size,
         })
     elif form == "adjacency":
+        min_gap = data.get("min_gap")
+        must_precede = bool(data.get("must_precede"))
+        if min_gap == 0 and not must_precede:
+            # A gap of zero forbids nothing, so nobody means it literally. It
+            # comes from reading "A must come before B", which is ordering
+            # rather than distance - which the IR now says directly.
+            _note(seen, "min_gap 0 -> must_precede (a gap of zero forbids nothing)")
+            must_precede, min_gap = True, None
         payload.update({
-            "first": data.get("first") or {},
-            "second": data.get("second") or {},
-            "min_gap": data.get("min_gap") if data.get("min_gap") is not None else 1,
+            "first": _normalise_selector(data.get("first"), seen),
+            "second": _normalise_selector(data.get("second"), seen),
+            "min_gap": min_gap if min_gap is not None else 1,
             "directional": bool(data.get("directional")),
             "must_follow": bool(data.get("must_follow")),
+            "must_precede": must_precede,
         })
     elif form == "bucket":
         payload.update({
-            "first": data.get("first") or {},
-            "second": data.get("second") or {},
+            "first": _normalise_selector(data.get("first"), seen),
+            "second": _normalise_selector(data.get("second"), seen),
             "dimension": data.get("dimension"),
-            "relation": data.get("bucket_relation"),
+            "relation": _normalise_relation(
+                data.get("bucket_relation"), seen, _BUCKET_RELATION_ALIASES, "bucket_relation"),
+        })
+    elif form == "balance":
+        payload.update({
+            "selector": _normalise_selector(data.get("selector"), seen),
+            "across": _normalise_scope(data.get("across"), seen),
+            "max_spread": data.get("max_spread"),
+        })
+    elif form == "span":
+        payload.update({
+            "selector": _normalise_selector(data.get("selector"), seen),
+            "max_span": data.get("max_span"),
+            "max_idle": data.get("max_idle"),
+            "min_idle_gap": data.get("min_idle_gap"),
         })
     elif form == "conditional":
         when = dict(data.get("when") or {})
         when.setdefault("form", "count")
         then = dict(data.get("then") or {})
-        payload.update({"when": when, "then": _rule_payload(then) if then.get("form") else then})
+        payload.update({
+            "when": _rule_payload(when, seen),
+            "then": _rule_payload(then, seen) if then.get("form") else then,
+        })
 
     return {k: v for k, v in payload.items() if v is not None}
 
 
-def _drop_empty(selector: dict | None) -> dict:
-    """Strip the nulls a model sends for fields it isn't using.
-
-    The IR refuses unknown selector fields, and would otherwise reject a
-    perfectly good rule because the model spelled out `not_subjects: null`.
-    """
-    if not isinstance(selector, dict):
-        return {}
-    return {k: v for k, v in selector.items() if v not in (None, [], "")}
-
-
 def _clean(payload: dict) -> dict:
-    for key in ("selector", "first", "second"):
-        if key in payload:
-            payload[key] = _drop_empty(payload[key])
-    if isinstance(payload.get("when"), dict):
-        payload["when"] = _clean(payload["when"])
-    if isinstance(payload.get("then"), dict):
-        payload["then"] = _clean(payload["then"])
+    """Kept as the single entry point callers use, now that _rule_payload
+    normalises as it goes. Selectors arrive already stripped of the nulls a
+    model pads with, so this only has to recurse into a conditional."""
+    for key in ("when", "then"):
+        if isinstance(payload.get(key), dict):
+            payload[key] = _clean(payload[key])
     return payload
 
 
@@ -613,8 +872,14 @@ def parse_rule_llm(
             readings=list(data.get("readings") or []),
         ))
 
+    seen: list[str] = []
     try:
-        rule = rule_from_dict(_clean(_rule_payload(block.input)))
+        rule = rule_from_dict(_clean(_rule_payload(block.input, seen)))
+        if seen:
+            # The point of logging these is not the rescued rule - it is
+            # finding out which wordings the model reaches for, so the schema
+            # can be renamed to match rather than translated forever.
+            logger.info("normalised model output for %r: %s", text, "; ".join(seen))
     except IRError as exc:
         # Logged at warning, not info: this is the model answering and the
         # schema failing to accept it, which is a defect on our side and should
