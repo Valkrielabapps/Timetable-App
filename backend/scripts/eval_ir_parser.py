@@ -211,10 +211,9 @@ def main():
     print(f"DECLINED   {outcomes['declined']:3d}/{answered}  "
           f"({100 * outcomes['declined'] / answered:.0f}%)  asked instead of guessing")
     if outcomes["invalid"]:
-        print(f"INVALID    {outcomes['invalid']:3d}/{answered}  the model answered and the schema "
-              f"refused it
-           - a defect on our side. --out has the validator's reason "
-              f"for each.")
+        print(f"INVALID    {outcomes['invalid']:3d}/{answered}  the model answered and the "
+              f"schema refused it - a defect on our side.")
+        print("           --out records the validator's reason for each.")
     if outcomes["failed"]:
         print(f"\nFAILED     {outcomes['failed']:3d}  calls did not complete, and are excluded "
               f"from the scores above.\n           Re-run just those with --only, or lower --jobs "
