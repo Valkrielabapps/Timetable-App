@@ -37,7 +37,9 @@ import argparse
 import csv
 import pathlib
 import sys
+import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -84,6 +86,14 @@ def main():
                     help="only the rules the nine legacy types could not express")
     ap.add_argument("--check", action="store_true",
                     help="print every rendered sentence, for reading against the input")
+    # One call per rule takes 2-3 seconds, so the full catalogue is 5-8 minutes
+    # run one at a time - long enough that a silent script is indistinguishable
+    # from a hung one. Six at a time brings it under a minute and stays well
+    # inside the rate limits a pilot-tier key has.
+    ap.add_argument("--jobs", type=int, default=6,
+                    help="how many rules to parse at once (default 6, use 1 to serialise)")
+    ap.add_argument("--out", metavar="PATH",
+                    help="also write every result to a TSV, for reading rule by rule")
     args = ap.parse_args()
 
     if not settings.anthropic_api_key:
@@ -97,15 +107,41 @@ def main():
     if args.limit:
         rows = rows[: args.limit]
 
-    print(f"Evaluating {len(rows)} rules against model={settings.llm_model}\n")
+    print(f"Evaluating {len(rows)} rules against model={settings.llm_model}, "
+          f"{args.jobs} at a time\n")
 
     outcomes = Counter()
     by_capability = Counter()
     declines = Counter()
     lines = []
+    started = time.time()
+    done = 0
 
-    for row in rows:
+    def progress():
+        """One self-overwriting line, so a long run never looks like a hang."""
+        nonlocal done
+        done += 1
+        elapsed = time.time() - started
+        rate = done / elapsed if elapsed else 0
+        left = (len(rows) - done) / rate if rate else 0
+        sys.stdout.write(
+            f"\r  {done}/{len(rows)} parsed  ({elapsed:.0f}s elapsed, "
+            f"~{left:.0f}s left)   "
+        )
+        sys.stdout.flush()
+
+    def parse_one(row):
         result = parse_rule_llm(row["TYPED"], TEACHERS, SUBJECTS, CLASS_GROUPS, PERIODS)
+        progress()
+        return row, result
+
+    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+        # map, not as_completed: the output is read top to bottom against the
+        # catalogue, so it has to come back in catalogue order.
+        results = list(pool.map(parse_one, rows))
+    print()
+
+    for row, result in results:
         if result is None:
             sys.exit("  parser unavailable (no key, or the call failed) - stopping")
 
@@ -121,6 +157,18 @@ def main():
         else:  # pragma: no cover - defensive
             outcomes["invalid"] += 1
             lines.append((row["ID"], "BAD", row["TYPED"], ""))
+
+    if args.out:
+        # The summary says how many; only the rows say which, and reading them
+        # is how the last run's 73% decline rate was traced to one missing
+        # sentence in the prompt rather than to the design.
+        out = pathlib.Path(args.out)
+        with out.open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f, delimiter="\t", lineterminator="\n")
+            w.writerow(["ID", "CAPABILITY", "STATUS", "TYPED", "READ_AS"])
+            for (rid, status, typed, said), row in zip(lines, rows):
+                w.writerow([rid, row["CAPABILITY"], status, typed, said])
+        print(f"Wrote {len(lines)} rows to {out}\n")
 
     if args.check:
         print("Read the right-hand column against the left. A sentence that")

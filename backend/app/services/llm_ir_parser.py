@@ -248,18 +248,23 @@ _RULE_TOOL = {
 _UNCLEAR_TOOL = {
     "name": "report_unclear",
     "description": (
-        "Use when the text cannot be turned into one correct rule: it is "
-        "genuinely ambiguous, too vague to enforce, refers to something not in "
-        "the school's data, or is not a rule at all. Preferred over guessing - "
-        "a confidently wrong rule silently changes the timetable, while a "
-        "question costs the admin five seconds."
+        "Use ONLY when you genuinely cannot tell which of two different rules "
+        "was meant, when there is nothing measurable to enforce at all, or when "
+        "a name has no match in the school's data.\n\n"
+        "Do NOT use it because a rule is long, unusual, or has a detail you "
+        "cannot capture exactly. A rule whose main effect you can state belongs "
+        "in record_rule with that effect and a description saying what you left "
+        "out - the admin sees your sentence and corrects it. Asking about a rule "
+        "you could have expressed costs them more than an imperfect first "
+        "attempt they can edit."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "reason": {
                 "type": "string",
-                "enum": ["ambiguous", "too_vague", "unknown_reference", "not_a_rule", "contradictory"],
+                "enum": ["ambiguous", "too_vague", "unknown_reference", "not_a_rule",
+                         "contradictory", "not_supported"],
             },
             "explanation": {
                 "type": "string",
@@ -345,8 +350,64 @@ _EXAMPLES = """Worked examples:
     when={scope:["teacher","day"],selector:{teachers:["Priya"],class_groups:["Grade 12"]},relation:">=",value:1}
     then={form:"count",scope:["teacher","day"],selector:{teachers:["Priya"]},relation:"<=",value:5}
 
+Informal rules reduce the same way. These all sound harder than they are:
+
+"atleast 1 maths class every week shd be 1st period for all 10th sections"
+  form=count scope=["class_group"] selector={subjects:["Maths"],class_groups:["Grade 10"],period_orders:[1]} relation=">=" value=1
+
+"6th std max 6 diff subjects a day. bag weight complaint pannitanga parents again"
+  form=count scope=["class_group","day"] selector={class_groups:["Grade 6"]} relation="<=" value=6 distinct="subject"
+  (the reason for a rule is not part of the rule - read past it)
+
+"priya takes english AND library for 7B. dont give her 7B more than twice a day"
+  form=count scope=["teacher","day"] selector={teachers:["Priya"],class_groups:["Grade 7 - B"]} relation="<=" value=2
+  (no subject filter: "counting all subjects together" is what an absent
+  subjects field already means)
+
+"every teacher needs atleast one light day mon to fri, 4 periods or less"
+  form=count scope=["teacher","day"] selector={days:[0,1,2,3,4]} relation="<=" value=4 strength="preference"
+  (the exact rule is "at least one such day", which cannot be said here. The
+  main effect can, so record it and say in `description` that it applies to
+  every weekday rather than to one - do not refuse over the gap)
+
+"rao mam - on days she has 12th dont give her 10th also, too much prep switching"
+  form=conditional scope=["teacher","day"]
+    when={scope:["teacher","day"],selector:{teachers:["Mrs. Rao"],class_groups:["Grade 12"]},relation:">=",value:1}
+    then={form:"count",scope:["teacher","day"],selector:{teachers:["Mrs. Rao"],class_groups:["Grade 10"]},relation:"==",value:0}
+
 "Make the timetable balanced and nice for everyone"
-  report_unclear, reason="too_vague" - "balanced" has no measurable meaning here."""
+  report_unclear, reason="too_vague" - "balanced" has no measurable meaning here.
+
+"chem lab - need 1 perod gap between 2 practicals, suresh has to clean n set up"
+  report_unclear, reason="not_supported" - this is about a room, which cannot
+  be represented yet. Note that the reason is the room, not the phrasing."""
+
+
+# What the representation genuinely cannot say yet, named so the model stops
+# guessing at the boundary. Without this it has no way to tell "I have no field
+# for rooms" from "this sentence is vague", so it reports both as vague - and,
+# worse, generalises the caution to rules it could have expressed perfectly.
+#
+# Rooms and dates are deferred on purpose rather than missing by oversight:
+# rooms are assigned in a pass after the schedule is fixed, and the timetable is
+# a weekly pattern with no calendar behind it. Both need structural work in the
+# solver, not a field here. See docs/research/README.md.
+_OUT_OF_SCOPE = """Some rules cannot be represented at all yet. For these, use
+report_unclear with reason='not_supported' and say plainly which part cannot be
+handled - do not approximate them, and do not let them make you cautious about
+anything else:
+- rooms, labs, halls and equipment: which room a lesson uses, room capacity,
+  two classes sharing a space, moving between buildings
+- calendar dates: "from 20 January", "during exam week", "on 18 December",
+  alternate Saturdays, anything tied to a date rather than a weekday
+- groups of students inside a section: a few children exempted from a subject,
+  wheelchair access, one batch going elsewhere
+- ranking rules against each other, or limiting how much a rule may be broken
+
+Everything else is in scope. In particular, a rule about how many periods a
+teacher or a class has, when a subject may be placed, what may sit next to
+what, what shares a day, or what happens only on certain days, can be
+expressed - even when the sentence is long or informal."""
 
 
 def _system_prompt(teacher_names, subject_names, class_group_labels, periods) -> str:
@@ -356,10 +417,19 @@ def _system_prompt(teacher_names, subject_names, class_group_labels, periods) ->
         "WHAT IT IS COUNTED OVER (scope), and which arithmetic form applies. "
         "Think about scope before anything else - it is what separates 'six "
         "periods a day' from 'six periods a week'.\n\n"
-        "Use record_rule when you can state the rule exactly. Use "
-        "report_unclear when you cannot, rather than guessing: a wrong rule "
-        "silently changes the timetable and nobody finds out, while a question "
-        "costs five seconds.\n\n"
+        "IMPORTANT - your answer is not applied straight away. It is rendered "
+        "back into plain English and shown to the admin, who confirms, edits or "
+        "rejects it before anything is saved. So an imperfect first attempt is "
+        "cheap: they will see it and fix it. Refusing to answer is what costs "
+        "them, because there is nothing to correct.\n\n"
+        "Prefer record_rule. Reach for report_unclear only when two genuinely "
+        "different rules are equally plausible, when there is nothing "
+        "measurable to enforce, or when a name matches nothing in the school's "
+        "data. If a rule has a clear main effect and a detail you cannot "
+        "capture, record the main effect and say in `description` what you left "
+        "out.\n\n"
+        + _OUT_OF_SCOPE
+        + "\n\n"
         f"Known teachers: {teacher_names}\n"
         f"Known subjects: {subject_names}\n"
         f"Known class groups (grades and sections): {class_group_labels}\n"

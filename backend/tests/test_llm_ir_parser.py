@@ -160,8 +160,32 @@ def test_both_tools_are_offered_so_the_model_can_decline():
     assert _RULE_TOOL["name"] == "record_rule"
     assert _UNCLEAR_TOOL["name"] == "report_unclear"
     assert set(_UNCLEAR_TOOL["input_schema"]["properties"]["reason"]["enum"]) == {
-        "ambiguous", "too_vague", "unknown_reference", "not_a_rule", "contradictory"
+        "ambiguous", "too_vague", "unknown_reference", "not_a_rule",
+        "contradictory", "not_supported",
     }
+
+
+def test_the_prompt_says_what_it_cannot_express():
+    """Without this the model has no way to tell "I have no field for rooms"
+    from "this sentence is vague", so it reports both as vague - and
+    generalises the caution to rules it could have expressed. That is what took
+    the first run's decline rate to 73%."""
+    prompt = _system_prompt(["Rao"], ["Maths"], ["Grade 8"], None)
+    assert "not_supported" in prompt
+    assert "rooms, labs, halls and equipment" in prompt
+    assert "calendar dates" in prompt
+    # And the other half: the boundary is a boundary, not a mood.
+    assert "Everything else is in scope" in prompt
+
+
+def test_the_prompt_tells_the_model_its_answer_is_confirmed_first():
+    """The actual bug behind the first run. The model was told a wrong rule
+    silently changes the timetable, and never told that its sentence is shown
+    to the admin for confirmation - so declining whenever it was less than
+    certain was correct reasoning from what it had been given."""
+    prompt = _system_prompt(["Rao"], ["Maths"], ["Grade 8"], None)
+    assert "confirms, edits or rejects it before anything is saved" in prompt
+    assert "Prefer record_rule" in prompt
 
 
 def test_the_prompt_teaches_the_daily_versus_weekly_distinction():
@@ -196,12 +220,20 @@ def test_the_prompt_carries_the_trap_readings():
 
 
 def test_the_prompt_stays_affordable():
-    """This rides on every parse. A page or two of examples is worth it; a
-    catalogue dump is not, and would want retrieval instead."""
+    """This rides on every parse, so it is worth knowing when it grows.
+
+    ~2,400 tokens for a 40-teacher school, which is about a fifth of a US cent
+    per rule entered. The examples earn that several times over: the first
+    evaluation run declined 73% of the catalogue, and most of the fix was
+    telling the model more, not less. The ceiling is here to catch the version
+    of this file where someone pastes in the whole catalogue - at that point it
+    wants retrieving the relevant examples per rule, not sending all of them
+    every time.
+    """
     prompt = _system_prompt(
         [f"Teacher {i}" for i in range(40)],
         [f"Subject {i}" for i in range(20)],
         [f"Grade {i}" for i in range(12)],
         [(d, o, None, False) for d in range(5) for o in range(1, 9)],
     )
-    assert len(prompt) < 9000
+    assert len(prompt) < 14_000
