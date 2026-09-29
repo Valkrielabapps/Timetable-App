@@ -30,6 +30,22 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db_path}"
 # itself is covered directly in tests/test_rate_limit.py, which re-enables it.
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 
+# The suite must not inherit a developer's real key. Two reasons, and the
+# second is the serious one:
+#
+#   - Several tests assert the no-LLM fallback paths (regex parsing, the 503
+#     from /edit-command, extract_setup_llm returning None). Those pass on CI
+#     and on a machine with no key, and fail the moment someone adds one to
+#     their .env - which is exactly what happened when the constraint
+#     catalogue evaluation needed a local key.
+#   - Any test that reaches an LLM call site with a key configured would make a
+#     real API call: money, network flakiness and non-deterministic results in
+#     what is meant to be a hermetic suite.
+#
+# Tests that want the LLM path stub the parser (see tests/test_ir_endpoints.py)
+# rather than needing a key, so clearing it here costs nothing.
+os.environ["ANTHROPIC_API_KEY"] = ""
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
