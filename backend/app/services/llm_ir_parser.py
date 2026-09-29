@@ -463,13 +463,24 @@ class Unclear:
 class IRParse:
     """What one piece of text resolved to.
 
-    Exactly one of `rule` and `unclear` is set. `sentence` is the rendered
-    English for a rule - the thing the admin actually confirms - and is
+    Exactly one of `rule`, `unclear` and `invalid` is set. `sentence` is the
+    rendered English for a rule - the thing the admin actually confirms - and is
     generated here so every caller shows the same words.
+
+    `invalid` is kept apart from `unclear` even though an admin sees much the
+    same message for both, because they are opposite facts about the system: a
+    decline is the model working correctly, while an invalid rule is the model
+    trying to answer and the schema or the prompt failing to carry the shape.
+    Folding the second into the first hid 16 real defects behind a decline
+    count in the second evaluation run - including rules that were verbatim
+    examples in the prompt.
     """
 
     rule: Rule | None = None
     unclear: Unclear | None = None
+    # The validator's complaint, verbatim. For a person this needs rewording;
+    # for working out why a rule failed it is the only thing that helps.
+    invalid: str | None = None
     sentence: str = ""
 
 
@@ -605,14 +616,10 @@ def parse_rule_llm(
     try:
         rule = rule_from_dict(_clean(_rule_payload(block.input)))
     except IRError as exc:
-        logger.info("model produced an invalid IR rule for %r: %s", text, exc)
-        return IRParse(unclear=Unclear(
-            reason="ambiguous",
-            explanation=(
-                "I couldn't turn that into a rule I can apply. Could you say it "
-                "another way, with the subject or teacher and when it applies?"
-            ),
-            question=str(exc),
-        ))
+        # Logged at warning, not info: this is the model answering and the
+        # schema failing to accept it, which is a defect on our side and should
+        # be visible without turning logging up.
+        logger.warning("model produced an invalid IR rule for %r: %s", text, exc)
+        return IRParse(invalid=str(exc))
 
     return IRParse(rule=rule, sentence=render(rule))

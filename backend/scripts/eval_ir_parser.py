@@ -161,14 +161,24 @@ def main():
             outcomes["expressed"] += 1
             by_capability[row["CAPABILITY"]] += 1
             lines.append((row["ID"], "OK", row["TYPED"], result.sentence))
+        elif result.invalid is not None:
+            # A defect on our side, not the model's and not the admin's: the
+            # model answered and the schema would not take it. Counted apart
+            # from declines because the second evaluation run had 16 of these
+            # hiding inside "ambiguous", several for rules that are verbatim
+            # examples in the prompt.
+            outcomes["invalid"] += 1
+            lines.append((row["ID"], "INVALID", row["TYPED"], result.invalid))
         elif result.unclear is not None:
             outcomes["declined"] += 1
             declines[result.unclear.reason] += 1
-            lines.append((row["ID"], f"ASK[{result.unclear.reason}]", row["TYPED"],
-                          result.unclear.explanation))
+            detail = result.unclear.explanation
+            if result.unclear.question:
+                detail = f"{detail} | {result.unclear.question}"
+            lines.append((row["ID"], f"ASK[{result.unclear.reason}]", row["TYPED"], detail))
         else:  # pragma: no cover - defensive
             outcomes["invalid"] += 1
-            lines.append((row["ID"], "BAD", row["TYPED"], ""))
+            lines.append((row["ID"], "INVALID", row["TYPED"], "no rule and no reason"))
 
     if args.out:
         # The summary says how many; only the rows say which, and reading them
@@ -201,7 +211,10 @@ def main():
     print(f"DECLINED   {outcomes['declined']:3d}/{answered}  "
           f"({100 * outcomes['declined'] / answered:.0f}%)  asked instead of guessing")
     if outcomes["invalid"]:
-        print(f"INVALID    {outcomes['invalid']:3d}/{answered}  failed validation - a real defect")
+        print(f"INVALID    {outcomes['invalid']:3d}/{answered}  the model answered and the schema "
+              f"refused it
+           - a defect on our side. --out has the validator's reason "
+              f"for each.")
     if outcomes["failed"]:
         print(f"\nFAILED     {outcomes['failed']:3d}  calls did not complete, and are excluded "
               f"from the scores above.\n           Re-run just those with --only, or lower --jobs "

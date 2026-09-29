@@ -227,3 +227,30 @@ def test_a_stored_rule_that_stops_validating_reports_as_unenforced(client, schoo
 
     fetched = client.get(f"/api/constraints/{created['id']}", headers=headers).json()
     assert fetched["enforced"] is False
+
+
+def test_a_rule_the_schema_refuses_is_not_filed_as_the_admin_being_unclear(
+    client, school, monkeypatch
+):
+    """The admin still gets a message they can act on - the validator's wording
+    is no use to them. But the two facts stay apart everywhere else, because
+    they are opposites: a decline is the model working correctly, while this is
+    the model answering and our schema failing to carry the shape.
+
+    Conflating them hid 16 real defects behind a decline count in the second
+    evaluation run, several for rules that are verbatim examples in the prompt.
+    """
+    school_row, headers = school
+    from app.services.llm_ir_parser import IRParse
+    monkeypatch.setattr("app.routers.constraints.parse_rule_llm",
+                        lambda *a, **k: IRParse(invalid="min_gap must be between 1 and 30, got 0"))
+
+    r = client.post("/api/constraints/interpret",
+                    json={"school_id": school_row["id"], "text": "keep PE and Maths apart"},
+                    headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["understood"] is False
+    # The validator's own words must not be shown as though the admin caused them.
+    assert "min_gap" not in (body["explanation"] or "")
+    assert "say it another way" in body["explanation"]

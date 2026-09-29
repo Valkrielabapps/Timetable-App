@@ -859,6 +859,19 @@ def interpret_constraint(
             detail="Rule interpretation is unavailable right now. Try again shortly.",
         )
 
+    if result.invalid is not None:
+        # The model answered and the schema would not take it. The admin can't
+        # act on the validator's wording, so they get something they can act on
+        # - but it is logged as the defect it is, rather than being filed as
+        # the admin having written an unclear sentence.
+        return ConstraintInterpretResponse(
+            understood=False, reason="ambiguous",
+            explanation=(
+                "I couldn't turn that into a rule I can apply. Could you say it "
+                "another way - naming the teacher or subject, and when it applies?"
+            ),
+        )
+
     if result.unclear is not None:
         u = result.unclear
         return ConstraintInterpretResponse(
