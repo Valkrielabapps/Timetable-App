@@ -572,7 +572,12 @@ def parse_rule_llm(
         return None
 
     try:
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        # The SDK retries with exponential backoff and honours Retry-After.
+        # Above its default of 2 because a 429 here costs an admin their rule:
+        # this returns None on failure and the caller falls back, so a burst
+        # that a few seconds of waiting would clear otherwise looks to them
+        # like the parser simply not understanding them.
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=5)
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,

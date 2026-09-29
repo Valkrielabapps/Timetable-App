@@ -88,10 +88,15 @@ def main():
                     help="print every rendered sentence, for reading against the input")
     # One call per rule takes 2-3 seconds, so the full catalogue is 5-8 minutes
     # run one at a time - long enough that a silent script is indistinguishable
-    # from a hung one. Six at a time brings it under a minute and stays well
-    # inside the rate limits a pilot-tier key has.
-    ap.add_argument("--jobs", type=int, default=6,
-                    help="how many rules to parse at once (default 6, use 1 to serialise)")
+    # from a hung one.
+    #
+    # Four rather than more: the prompt is ~2,400 input tokens and a starter
+    # key allows 500,000 a minute, so the ceiling is about 200 calls a minute.
+    # Eight in flight bursts straight past that, which is how the second
+    # evaluation run hit a 429 on its 140th rule.
+    ap.add_argument("--jobs", type=int, default=4,
+                    help="how many rules to parse at once (default 4; raise only if "
+                         "your key's tokens-per-minute limit allows it)")
     ap.add_argument("--out", metavar="PATH",
                     help="also write every result to a TSV, for reading rule by rule")
     args = ap.parse_args()
@@ -143,7 +148,14 @@ def main():
 
     for row, result in results:
         if result is None:
-            sys.exit("  parser unavailable (no key, or the call failed) - stopping")
+            # A call that failed for any reason - a rate limit, a dropped
+            # connection. Counted and carried past rather than ending the run:
+            # the first version of this aborted on the first failure and threw
+            # away 143 good results to report one bad one, after a minute of
+            # waiting and real money spent.
+            outcomes["failed"] += 1
+            lines.append((row["ID"], "FAIL", row["TYPED"], "the API call did not complete"))
+            continue
 
         if result.rule is not None:
             outcomes["expressed"] += 1
@@ -179,13 +191,21 @@ def main():
             print(f"   read : {said}\n")
 
     total = sum(outcomes.values())
+    # Scored against the rules that actually got an answer: a call that never
+    # completed says nothing about the parser, and folding it into the
+    # denominator would quietly understate the score.
+    answered = total - outcomes["failed"]
     print("=" * 66)
-    print(f"EXPRESSED  {outcomes['expressed']:3d}/{total}  "
-          f"({100 * outcomes['expressed'] / total:.0f}%)  became a rule the solver can run")
-    print(f"DECLINED   {outcomes['declined']:3d}/{total}  "
-          f"({100 * outcomes['declined'] / total:.0f}%)  asked instead of guessing")
+    print(f"EXPRESSED  {outcomes['expressed']:3d}/{answered}  "
+          f"({100 * outcomes['expressed'] / answered:.0f}%)  became a rule the solver can run")
+    print(f"DECLINED   {outcomes['declined']:3d}/{answered}  "
+          f"({100 * outcomes['declined'] / answered:.0f}%)  asked instead of guessing")
     if outcomes["invalid"]:
-        print(f"INVALID    {outcomes['invalid']:3d}/{total}  failed validation - a real defect")
+        print(f"INVALID    {outcomes['invalid']:3d}/{answered}  failed validation - a real defect")
+    if outcomes["failed"]:
+        print(f"\nFAILED     {outcomes['failed']:3d}  calls did not complete, and are excluded "
+              f"from the scores above.\n           Re-run just those with --only, or lower --jobs "
+              f"if they were rate limits.")
 
     if declines:
         print("\nWhy it declined:")
