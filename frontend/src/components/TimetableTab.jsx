@@ -271,6 +271,22 @@ export default function TimetableTab({
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
   const failed = !isGenerating && timetable?.status === 'failed'
   const solved = !isGenerating && timetable?.status === 'draft'
+  // Rules this timetable currently breaks, computed server-side on every read
+  // (see _violations_for in backend/app/routers/timetables.py). Normally
+  // empty: the solver was given the same rules. It fills up when a slot is
+  // moved by hand - a manual move that double-books nobody passes every
+  // physical check while still breaking a rule, and without this the
+  // Constraints tab goes on calling that rule enforced.
+  const violations = timetable?.violations ?? []
+  // Which cells to mark. A slot can break more than one rule, so the entry id
+  // maps to all of them rather than the first found.
+  const violatingEntries = new Map()
+  for (const v of violations) {
+    for (const id of v.entry_ids) {
+      violatingEntries.set(id, [...(violatingEntries.get(id) ?? []), v])
+    }
+  }
+
 
   return (
     <div className="flex flex-col gap-5">
@@ -320,6 +336,39 @@ export default function TimetableTab({
       </div>
 
       <div className="h-px bg-slate-200" />
+
+      {violations.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-none">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+          </svg>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">
+              {violatingEntries.size === 1
+                ? '1 slot now breaks a rule you set'
+                : `${violatingEntries.size} slots now break rules you set`}
+            </span>
+            {/* The rule's own confirmed sentence, not a paraphrase - it is what
+                the Constraints tab shows, and a warning that named it
+                differently would send someone looking for a rule they don't
+                have. The numbers say which slot to move. */}
+            <ul className="flex flex-col gap-0.5">
+              {violations.map((v, i) => (
+                <li key={`${v.constraint_id}-${i}`}>
+                  {v.description}{' '}
+                  <span className="text-amber-700">— {v.detail}</span>
+                </li>
+              ))}
+            </ul>
+            <span className="text-amber-700">
+              The change is kept. Move the marked slots back, or change the rule on the
+              Constraints tab.
+            </span>
+          </div>
+        </div>
+      )}
 
       {unenforcedConstraints.length > 0 && (
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
@@ -536,10 +585,20 @@ export default function TimetableTab({
                         : isBatched
                         ? 'hover:bg-slate-50'
                         : ''
+                      // Any entry in this cell breaking a rule marks the cell.
+                      // An inset ring rather than a border, so the grid's own
+                      // lines don't shift and the lock tint stays readable
+                      // underneath - the two say different things and both
+                      // need to survive.
+                      const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
+                      const violationRing = broken.length
+                        ? 'ring-2 ring-inset ring-amber-400'
+                        : ''
                       return (
                         <td
                           key={d}
-                          className={`border border-slate-200 px-3 py-2 transition-colors ${editable ? 'align-top' : ''} ${lockTint}`}
+                          title={broken.length ? broken.map((v) => v.description).join('\n') : undefined}
+                          className={`border border-slate-200 px-3 py-2 transition-colors ${editable ? 'align-top' : ''} ${lockTint} ${violationRing}`}
                           onDragOver={editable && !isBatched ? (e) => e.preventDefault() : undefined}
                           onDrop={editable && !isBatched ? () => handleDrop(d, order) : undefined}
                         >

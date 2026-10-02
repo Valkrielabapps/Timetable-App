@@ -40,6 +40,21 @@ class TimetableEntryOut(BaseModel):
     lab_batch: int | None = None
 
 
+class ViolationOut(BaseModel):
+    """One rule a timetable breaks, and the slots involved."""
+
+    constraint_id: int | None = None
+    # The sentence the admin confirmed when they added the rule, so the warning
+    # quotes them rather than paraphrasing.
+    description: str
+    strength: str
+    entry_ids: list[int]
+    # What went wrong in numbers. "This breaks a rule" without "she has 7
+    # periods and the rule allows 6" leaves someone hunting for which slot to
+    # move.
+    detail: str
+
+
 class TimetableOut(BaseModel):
     """
     Represents one generation job's current state. `status` is the job
@@ -62,6 +77,17 @@ class TimetableOut(BaseModel):
     # frontend just shows error_message's bulleted list on its own.
     error_explanation: str | None = None
     entries: list[TimetableEntryOut]
+    # Rules this timetable currently breaks. Normally empty: the solver was
+    # given the same rules, so a freshly generated timetable should honour them
+    # all. It fills up when someone moves a slot by hand - a manual move that
+    # double-books nobody passes every physical check while still breaking a
+    # rule, and without this the Constraints tab goes on calling that rule
+    # enforced while the timetable disagrees.
+    #
+    # A violation on an UNTOUCHED timetable means something else: the solver and
+    # the checker disagree, and one of them is wrong. That has happened three
+    # times so far, each time silently.
+    violations: list[ViolationOut] = []
 
 
 class EditCommandRequest(BaseModel):
@@ -83,3 +109,4 @@ class EditCommandResponse(BaseModel):
     action: str
     description: str
     entries: list[TimetableEntryOut]
+

@@ -26,6 +26,7 @@ real task queue; the job-row-plus-polling API shape wouldn't need to
 change.
 """
 import threading
+from dataclasses import replace
 
 import sentry_sdk
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -38,6 +39,7 @@ from app.core.auth import get_current_user
 from app.core.database import SessionLocal, get_db
 from app.models.school import (
     ClassGroup,
+    Constraint,
     Period,
     Room,
     Subject,
@@ -54,10 +56,13 @@ from app.schemas.timetable import (
     TimetableEntryUpdate,
     TimetableOut,
 )
+from app.services.constraint_ir import IRError, rule_from_dict
+from app.services.constraint_ir_checker import Placement, check_rules
+from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
 from app.services.export import build_excel, build_pdf
 from app.services.infeasibility_explainer import explain_infeasibility
-from app.services.solver import generate_school_timetable
+from app.services.solver import _class_group_labels, generate_school_timetable
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
 
@@ -114,7 +119,96 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         error_message=timetable.error_message,
         error_explanation=timetable.error_explanation,
         entries=entries,
+        violations=_violations_for(db, timetable, periods),
     )
+
+
+def _violations_for(db: Session, timetable: Timetable, periods: dict) -> list[dict]:
+    """Which saved rules this timetable currently breaks.
+
+    Computed on read rather than stored, because the thing that breaks a rule
+    is a manual edit and there is no sensible moment to recompute a stored
+    answer - every PATCH, every swap, every edit command would have to remember
+    to. Reading is cheap: the entries are fixed, so a rule is filtering and
+    counting with no solver involved.
+
+    Only the general-representation rules are checked. The nine legacy types
+    have no checker and are skipped rather than reported as satisfied, which
+    would be a claim this cannot make.
+    """
+    if timetable.status != "draft" or not timetable.entries:
+        return []
+
+    rows = (
+        db.query(Constraint)
+        .filter(Constraint.school_id == timetable.school_id, Constraint.type == "ir")
+        .all()
+    )
+    if not rows:
+        return []
+
+    rules = []
+    for row in rows:
+        try:
+            rule = rule_from_dict(row.parameters or {})
+            # The warning quotes Constraint.description - the sentence the
+            # admin was shown and agreed to - rather than the rule's own
+            # embedded one. They are usually the same, but the row is the
+            # authority: it is what the Constraints tab displays, and a warning
+            # naming a rule differently from the card it refers to sends people
+            # looking for a rule they do not have.
+            rules.append((row.id, replace(rule, description=row.description or rule.description)))
+        except IRError:
+            # A stored rule that no longer validates is reported by the solver
+            # on generation; repeating it on every read would be noise.
+            continue
+    if not rules:
+        return []
+
+    school_periods = db.query(Period).filter(Period.school_id == timetable.school_id).all()
+    class_groups = db.query(ClassGroup).filter(
+        ClassGroup.school_id == timetable.school_id).all()
+    index = SchoolIndex(
+        subject_ids={s.name: s.id for s in db.query(Subject).filter(
+            Subject.school_id == timetable.school_id).all()},
+        teacher_ids={t.name: t.id for t in db.query(Teacher).filter(
+            Teacher.school_id == timetable.school_id).all()},
+        class_group_ids=_class_group_labels(class_groups),
+        orders_by_day=_orders_by_day(school_periods),
+        first_order_by_day=_edge_orders(school_periods, first=True),
+        last_order_by_day=_edge_orders(school_periods, first=False),
+    )
+
+    placements = [
+        Placement(
+            entry_id=e.id, class_group_id=e.class_group_id, subject_id=e.subject_id,
+            teacher_id=e.teacher_id, period_id=e.period_id,
+            day_of_week=periods[e.period_id].day_of_week,
+            order=periods[e.period_id].order,
+        )
+        for e in timetable.entries
+    ]
+    return [vars(v) for v in check_rules(placements, rules, index)]
+
+
+def _orders_by_day(school_periods: list[Period]) -> dict[int, list[int]]:
+    """Every period of each day, breaks included - positions count rows the
+    admin can see. Mirrors the solver's own table so the check and the
+    enforcement agree about what "period 5" means."""
+    by_day: dict[int, list[int]] = {}
+    for period in school_periods:
+        by_day.setdefault(period.day_of_week, []).append(period.order)
+    return {day: sorted(orders) for day, orders in by_day.items()}
+
+
+def _edge_orders(school_periods: list[Period], first: bool) -> dict[int, int]:
+    """The first or last TEACHING period of each day - "the last period" of a
+    day means its last lesson slot, not lunch."""
+    by_day: dict[int, list[int]] = {}
+    for period in school_periods:
+        if not period.is_break:
+            by_day.setdefault(period.day_of_week, []).append(period.order)
+    return {day: (min(orders) if first else max(orders)) for day, orders in by_day.items()}
 
 
 def _run_generation_job(timetable_id: int, school_id: int) -> None:
