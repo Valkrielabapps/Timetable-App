@@ -203,7 +203,10 @@ _SCOPE_KEY = {
     "class_group": lambda a: a.class_group_id,
     "subject": lambda a: a.subject_id,
     "day": lambda a: a.day_of_week,
+    # One slot in the week.
     "period": lambda a: a.period_id,
+    # A position in the day, the same number on every day.
+    "period_order": lambda a: a.order,
 }
 
 
@@ -264,10 +267,7 @@ def _count_expr(model, group, resolved, form: Count, name: str):
     if not form.distinct:
         return (sum(a.var for a in selected) if selected else 0), bool(selected)
 
-    keyer = {"subject": lambda a: a.subject_id,
-             "teacher": lambda a: a.teacher_id,
-             "class_group": lambda a: a.class_group_id,
-             "day": lambda a: a.day_of_week}[form.distinct]
+    keyer = _SCOPE_KEY[form.distinct]
     by_kind: dict = {}
     for atom in selected:
         by_kind.setdefault(keyer(atom), []).append(atom.var)

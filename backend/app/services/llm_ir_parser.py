@@ -511,6 +511,24 @@ Rules that sound vague and are not. Say these, don't refuse them:
 "if eng and math are both there that day, english must come before maths"
   form=adjacency scope=["class_group"] first={subjects:["English"]} second={subjects:["Maths"]} must_precede=true
 
+"Libary for 8th - each section diff day. 8A 8B 8C 8D cant be same day"
+  form=count scope=[] selector={subjects:["Library"],class_groups:["Grade 8"]} distinct="day" relation="at_least" value=4
+  ("all four on different days" is four different days used - a count of
+  distinct days, not a bucket. A bucket compares two named sets, so it cannot
+  say "all of these differ from each other".)
+
+"dont put hindi P4 every single day, vary the period"
+  form=count scope=["class_group"] selector={subjects:["Hindi"]} distinct="period_order" relation="at_least" value=2 strength="preference"
+  (period_order is the position in the day - P4 - as opposed to `period`, which
+  is one slot in the week. "Vary the period" means more than one position gets
+  used.)
+
+"every teacher atleast one free before lunch"
+  form=count scope=["teacher","day"] selector={period_orders:[1,2,3,4,5]} relation="at_most" value=4
+  (with five periods before lunch, teaching at most four of them leaves one
+  free. This is "on every day", so no exists_over - a free period before lunch
+  on ONE day of the week was not what was asked for.)
+
 "Don't give the same teacher the last period every day"
   form=count scope=["teacher"] selector={period_positions:["last"]} relation="at_most" value=2 strength="preference"
   (period_positions, not a number - the last period is the 8th on a full day
@@ -533,7 +551,20 @@ Rules that sound vague and are not. Say these, don't refuse them:
 
 "chem lab - need 1 perod gap between 2 practicals, suresh has to clean n set up"
   report_unclear, reason="not_supported" - this is about a room, which cannot
-  be represented yet. Note that the reason is the room, not the phrasing."""
+  be represented yet. Note that the reason is the room, not the phrasing.
+
+"arjun sir PE periods back to back as much as poss, dont make him walk to ground 4 times"
+  report_unclear, reason="not_supported" - "as few separate stretches as
+  possible" is a thing to minimise rather than a limit to set, and there is no
+  form for that. Do not send a run rule with neither max_consecutive nor
+  block_size; if a specific block would do ("PE comes in doubles"), say that
+  instead and note the difference in `description`.
+
+"fri should be lighter than mon-thurs where possible"
+  report_unclear, reason="not_supported" - balance evens groups out against
+  each other; it cannot make one named group lighter than the rest. Only reach
+  for balance when the sentence says "evenly", "spread" or "roughly the same",
+  and never put the same dimension in both `scope` and `across`."""
 
 
 # What the representation genuinely cannot say yet, named so the model stops
@@ -824,6 +855,14 @@ def _rule_payload(data: dict, seen: list[str] | None = None) -> dict:
             # turning an existential rule back into a universal one.
             "exists_over": _normalise_scope(data.get("exists_over"), seen),
         })
+        # Naming a dimension as existential while leaving it out of scope says
+        # the rule is grouped by it - that is what "at least one day" means. The
+        # IR refuses the combination, so repair it rather than lose a rule the
+        # model read correctly.
+        missing = [d for d in payload["exists_over"] if d not in payload["scope"]]
+        if missing:
+            _note(seen, f"scope gained {missing} because exists_over named them")
+            payload["scope"] = list(payload["scope"]) + missing
     elif form == "run":
         max_consecutive = data.get("max_consecutive")
         block_size = data.get("block_size")
@@ -922,12 +961,13 @@ def parse_rule_llm(
         return None
 
     try:
-        # The SDK retries with exponential backoff and honours Retry-After.
-        # Above its default of 2 because a 429 here costs an admin their rule:
-        # this returns None on failure and the caller falls back, so a burst
-        # that a few seconds of waiting would clear otherwise looks to them
-        # like the parser simply not understanding them.
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=5)
+        # The SDK retries with exponential backoff and honours Retry-After. One
+        # above the default of 2, not three above: a retry re-sends the whole
+        # ~3,000-token prompt, so a high budget turns one rate-limited call into
+        # six calls' worth of tokens and pushes the next batch over the same
+        # limit - the retries feeding the thing they are retrying against. Five
+        # was set to be safe and burned through a prepaid balance instead.
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,

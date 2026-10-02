@@ -186,10 +186,23 @@ def test_exists_over_cannot_swallow_the_whole_scope():
                relation="<=", value=4, description="x")
 
 
-def test_exists_over_must_name_something_in_scope():
+def test_the_ir_itself_refuses_exists_over_outside_scope():
+    """Checked against rule_from_dict directly: the stored shape has to stay
+    coherent whatever the mapping layer accepts on the way in."""
     with pytest.raises(IRError, match="only name dimensions that are in scope"):
-        _parse(form="count", scope=["teacher"], exists_over=["day"],
-               relation="<=", value=4, description="x")
+        rule_from_dict({"form": "count", "scope": ["teacher"], "exists_over": ["day"],
+                        "relation": "<=", "value": 4})
+
+
+def test_a_dimension_named_only_in_exists_over_is_added_to_scope():
+    """R124 arrived this way. Naming a dimension as existential while leaving
+    it out of scope says the rule is grouped by it - that is what "at least one
+    day" means - so repairing it keeps a rule the model read correctly."""
+    rule, notes = _parse(form="count", scope=["teacher"], exists_over=["day"],
+                         relation="at_most", value=4, description="x")
+    assert rule.form.scope == ("teacher", "day")
+    assert rule.form.exists_over == ("day",)
+    assert any("exists_over" in n for n in notes)
 
 
 def test_a_balance_cannot_even_out_what_it_also_groups_by():

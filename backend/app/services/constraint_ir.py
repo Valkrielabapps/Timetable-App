@@ -70,7 +70,11 @@ from dataclasses import dataclass
 # Dimensions a rule can group by. "period" means one group per slot in the week
 # (for rules like "at least one English teacher is free in every period");
 # "day" means one group per weekday.
-SCOPE_DIMENSIONS = ("teacher", "class_group", "subject", "day", "period")
+# "period" is one slot in the week; "period_order" is a position in the day,
+# the same number on every day. The difference matters for rules about
+# varying when something falls: "don't put Hindi in P4 every single day" is
+# about the position repeating across days, which grouping by slot cannot see.
+SCOPE_DIMENSIONS = ("teacher", "class_group", "subject", "day", "period", "period_order")
 
 RELATIONS = ("<=", ">=", "==")
 
@@ -459,9 +463,10 @@ def _count_from_dict(data: dict) -> Count:
         # all their classes in 3 days" counts how many different days get used.
         # It was left out of the first version for no reason that survived
         # contact with the catalogue.
-        if distinct not in ("subject", "teacher", "class_group", "day"):
+        if distinct not in ("subject", "teacher", "class_group", "day", "period_order"):
             raise IRError(
-                f"distinct must be subject, teacher, class_group or day, got {distinct!r}"
+                f"distinct must be subject, teacher, class_group, day or "
+                f"period_order, got {distinct!r}"
             )
     scope = _scope_from(data.get("scope"))
     exists_over = _scope_from(data.get("exists_over"))

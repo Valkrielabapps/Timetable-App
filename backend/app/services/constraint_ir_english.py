@@ -223,7 +223,8 @@ def _render_count(form: Count, suppress_time: bool = False) -> str:
 
     if form.distinct:
         unit = {"subject": "different subjects", "teacher": "different teachers",
-                "class_group": "different classes", "day": "different days"}[form.distinct]
+                "class_group": "different classes", "day": "different days",
+                "period_order": "different period numbers"}[form.distinct]
         amount = _amount(form.relation, form.value, unit)
         # "different subjects" already reads as a count, so the lesson noun is
         # dropped - but any filter narrowing *which* lessons are counted still
@@ -232,7 +233,7 @@ def _render_count(form: Count, suppress_time: bool = False) -> str:
         tail = f" among {narrowing}" if _whose(sel, used) else (f" {_when(sel)}" if sel.days or sel.period_orders else "")
         # "has at most 3 different days" reads as an inventory of days rather
         # than a working pattern, which is the opposite of what it constrains.
-        verb = "has lessons on" if form.distinct == "day" else "has"
+        verb = {"day": "has lessons on", "period_order": "uses"}.get(form.distinct, "has")
         sentence = f"{subject} {verb} {amount}{tail}"
     else:
         whose = _whose(sel, used)

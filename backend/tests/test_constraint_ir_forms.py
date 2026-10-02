@@ -279,3 +279,59 @@ def test_a_soft_rule_still_costs_something_when_broken():
     solver.parameters.max_time_in_seconds = 5
     assert solver.Solve(b.model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)
     assert solver.ObjectiveValue() > 0
+
+
+# ---------------------------------------------------------------------------
+# period_order - a position in the day, not a slot in the week
+# ---------------------------------------------------------------------------
+
+
+def test_distinct_period_order_counts_positions_not_slots():
+    """R123 "dont put hindi P4 every single day, vary the period". Period 1 on
+    both days is ONE position used twice; periods 1 and 2 are two positions.
+    Grouping by slot cannot tell those apart, which is why period_order exists
+    alongside period."""
+    b = Board(subject_ids=(1,))
+    b.add({"form": "count", "scope": ["class_group"], "selector": {"subjects": ["Maths"]},
+           "distinct": "period_order", "relation": ">=", "value": 2})
+    b.assert_exactly_impossible((100, 1, 10, 0, 1), (100, 1, 10, 1, 1))
+
+
+def test_two_positions_satisfy_it():
+    b = Board(subject_ids=(1,))
+    b.add({"form": "count", "scope": ["class_group"], "selector": {"subjects": ["Maths"]},
+           "distinct": "period_order", "relation": ">=", "value": 2})
+    b.assert_exactly_possible((100, 1, 10, 0, 1), (100, 1, 10, 1, 2))
+
+
+def test_distinct_days_and_distinct_positions_are_different_questions():
+    """One timetable, two answers. Maths in period 1 on both days spans two
+    DAYS and one POSITION - so "spread across the week" is satisfied and "vary
+    the period" is not. If these behaved alike, "dont put hindi P4 every single
+    day" would be silently satisfied by the arrangement it was written to
+    prevent."""
+    by_day = Board(subject_ids=(1,))
+    by_day.add({"form": "count", "scope": ["class_group"], "selector": {"subjects": ["Maths"]},
+                "distinct": "day", "relation": ">=", "value": 2})
+    by_day.assert_exactly_possible((100, 1, 10, 0, 1), (100, 1, 10, 1, 1))
+
+    by_position = Board(subject_ids=(1,))
+    by_position.add({"form": "count", "scope": ["class_group"], "selector": {"subjects": ["Maths"]},
+                     "distinct": "period_order", "relation": ">=", "value": 2})
+    by_position.assert_exactly_impossible((100, 1, 10, 0, 1), (100, 1, 10, 1, 1))
+
+
+def test_distinct_days_counts_four_sections_on_four_days():
+    """R101 "each section diff day - 8A 8B 8C 8D cant be same day". Expressed
+    as four different days used, because a bucket compares two named sets and
+    cannot say "all of these differ from each other"."""
+    b = Board(class_ids=(100, 101), subject_ids=(1,))
+    b.add({"form": "count", "scope": [], "selector": {"subjects": ["Maths"],
+                                                      "class_groups": ["Grade 8"]},
+           "distinct": "day", "relation": ">=", "value": 2})
+    b.assert_exactly_impossible((100, 1, 10, 0, 1), (101, 1, 10, 0, 2))
+    b2 = Board(class_ids=(100, 101), subject_ids=(1,))
+    b2.add({"form": "count", "scope": [], "selector": {"subjects": ["Maths"],
+                                                       "class_groups": ["Grade 8"]},
+            "distinct": "day", "relation": ">=", "value": 2})
+    b2.assert_exactly_possible((100, 1, 10, 0, 1), (101, 1, 10, 1, 1))

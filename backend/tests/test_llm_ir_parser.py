@@ -222,13 +222,19 @@ def test_the_prompt_carries_the_trap_readings():
 def test_the_prompt_stays_affordable():
     """This rides on every parse, so it is worth knowing when it grows.
 
-    ~2,400 tokens for a 40-teacher school, which is about a fifth of a US cent
-    per rule entered. The examples earn that several times over: the first
-    evaluation run declined 73% of the catalogue, and most of the fix was
-    telling the model more, not less. The ceiling is here to catch the version
-    of this file where someone pastes in the whole catalogue - at that point it
-    wants retrieving the relevant examples per rule, not sending all of them
-    every time.
+    ~3,600 tokens for a 40-teacher school: about a third of a US cent per rule
+    entered, and roughly 50 cents to run the whole catalogue through it.
+
+    The examples earn that several times over. In-scope coverage went 27% ->
+    55% -> 69% -> 76% across four evaluation runs, and almost every step was
+    telling the model more rather than less - worked examples in the phrasing
+    school staff actually use, and plain statements of what cannot be
+    represented.
+
+    The ceiling exists to catch the version of this file where someone pastes
+    in the whole catalogue. Past roughly this size the right move is retrieval -
+    pick the handful of examples closest to the sentence being parsed - rather
+    than sending all of them on every call.
     """
     prompt = _system_prompt(
         [f"Teacher {i}" for i in range(40)],
@@ -236,4 +242,4 @@ def test_the_prompt_stays_affordable():
         [f"Grade {i}" for i in range(12)],
         [(d, o, None, False) for d in range(5) for o in range(1, 9)],
     )
-    assert len(prompt) < 14_000
+    assert len(prompt) < 18_000
