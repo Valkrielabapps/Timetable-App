@@ -666,11 +666,16 @@ class IRParse:
     # for working out why a rule failed it is the only thing that helps.
     invalid: str | None = None
     sentence: str = ""
-    # (input_tokens, output_tokens) for this call, or None if it never reached
-    # the API. Carried so a caller can report what a run cost: a prepaid
-    # balance disappearing with nothing on screen to explain it is a worse
-    # failure than a slow script.
-    usage: tuple[int, int] | None = None
+    # (input, output, cache_read, cache_write) tokens for this call, or None if
+    # it never reached the API. Carried so a caller can report what a run cost:
+    # a prepaid balance disappearing with nothing on screen to explain it is a
+    # worse failure than a slow script.
+    #
+    # The cache figures are not decoration. Caching fails silently - the
+    # request succeeds, the bill is just higher - so the only way to know it is
+    # working is to look at cache_read, and the only way to notice it stopped
+    # is to keep looking.
+    usage: tuple[int, int, int, int] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -976,7 +981,22 @@ def parse_rule_llm(
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,
-            system=_system_prompt(teacher_names, subject_names, class_group_labels, periods),
+            # Cached, because every call in a sitting sends the same ~8,900
+            # tokens of tool schemas and worked examples and only the one
+            # sentence at the end differs. Reads cost a tenth of the write.
+            #
+            # The breakpoint goes on the last system block and covers the tools
+            # too: the prompt renders tools -> system -> messages, so a marker
+            # here caches everything before it. That ordering is the whole
+            # reason this is worth doing - the two tool schemas are about as
+            # large as the system prompt, and measuring the system prompt alone
+            # put the prefix under Haiku 4.5's 4,096-token minimum and led to
+            # the wrong conclusion that caching could not apply.
+            system=[{
+                "type": "text",
+                "text": _system_prompt(teacher_names, subject_names, class_group_labels, periods),
+                "cache_control": {"type": "ephemeral"},
+            }],
             tools=[_RULE_TOOL, _UNCLEAR_TOOL],
             # "any" rather than a named tool: the model must be able to choose
             # report_unclear, which is the whole point of offering it.
@@ -984,7 +1004,12 @@ def parse_rule_llm(
             messages=[{"role": "user", "content": text}],
         )
         block = next(b for b in response.content if b.type == "tool_use")
-        usage = (response.usage.input_tokens, response.usage.output_tokens)
+        usage = (
+            response.usage.input_tokens,
+            response.usage.output_tokens,
+            getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+            getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+        )
     except Exception:
         logger.exception("IR constraint parsing failed")
         return None

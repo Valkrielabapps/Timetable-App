@@ -1,41 +1,41 @@
 ID	CAPABILITY	STATUS	TYPED	READ_AS
-R007	M1-slot-availability	FAIL	Mrs. Rao would like her classes in the morning if possible	the API call did not complete
-R008	M10-calendar	FAIL	Mr. Khan is on leave from 10 to 14 November	the API call did not complete
-R011	M3-weekly-shape	FAIL	Every full-time teacher must get at least 24 periods	the API call did not complete
-R012	M2-daily-load	FAIL	No teacher should teach more than 6 periods in a day	the API call did not complete
-R013	M2-daily-load	FAIL	If Ms. Das comes in, give her at least 3 periods that day	the API call did not complete
-R015	M2-daily-load	FAIL	Every teacher needs at least one free period each day	the API call did not complete
-R016	M3-weekly-shape	FAIL	Spread Mr. Khan's classes evenly through the week	the API call did not complete
-R017	M3-weekly-shape	FAIL	Don't leave teachers with 3 free periods in the middle of the day	the API call did not complete
-R023	M7-assignment	FAIL	Mr. Khan should not be given 10B	the API call did not complete
-R024	M7-assignment	FAIL	Class teachers must take the first period in their own class every day	the API call did not complete
-R025	M7-assignment	FAIL	The same teacher should take Science for all of Grade 9	the API call did not complete
-R026	M8-parallel	FAIL	Ms. Das should assist in Grade 1A's English periods	the API call did not complete
-R033	M4-period-window	FAIL	Hindi should be in the 2nd period	the API call did not complete
-R034	M4-period-window	FAIL	Maths and Science only before lunch	the API call did not complete
-R035	M4-period-window	FAIL	Art and Music can be after lunch	the API call did not complete
-R038	M5-day-spread	FAIL	Grade 1 should have English in the same period every day	the API call did not complete
-R046	M5-day-spread	FAIL	PE shouldn't be on two days in a row	the API call did not complete
-R047	M5-day-spread	FAIL	Spread Science periods through the week	the API call did not complete
-R051	M6-blocks-adjacency	FAIL	Chemistry practicals need two periods together	the API call did not complete
-R052	M6-blocks-adjacency	FAIL	Only one double Maths period per week	the API call did not complete
-R053	M6-blocks-adjacency	FAIL	The Physics double period shouldn't be split by lunch	the API call did not complete
-R064	M1-slot-availability	FAIL	Grade 7 gets Library on Wednesday last period	the API call did not complete
-R065	M8-parallel	FAIL	8A and 8B have PE together	the API call did not complete
-R066	M8-parallel	FAIL	Biology and Computer Science for Grade 11 at the same time	the API call did not complete
-R070	M1-slot-availability	FAIL	Grade 12 has a zero period at 7:30 for Maths	the API call did not complete
-R071	M9-rooms	FAIL	Primary classes should stay in their own room	the API call did not complete
-R073	M9-rooms	FAIL	The computer lab is used by the junior school on Monday mornings	the API call did not complete
-R074	M9-rooms	FAIL	Mrs. Rao teaches only in Room 12 because of her knee	the API call did not complete
-R087	M1-slot-availability	FAIL	Keep Tuesday 8th period for remedial classes for Grade 10	the API call did not complete
-R089	M11-conditional-meta	FAIL	Teacher availability is more important than subject order	the API call did not complete
-R090	M11-conditional-meta	FAIL	No PE in the first period, except for Grade 12	the API call did not complete
-R091	M10-calendar	FAIL	During exams in March, no PE	the API call did not complete
-R153	M11-conditional-meta	FAIL	maths not in last period - ok if 2 or 3 sections break it, not more	the API call did not complete
-R154	M11-conditional-meta	FAIL	if u have to break the morning maths rule dont always do it to the same section	the API call did not complete
-R157	M10-calendar	FAIL	das mam only 1st n 3rd saturdays	the API call did not complete
-R158	M10-calendar	FAIL	cbse practicals jan 20 - feb 10, phy chem bio labs fully blocked for 12th exams. no other practicals those dates	the API call did not complete
-R175	M12-cohort	FAIL	5 kids from 11 PCM took music as addl subject. music cant clash with their maths phy chem	the API call did not complete
-R176	M12-cohort	FAIL	3 kids in 7C exempted from hindi go to resource room with fernandez mam, so her resource room slot = 7C hindi periods	the API call did not complete
-R177	M12-cohort	FAIL	8C has a wheelchair student. all 8C periods ground floor incl labs pls	the API call did not complete
-R178	M12-cohort	FAIL	9A batch 1 comp lab n batch 2 physics lab same time, then swap next period	the API call did not complete
+R007	M1-slot-availability	OK	Mrs. Rao would like her classes in the morning if possible	Where it can be arranged, on any day Mrs. Rao teaches, periods fall within 4 consecutive periods, whichever 4 those are.
+R008	M10-calendar	ASK[not_supported]	Mr. Khan is on leave from 10 to 14 November	This rule is tied to specific calendar dates (10 to 14 November), but the system only handles rules based on weekdays (Monday through Saturday) and periods within a day, not absolute dates.
+R011	M3-weekly-shape	ASK[too_vague]	Every full-time teacher must get at least 24 periods	"The rule mentions ""every full-time teacher"" but the school data lists specific teachers without indicating which are full-time and which are part-time. Without knowing which teachers fall into this category, the rule cannot be enforced. | Which teachers at this school are designated as full-time?"
+R012	M2-daily-load	OK	No teacher should teach more than 6 periods in a day	Every teacher has at most 6 periods on any day.
+R013	M2-daily-load	OK	If Ms. Das comes in, give her at least 3 periods that day	Wherever Ms. Das has at least 1 period on any day, Ms. Das has at least 3 periods.
+R015	M2-daily-load	OK	Every teacher needs at least one free period each day	Every teacher has at most 7 periods on any day.
+R016	M3-weekly-shape	OK	Spread Mr. Khan's classes evenly through the week	Where it can be arranged, Mr. Khan has periods spread across the days of the week, with at most 1 period between the fullest and the emptiest.
+R017	M3-weekly-shape	OK	Don't leave teachers with 3 free periods in the middle of the day	Where it can be arranged, on any day every teacher teaches, there are at most 2 free periods between the first and the last.
+R023	M7-assignment	OK	Mr. Khan should not be given 10B	Mr. Khan has no Grade 10 - B periods in the week.
+R024	M7-assignment	ASK[ambiguous]	Class teachers must take the first period in their own class every day	"A ""class teacher"" is a staff role that is not stored in the timetable system - the system knows which teacher teaches which subject to which class, but not which teacher holds the broader administrative role of being ""the class teacher"" for a particular grade or section. Without knowing which teacher is the class teacher for which class group, there is nothing measurable to enforce. | Which teacher is the class teacher for each grade or section? (For example, ""Mr. Khan is the class teacher for Grade 9 - A"", and so on for each one you want this rule to apply to.)"
+R025	M7-assignment	OK	The same teacher should take Science for all of Grade 9	Where it can be arranged, every teacher has exactly 1 Grade 9 Science period in the week.
+R026	M8-parallel	ASK[not_a_rule]	Ms. Das should assist in Grade 1A's English periods	This sentence describes a staffing assignment (Ms. Das assists with Grade 1A English), not a scheduling constraint. There is no measurable limit or requirement to enforce in the timetable - no cap on periods, no day restriction, no timing relationship.
+R033	M4-period-window	OK	Hindi should be in the 2nd period	Every class has at least 1 Hindi period in period 2.
+R034	M4-period-window	OK	Maths and Science only before lunch	No class has Maths or Science periods in periods 6, 7 or 8.
+R035	M4-period-window	ASK[ambiguous]	Art and Music can be after lunch	This sentence could mean either that Art and Music are allowed to be scheduled after lunch (stating permission rather than a rule), or that Art and Music must never be scheduled before lunch (a prohibition that becomes a rule). | Should Art and Music be avoided before lunch, or is this just saying they are allowed after lunch without restricting when they can be?
+R038	M5-day-spread	OK	Grade 1 should have English in the same period every day	For Grade 1, English periods on Monday and English periods on Tuesday, Wednesday, Thursday, Friday or Saturday are scheduled at the same time.
+R046	M5-day-spread	OK	PE shouldn't be on two days in a row	For every class, PE periods and PE periods are never back to back, in either order.
+R047	M5-day-spread	OK	Spread Science periods through the week	Where it can be arranged, every class has Science periods spread across the days of the week, with at most 2 periods between the fullest and the emptiest.
+R051	M6-blocks-adjacency	OK	Chemistry practicals need two periods together	For every class, Chemistry periods are scheduled in blocks of 2 consecutive periods on any day.
+R052	M6-blocks-adjacency	OK	Only one double Maths period per week	For every class, Maths periods are scheduled in blocks of 2 consecutive periods on any day.
+R053	M6-blocks-adjacency	OK	The Physics double period shouldn't be split by lunch	For every class, Physics periods are scheduled in blocks of 2 consecutive periods on any day.
+R064	M1-slot-availability	OK	Grade 7 gets Library on Wednesday last period	Grade 7 has at least 1 Library period in the last period of the day on Wednesday.
+R065	M8-parallel	OK	8A and 8B have PE together	For Grade 8 - A, PE periods and PE periods are scheduled at the same time.
+R066	M8-parallel	OK	Biology and Computer Science for Grade 11 at the same time	For Grade 11, Biology periods and Computer Science periods are scheduled at the same time.
+R070	M1-slot-availability	ASK[not_supported]	Grade 12 has a zero period at 7:30 for Maths	"This rule involves a time of day (7:30) that falls outside the standard timetable structure. The system can only schedule lessons during the periods defined in the timetable (Monday–Friday: 8 periods; Saturday: 4 periods), which are numbered without reference to clock times. A ""zero period"" before the main timetable cannot be represented."
+R071	M9-rooms	ASK[not_supported]	Primary classes should stay in their own room	This rule is about room allocation - which room a class uses and whether they move between spaces. The timetable system does not yet support room-based constraints.
+R073	M9-rooms	ASK[not_supported]	The computer lab is used by the junior school on Monday mornings	This rule is about a room (the computer lab) and when it is available for use. The system cannot yet represent constraints tied to specific rooms, their availability, or which classes use them.
+R074	M9-rooms	ASK[not_supported]	Mrs. Rao teaches only in Room 12 because of her knee	This rule is about which room Mrs. Rao's lessons are scheduled in. The timetabling system cannot yet represent constraints based on rooms, room capacity, or room assignments.
+R087	M1-slot-availability	OK	Keep Tuesday 8th period for remedial classes for Grade 10	Grade 10 has at least 1 period in period 8 on Tuesday.
+R089	M11-conditional-meta	ASK[not_a_rule]	Teacher availability is more important than subject order	This statement describes a priority between two types of constraints, but does not itself say which lessons should or shouldn't be scheduled when. There is nothing measurable to enforce. | Are you asking to rank certain rules higher than others if they conflict, or to record a specific scheduling constraint about teacher availability or subject order?
+R090	M11-conditional-meta	OK	No PE in the first period, except for Grade 12	Grade 1, Grade 2, Grade 3, Grade 4, Grade 5, Grade 6, Grade 7, Grade 8, Grade 9, Grade 10 or Grade 11 has no PE periods in the first period of the day.
+R091	M10-calendar	ASK[not_supported]	During exams in March, no PE	"This rule is tied to a specific calendar date (""March""), not to a regular weekday pattern. The system can handle rules about which days of the week PE may or may not occur, but cannot yet handle rules that apply only during specific calendar periods like exam weeks or named months."
+R153	M11-conditional-meta	OK	maths not in last period - ok if 2 or 3 sections break it, not more	Every class has at most 3 Maths periods in the last period of the day.
+R154	M11-conditional-meta	ASK[too_vague]	if u have to break the morning maths rule dont always do it to the same section	"The rule mentions ""the morning maths rule"" but doesn't define what that rule is. Also, ""if you have to break it"" suggests a fallback or preference rather than a hard constraint, and ""don't always do it to the same section"" doesn't specify what should happen instead - whether exceptions should be spread evenly, rotated, or something else. | What is the morning Maths rule you're referring to? And when it must be broken, should exceptions be spread evenly across sections, or something else?"
+R157	M10-calendar	ASK[ambiguous]	das mam only 1st n 3rd saturdays	"Ms. Das is available only on the 1st and 3rd Saturdays of each month, but the timetable structure here works with weekdays (Monday through Saturday as day numbers), not calendar dates. The system cannot yet represent ""1st Saturday"" vs ""2nd Saturday"" or any rule tied to dates within a month. | Should I record a simpler rule instead—for example, that Ms. Das simply cannot teach on most Saturdays and should be marked unavailable on all but two specific dates? Or should this be noted outside the timetable system?"
+R158	M10-calendar	ASK[not_supported]	cbse practicals jan 20 - feb 10, phy chem bio labs fully blocked for 12th exams. no other practicals those dates	This rule is tied to specific calendar dates (20 January to 10 February), which cannot be represented in the timetable system. The system works with weekdays (Monday through Saturday) and periods within days, not with calendar ranges. | Should this be converted to a standing rule for all weeks, or is the exam period something that will be handled separately outside the regular timetable?
+R175	M12-cohort	ASK[unknown_reference]	5 kids from 11 PCM took music as addl subject. music cant clash with their maths phy chem	"The rule refers to ""11 PCM"" and ""5 kids from 11 PCM"", but the school's class groups list doesn't include any section with that label. It includes Grade 11 - A, Grade 11 - B, Grade 11 - C, Grade 11 - D, but no ""PCM"". | Does ""11 PCM"" refer to one of the Grade 11 sections (A, B, C, or D), or is it a different grouping within Grade 11?"
+R176	M12-cohort	ASK[not_supported]	3 kids in 7C exempted from hindi go to resource room with fernandez mam, so her resource room slot = 7C hindi periods	This rule is about a group of students inside a class section (3 children in 7C) being exempted from a subject, which cannot be represented in the timetabling system. The system works with whole class groups, not subsets of students within a section. | Would you like to instead create a rule that applies to the whole of Grade 7 - C, or is this exemption truly only for those 3 individual students?
+R177	M12-cohort	ASK[not_supported]	8C has a wheelchair student. all 8C periods ground floor incl labs pls	This rule requires scheduling lessons in specific rooms (ground floor, labs), which is about where lessons take place rather than when. The system cannot yet represent room assignments, building locations, or facility constraints.
+R178	M12-cohort	ASK[ambiguous]	9A batch 1 comp lab n batch 2 physics lab same time, then swap next period	The rule describes Computer Science and Physics labs for Grade 9 - A, but it's unclear whether you want them at the same time in the same period (which would require them in different rooms), or whether this is about rotating two batches of students through two labs. | Are you dividing Grade 9 - A into two subgroups rotating through two labs, or scheduling the two subjects at the same clock time with students or teachers moving between them?

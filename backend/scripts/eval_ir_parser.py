@@ -81,14 +81,13 @@ CATALOGUE = pathlib.Path(__file__).resolve().parents[2] / "docs" / "research" / 
 # up: the only job here is to turn a run into a number a person can decide about
 # before spending more, and a rough figure shown beats an exact one nobody sees.
 #
-# On caching, since it is the obvious saving and does not work here: the system
-# prompt is identical across every call in a run, but Haiku 4.5 will not cache a
-# prefix under 4,096 tokens and ours is around 3,700. Below that minimum the API
-# caches nothing, reports cache_creation_input_tokens: 0 and charges full price,
-# with no error - so a cache_control marker here would look like a fix and be a
-# no-op. Worth revisiting if the prompt grows past 4,096.
+# Cache reads are a tenth of base input, writes a quarter more than it. The
+# prefix being cached is the tool schemas plus the system prompt - about 8,900
+# tokens, of which only the one sentence at the end of each call differs.
 PRICE_IN_PER_MTOK = 1.00
 PRICE_OUT_PER_MTOK = 5.00
+PRICE_CACHE_READ_PER_MTOK = 0.10
+PRICE_CACHE_WRITE_PER_MTOK = 1.25
 
 # The school the catalogue was written against. These lists have to contain
 # every name the rules mention, or a correct parse still declines for an
@@ -178,7 +177,7 @@ def main():
     by_capability = Counter()
     declines = Counter()
     lines = []
-    tokens_in = tokens_out = 0
+    tokens_in = tokens_out = cache_read = cache_write = 0
     started = time.time()
     done = 0
 
@@ -210,6 +209,8 @@ def main():
         if result is not None and result.usage:
             tokens_in += result.usage[0]
             tokens_out += result.usage[1]
+            cache_read += result.usage[2]
+            cache_write += result.usage[3]
         if result is None:
             # A call that failed for any reason - a rate limit, a dropped
             # connection. Counted and carried past rather than ending the run:
@@ -294,9 +295,24 @@ def main():
 
     # Printed every run, not behind a flag. A prepaid balance disappearing with
     # nothing on screen to explain it is a worse failure than a slow script.
-    cost = tokens_in / 1e6 * PRICE_IN_PER_MTOK + tokens_out / 1e6 * PRICE_OUT_PER_MTOK
+    cost = (tokens_in / 1e6 * PRICE_IN_PER_MTOK
+            + tokens_out / 1e6 * PRICE_OUT_PER_MTOK
+            + cache_read / 1e6 * PRICE_CACHE_READ_PER_MTOK
+            + cache_write / 1e6 * PRICE_CACHE_WRITE_PER_MTOK)
     print(f"\nCost: {tokens_in:,} input + {tokens_out:,} output tokens, "
           f"about ${cost:.2f}.")
+    # Caching fails silently: the requests succeed and the bill is just higher.
+    # The read count is the only ground truth that it is working, so it is
+    # printed every run rather than kept for when someone goes looking.
+    if cache_read or cache_write:
+        shared = cache_read + cache_write
+        print(f"      {cache_read:,} tokens served from cache, {cache_write:,} written. "
+              f"Without caching those {shared:,} would have cost "
+              f"${shared / 1e6 * PRICE_IN_PER_MTOK:.2f}.")
+    else:
+        print("      Nothing was cached - expected reads here. Check the prefix "
+              "hasn't picked up something that varies per call.")
+
     catalogue_size = len(load_catalogue())
     if rows and len(rows) < catalogue_size:
         print(f"      A full {catalogue_size}-rule run at this rate: "
