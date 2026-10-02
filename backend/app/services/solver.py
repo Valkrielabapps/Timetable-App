@@ -99,6 +99,19 @@ def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
     return labels
 
 
+def _all_periods_by_day(all_periods: list[Period]) -> dict[int, list[Period]]:
+    """Every period of each day, breaks included.
+
+    Distinct from the solver's `periods_by_day`, which drops breaks because
+    nothing is scheduled in them. Positions have to count breaks: a rule saying
+    "period 5" means the fifth row of the timetable, and lunch is a row.
+    """
+    by_day: dict[int, list[Period]] = {}
+    for period in all_periods:
+        by_day.setdefault(period.day_of_week, []).append(period)
+    return by_day
+
+
 def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id) -> list[Atom]:
     """Flatten the model's decision variables into what a selector can filter.
 
@@ -913,9 +926,17 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
             teacher_ids={t.name: t.id for t in teachers},
             class_group_ids=_class_group_labels(class_groups),
-            # Taken from teaching periods only, and per day, so "the last
-            # period" on a half-day Saturday is that day's last rather than the
-            # week's - and never lands on lunch.
+            # Every period of the day, breaks included, because a position
+            # counts rows the admin can see: the timetable grid shows lunch as
+            # a row, and the prompt's "8 periods per day" counts it too, so
+            # "period 5" has to mean the fifth row either way.
+            orders_by_day={
+                day: sorted(p.order for p in day_periods)
+                for day, day_periods in _all_periods_by_day(all_periods).items()
+            },
+            # Teaching periods only, and per day, so "the last period" on a
+            # half-day Saturday is that day's last rather than the week's - and
+            # never lands on lunch.
             first_order_by_day={
                 day: min(p.order for p in day_periods)
                 for day, day_periods in periods_by_day.items()

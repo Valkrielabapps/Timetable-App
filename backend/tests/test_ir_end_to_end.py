@@ -337,3 +337,42 @@ def test_an_exists_over_rule_compiles_against_a_real_school(db):
     for day, _order in _periods_used(result, db, school, "Maths"):
         per_day[day] = per_day.get(day, 0) + 1
     assert min(per_day.values()) <= 1, per_day
+
+
+def test_a_teacher_blocked_after_period_four_in_a_zero_based_school(db):
+    """The reported bug, end to end: "Mrs. Kamini Chandra has no periods in
+    periods 5, 6, 7 or 8" on a school whose Period rows are numbered from zero
+    and whose grid renders `Period {order + 1}`.
+
+    Four lessons and eight periods, with the last four barred, leaves exactly
+    the first four - so if the positions resolve wrongly by even one, this is
+    either infeasible or puts a lesson where the admin said not to.
+    """
+    school = School(name="Zero Based")
+    db.add(school)
+    db.commit()
+    db.refresh(school)
+    # Orders 0-7, which the timetable grid shows as Period 1 to Period 8.
+    for order in range(0, 8):
+        db.add(Period(school_id=school.id, day_of_week=0, order=order))
+    db.commit()
+
+    cg = _class_group(db, school)
+    hindi = _subject(db, school, "Hindi")
+    _teacher(db, school, "Mrs. Kamini Chandra", [hindi.id])
+    _require(db, cg, hindi, 4)
+
+    _ir(db, school, {"form": "count", "scope": [],
+                     "selector": {"teachers": ["Mrs. Kamini Chandra"],
+                                  "period_orders": [5, 6, 7, 8]},
+                     "relation": "==", "value": 0},
+        description="Mrs. Kamini Chandra has no periods in periods 5, 6, 7 or 8")
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    assert not result.warnings, result.warnings
+
+    used = sorted(o for _day, o in _periods_used(result, db, school, "Hindi"))
+    # Stored orders 0-3 are the periods displayed as 1-4. Order 4 is the
+    # displayed Period 5 - the slot the real timetable wrongly used.
+    assert used == [0, 1, 2, 3], f"expected the first four periods, got {used}"

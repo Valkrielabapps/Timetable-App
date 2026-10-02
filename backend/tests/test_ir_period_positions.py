@@ -27,6 +27,7 @@ CLASS_GROUPS = {"Grade 8": [100]}
 DAY_LENGTHS = {0: 4, 5: 2}
 INDEX = SchoolIndex(
     subject_ids=SUBJECTS, teacher_ids=TEACHERS, class_group_ids=CLASS_GROUPS,
+    orders_by_day={day: list(range(1, last + 1)) for day, last in DAY_LENGTHS.items()},
     first_order_by_day={day: 1 for day in DAY_LENGTHS},
     last_order_by_day=dict(DAY_LENGTHS),
 )
@@ -79,14 +80,16 @@ def test_last_period_means_each_days_own_last():
     assert b.allows(5, 1), "Saturday period 1 is not the last and should be free"
 
 
-def test_a_period_number_is_not_a_position():
-    """Period 4 blocks Monday's last and leaves Saturday's alone - the exact
-    difference the position exists to express."""
+def test_a_numbered_period_is_not_the_same_as_the_last_one():
+    """"Period 4" and "the last period" differ once days differ in length.
+    Monday's fourth period exists; Saturday has no fourth period at all, so a
+    rule about period 4 does not touch it - where a rule about "the last
+    period" would."""
     b = ShortWeek()
     b.add({"form": "count", "scope": [], "selector": {"period_orders": [4]},
            "relation": "==", "value": 0})
     assert not b.allows(0, 4)
-    assert b.allows(5, 2), "Saturday's last period is 2, so a rule about 4 misses it"
+    assert b.allows(5, 2), "Saturday has only two periods, so there is no fourth to block"
 
 
 def test_first_period_resolves_the_same_way():

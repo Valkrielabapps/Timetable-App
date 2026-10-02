@@ -26,10 +26,18 @@ from app.services.constraint_ir_compiler import (
 SUBJECTS = {"Maths": 1, "PE": 2, "Art": 3}
 TEACHERS = {"Rao": 10, "Khan": 11}
 CLASS_GROUPS = {"Grade 8": [100, 101], "Grade 8 - A": [100], "Grade 8 - B": [101]}
-INDEX = SchoolIndex(subject_ids=SUBJECTS, teacher_ids=TEACHERS, class_group_ids=CLASS_GROUPS)
-
 DAYS = (0, 1)
 ORDERS = (1, 2, 3, 4)
+
+# This school numbers its periods from 1, so a position and a stored order
+# happen to coincide here. test_ir_period_numbering.py covers the case where
+# they do not, which is the one that bit a real school.
+INDEX = SchoolIndex(
+    subject_ids=SUBJECTS, teacher_ids=TEACHERS, class_group_ids=CLASS_GROUPS,
+    orders_by_day={day: list(ORDERS) for day in DAYS},
+    first_order_by_day={day: ORDERS[0] for day in DAYS},
+    last_order_by_day={day: ORDERS[-1] for day in DAYS},
+)
 
 
 class Board:

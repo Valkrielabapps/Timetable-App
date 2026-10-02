@@ -77,11 +77,36 @@ class SchoolIndex:
     subject_ids: dict[str, int]
     teacher_ids: dict[str, int]
     class_group_ids: dict[str, list[int]]
-    # The first and last TEACHING period of each day, by day_of_week. Per day
-    # rather than school-wide because a half-day Saturday has a different last
-    # period from a full Tuesday, and a rule about "the last period" means both.
+    # Every period of each day, by day_of_week, sorted. This is what turns a
+    # position into a row: "period 5" is the fifth entry here, whatever its
+    # stored `order` happens to be.
+    #
+    # It has to be a lookup rather than arithmetic because `order` is typed in
+    # by hand when a school is set up - it may start at 0 or 1, and deleting
+    # and re-adding periods leaves holes. Everything a person sees is 1-based
+    # (the timetable grid renders `Period {order + 1}`, and the prompt tells
+    # the model the periods are "numbered 1 to N"), so a rule saying "period 5"
+    # means the fifth row, not the row whose stored order is 5.
+    orders_by_day: dict[int, list[int]] = field(default_factory=dict)
+    # The first and last TEACHING period of each day. Separate from the above
+    # because breaks count as rows a person can see, but "the last period" of a
+    # day means its last lesson slot, not lunch.
     first_order_by_day: dict[int, int] = field(default_factory=dict)
     last_order_by_day: dict[int, int] = field(default_factory=dict)
+
+    def slots_at(self, positions) -> set[tuple[int, int]]:
+        """(day, order) pairs for 1-based positions, per day.
+
+        A position past the end of a day simply isn't there - a half-day
+        Saturday has no fifth period, and the rule should quietly not apply
+        rather than landing on whatever happens to be last.
+        """
+        slots = set()
+        for day, orders in self.orders_by_day.items():
+            for position in positions:
+                if 1 <= position <= len(orders):
+                    slots.add((day, orders[position - 1]))
+        return slots
 
     def unknown(self, kind: str, name: str) -> bool:
         table = {"subject": self.subject_ids, "teacher": self.teacher_ids,
@@ -142,16 +167,17 @@ def _resolve(sel: Selector, index: SchoolIndex) -> dict:
     if sel.days is not None:
         out["days"] = set(sel.days)
     if sel.period_orders is not None:
-        out["period_orders"] = set(sel.period_orders)
+        # Positions, not stored values - see SchoolIndex.orders_by_day. Folded
+        # into the same slot set as period_positions so a selector naming both
+        # ("period 1 or the last period") means either.
+        out.setdefault("position_slots", set()).update(index.slots_at(sel.period_orders))
     if sel.period_positions is not None:
         # Resolved to concrete (day, order) pairs here rather than compared
         # position-by-position later, so a day's own length decides what its
         # last period is.
-        slots = set()
         for position in sel.period_positions:
             table = index.first_order_by_day if position == "first" else index.last_order_by_day
-            slots.update((day, order) for day, order in table.items())
-        out["position_slots"] = slots
+            out.setdefault("position_slots", set()).update(table.items())
     return out
 
 
@@ -172,8 +198,6 @@ def _matches(atom: Atom, resolved: dict, ignore_time: bool = False) -> bool:
         return False
     if not ignore_time:
         if "days" in resolved and atom.day_of_week not in resolved["days"]:
-            return False
-        if "period_orders" in resolved and atom.order not in resolved["period_orders"]:
             return False
         if "position_slots" in resolved:
             if (atom.day_of_week, atom.order) not in resolved["position_slots"]:
