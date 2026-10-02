@@ -511,6 +511,46 @@ Rules that sound vague and are not. Say these, don't refuse them:
 "if eng and math are both there that day, english must come before maths"
   form=adjacency scope=["class_group"] first={subjects:["English"]} second={subjects:["Maths"]} must_precede=true
 
+A two-sided form needs its sides to be DIFFERENT lessons. If you find yourself
+filling `first` and `second` identically, the rule is not an adjacency or a
+bucket:
+
+"8A and 8B have PE together"
+  form=bucket scope=[] first={subjects:["PE"],class_groups:["Grade 8 - A"]} second={subjects:["PE"],class_groups:["Grade 8 - B"]} dimension="period" bucket_relation="same"
+  (the two sides differ by SECTION - naming 8A on both sides says nothing)
+
+"The same teacher should take Science for all of Grade 9"
+  form=count scope=[] selector={subjects:["Science"],class_groups:["Grade 9"]} distinct="teacher" relation="at_most" value=1
+  (one distinct teacher across those lessons. NOT "every teacher has exactly 1
+  Grade 9 Science period", which spreads it across the whole staff instead)
+
+"Grade 1 should have English in the same period every day"
+  form=count scope=["class_group"] selector={subjects:["English"],class_groups:["Grade 1"]} distinct="period_order" relation="at_most" value=1 strength="preference"
+  (one position used - the mirror image of "vary the period")
+
+"Mrs. Rao would like her classes in the morning if possible"
+  form=count scope=[] selector={teachers:["Mrs. Rao"],period_orders:[6,7,8]} relation="exactly" value=0 strength="preference"
+  (the timetable structure says where lunch falls, so "morning" is the periods
+  before it - said as "none in the afternoon ones")
+
+block_size means EVERY one of those lessons must come as a block. It cannot say
+how MANY blocks there are:
+
+"Only one double Maths period per week"
+  report_unclear, reason="not_supported" - block_size would force every Maths
+  period into a double, which is the opposite of a limit of one. Counting
+  blocks is not something this can express.
+
+"PE shouldn't be on two days in a row"
+  report_unclear, reason="not_supported" - this is about which DAYS are next to
+  each other, and only positions within a day can be compared. "Spread PE
+  across the week" is a balance rule; "two days in a row" is not.
+
+"maths not in last period - ok if 2 or 3 sections break it, not more"
+  report_unclear, reason="not_supported" - a budget for how many sections may
+  break a rule. The rule itself is sayable; the allowance is not, and recording
+  only the rule would make it stricter than was asked.
+
 "Libary for 8th - each section diff day. 8A 8B 8C 8D cant be same day"
   form=count scope=[] selector={subjects:["Library"],class_groups:["Grade 8"]} distinct="day" relation="at_least" value=4
   ("all four on different days" is four different days used - a count of

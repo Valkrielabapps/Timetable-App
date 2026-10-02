@@ -229,12 +229,17 @@ def _render_count(form: Count, suppress_time: bool = False) -> str:
         # "different subjects" already reads as a count, so the lesson noun is
         # dropped - but any filter narrowing *which* lessons are counted still
         # has to be said.
-        narrowing = " ".join(p for p in (_whose(sel, used), _when(sel)) if p)
-        tail = f" among {narrowing}" if _whose(sel, used) else (f" {_when(sel)}" if sel.days or sel.period_orders else "")
+        # The lessons being counted over have to appear. Without them, "at most
+        # 1 different teacher for Grade 9 Science" renders as "Grade 9 has at
+        # most 1 different teacher" - a far wider rule, and one a reader would
+        # rightly reject. Same class of bug as a scope swallowing a class group.
+        narrowed = _whose(sel, used) or sel.subjects or sel.not_subjects or _when(sel)
+        narrowing = " ".join(p for p in (_whose(sel, used), _lesson_noun(sel), _when(sel)) if p)
         # "has at most 3 different days" reads as an inventory of days rather
         # than a working pattern, which is the opposite of what it constrains.
         verb = {"day": "has lessons on", "period_order": "uses"}.get(form.distinct, "has")
-        sentence = f"{subject} {verb} {amount}{tail}"
+        sentence = (f"{subject} {verb} {amount} across its {narrowing}" if narrowed
+                    else f"{subject} {verb} {amount}")
     else:
         whose = _whose(sel, used)
         noun = _lesson_noun(sel)
@@ -255,6 +260,38 @@ def _render_count(form: Count, suppress_time: bool = False) -> str:
             sentence = f"no {universal[len('every ')::]} has {rest}"
             break
     return sentence
+
+
+def _common(first: Selector, second: Selector) -> Selector:
+    """Only what both sides agree on, for the sentence's subject.
+
+    A two-sided rule is about whatever its sides share; the fields they differ
+    on are the rule. Taking the subject from `first` alone claims one side's
+    value for both - "For Grade 8 - A, Grade 8 - A PE periods and Grade 8 - B PE
+    periods", which names 8A twice and reads as a rule about 8A.
+    """
+    shared = {}
+    for field in ("subjects", "not_subjects", "teachers", "class_groups",
+                  "days", "period_orders", "period_positions"):
+        a, b = getattr(first, field), getattr(second, field)
+        shared[field] = a if a == b else None
+    return Selector(**shared)
+
+
+def _sides(first: Selector, second: Selector, used: frozenset[str]) -> tuple[str, str]:
+    """Describe two sides, skipping only what they genuinely share.
+
+    `used` names what the sentence's subject already said. Applying it to both
+    sides blindly is wrong whenever the sides differ on that field: "8A and 8B
+    have PE together" then renders as "For Grade 8 - A, PE periods and PE
+    periods", which is both unreadable and indistinguishable from the broken
+    rule where the model named 8A twice.
+    """
+    shared = frozenset(
+        field for field in used
+        if getattr(first, field, None) == getattr(second, field, None)
+    )
+    return _describe_lessons(first, shared), _describe_lessons(second, shared)
 
 
 def _render_run(form: Run) -> str:
@@ -280,9 +317,8 @@ def _render_run(form: Run) -> str:
 
 
 def _render_adjacency(form: Adjacency) -> str:
-    subject, used = _scope_subject(form.scope, form.first)
-    first = _describe_lessons(form.first, used)
-    second = _describe_lessons(form.second, used)
+    subject, used = _scope_subject(form.scope, _common(form.first, form.second))
+    first, second = _sides(form.first, form.second, used)
 
     if form.must_follow:
         return f"for {subject}, {second} come in the period straight after {first}"
@@ -312,9 +348,8 @@ def _render_adjacency(form: Adjacency) -> str:
 
 
 def _render_bucket(form: Bucket) -> str:
-    subject, used = _scope_subject(form.scope, form.first)
-    first = _describe_lessons(form.first, used)
-    second = _describe_lessons(form.second, used)
+    subject, used = _scope_subject(form.scope, _common(form.first, form.second))
+    first, second = _sides(form.first, form.second, used)
     unit = "day" if form.dimension == "day" else "period"
     if form.relation == "same":
         if form.dimension == "period":
@@ -373,15 +408,20 @@ def _render_conditional(form: Conditional) -> str:
     return f"wherever {condition}, {consequence}"
 
 
+def _drop_empty_scope(sentence: str) -> str:
+    """"For the school," names no grouping - every rule is about the school."""
+    return sentence[len("for the school, "):] if sentence.startswith("for the school, ") else sentence
+
+
 def render_form(form: Form) -> str:
     if isinstance(form, Count):
         return _render_count(form)
     if isinstance(form, Run):
         return _render_run(form)
     if isinstance(form, Adjacency):
-        return _render_adjacency(form)
+        return _drop_empty_scope(_render_adjacency(form))
     if isinstance(form, Bucket):
-        return _render_bucket(form)
+        return _drop_empty_scope(_render_bucket(form))
     if isinstance(form, Balance):
         return _render_balance(form)
     if isinstance(form, Span):

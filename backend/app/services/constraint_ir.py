@@ -537,7 +537,28 @@ def _adjacency_from_dict(data: dict) -> Adjacency:
     )
     if adj.first.is_empty() or adj.second.is_empty():
         raise IRError("an adjacency rule needs both sides to say which lessons they mean")
+    _refuse_identical_sides(adj.first, adj.second, "adjacency")
     return adj
+
+
+def _refuse_identical_sides(first: Selector, second: Selector, form: str) -> None:
+    """Both sides naming the same lessons is never a rule anyone means.
+
+    "PE and PE are never back to back" is max_consecutive on a run; "8A's PE and
+    8A's PE at the same time" is vacuous. Both turn up when the model fills
+    `first` and correctly fails to differentiate `second` - the fifth evaluation
+    run produced two, and both rendered as visible nonsense ("PE periods and PE
+    periods are never back to back"). Refusing here turns a wrong rule into a
+    question, which is the trade this whole design is built on.
+    """
+    if first == second:
+        article = "an" if form[0] in "aeiou" else "a"
+        raise IRError(
+            f"{article} {form} rule needs its two sides to describe DIFFERENT lessons - "
+            f"both name the same ones. If the rule is about one subject against "
+            f"itself, it is a run rule (back-to-back limits) or a count of "
+            f"distinct days, not {article} {form}."
+        )
 
 
 def _balance_from_dict(data: dict) -> Balance:
@@ -593,6 +614,7 @@ def _bucket_from_dict(data: dict) -> Bucket:
     )
     if bucket.first.is_empty() or bucket.second.is_empty():
         raise IRError("a bucket rule needs both sides to say which lessons they mean")
+    _refuse_identical_sides(bucket.first, bucket.second, "bucket")
     return bucket
 
 
