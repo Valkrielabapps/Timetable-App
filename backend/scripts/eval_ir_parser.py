@@ -43,6 +43,35 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+
+def _require_venv() -> None:
+    """Fail with something actionable when the shell has lost the venv.
+
+    Run under the wrong Python, this script dies on whichever dependency it
+    reaches first - "No module named 'pydantic'", or "anthropic package not
+    installed", both true and neither the problem. The packages are in the
+    project's venv; the shell isn't using it. Checked before the app imports,
+    because those are what fail.
+    """
+    try:
+        import anthropic  # noqa: F401
+        import pydantic  # noqa: F401
+    except ImportError as exc:
+        sys.exit(
+            f"{exc.name} isn't importable from this Python:\n"
+            f"    {sys.executable}\n\n"
+            f"It is almost certainly installed in the project's venv and this "
+            f"shell isn't using it. Activate the venv:\n"
+            f"    .venv\\Scripts\\Activate.ps1      (PowerShell)\n"
+            f"    source .venv/bin/activate        (bash)\n\n"
+            f"or run this script with the venv's Python directly:\n"
+            f"    .venv\\Scripts\\python.exe scripts/eval_ir_parser.py ...\n\n"
+            f"Only install anything if that Python also cannot import it."
+        )
+
+
+_require_venv()
+
 from app.core.config import settings  # noqa: E402
 from app.services.llm_ir_parser import parse_rule_llm  # noqa: E402
 

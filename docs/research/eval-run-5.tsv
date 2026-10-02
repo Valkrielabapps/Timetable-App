@@ -1,0 +1,41 @@
+ID	CAPABILITY	STATUS	TYPED	READ_AS
+R007	M1-slot-availability	FAIL	Mrs. Rao would like her classes in the morning if possible	the API call did not complete
+R008	M10-calendar	FAIL	Mr. Khan is on leave from 10 to 14 November	the API call did not complete
+R011	M3-weekly-shape	FAIL	Every full-time teacher must get at least 24 periods	the API call did not complete
+R012	M2-daily-load	FAIL	No teacher should teach more than 6 periods in a day	the API call did not complete
+R013	M2-daily-load	FAIL	If Ms. Das comes in, give her at least 3 periods that day	the API call did not complete
+R015	M2-daily-load	FAIL	Every teacher needs at least one free period each day	the API call did not complete
+R016	M3-weekly-shape	FAIL	Spread Mr. Khan's classes evenly through the week	the API call did not complete
+R017	M3-weekly-shape	FAIL	Don't leave teachers with 3 free periods in the middle of the day	the API call did not complete
+R023	M7-assignment	FAIL	Mr. Khan should not be given 10B	the API call did not complete
+R024	M7-assignment	FAIL	Class teachers must take the first period in their own class every day	the API call did not complete
+R025	M7-assignment	FAIL	The same teacher should take Science for all of Grade 9	the API call did not complete
+R026	M8-parallel	FAIL	Ms. Das should assist in Grade 1A's English periods	the API call did not complete
+R033	M4-period-window	FAIL	Hindi should be in the 2nd period	the API call did not complete
+R034	M4-period-window	FAIL	Maths and Science only before lunch	the API call did not complete
+R035	M4-period-window	FAIL	Art and Music can be after lunch	the API call did not complete
+R038	M5-day-spread	FAIL	Grade 1 should have English in the same period every day	the API call did not complete
+R046	M5-day-spread	FAIL	PE shouldn't be on two days in a row	the API call did not complete
+R047	M5-day-spread	FAIL	Spread Science periods through the week	the API call did not complete
+R051	M6-blocks-adjacency	FAIL	Chemistry practicals need two periods together	the API call did not complete
+R052	M6-blocks-adjacency	FAIL	Only one double Maths period per week	the API call did not complete
+R053	M6-blocks-adjacency	FAIL	The Physics double period shouldn't be split by lunch	the API call did not complete
+R064	M1-slot-availability	FAIL	Grade 7 gets Library on Wednesday last period	the API call did not complete
+R065	M8-parallel	FAIL	8A and 8B have PE together	the API call did not complete
+R066	M8-parallel	FAIL	Biology and Computer Science for Grade 11 at the same time	the API call did not complete
+R070	M1-slot-availability	FAIL	Grade 12 has a zero period at 7:30 for Maths	the API call did not complete
+R071	M9-rooms	FAIL	Primary classes should stay in their own room	the API call did not complete
+R073	M9-rooms	FAIL	The computer lab is used by the junior school on Monday mornings	the API call did not complete
+R074	M9-rooms	FAIL	Mrs. Rao teaches only in Room 12 because of her knee	the API call did not complete
+R087	M1-slot-availability	FAIL	Keep Tuesday 8th period for remedial classes for Grade 10	the API call did not complete
+R089	M11-conditional-meta	FAIL	Teacher availability is more important than subject order	the API call did not complete
+R090	M11-conditional-meta	FAIL	No PE in the first period, except for Grade 12	the API call did not complete
+R091	M10-calendar	FAIL	During exams in March, no PE	the API call did not complete
+R153	M11-conditional-meta	FAIL	maths not in last period - ok if 2 or 3 sections break it, not more	the API call did not complete
+R154	M11-conditional-meta	FAIL	if u have to break the morning maths rule dont always do it to the same section	the API call did not complete
+R157	M10-calendar	FAIL	das mam only 1st n 3rd saturdays	the API call did not complete
+R158	M10-calendar	FAIL	cbse practicals jan 20 - feb 10, phy chem bio labs fully blocked for 12th exams. no other practicals those dates	the API call did not complete
+R175	M12-cohort	FAIL	5 kids from 11 PCM took music as addl subject. music cant clash with their maths phy chem	the API call did not complete
+R176	M12-cohort	FAIL	3 kids in 7C exempted from hindi go to resource room with fernandez mam, so her resource room slot = 7C hindi periods	the API call did not complete
+R177	M12-cohort	FAIL	8C has a wheelchair student. all 8C periods ground floor incl labs pls	the API call did not complete
+R178	M12-cohort	FAIL	9A batch 1 comp lab n batch 2 physics lab same time, then swap next period	the API call did not complete
