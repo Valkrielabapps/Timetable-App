@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import ConstraintInterpretation from './ConstraintInterpretation.jsx'
 
 const TYPE_LABELS = {
   workload_limit: 'Workload limit',
@@ -78,6 +79,10 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   const [error, setError] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [scopeEditingId, setScopeEditingId] = useState(null)
+  // { typed, interpretation } while a rule is waiting to be confirmed, null
+  // otherwise. Nothing is saved until it clears.
+  const [pending, setPending] = useState(null)
+  const [confirming, setConfirming] = useState(false)
   // Batch entry ("add several rules at once") is a separate mode rather
   // than trying to detect multi-line input in the single-rule form —
   // keeping them distinct means the single-rule flow's behavior (and its
@@ -96,6 +101,11 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
     return cg.grade ? `${cg.grade} - ${cg.name}` : cg.name
   }
 
+  // Entering one rule is two steps now: read it back, then save what was read.
+  // See ConstraintInterpretation.jsx for why that is not a politeness - a
+  // misread rule no longer fails visibly, it schedules the wrong thing
+  // faithfully, and the person who typed the sentence is the only one who can
+  // tell. `pending` holds the rule awaiting that answer.
   async function handleAdd(e) {
     e.preventDefault()
     const text = input.trim()
@@ -103,14 +113,37 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
     setSubmitting(true)
     setError(null)
     try {
-      await api.parseConstraint(schoolId, text)
-      setInput('')
-      await onReload()
+      setPending({ typed: text, interpretation: await api.interpretConstraint(schoolId, text) })
     } catch (err) {
       setError(err.message)
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function handleConfirm() {
+    if (!pending?.interpretation?.rule) return
+    setConfirming(true)
+    setError(null)
+    try {
+      await api.confirmConstraint(schoolId, pending.interpretation.rule, pending.typed)
+      setPending(null)
+      setInput('')
+      await onReload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  // Rewording puts the original text back in the box rather than clearing it:
+  // the admin is usually changing a word or two, and retyping the whole rule
+  // is enough friction to make accepting a wrong reading the easier option.
+  function handleReword() {
+    setInput(pending?.typed ?? '')
+    setPending(null)
+    setError(null)
   }
 
   async function handleBatchAdd(e) {
@@ -218,6 +251,18 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
                 </button>
               </div>
             </form>
+          ) : pending ? (
+            <ConstraintInterpretation
+              typed={pending.typed}
+              interpretation={pending.interpretation}
+              saving={confirming}
+              onConfirm={handleConfirm}
+              onReword={handleReword}
+              onCancel={() => {
+                setPending(null)
+                setInput('')
+              }}
+            />
           ) : (
             <>
               <form onSubmit={handleAdd} className="flex items-center gap-2.5 rounded-md border border-slate-300 py-1.5 pl-3.5 pr-1.5">
@@ -232,7 +277,7 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
                   disabled={submitting}
                   className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
-                  {submitting ? 'Adding…' : 'Add'}
+                  {submitting ? 'Reading…' : 'Add'}
                 </button>
               </form>
               <button

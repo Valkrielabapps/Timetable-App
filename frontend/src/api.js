@@ -202,6 +202,21 @@ export const api = {
   // POST /batch docstring for how it splits multi-rule text with and
   // without an LLM available.
   parseConstraintsBatch: (schoolId, text) => post("/constraints/batch", { school_id: schoolId, text }),
+  // Read one rule and say what it was understood to mean, WITHOUT saving it.
+  // The two halves of entering a rule are deliberately separate calls: the
+  // general rule representation can express far more than the old fixed types,
+  // and the price of that is that a misreading no longer announces itself by
+  // failing to parse — it produces a valid rule that quietly schedules
+  // something nobody asked for. The sentence this returns is what the admin
+  // checks before anything is written.
+  interpretConstraint: (schoolId, text) =>
+    post("/constraints/interpret", { school_id: schoolId, text }),
+  // Save a rule the admin has just been shown and accepted. Takes the rule
+  // back rather than the text, so what gets stored is what they read — a
+  // re-parse could return something different, and then the sentence they
+  // agreed to would not be the rule in the database.
+  confirmConstraint: (schoolId, rule, sourceText) =>
+    post("/constraints/confirm", { school_id: schoolId, rule, source_text: sourceText }),
   // Re-parses new text into an EXISTING constraint (same id) instead of
   // creating a new one — used by the Edit affordance on a constraint card.
   reparseConstraint: (id, text) => put(`/constraints/${id}/reparse`, { text }),
