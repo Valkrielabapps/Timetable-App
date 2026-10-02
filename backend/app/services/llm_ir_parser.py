@@ -666,6 +666,11 @@ class IRParse:
     # for working out why a rule failed it is the only thing that helps.
     invalid: str | None = None
     sentence: str = ""
+    # (input_tokens, output_tokens) for this call, or None if it never reached
+    # the API. Carried so a caller can report what a run cost: a prepaid
+    # balance disappearing with nothing on screen to explain it is a worse
+    # failure than a slow script.
+    usage: tuple[int, int] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -979,13 +984,14 @@ def parse_rule_llm(
             messages=[{"role": "user", "content": text}],
         )
         block = next(b for b in response.content if b.type == "tool_use")
+        usage = (response.usage.input_tokens, response.usage.output_tokens)
     except Exception:
         logger.exception("IR constraint parsing failed")
         return None
 
     if block.name == "report_unclear":
         data = block.input
-        return IRParse(unclear=Unclear(
+        return IRParse(usage=usage, unclear=Unclear(
             reason=data.get("reason", "ambiguous"),
             explanation=data.get("explanation") or "This rule needs clarifying.",
             question=data.get("question"),
@@ -1005,6 +1011,6 @@ def parse_rule_llm(
         # schema failing to accept it, which is a defect on our side and should
         # be visible without turning logging up.
         logger.warning("model produced an invalid IR rule for %r: %s", text, exc)
-        return IRParse(invalid=str(exc))
+        return IRParse(invalid=str(exc), usage=usage)
 
-    return IRParse(rule=rule, sentence=render(rule))
+    return IRParse(rule=rule, sentence=render(rule), usage=usage)

@@ -48,6 +48,19 @@ from app.services.llm_ir_parser import parse_rule_llm  # noqa: E402
 
 CATALOGUE = pathlib.Path(__file__).resolve().parents[2] / "docs" / "research" / "constraint-catalogue.tsv"
 
+# Claude Haiku 4.5, US dollars per million tokens. Hard-coded rather than looked
+# up: the only job here is to turn a run into a number a person can decide about
+# before spending more, and a rough figure shown beats an exact one nobody sees.
+#
+# On caching, since it is the obvious saving and does not work here: the system
+# prompt is identical across every call in a run, but Haiku 4.5 will not cache a
+# prefix under 4,096 tokens and ours is around 3,700. Below that minimum the API
+# caches nothing, reports cache_creation_input_tokens: 0 and charges full price,
+# with no error - so a cache_control marker here would look like a fix and be a
+# no-op. Worth revisiting if the prompt grows past 4,096.
+PRICE_IN_PER_MTOK = 1.00
+PRICE_OUT_PER_MTOK = 5.00
+
 # The school the catalogue was written against. These lists have to contain
 # every name the rules mention, or a correct parse still declines for an
 # unknown reference and the score measures the fixture rather than the parser.
@@ -99,6 +112,10 @@ def main():
                          "your key's tokens-per-minute limit allows it)")
     ap.add_argument("--out", metavar="PATH",
                     help="also write every result to a TSV, for reading rule by rule")
+    ap.add_argument("--sample", type=int, metavar="N",
+                    help="N rules spread evenly across the capability groups, for "
+                         "cheap iteration - the whole catalogue is not needed to see "
+                         "whether a prompt change helped")
     args = ap.parse_args()
 
     if not settings.anthropic_api_key:
@@ -109,6 +126,19 @@ def main():
         rows = [r for r in rows if r["VERDICT"] == "MISSING"]
     if args.only:
         rows = [r for r in rows if r["ID"] in set(args.only)]
+    if args.sample:
+        # Round-robin across capability groups rather than taking the first N:
+        # the catalogue is ordered by capability, so a prefix would be most of
+        # one group and none of another. A prefix is not a sample.
+        groups: dict[str, list] = {}
+        for row in rows:
+            groups.setdefault(row["CAPABILITY"], []).append(row)
+        picked, order = [], sorted(groups)
+        while len(picked) < args.sample and any(groups.values()):
+            for capability in order:
+                if groups[capability] and len(picked) < args.sample:
+                    picked.append(groups[capability].pop(0))
+        rows = sorted(picked, key=lambda r: r["ID"])
     if args.limit:
         rows = rows[: args.limit]
 
@@ -119,6 +149,7 @@ def main():
     by_capability = Counter()
     declines = Counter()
     lines = []
+    tokens_in = tokens_out = 0
     started = time.time()
     done = 0
 
@@ -147,6 +178,9 @@ def main():
     print()
 
     for row, result in results:
+        if result is not None and result.usage:
+            tokens_in += result.usage[0]
+            tokens_out += result.usage[1]
         if result is None:
             # A call that failed for any reason - a rate limit, a dropped
             # connection. Counted and carried past rather than ending the run:
@@ -228,6 +262,16 @@ def main():
         print("\nExpressed, by the capability the nine types were missing:")
         for capability, n in by_capability.most_common():
             print(f"  {n:3d}  {capability}")
+
+    # Printed every run, not behind a flag. A prepaid balance disappearing with
+    # nothing on screen to explain it is a worse failure than a slow script.
+    cost = tokens_in / 1e6 * PRICE_IN_PER_MTOK + tokens_out / 1e6 * PRICE_OUT_PER_MTOK
+    print(f"\nCost: {tokens_in:,} input + {tokens_out:,} output tokens, "
+          f"about ${cost:.2f}.")
+    catalogue_size = len(load_catalogue())
+    if rows and len(rows) < catalogue_size:
+        print(f"      A full {catalogue_size}-rule run at this rate: "
+              f"~${cost / len(rows) * catalogue_size:.2f}.")
 
     print("\nEXPRESSED counts rules that are valid, not rules that are right.")
     print("Run with --check and read the sentences: that is the only measure")
