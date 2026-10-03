@@ -55,6 +55,34 @@ class ViolationOut(BaseModel):
     detail: str
 
 
+class TimetableSummaryOut(BaseModel):
+    """One timetable without its entries - what a list of them should be.
+
+    GET /api/timetables used to return the full TimetableOut for every
+    timetable a school had ever generated, entries and all. Every caller then
+    used one or two fields: the highest id, or the first row whose status is
+    draft. For a 25-section school that is around a thousand entries per
+    timetable, pulled once per timetable, to read an integer - and the entries
+    carry resolved names, so each one cost five lookup queries as well.
+
+    That was the few-second pause on every visit to the Timetable tab. It also
+    grew with every generation, so the longer a school used the app the slower
+    the tab got, which is the shape of problem that looks like it needs caching
+    and does not: fetching a megabyte quickly is still fetching a megabyte.
+
+    Anything that needs the entries asks for one timetable by id.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    school_id: int
+    status: str
+    solver_status: str | None
+    error_message: str | None
+    error_explanation: str | None = None
+
+
 class TimetableOut(BaseModel):
     """
     Represents one generation job's current state. `status` is the job

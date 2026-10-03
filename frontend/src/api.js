@@ -232,6 +232,10 @@ export const api = {
   // interval until status is no longer "generating").
   generateTimetable: (schoolId) => post(`/timetables/generate?school_id=${schoolId}`),
   getTimetable: (id) => get(`/timetables/${id}`),
+  // Summaries only - no entries. Callers use this to find a timetable (the
+  // newest, or the draft) and then fetch that one with getTimetable. See
+  // TimetableSummaryOut in backend/app/schemas/timetable.py for why it stopped
+  // carrying entries.
   listTimetables: (schoolId) => get(`/timetables?school_id=${schoolId}`),
   // Manual editing of one already-generated slot — lock/unlock it (kept in
   // place on the next regenerate) and/or drag it to a free period.

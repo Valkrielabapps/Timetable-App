@@ -50,6 +50,7 @@ from app.models.school import (
 )
 from app.models.user import User
 from app.schemas.timetable import (
+    TimetableSummaryOut,
     EditCommandRequest,
     EditCommandResponse,
     TimetableEntryOut,
@@ -119,11 +120,12 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         error_message=timetable.error_message,
         error_explanation=timetable.error_explanation,
         entries=entries,
-        violations=_violations_for(db, timetable, periods),
+        violations=_violations_for(db, timetable, class_groups, subjects, teachers, periods),
     )
 
 
-def _violations_for(db: Session, timetable: Timetable, periods: dict) -> list[dict]:
+def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
+                    subjects: dict, teachers: dict, periods: dict) -> list[dict]:
     """Which saved rules this timetable currently breaks.
 
     Computed on read rather than stored, because the thing that breaks a rule
@@ -165,15 +167,11 @@ def _violations_for(db: Session, timetable: Timetable, periods: dict) -> list[di
     if not rules:
         return []
 
-    school_periods = db.query(Period).filter(Period.school_id == timetable.school_id).all()
-    class_groups = db.query(ClassGroup).filter(
-        ClassGroup.school_id == timetable.school_id).all()
+    school_periods = list(periods.values())
     index = SchoolIndex(
-        subject_ids={s.name: s.id for s in db.query(Subject).filter(
-            Subject.school_id == timetable.school_id).all()},
-        teacher_ids={t.name: t.id for t in db.query(Teacher).filter(
-            Teacher.school_id == timetable.school_id).all()},
-        class_group_ids=_class_group_labels(class_groups),
+        subject_ids={s.name: s.id for s in subjects.values()},
+        teacher_ids={t.name: t.id for t in teachers.values()},
+        class_group_ids=_class_group_labels(list(class_groups.values())),
         orders_by_day=_orders_by_day(school_periods),
         first_order_by_day=_edge_orders(school_periods, first=True),
         last_order_by_day=_edge_orders(school_periods, first=False),
@@ -344,11 +342,19 @@ def get_timetable(timetable_id: int, db: Session = Depends(get_db), current_user
     return _to_timetable_out(db, timetable)
 
 
-@router.get("", response_model=list[TimetableOut])
+@router.get("", response_model=list[TimetableSummaryOut])
 def list_timetables(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Every timetable this school has generated, WITHOUT their entries.
+
+    Callers use this to find one timetable - the newest, or the draft - and
+    then fetch that one by id. Returning entries here meant pulling every entry
+    of every timetable ever generated, with resolved names, to read an id; see
+    TimetableSummaryOut for what that cost.
+    """
     require_school_access(db, current_user, school_id)
-    timetables = db.query(Timetable).filter(Timetable.school_id == school_id).all()
-    return [_to_timetable_out(db, t) for t in timetables]
+    # Columns only: not touching `.entries` leaves the relationship unloaded,
+    # so no per-timetable query is issued for them.
+    return db.query(Timetable).filter(Timetable.school_id == school_id).all()
 
 
 def _check_slot_conflict(

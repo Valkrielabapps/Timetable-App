@@ -63,11 +63,26 @@ export function useRoomMutations(schoolId) {
 // Timetables
 // ---------------------------------------------------------------------------
 
+/**
+ * Which timetables this school has, WITHOUT their entries.
+ *
+ * Used to find one - the newest, or the draft - which is then fetched by id
+ * through useTimetable below. The response used to carry every entry of every
+ * timetable ever generated: 4MB and 71 queries on a 28-section school with ten
+ * generations, to read an id. That was the few-second pause on every visit to
+ * the Timetable tab, and it grew with every generation.
+ *
+ * Now that it is a few hundred bytes, it is held far longer. Timetables appear
+ * when one is generated, which this tab does itself and invalidates - the only
+ * other source is another admin generating one, and showing that a few minutes
+ * late costs nothing next to re-fetching on every tab switch.
+ */
 export function useTimetables(schoolId) {
   return useQuery({
     queryKey: keys.timetables(schoolId),
     queryFn: () => api.listTimetables(schoolId),
     enabled: schoolId != null,
+    staleTime: 5 * 60_000,
   })
 }
 
