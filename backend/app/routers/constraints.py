@@ -205,8 +205,36 @@ def _to_out(db: Session, constraint: Constraint) -> ConstraintOut:
         description=constraint.description,
         source_text=constraint.source_text,
         parsed_by=constraint.parsed_by,
-        enforced=_is_enforced(constraint),
+        enforced=_is_enforced(constraint) and not _names_missing(db, constraint),
         conflicts=conflicts,
+    )
+
+
+def _names_missing(db: Session, constraint: Constraint) -> list[str]:
+    """Names an IR rule uses that this school no longer has.
+
+    A rule is only applied for the teachers, subjects and sections it can
+    resolve, so one naming somebody who has left matches nothing and does
+    nothing - while still reporting itself as enforced, because validating the
+    stored shape says nothing about whether the names in it still exist.
+
+    Checked here rather than left to the solver because the card is where
+    someone looks to find out whether a rule is working. The solver does report
+    it, into TimetableSolveResult.warnings, which nothing reads.
+    """
+    if constraint.type != "ir":
+        return []
+    try:
+        rule = rule_from_dict(constraint.parameters or {})
+    except IRError:
+        return []
+
+    data = _load_resolution_data(db, constraint.school_id)
+    found = referenced_names(rule)
+    return (
+        [n for n in sorted(found["subject"]) if n not in data.subject_by_name]
+        + [n for n in sorted(found["teacher"]) if n not in data.teacher_by_name]
+        + [n for n in sorted(found["class_group"]) if n not in data.label_to_class_groups]
     )
 
 

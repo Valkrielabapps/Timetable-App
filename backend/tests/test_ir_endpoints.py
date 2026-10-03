@@ -254,3 +254,47 @@ def test_a_rule_the_schema_refuses_is_not_filed_as_the_admin_being_unclear(
     # The validator's own words must not be shown as though the admin caused them.
     assert "min_gap" not in (body["explanation"] or "")
     assert "say it another way" in body["explanation"]
+
+
+def test_a_rule_naming_a_missing_subject_does_not_claim_to_be_enforced(client, school):
+    """A rule is applied only for the names it can resolve, so one naming a
+    subject the school doesn't have matches nothing and does nothing - while
+    the stored shape still validates perfectly.
+
+    This is the honest-badge problem the nine legacy types had, in a new place:
+    the card is where someone looks to find out whether a rule is working, and
+    it was answering from the shape alone. The solver does report it, into
+    TimetableSolveResult.warnings, which nothing reads.
+    """
+    school_row, headers = school
+    created = client.post("/api/constraints/confirm",
+                          json={"school_id": school_row["id"],
+                                "rule": {"form": "count", "scope": ["class_group"],
+                                         "selector": {"subjects": ["Maths"],
+                                                      "period_orders": [1]},
+                                         "relation": "==", "value": 0},
+                                "source_text": "no Maths in period 1"},
+                          headers=headers).json()
+    assert created["enforced"] is True
+
+    subjects = client.get(f"/api/subjects?school_id={school_row['id']}", headers=headers).json()
+    maths = next(s for s in subjects if s["name"] == "Maths")
+    client.delete(f"/api/subjects/{maths['id']}", headers=headers)
+
+    after = client.get(f"/api/constraints/{created['id']}", headers=headers).json()
+    assert after["enforced"] is False, "a rule matching nothing must not report itself as applied"
+
+
+def test_a_rule_whose_names_all_resolve_still_reports_enforced(client, school):
+    """The badge has to stay useful - turning it off for everything would be as
+    dishonest as leaving it on."""
+    school_row, headers = school
+    created = client.post("/api/constraints/confirm",
+                          json={"school_id": school_row["id"],
+                                "rule": {"form": "count", "scope": ["class_group"],
+                                         "selector": {"subjects": ["Maths"]},
+                                         "relation": "<=", "value": 2},
+                                "source_text": "at most 2 Maths a week"},
+                          headers=headers).json()
+    assert client.get(f"/api/constraints/{created['id']}",
+                      headers=headers).json()["enforced"] is True
