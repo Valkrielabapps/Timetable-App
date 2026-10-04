@@ -200,7 +200,7 @@ describe('useApplyEntryUpdates', () => {
     await waitFor(() => expect(result.current.tt.isSuccess).toBe(true))
     const callsBefore = api.getTimetable.mock.calls.length
 
-    result.current.apply({ id: 2, locked: true })
+    result.current.apply({ entries: [{ id: 2, locked: true }] })
 
     const cached = client.getQueryData(['timetable', 3])
     expect(cached.entries.find((e) => e.id === 2).locked).toBe(true)

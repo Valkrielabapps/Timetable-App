@@ -13,6 +13,8 @@ vi.mock('../hooks/useSchoolData', () => ({
   useTimetable: () => ({ data: mockTimetable() }),
   useGenerateTimetable: () => ({ generate: vi.fn(), isGenerating: false }),
   useApplyEntryUpdates: () => vi.fn(),
+  useOptimisticMove: () => vi.fn(),
+  useOptimisticSwap: () => vi.fn(),
 }))
 
 /**

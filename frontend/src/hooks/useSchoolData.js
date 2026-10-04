@@ -140,13 +140,82 @@ export function useGenerateTimetable(schoolId) {
  */
 export function useApplyEntryUpdates(timetableId) {
   const queryClient = useQueryClient()
-  return (...updated) => {
+  return ({ entries = [], violations }) => {
     queryClient.setQueryData(keys.timetable(timetableId), (prev) => {
       if (!prev) return prev
       return {
         ...prev,
-        entries: prev.entries.map((e) => updated.find((u) => u.id === e.id) ?? e),
+        entries: prev.entries.map((e) => entries.find((u) => u.id === e.id) ?? e),
+        // Recomputed server-side with every edit and patched in alongside the
+        // rows. Left out, the warning band would go stale the moment a slot
+        // moved - which is exactly when it has something to say.
+        violations: violations ?? prev.violations,
       }
     })
+  }
+}
+
+/**
+ * Move a slot in the cache before the server has agreed to it.
+ *
+ * Dragging used to wait for the round trip before the cell moved, so every
+ * drag cost one API call of visible lag on something that should feel like
+ * picking a card up and putting it down.
+ *
+ * Returns a rollback. The move is a guess - the server can still refuse it,
+ * usually because the target double-books a teacher - and putting the cell
+ * back is the only honest response to that.
+ */
+export function useOptimisticMove(timetableId) {
+  const queryClient = useQueryClient()
+  return (entryId, period) => {
+    const key = keys.timetable(timetableId)
+    const previous = queryClient.getQueryData(key)
+    queryClient.setQueryData(key, (prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        entries: prev.entries.map((e) =>
+          e.id === entryId
+            ? { ...e, period_id: period.id, day_of_week: period.day_of_week, order: period.order }
+            : e,
+        ),
+        // Deliberately not guessed at. Working out which rules the move breaks
+        // would mean a second implementation of the rule engine in the
+        // browser, and two of those drifting apart is worse than a banner that
+        // settles a moment late. The server sends the real answer back.
+        violations: prev.violations,
+      }
+    })
+    return () => queryClient.setQueryData(key, previous)
+  }
+}
+
+/**
+ * Swap two slots in the cache before the server has agreed to it.
+ *
+ * Separate from a move because both rows change at once, and applying two
+ * moves in sequence would briefly show both entries in the same cell.
+ */
+export function useOptimisticSwap(timetableId) {
+  const queryClient = useQueryClient()
+  return (aId, bId) => {
+    const key = keys.timetable(timetableId)
+    const previous = queryClient.getQueryData(key)
+    queryClient.setQueryData(key, (prev) => {
+      if (!prev) return prev
+      const a = prev.entries.find((e) => e.id === aId)
+      const b = prev.entries.find((e) => e.id === bId)
+      if (!a || !b) return prev
+      const slotOf = (e) => ({ period_id: e.period_id, day_of_week: e.day_of_week, order: e.order })
+      return {
+        ...prev,
+        entries: prev.entries.map((e) =>
+          e.id === aId ? { ...e, ...slotOf(b) } : e.id === bId ? { ...e, ...slotOf(a) } : e,
+        ),
+        violations: prev.violations,
+      }
+    })
+    return () => queryClient.setQueryData(key, previous)
   }
 }

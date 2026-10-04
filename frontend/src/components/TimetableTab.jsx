@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { api } from '../api'
 import {
   useApplyEntryUpdates,
+  useOptimisticMove,
+  useOptimisticSwap,
   useGenerateTimetable,
   useTimetable,
   useTimetables,
@@ -152,6 +154,8 @@ export default function TimetableTab({
   const { data: timetable = null } = useTimetable(latestTimetableId)
   const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
   const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
+  const optimisticMove = useOptimisticMove(timetable?.id)
+  const optimisticSwap = useOptimisticSwap(timetable?.id)
 
   async function handleGenerate() {
     setError(null)
@@ -177,7 +181,7 @@ export default function TimetableTab({
     setCommandFeedback(null)
     try {
       const result = await api.editTimetableByCommand(timetable.id, text)
-      applyEntryUpdates(...result.entries)
+      applyEntryUpdates(result)
       setCommandFeedback({ ok: true, text: result.description })
       setCommandText('')
     } catch (err) {
@@ -190,8 +194,7 @@ export default function TimetableTab({
   async function handleToggleLock(entry) {
     setError(null)
     try {
-      const updated = await api.updateTimetableEntry(entry.id, { locked: !entry.locked })
-      applyEntryUpdates(updated)
+      applyEntryUpdates(await api.updateTimetableEntry(entry.id, { locked: !entry.locked }))
     } catch (err) {
       setError(err.message)
     }
@@ -213,18 +216,27 @@ export default function TimetableTab({
       return
     }
     setError(null)
+    // The cell moves now, not when the server answers. Waiting for the round
+    // trip put a visible delay on every drag, on an interaction that should
+    // feel like picking a card up and putting it down.
+    //
+    // `rollback` restores the cache if the server refuses - usually because
+    // the target double-books a teacher - which is the only honest response to
+    // a move that turned out not to be allowed.
+    const rollback = targetEntry
+      ? optimisticSwap(entryId, targetEntry.id)
+      : optimisticMove(entryId, targetPeriod)
     try {
       if (targetEntry) {
         // Target cell is already occupied — a plain move would look like
         // a double-booking (the other entry is still "there" until it
         // moves too), so swap both entries' periods in one request instead.
-        const [a, b] = await api.swapTimetableEntries(entryId, targetEntry.id)
-        applyEntryUpdates(a, b)
+        applyEntryUpdates(await api.swapTimetableEntries(entryId, targetEntry.id))
       } else {
-        const updated = await api.updateTimetableEntry(entryId, { period_id: targetPeriod.id })
-        applyEntryUpdates(updated)
+        applyEntryUpdates(await api.updateTimetableEntry(entryId, { period_id: targetPeriod.id }))
       }
     } catch (err) {
+      rollback()
       setError(err.message)
     }
   }
