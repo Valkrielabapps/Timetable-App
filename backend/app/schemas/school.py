@@ -1,6 +1,6 @@
 """Pydantic schemas for School — what the API accepts/returns, separate from
 the SQLAlchemy model that defines what the database stores."""
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SchoolCreate(BaseModel):
@@ -23,6 +23,7 @@ class SchoolOut(BaseModel):
     # same reasoning as Teacher.qualified_grades — the frontend already
     # treats a missing/None value the same as an empty list.
     grade_order: list[str] | None = None
+    profile: dict | None = None
     # The current user's role for THIS school specifically ("admin" or
     # "viewer") — not a column on the School model, computed per-request
     # by whichever router endpoint builds this (see app/core/access.py).
@@ -39,3 +40,37 @@ class SchoolInstitutionTypeUpdate(BaseModel):
     # Same "not a strict enum" reasoning as SchoolCreate.institution_type —
     # the frontend only ever sends "school" or "college".
     institution_type: str | None = None
+
+
+class SchoolNameUpdate(BaseModel):
+    name: str
+
+
+class SchoolProfile(BaseModel):
+    """Everything in Settings > School profile apart from name and type.
+
+    All optional, all free text with length caps (plus a month number), so
+    a school can fill in as much or as little as it likes. Unknown keys are
+    dropped rather than stored, so the JSON column can't fill up with junk.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    board: str | None = Field(default=None, max_length=80)
+    affiliation_number: str | None = Field(default=None, max_length=60)
+    udise_code: str | None = Field(default=None, max_length=30)
+    established_year: int | None = Field(default=None, ge=1800, le=2100)
+    head_name: str | None = Field(default=None, max_length=100)
+    head_title: str | None = Field(default=None, max_length=60)
+    medium: str | None = Field(default=None, max_length=60)
+    academic_year_start_month: int | None = Field(default=None, ge=1, le=12)
+    student_count: int | None = Field(default=None, ge=0, le=100000)
+    website: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=300)
+    city: str | None = Field(default=None, max_length=80)
+    state: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=80)
+    postal_code: str | None = Field(default=None, max_length=20)
+    description: str | None = Field(default=None, max_length=1000)

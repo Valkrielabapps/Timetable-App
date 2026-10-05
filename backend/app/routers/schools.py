@@ -25,10 +25,24 @@ from app.core.database import get_db
 from app.models.school import School, SchoolInvite, SchoolMembership
 from app.models.user import User
 from app.schemas.membership import InviteCreate, InviteOut, MemberOut, MemberRoleUpdate
-from app.schemas.school import SchoolCreate, SchoolGradeOrderUpdate, SchoolInstitutionTypeUpdate, SchoolOut
+from app.schemas.school import (
+    SchoolCreate,
+    SchoolGradeOrderUpdate,
+    SchoolInstitutionTypeUpdate,
+    SchoolNameUpdate,
+    SchoolOut,
+    SchoolProfile,
+)
 from app.services.email_service import send_invite_email
 
 router = APIRouter(prefix="/api/schools", tags=["schools"])
+
+
+def _school_out(school: School, role: str) -> SchoolOut:
+    return SchoolOut(
+        id=school.id, name=school.name, institution_type=school.institution_type,
+        grade_order=school.grade_order, profile=school.profile, role=role,
+    )
 
 
 @router.post("", response_model=SchoolOut, status_code=201)
@@ -41,10 +55,7 @@ def create_school(
     db.add(school)
     db.commit()
     db.refresh(school)
-    return SchoolOut(
-        id=school.id, name=school.name, institution_type=school.institution_type,
-        grade_order=school.grade_order, role="admin",
-    )
+    return _school_out(school, "admin")
 
 
 @router.get("", response_model=list[SchoolOut])
@@ -64,13 +75,7 @@ def list_schools(
     # same school; de-dupe by id rather than assume that can't happen.
     by_id = {s.id: s for s in owned + member_schools}
     return [
-        SchoolOut(
-            id=s.id,
-            name=s.name,
-            institution_type=s.institution_type,
-            grade_order=s.grade_order,
-            role=get_membership_role(db, current_user, s.id) or "viewer",
-        )
+        _school_out(s, get_membership_role(db, current_user, s.id) or "viewer")
         for s in by_id.values()
     ]
 
@@ -83,10 +88,7 @@ def get_school(
 ):
     role = require_school_access(db, current_user, school_id)
     school = db.get(School, school_id)
-    return SchoolOut(
-        id=school.id, name=school.name, institution_type=school.institution_type,
-        grade_order=school.grade_order, role=role,
-    )
+    return _school_out(school, role)
 
 
 @router.put("/{school_id}/grade-order", response_model=SchoolOut)
@@ -104,10 +106,7 @@ def update_grade_order(
     school.grade_order = payload.grade_order
     db.commit()
     db.refresh(school)
-    return SchoolOut(
-        id=school.id, name=school.name, institution_type=school.institution_type,
-        grade_order=school.grade_order, role=role,
-    )
+    return _school_out(school, role)
 
 
 @router.put("/{school_id}/institution-type", response_model=SchoolOut)
@@ -129,10 +128,51 @@ def update_institution_type(
     school.institution_type = payload.institution_type
     db.commit()
     db.refresh(school)
-    return SchoolOut(
-        id=school.id, name=school.name, institution_type=school.institution_type,
-        grade_order=school.grade_order, role=role,
-    )
+    return _school_out(school, role)
+
+
+@router.put("/{school_id}/name", response_model=SchoolOut)
+def update_school_name(
+    school_id: int, payload: SchoolNameUpdate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Admin-only rename, from Settings > School profile. Before this the
+    name could only be set once, in the create-school modal."""
+    role = require_school_access(db, current_user, school_id, min_role="admin")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="School name can't be empty.")
+    if len(name) > 120:
+        raise HTTPException(status_code=422, detail="School name is too long (120 characters max).")
+    school = db.get(School, school_id)
+    school.name = name
+    db.commit()
+    db.refresh(school)
+    return _school_out(school, role)
+
+
+@router.put("/{school_id}/profile", response_model=SchoolOut)
+def update_school_profile(
+    school_id: int, payload: SchoolProfile,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Admin-only: replaces the descriptive profile (board, codes, head of
+    institution, contact details, address...) from Settings > School
+    profile. The form always sends every field, so this replaces the whole
+    profile; blank strings are stored as missing rather than as "".
+    """
+    role = require_school_access(db, current_user, school_id, min_role="admin")
+    cleaned = {}
+    for key, value in payload.model_dump().items():
+        if isinstance(value, str):
+            value = value.strip() or None
+        if value is not None:
+            cleaned[key] = value
+    school = db.get(School, school_id)
+    school.profile = cleaned
+    db.commit()
+    db.refresh(school)
+    return _school_out(school, role)
 
 
 @router.get("/{school_id}/members", response_model=list[MemberOut])

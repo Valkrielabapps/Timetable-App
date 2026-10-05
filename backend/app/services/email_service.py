@@ -25,6 +25,7 @@ Design choices (mirrors app/services/llm_constraint_parser.py):
     copyable link in the UI as a fallback (see TeamTab.jsx). For password
     resets, the user can just request another one.
 """
+import html as _html
 import logging
 
 import requests
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 _RESEND_API_URL = "https://api.resend.com/emails"
 
 
-def _send(to_email: str, subject: str, html: str, log_context: str) -> bool:
+def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: str | None = None) -> bool:
     """Shared send path for every email this service sends — the part
     that's identical regardless of which template/recipient is involved:
     no-op if unconfigured, POST to Resend, swallow every failure mode into
@@ -46,16 +47,20 @@ def _send(to_email: str, subject: str, html: str, log_context: str) -> bool:
         logger.info("RESEND_API_KEY not set; skipping %s to %s", log_context, to_email)
         return False
 
+    payload = {
+        "from": settings.email_from_address,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }
+    if reply_to:
+        payload["reply_to"] = reply_to
+
     try:
         response = requests.post(
             _RESEND_API_URL,
             headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": settings.email_from_address,
-                "to": [to_email],
-                "subject": subject,
-                "html": html,
-            },
+            json=payload,
             timeout=10,
         )
         if response.status_code >= 400:
@@ -142,4 +147,44 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
         subject="Reset your Timetable App password",
         html=html,
         log_context="password reset email",
+    )
+
+
+def send_support_ticket(
+    from_email: str,
+    from_name: str | None,
+    school_name: str | None,
+    category: str,
+    subject: str,
+    message: str,
+) -> bool:
+    """Forwards a ticket from the in-app support button to the support
+    inbox (settings.support_email). Reply-To is the user's own address, so
+    hitting Reply in the support inbox answers them directly.
+
+    Everything the user typed is HTML-escaped: it lands in our own inbox,
+    and an unescaped message is an easy way to make a support email render
+    something misleading. Same never-raises contract as the other senders;
+    app/routers/support.py tells the user to email directly when this
+    returns False rather than pretending the ticket went through."""
+    esc = _html.escape
+    body = esc(message).replace("\n", "<br />")
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 560px;">
+      <p style="color: #64748b; font-size: 13px; margin: 0 0 12px;">
+        From {esc(from_name or "")} &lt;{esc(from_email)}&gt;<br />
+        School: {esc(school_name or "-")}<br />
+        Category: {esc(category)}
+      </p>
+      <p style="font-weight: 600; margin: 0 0 8px;">{esc(subject)}</p>
+      <p style="margin: 0; line-height: 1.5;">{body}</p>
+    </div>
+    """.strip()
+
+    return _send(
+        to_email=settings.support_email,
+        subject=f"[Support] {subject}",
+        html=html,
+        log_context="support ticket",
+        reply_to=from_email,
     )

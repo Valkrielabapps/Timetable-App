@@ -25,7 +25,7 @@ function naturalGradeCompare(a, b) {
 // end) instead of silently disappearing from the list. "Ungrouped"
 // (sections with no grade set) always sorts last — it's not a real grade,
 // just where sections with none land.
-function sortGradeKeys(keys, gradeOrder) {
+export function sortGradeKeys(keys, gradeOrder) {
   const order = gradeOrder && gradeOrder.length > 0 ? gradeOrder : null
   return [...keys].sort((a, b) => {
     if (a === 'Ungrouped' || b === 'Ungrouped') {

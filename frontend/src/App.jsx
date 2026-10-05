@@ -14,11 +14,12 @@ import AboutPage from './components/AboutPage'
 import CustomersPage from './components/CustomersPage'
 import Sidebar from './components/Sidebar'
 import FirstRunWelcome from './components/FirstRunWelcome'
-import OverviewTab from './components/OverviewTab'
+import DashboardTab from './components/DashboardTab'
+import SettingsTab from './components/SettingsTab'
+import SupportWidget from './components/SupportWidget'
 import DataEntryTab from './components/DataEntryTab'
 import ConstraintsTab from './components/ConstraintsTab'
 import TimetableTab from './components/TimetableTab'
-import TeamTab from './components/TeamTab'
 import SetupProgressBar from './components/SetupProgressBar'
 import { useSetupProgress } from './hooks/useSetupProgress'
 import { useQueryClient } from '@tanstack/react-query'
@@ -31,7 +32,7 @@ import { useTimetables } from './hooks/useSchoolData'
 // Schedule/Substitutions toggle inside TimetableTab.jsx instead of adding
 // to this top-level count.
 const BASE_TABS = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'entry', label: 'Data Entry' },
   { id: 'constraints', label: 'Constraints' },
   { id: 'timetable', label: 'Timetable' },
@@ -97,7 +98,7 @@ function App() {
   // the tab can own its own data again (see useTimetable in
   // hooks/useSchoolData.js, which also replaces the polling that lived
   // here).
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState('dashboard')
   // Which of Data Entry's three sub-pages (subjects/teachers/plan) is
   // active — lifted up here rather than kept local to DataEntryTab so
   // the header progress bar and OverviewTab's step cards can jump
@@ -389,6 +390,18 @@ function App() {
     }
   }
 
+  // Settings > School profile. Same local-patch pattern as the two
+  // handlers above. Throws so the form can show the error inline.
+  async function handleRenameSchool(name) {
+    const updated = await api.updateSchoolName(selectedSchoolId, name)
+    setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
+  }
+
+  async function handleSaveSchoolProfile(profile) {
+    const updated = await api.updateSchoolProfile(selectedSchoolId, profile)
+    setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
+  }
+
   async function handleDeleteClassGroup(classGroup) {
     const label = classGroup.grade ? `${classGroup.grade} - ${classGroup.name}` : classGroup.name
     if (
@@ -568,7 +581,10 @@ function App() {
   }
 
   const isViewer = selectedSchool?.role === 'viewer'
-  const TABS = selectedSchool?.role === 'admin' ? [...BASE_TABS, { id: 'team', label: 'Team' }] : BASE_TABS
+  // Team moved into Settings (opened from the header, left of Sign out),
+  // so the tab list is the same for admins and viewers now.
+  const TABS = BASE_TABS
+  const isAdmin = selectedSchool?.role === 'admin'
 
   // Jumps to a tab and, for Data Entry, straight to the right sub-page
   // (subjects/teachers/plan) instead of leaving the admin to find it —
@@ -576,6 +592,18 @@ function App() {
   function handleNavigate(tabId, subView) {
     setTab(tabId)
     if (subView) setDataEntrySubView(subView)
+  }
+
+  // From the Dashboard's sections list: select that section, then open
+  // either its weekly plan (Data Entry) or its timetable.
+  function handleOpenSection(classGroupId, target) {
+    setSelectedClassGroupId(classGroupId)
+    if (target === 'timetable') {
+      setTab('timetable')
+    } else {
+      setDataEntrySubView('plan')
+      setTab('entry')
+    }
   }
 
   // Data Entry has two distinct modes: school-wide (Subjects/Teachers/
@@ -670,9 +698,26 @@ function App() {
             </div>
           )}
 
-          <button onClick={handleLogout} className="ml-2 text-xs text-slate-400 hover:text-slate-700">
-            Sign out
-          </button>
+          <div className={`flex items-center gap-1 ${selectedSchool ? 'ml-2' : 'ml-auto'}`}>
+            {selectedSchool && (
+              <button
+                onClick={() => setTab('settings')}
+                aria-current={tab === 'settings' ? 'page' : undefined}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium ${
+                  tab === 'settings' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                }`}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+                </svg>
+                Settings
+              </button>
+            )}
+            <button onClick={handleLogout} className="rounded-md px-2.5 py-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-10 py-8">
@@ -721,12 +766,21 @@ function App() {
                     the "add your first section" flow here instead of it
                     blocking every other tab — Subjects/Teachers and even
                     Constraints are school-wide and don't need one. */}
-                {tab === 'overview' && (
-                  selectedClassGroup ? (
-                    <OverviewTab
-                      classGroup={selectedClassGroup}
-                      onNavigate={handleNavigate}
+                {tab === 'dashboard' && (
+                  classGroups.length > 0 ? (
+                    <DashboardTab
+                      user={user}
+                      school={selectedSchool}
+                      classGroups={classGroups}
+                      teachers={teachers}
+                      subjects={subjects}
+                      constraints={constraints}
+                      periods={periods}
+                      allRequirements={allRequirements}
                       progress={setupProgress}
+                      onNavigate={handleNavigate}
+                      onOpenSection={handleOpenSection}
+                      readOnly={isViewer}
                     />
                   ) : isViewer ? (
                     <p className="text-sm text-slate-500">
@@ -789,18 +843,26 @@ function App() {
                     </p>
                   )
                 )}
-                {tab === 'team' && selectedSchool?.role === 'admin' && (
-                  <TeamTab
-                    schoolId={selectedSchoolId}
+                {tab === 'settings' && (
+                  <SettingsTab
+                    user={user}
+                    onUserUpdated={setUser}
+                    school={selectedSchool}
+                    onRenameSchool={handleRenameSchool}
+                    onUpdateInstitutionType={handleUpdateInstitutionType}
+                    onSaveProfile={handleSaveSchoolProfile}
+                    isAdmin={isAdmin}
                     members={members}
                     invites={invites}
-                    onReload={reloadTeam}
+                    onReloadTeam={reloadTeam}
                   />
                 )}
             </motion.div>
           )}
         </div>
       </div>
+
+      <SupportWidget schoolId={selectedSchoolId} />
 
       <AnimatePresence>
       {addSchoolOpen && (

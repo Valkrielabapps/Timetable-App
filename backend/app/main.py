@@ -29,6 +29,7 @@ from app.routers import (
     solver,
     subjects,
     substitutions,
+    support,
     teachers,
     timetables,
 )
@@ -79,6 +80,7 @@ app.include_router(timetables.router)
 app.include_router(solver.router)
 app.include_router(substitutions.router)
 app.include_router(setup_extraction.router)
+app.include_router(support.router)
 
 
 @app.get("/health")

@@ -10,22 +10,16 @@
  * Timetable tabs) and passes the result down, rather than this component
  * fetching the same data a second time.
  *
- * Collapses to a quiet "Ready" badge once every required step is done,
- * rather than permanently occupying header space nagging an admin who's
- * already generated a timetable and is just doing routine edits.
+ * Disappears entirely once every required step is done (it used to turn
+ * into a green "Ready" badge, which read as filler). The Dashboard's setup
+ * card follows the same rule.
  */
 export default function SetupProgressBar({ progress, onNavigate }) {
   const { requiredSteps, doneRequiredCount, currentStep, allRequiredDone, loaded } = progress
 
   if (!loaded) return null
 
-  if (allRequiredDone) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-        <span aria-hidden="true">✓</span> Ready
-      </span>
-    )
-  }
+  if (allRequiredDone) return null
 
   return (
     <button

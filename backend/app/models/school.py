@@ -37,6 +37,15 @@ class School(Base):
     # Grades not present in this list (e.g. a brand-new one added after
     # the last reorder) are shown after every listed grade.
     grade_order = Column(JSON, default=list)
+    # Descriptive details shown and edited in Settings > School profile:
+    # board, affiliation/UDISE code, principal, contact details, address,
+    # academic year start, etc. One JSON column rather than a dozen
+    # columns because none of it is queried, filtered or used by the
+    # solver - it's display data for the profile page and, later, export
+    # headers. The allowed keys and their limits live in
+    # app/schemas/school.py (SchoolProfile), which is what actually
+    # validates what goes in here. Null for schools created before this.
+    profile = Column(JSON, nullable=True)
 
     owner = relationship("User", back_populates="schools")
     teachers = relationship("Teacher", back_populates="school", cascade="all, delete-orphan")

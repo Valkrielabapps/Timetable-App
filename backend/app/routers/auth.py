@@ -29,6 +29,7 @@ from app.schemas.auth import (
     SignupRequest,
     TokenResponse,
     UserOut,
+    UserProfileUpdate,
 )
 from app.services.email_service import send_password_reset_email
 
@@ -125,6 +126,28 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(
+    payload: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lets a user change their display name (Settings > My account). Email
+    stays fixed: it's the login identity, and for Google accounts it's
+    whatever Google verified, so changing it needs a verification flow
+    this doesn't have."""
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name can't be empty.")
+    if len(name) > 100:
+        raise HTTPException(status_code=422, detail="Name is too long (100 characters max).")
+    user = db.get(User, current_user.id)
+    user.name = name
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.post("/forgot-password", status_code=202)

@@ -102,6 +102,10 @@ class Settings(BaseSettings):
     # box in development; MUST be set to the real deployed frontend URL in
     # production or invite links will point at localhost.
     frontend_base_url: str = "http://localhost:5173"
+    # Inbox that tickets from the in-app support button are sent to (see
+    # app/routers/support.py). Not secret, so a default is fine; override
+    # with SUPPORT_EMAIL if tickets should land somewhere else.
+    support_email: str = "support@timetablz.com"
 
     # How long a forgot-password link stays valid before it's rejected as
     # expired (see PasswordResetToken / app/routers/auth.py). Short on

@@ -145,6 +145,7 @@ export const api = {
   // it server-side rather than trusting it as-is.
   loginWithGoogle: (credential) => post("/auth/google", { credential }),
   me: () => get("/auth/me"),
+  updateMe: (data) => patch("/auth/me", data),
   forgotPassword: (email) => post("/auth/forgot-password", { email }),
   resetPassword: (token, newPassword) => post("/auth/reset-password", { token, new_password: newPassword }),
 
@@ -155,6 +156,12 @@ export const api = {
     put(`/schools/${schoolId}/grade-order`, { grade_order: gradeOrder }),
   updateSchoolInstitutionType: (schoolId, institutionType) =>
     put(`/schools/${schoolId}/institution-type`, { institution_type: institutionType }),
+  updateSchoolName: (schoolId, name) => put(`/schools/${schoolId}/name`, { name }),
+  updateSchoolProfile: (schoolId, profile) => put(`/schools/${schoolId}/profile`, profile),
+
+  // Support ticket from the floating help button - emailed to the
+  // support inbox (backend/app/routers/support.py).
+  createSupportTicket: (data) => post("/support/tickets", data),
 
   // Subjects
   listSubjects: (schoolId) => get(`/subjects?school_id=${schoolId}`),
