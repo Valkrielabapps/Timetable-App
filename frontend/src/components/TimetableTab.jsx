@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { api } from '../api'
+import ScheduleGrid from './ScheduleGrid.jsx'
 import {
   useApplyEntryUpdates,
+  useOptimisticMove,
+  useOptimisticSwap,
   useGenerateTimetable,
   useTimetable,
   useTimetables,
 } from '../hooks/useSchoolData'
 import SubstitutionsTab from './SubstitutionsTab'
 
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+// Where the sidebar scrolls to. Derived from the id rather than passed around,
+// so selecting a section needs no extra wiring between the two components.
+const sectionAnchorId = (classGroupId) => `timetable-section-${classGroupId}`
 
 /**
  * Generates a timetable for the whole school (every section + every
@@ -104,6 +109,9 @@ export default function TimetableTab({
   const [selectedTeacherId, setSelectedTeacherId] = useState(teachers[0]?.id ?? null)
   const [error, setError] = useState(null)
   const [dragEntryId, setDragEntryId] = useState(null)
+  // Which section the dragged slot came from, so a drop into another
+  // section's grid can be refused rather than quietly moving it.
+  const [dragClassGroupId, setDragClassGroupId] = useState(null)
   // Which export format is currently downloading, if any — guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
@@ -152,6 +160,8 @@ export default function TimetableTab({
   const { data: timetable = null } = useTimetable(latestTimetableId)
   const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
   const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
+  const optimisticMove = useOptimisticMove(timetable?.id)
+  const optimisticSwap = useOptimisticSwap(timetable?.id)
 
   async function handleGenerate() {
     setError(null)
@@ -177,7 +187,7 @@ export default function TimetableTab({
     setCommandFeedback(null)
     try {
       const result = await api.editTimetableByCommand(timetable.id, text)
-      applyEntryUpdates(...result.entries)
+      applyEntryUpdates(result)
       setCommandFeedback({ ok: true, text: result.description })
       setCommandText('')
     } catch (err) {
@@ -190,41 +200,59 @@ export default function TimetableTab({
   async function handleToggleLock(entry) {
     setError(null)
     try {
-      const updated = await api.updateTimetableEntry(entry.id, { locked: !entry.locked })
-      applyEntryUpdates(updated)
+      applyEntryUpdates(await api.updateTimetableEntry(entry.id, { locked: !entry.locked }))
     } catch (err) {
       setError(err.message)
     }
   }
 
-  async function handleDrop(day, order) {
+  async function handleDrop(day, order, classGroupId) {
     const entryId = dragEntryId
+    const sourceClassGroupId = dragClassGroupId
     setDragEntryId(null)
+    setDragClassGroupId(null)
     if (!entryId) return
+    // Every section's grid is on screen at once, so a drop can land in a grid
+    // the dragged slot does not belong to. Moving it would quietly reposition
+    // it inside its OWN section, which is not what dropping it over 8B looks
+    // like it should do.
+    if (classGroupId != null && sourceClassGroupId !== classGroupId) {
+      setError("A slot can only be moved within its own section's timetable.")
+      return
+    }
     const targetPeriod = periodAt(day, order)
     if (!targetPeriod) return
     // Drop targets are never batched slots — batched cells don't attach
     // onDrop at all (see the isBatched guard on <td> below) — so taking
     // the first match here is safe.
-    const targetEntry = entriesFor(day, order)[0] ?? null
+    const targetEntry = entriesFor(day, order, classGroupId)[0] ?? null
     if (targetEntry && targetEntry.id === entryId) return // dropped back on itself
     if (targetEntry && targetEntry.locked) {
       setError("That slot is locked — unlock it before swapping something into it.")
       return
     }
     setError(null)
+    // The cell moves now, not when the server answers. Waiting for the round
+    // trip put a visible delay on every drag, on an interaction that should
+    // feel like picking a card up and putting it down.
+    //
+    // `rollback` restores the cache if the server refuses - usually because
+    // the target double-books a teacher - which is the only honest response to
+    // a move that turned out not to be allowed.
+    const rollback = targetEntry
+      ? optimisticSwap(entryId, targetEntry.id)
+      : optimisticMove(entryId, targetPeriod)
     try {
       if (targetEntry) {
         // Target cell is already occupied — a plain move would look like
         // a double-booking (the other entry is still "there" until it
         // moves too), so swap both entries' periods in one request instead.
-        const [a, b] = await api.swapTimetableEntries(entryId, targetEntry.id)
-        applyEntryUpdates(a, b)
+        applyEntryUpdates(await api.swapTimetableEntries(entryId, targetEntry.id))
       } else {
-        const updated = await api.updateTimetableEntry(entryId, { period_id: targetPeriod.id })
-        applyEntryUpdates(updated)
+        applyEntryUpdates(await api.updateTimetableEntry(entryId, { period_id: targetPeriod.id }))
       }
     } catch (err) {
+      rollback()
       setError(err.message)
     }
   }
@@ -241,12 +269,12 @@ export default function TimetableTab({
   // solver.py) produces several simultaneous entries at the same class
   // group + period, one per batch, each with its own teacher and room.
   // The normal, unsplit case is just an array of 0 or 1.
-  function entriesFor(day, order) {
+  function entriesFor(day, order, classGroupId = null) {
     const period = periodAt(day, order)
     if (!period || !timetable) return []
-    if (view === 'section') {
+    if (classGroupId != null) {
       return timetable.entries.filter(
-        (e) => e.period_id === period.id && e.class_group_id === classGroup.id
+        (e) => e.period_id === period.id && e.class_group_id === classGroupId
       )
     }
     // Includes slots where this teacher is only the *assistant*, not the
@@ -261,12 +289,41 @@ export default function TimetableTab({
 
   const classGroupName = (id) => classGroups.find((c) => c.id === id)?.name
 
+
   // In By Teacher view, an entry can show up because the selected teacher
   // is the main teacher or because they're only the assistant (see
   // entriesFor above) — this tells the two apart so the grid can label
   // "(Assisting)" instead of implying they're leading a class solo.
   const isSelectedTeacherAssisting = (e) =>
     view === 'teacher' && e.assistant_teacher_id === selectedTeacherId && e.teacher_id !== selectedTeacherId
+
+  // Sections in the order the sidebar lists them, so scrolling and clicking
+  // agree about what comes next.
+  const sections = [...classGroups].sort(
+    (a, b) =>
+      (a.grade ?? '').localeCompare(b.grade ?? '', undefined, { numeric: true }) ||
+      (a.name ?? '').localeCompare(b.name ?? '', undefined, { numeric: true }),
+  )
+
+  // Picking a section in the sidebar scrolls to it rather than swapping what
+  // is on screen. The selection already exists and is already wired - this
+  // just changes what it means here, so the sidebar needs no knowledge of the
+  // timetable view.
+  //
+  // Deliberately not on first paint: arriving at the tab and being thrown past
+  // the Generate button and the warnings above the grid is disorienting, and
+  // the admin has not asked to go anywhere yet.
+  const scrolledOnce = useRef(false)
+  useEffect(() => {
+    if (view !== 'section' || !classGroup) return
+    if (!scrolledOnce.current) {
+      scrolledOnce.current = true
+      return
+    }
+    document
+      .getElementById(sectionAnchorId(classGroup.id))
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [classGroup, view])
 
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
   const failed = !isGenerating && timetable?.status === 'failed'
@@ -285,6 +342,16 @@ export default function TimetableTab({
     for (const id of v.entry_ids) {
       violatingEntries.set(id, [...(violatingEntries.get(id) ?? []), v])
     }
+  }
+
+  // With every section stacked, the band above the grid says what broke but
+  // not where to scroll. This puts the count on the section's own heading.
+  const sectionViolationCount = (classGroupId) => {
+    if (!timetable) return 0
+    const inSection = new Set(
+      timetable.entries.filter((e) => e.class_group_id === classGroupId).map((e) => e.id),
+    )
+    return [...violatingEntries.keys()].filter((id) => inSection.has(id)).length
   }
 
 
@@ -540,144 +607,72 @@ export default function TimetableTab({
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-md border border-slate-200">
-            <table className="min-w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="border border-slate-200 px-3 py-2 text-left font-medium">Period</th>
-                  {days.map((d) => (
-                    <th key={d} className="border border-slate-200 px-3 py-2 text-left font-medium">
-                      {DAY_NAMES[d]}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order}>
-                    <td className="border border-slate-200 px-3 py-2 font-medium text-slate-500">
-                      Period {order + 1}
-                    </td>
-                    {days.map((d) => {
-                      const entries = entriesFor(d, order)
-                      const period = periodAt(d, order)
-                      const editable = view === 'section' && !readOnly
-                      // Lab-batch slots (2+ simultaneous entries) aren't
-                      // drag/lock-editable in this version — see
-                      // solver.py's note on locked entries not being
-                      // honored for batched subjects. Editing a single
-                      // batch out of several needs its own interaction
-                      // (which one? does it drag the whole session or one
-                      // batch?) that hasn't been designed yet, so these
-                      // slots are view-only for now rather than allowing
-                      // an edit that wouldn't survive regeneration anyway.
-                      const isBatched = entries.length > 1
-                      const singleEntry = entries.length === 1 ? entries[0] : null
-                      // Locked/unlocked is shown as a light background tint
-                      // on the whole cell instead of a lock icon on the
-                      // entry — red for locked, green for unlocked — so
-                      // the state is visible at a glance across the whole
-                      // grid, not just on hover/inspection of one cell.
-                      const lockTint = singleEntry
-                        ? singleEntry.locked
-                          ? 'bg-red-50 hover:bg-red-100'
-                          : 'bg-emerald-50 hover:bg-emerald-100'
-                        : isBatched
-                        ? 'hover:bg-slate-50'
-                        : ''
-                      // Any entry in this cell breaking a rule marks the cell.
-                      // An inset ring rather than a border, so the grid's own
-                      // lines don't shift and the lock tint stays readable
-                      // underneath - the two say different things and both
-                      // need to survive.
-                      const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
-                      const violationRing = broken.length
-                        ? 'ring-2 ring-inset ring-amber-400'
-                        : ''
-                      return (
-                        <td
-                          key={d}
-                          title={broken.length ? broken.map((v) => v.description).join('\n') : undefined}
-                          className={`border border-slate-200 px-3 py-2 transition-colors ${editable ? 'align-top' : ''} ${lockTint} ${violationRing}`}
-                          onDragOver={editable && !isBatched ? (e) => e.preventDefault() : undefined}
-                          onDrop={editable && !isBatched ? () => handleDrop(d, order) : undefined}
-                        >
-                          {!period ? (
-                            <span className="text-slate-300">—</span>
-                          ) : isBatched ? (
-                            <div className="flex flex-col gap-1.5">
-                              {entries
-                                .slice()
-                                .sort((a, b) => (a.lab_batch ?? 0) - (b.lab_batch ?? 0))
-                                .map((e) => (
-                                  <div key={e.id} className="border-l-2 border-slate-200 pl-1.5">
-                                    <div className="font-medium">
-                                      {e.subject_name}
-                                      {e.lab_batch && (
-                                        <span className="ml-1 text-xs font-normal text-slate-400">
-                                          Batch {e.lab_batch}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                      {view === 'section'
-                                        ? e.teacher_name
-                                        : `Sec ${classGroupName(e.class_group_id)}${isSelectedTeacherAssisting(e) ? ' (Assisting)' : ''}`}
-                                    </div>
-                                    {view === 'section' && e.assistant_teacher_name && (
-                                      <div className="text-xs text-slate-400">Asst: {e.assistant_teacher_name}</div>
-                                    )}
-                                    {e.room_name && <div className="text-xs text-slate-400">{e.room_name}</div>}
-                                  </div>
-                                ))}
-                            </div>
-                          ) : singleEntry ? (
-                            <div
-                              draggable={editable && !singleEntry.locked}
-                              onDragStart={editable ? () => setDragEntryId(singleEntry.id) : undefined}
-                              onDragEnd={() => setDragEntryId(null)}
-                              onClick={editable ? () => handleToggleLock(singleEntry) : undefined}
-                              title={
-                                editable
-                                  ? singleEntry.locked
-                                    ? 'Locked — click to unlock (movable, may change on regenerate)'
-                                    : 'Click to lock in place before regenerating'
-                                  : singleEntry.locked
-                                  ? 'Locked in place'
-                                  : undefined
-                              }
-                              className={
-                                editable
-                                  ? singleEntry.locked
-                                    ? 'cursor-pointer'
-                                    : 'cursor-move'
-                                  : ''
-                              }
-                            >
-                              <div className="font-medium">{singleEntry.subject_name}</div>
-                              <div className="text-xs text-slate-500">
-                                {view === 'section'
-                                  ? singleEntry.teacher_name
-                                  : `Sec ${classGroupName(singleEntry.class_group_id)}${isSelectedTeacherAssisting(singleEntry) ? ' (Assisting)' : ''}`}
-                              </div>
-                              {view === 'section' && singleEntry.assistant_teacher_name && (
-                                <div className="text-xs text-slate-400">Asst: {singleEntry.assistant_teacher_name}</div>
-                              )}
-                              {singleEntry.room_name && (
-                                <div className="text-xs text-slate-400">{singleEntry.room_name}</div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-300">Free</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {view === 'section' ? (
+            // Every section, stacked and scrollable, rather than one at a
+            // time. Picking a section in the sidebar scrolls to it instead of
+            // swapping what is on screen - the whole school is one document,
+            // which is how a timetable is read on paper and how it gets
+            // checked against itself.
+            <div className="flex flex-col gap-8">
+              {sections.map((cg) => (
+                <section
+                  key={cg.id}
+                  id={sectionAnchorId(cg.id)}
+                  // Clears the sticky header when the sidebar scrolls here.
+                  className="flex scroll-mt-6 flex-col gap-2"
+                >
+                  <h4 className="text-sm font-medium text-slate-700">
+                    {cg.grade ? `${cg.grade} · ${cg.name}` : cg.name}
+                    {sectionViolationCount(cg.id) > 0 && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-900">
+                        {sectionViolationCount(cg.id)} slot
+                        {sectionViolationCount(cg.id) === 1 ? '' : 's'} breaking a rule
+                      </span>
+                    )}
+                  </h4>
+                  <ScheduleGrid
+                    days={days}
+                    orders={orders}
+                    periodAt={periodAt}
+                    entriesAt={(d, o) => entriesFor(d, o, cg.id)}
+                    editable={!readOnly}
+                    violatingEntries={violatingEntries}
+                    onDragStart={(entry) => {
+                      setDragEntryId(entry.id)
+                      setDragClassGroupId(entry.class_group_id)
+                    }}
+                    onDragEnd={() => {
+                      setDragEntryId(null)
+                      setDragClassGroupId(null)
+                    }}
+                    onDrop={(d, o) => handleDrop(d, o, cg.id)}
+                    onToggleLock={handleToggleLock}
+                    secondaryLine={(e) => e.teacher_name}
+                    showAssistant
+                  />
+                </section>
+              ))}
+            </div>
+          ) : (
+            <ScheduleGrid
+              days={days}
+              orders={orders}
+              periodAt={periodAt}
+              entriesAt={(d, o) => entriesFor(d, o)}
+              editable={false}
+              violatingEntries={violatingEntries}
+              onDragStart={() => {}}
+              onDragEnd={() => {}}
+              onDrop={() => {}}
+              onToggleLock={() => {}}
+              secondaryLine={(e) =>
+                `Sec ${classGroupName(e.class_group_id)}${
+                  isSelectedTeacherAssisting(e) ? ' (Assisting)' : ''
+                }`
+              }
+              showAssistant={false}
+            />
+          )}
         </motion.div>
       )}
 

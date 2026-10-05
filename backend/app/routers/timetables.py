@@ -50,6 +50,7 @@ from app.models.school import (
 )
 from app.models.user import User
 from app.schemas.timetable import (
+    EntryUpdateOut,
     TimetableSummaryOut,
     EditCommandRequest,
     EditCommandResponse,
@@ -187,6 +188,25 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
         for e in timetable.entries
     ]
     return [vars(v) for v in check_rules(placements, rules, index)]
+
+
+def _violations_after_edit(db: Session, timetable: Timetable) -> list[dict]:
+    """Recheck the whole timetable after one slot moved.
+
+    Whole, not just the moved slot: a rule is about a group of lessons, so
+    moving one can fix a violation elsewhere as easily as cause one here. The
+    four lookups this loads are the cost of the check being honest - and the
+    drag has already finished on screen by the time this runs, since the
+    frontend moves the cell before the request goes out.
+    """
+    school_id = timetable.school_id
+    return _violations_for(
+        db, timetable,
+        {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()},
+        {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()},
+        {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()},
+        {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()},
+    )
 
 
 def _orders_by_day(school_periods: list[Period]) -> dict[int, list[int]]:
@@ -401,7 +421,7 @@ def _check_slot_conflict(
             )
 
 
-@router.patch("/entries/{entry_id}", response_model=TimetableEntryOut)
+@router.patch("/entries/{entry_id}", response_model=EntryUpdateOut)
 def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Manual editing of one already-generated slot: lock/unlock it, and/or
@@ -442,7 +462,8 @@ def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Dep
         )
 
     data = payload.model_dump(exclude_unset=True)
-    return _apply_entry_update(db, entry, data)
+    updated = _apply_entry_update(db, entry, data)
+    return EntryUpdateOut(entries=[updated], violations=_violations_after_edit(db, timetable))
 
 
 def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:
@@ -469,7 +490,7 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
     return _entry_out(db, entry)
 
 
-@router.post("/entries/{entry_id}/swap-with/{other_entry_id}", response_model=list[TimetableEntryOut])
+@router.post("/entries/{entry_id}/swap-with/{other_entry_id}", response_model=EntryUpdateOut)
 def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Swaps two entries' periods in one transaction — what actually happens
@@ -504,7 +525,10 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
     if entry.period_id == other.period_id:
         raise HTTPException(status_code=400, detail="These are already in the same period.")
 
-    return _apply_entry_swap(db, entry, other)
+    return EntryUpdateOut(
+        entries=_apply_entry_swap(db, entry, other),
+        violations=_violations_after_edit(db, timetable),
+    )
 
 
 def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry) -> list[TimetableEntryOut]:
@@ -646,7 +670,8 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
 
     if action in ("lock", "unlock"):
         updated = _apply_entry_update(db, entry, {"locked": action == "lock"})
-        return EditCommandResponse(action=action, description=description, entries=[updated])
+        return EditCommandResponse(action=action, description=description, entries=[updated],
+                                  violations=_violations_after_edit(db, timetable))
 
     if action == "move":
         if entry.locked:
@@ -661,7 +686,8 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
                 raise HTTPException(status_code=422, detail=unresolved_detail)
             data["teacher_id"] = target_teacher_id
         updated = _apply_entry_update(db, entry, data)
-        return EditCommandResponse(action=action, description=description, entries=[updated])
+        return EditCommandResponse(action=action, description=description, entries=[updated],
+                                  violations=_violations_after_edit(db, timetable))
 
     # action == "swap"
     other = next((e for e in entries if e.id == parsed.get("other_entry_id")), None)
@@ -672,7 +698,8 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     if entry.period_id == other.period_id:
         raise HTTPException(status_code=400, detail="These are already in the same period.")
     updated = _apply_entry_swap(db, entry, other)
-    return EditCommandResponse(action=action, description=description, entries=updated)
+    return EditCommandResponse(action=action, description=description, entries=updated,
+                               violations=_violations_after_edit(db, timetable))
 
 
 _EXPORT_CONTENT_TYPES = {

@@ -127,6 +127,21 @@ class EditCommandRequest(BaseModel):
     text: str
 
 
+class EntryUpdateOut(BaseModel):
+    """The rows one edit changed, and the rules the timetable now breaks.
+
+    Violations travel with the edit rather than being fetched afterwards
+    because the frontend patches these rows into its cached timetable instead
+    of re-reading it - re-reading a school-wide timetable to reflect one drag
+    is what made dragging slow in the first place. Without the violations
+    riding along, the warning band would go stale the moment a slot moved,
+    which is precisely when it has something to say.
+    """
+
+    entries: list[TimetableEntryOut]
+    violations: list[ViolationOut] = []
+
+
 class EditCommandResponse(BaseModel):
     """`entries` is the one or two rows actually changed (one for a
     move/lock/unlock, two for a swap) — same shape PATCH .../entries/{id}
@@ -137,4 +152,6 @@ class EditCommandResponse(BaseModel):
     action: str
     description: str
     entries: list[TimetableEntryOut]
+    # Same reason as EntryUpdateOut: a conversational edit moves slots too.
+    violations: list[ViolationOut] = []
 
