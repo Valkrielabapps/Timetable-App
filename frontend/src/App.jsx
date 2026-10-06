@@ -15,6 +15,8 @@ import CustomersPage from './components/CustomersPage'
 import Sidebar from './components/Sidebar'
 import FirstRunWelcome from './components/FirstRunWelcome'
 import DashboardTab from './components/DashboardTab'
+import CalendarTab from './components/CalendarTab'
+import DemoTab from './components/DemoTab'
 import SettingsTab from './components/SettingsTab'
 import SupportWidget from './components/SupportWidget'
 import DataEntryTab from './components/DataEntryTab'
@@ -32,7 +34,6 @@ import { useTimetables } from './hooks/useSchoolData'
 // Schedule/Substitutions toggle inside TimetableTab.jsx instead of adding
 // to this top-level count.
 const BASE_TABS = [
-  { id: 'dashboard', label: 'Dashboard' },
   { id: 'entry', label: 'Data Entry' },
   { id: 'constraints', label: 'Constraints' },
   { id: 'timetable', label: 'Timetable' },
@@ -581,8 +582,8 @@ function App() {
   }
 
   const isViewer = selectedSchool?.role === 'viewer'
-  // Team moved into Settings (opened from the header, left of Sign out),
-  // so the tab list is the same for admins and viewers now.
+  // Dashboard, Settings and Sign out live in the left sidebar; the header
+  // only carries the three working tabs.
   const TABS = BASE_TABS
   const isAdmin = selectedSchool?.role === 'admin'
 
@@ -632,6 +633,9 @@ function App() {
           onSelectClassGroup={(id) => {
             setSelectedClassGroupId(id)
             setDataEntrySubView('plan')
+            // From the Dashboard or Settings there's nothing section-
+            // specific to show, so picking a section opens its plan.
+            if (['dashboard', 'calendar', 'settings', 'demo'].includes(tab)) setTab('entry')
           }}
           onAddClassGroup={handleAddClassGroup}
           onAddClassGroups={handleAddClassGroups}
@@ -640,11 +644,12 @@ function App() {
           onRenameGrade={handleRenameGrade}
           gradeOrder={selectedSchool?.grade_order}
           onReorderGrades={handleReorderGrades}
-          onGoToDataEntry={(subView) => {
-            setTab('entry')
-            setDataEntrySubView(subView)
-          }}
-          activeDataEntrySubView={inSchoolWideDataEntry ? dataEntrySubView : null}
+          activeTab={tab}
+          onGoToDashboard={() => setTab('dashboard')}
+          onGoToCalendar={() => setTab('calendar')}
+          onGoToDemo={() => setTab('demo')}
+          onGoToSettings={() => setTab('settings')}
+          onSignOut={handleLogout}
           readOnly={isViewer}
         />
       ) : null}
@@ -668,7 +673,7 @@ function App() {
             <div className="ml-auto flex items-center gap-3">
               <SetupProgressBar progress={setupProgress} onNavigate={handleNavigate} />
               <nav className="flex gap-1 text-sm">
-                {TABS.map((t) => {
+                {TABS.map((t, index) => {
                   // Constraints/Timetable can't do anything useful until
                   // the basics exist (no subjects/teachers means an empty
                   // Constraints screen and a Timetable tab that can only
@@ -690,7 +695,16 @@ function App() {
                           className="absolute inset-0 rounded-md bg-neutral-900"
                         />
                       )}
-                      <span className="relative z-10">{t.label}</span>
+                      <span className="relative z-10 flex items-center gap-2">
+                        {/* Step number: the three tabs are the order of work. */}
+                        <span
+                          aria-hidden="true"
+                          className="flex h-6 w-6 flex-none items-center justify-center rounded-full border-4 border-current text-[11px] font-semibold leading-none"
+                        >
+                          {index + 1}
+                        </span>
+                        {t.label}
+                      </span>
                     </button>
                   )
                 })}
@@ -698,26 +712,13 @@ function App() {
             </div>
           )}
 
-          <div className={`flex items-center gap-1 ${selectedSchool ? 'ml-2' : 'ml-auto'}`}>
-            {selectedSchool && (
-              <button
-                onClick={() => setTab('settings')}
-                aria-current={tab === 'settings' ? 'page' : undefined}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium ${
-                  tab === 'settings' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-                }`}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-                </svg>
-                Settings
-              </button>
-            )}
-            <button onClick={handleLogout} className="rounded-md px-2.5 py-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          {schools.length === 0 && (
+            // The sidebar (which normally holds Sign out) only shows once a
+            // school exists, so a brand-new account needs it here.
+            <button onClick={handleLogout} className="ml-auto rounded-md px-2.5 py-1.5 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               Sign out
             </button>
-          </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-10 py-8">
@@ -843,6 +844,16 @@ function App() {
                     </p>
                   )
                 )}
+                {tab === 'calendar' && (
+                  <CalendarTab
+                    schoolId={selectedSchoolId}
+                    periods={periods}
+                    teachers={teachers}
+                    classGroups={classGroups}
+                    onNavigate={handleNavigate}
+                  />
+                )}
+                {tab === 'demo' && <DemoTab />}
                 {tab === 'settings' && (
                   <SettingsTab
                     user={user}
