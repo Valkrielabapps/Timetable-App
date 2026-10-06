@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import Teacher
+from app.models.school import ElectiveOption, SubjectRequirement, Teacher
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.teacher import TeacherCreate, TeacherOut, TeacherUpdate
@@ -58,6 +58,17 @@ def delete_teacher(teacher_id: int, db: Session = Depends(get_db), current_user:
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
     require_school_access(db, current_user, teacher.school_id, min_role="admin")
+    # A pin to a teacher who no longer exists doesn't fall back to "anyone
+    # qualified" - the solver reads it as "only this teacher", finds nobody,
+    # and fails with "no qualified teacher found", which points the admin at
+    # qualifications rather than at the teacher they deleted. Clearing the pin
+    # restores the normal choice among qualified staff.
+    db.query(SubjectRequirement).filter(SubjectRequirement.preferred_teacher_id == teacher_id).update(
+        {SubjectRequirement.preferred_teacher_id: None}
+    )
+    db.query(ElectiveOption).filter(ElectiveOption.preferred_teacher_id == teacher_id).update(
+        {ElectiveOption.preferred_teacher_id: None}
+    )
     db.delete(teacher)
     db.commit()
 

@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import Subject, SubjectRequirement
+from app.models.school import (
+    ElectiveBlock, ElectiveOption, Subject, SubjectRequirement, TimetableEntry,
+)
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.subject import SubjectCreate, SubjectOut, SubjectUpdate
@@ -68,6 +70,22 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
     # explicitly here closes that gap. See dedupe_orphaned_requirements.py
     # for a one-off cleanup of any orphans a pre-fix delete already left.
     db.query(SubjectRequirement).filter(SubjectRequirement.subject_id == subject_id).delete()
+    # Same orphan problem for block options, with a worse failure: a block
+    # whose last option is gone would still reserve the section's periods for
+    # nothing at all. Options go, and so does any block left empty by it. A
+    # block left with one option still schedules correctly - it is just a
+    # subject everyone in that block takes - so it is kept for the admin to see.
+    affected_blocks = {
+        o.block_id for o in db.query(ElectiveOption).filter(ElectiveOption.subject_id == subject_id).all()
+    }
+    db.query(ElectiveOption).filter(ElectiveOption.subject_id == subject_id).delete()
+    for block_id in affected_blocks:
+        remaining = db.query(ElectiveOption).filter(ElectiveOption.block_id == block_id).count()
+        if remaining == 0:
+            db.query(TimetableEntry).filter(TimetableEntry.elective_block_id == block_id).update(
+                {TimetableEntry.elective_block_id: None}
+            )
+            db.query(ElectiveBlock).filter(ElectiveBlock.id == block_id).delete()
     db.delete(subject)
     db.commit()
 

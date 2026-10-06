@@ -174,6 +174,9 @@ class ClassGroup(Base):
     requirements = relationship(
         "SubjectRequirement", back_populates="class_group", cascade="all, delete-orphan"
     )
+    elective_blocks = relationship(
+        "ElectiveBlock", back_populates="class_group", cascade="all, delete-orphan"
+    )
 
 
 class SubjectRequirement(Base):
@@ -203,6 +206,64 @@ class SubjectRequirement(Base):
     __table_args__ = (UniqueConstraint("class_group_id", "subject_id"),)
 
     class_group = relationship("ClassGroup", back_populates="requirements")
+
+
+class ElectiveBlock(Base):
+    """A set of subjects one section studies at the same time, each student
+    taking exactly one of them.
+
+    The usual shape for Grades 11 and 12: a section has common subjects that
+    everyone takes (English, as normal SubjectRequirements) and then blocks
+    like "Physics / Accounts / History", where the class splits up for those
+    periods and each student goes to the one they chose. Which subjects share
+    a block is decided by the school before timetabling starts - it is what
+    determines which subject combinations a student can take at all.
+
+    Scheduled as one slot with several simultaneous lessons: when the block
+    meets, the section is occupied once and every option needs its own
+    teacher at that moment. Every option therefore gets the block's
+    periods_per_week - they run together, so they cannot differ.
+
+    Scoped to one section. Blocks that span a whole grade (students leaving
+    their section to join a subject) are deliberately not modelled: they
+    would need a timetable entry owned by several sections at once.
+    """
+    __tablename__ = "elective_blocks"
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    class_group_id = Column(Integer, ForeignKey("class_groups.id"), nullable=False)
+    name = Column(String, nullable=False)
+    periods_per_week = Column(Integer, nullable=False)
+
+    class_group = relationship("ClassGroup", back_populates="elective_blocks")
+    options = relationship(
+        "ElectiveOption", back_populates="block", cascade="all, delete-orphan",
+        order_by="ElectiveOption.id",
+    )
+
+
+class ElectiveOption(Base):
+    """One subject a student can choose within an ElectiveBlock.
+
+    Unique per (block, subject). A subject also may not appear in two blocks
+    of the same section, or as both a block option and a normal requirement
+    for it - the API refuses both, because either would schedule the subject
+    twice and silently inflate the section's real periods per week.
+    """
+    __tablename__ = "elective_options"
+
+    id = Column(Integer, primary_key=True)
+    block_id = Column(Integer, ForeignKey("elective_blocks.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    # Same meaning as SubjectRequirement.preferred_teacher_id: pins this
+    # option to one teacher instead of letting the solver pick among the
+    # qualified ones.
+    preferred_teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
+
+    __table_args__ = (UniqueConstraint("block_id", "subject_id"),)
+
+    block = relationship("ElectiveBlock", back_populates="options")
 
 
 class Constraint(Base):
@@ -290,6 +351,15 @@ class TimetableEntry(Base):
     # entry. Lets the frontend show "Batch 1"/"Batch 2" for what would
     # otherwise be two indistinguishable rows at the same class/subject/period.
     lab_batch = Column(Integer, nullable=True)
+    # Set when this entry is one option of an elective block - several entries
+    # then share one section and period, one per option. Lets the grid show
+    # them as one block, lets dragging move them together, and is what a
+    # student's own timetable is filtered by. SET NULL rather than cascade on
+    # the block's deletion: a generated timetable is a record and keeps its
+    # rows, it just stops knowing they were a block.
+    elective_block_id = Column(
+        Integer, ForeignKey("elective_blocks.id", ondelete="SET NULL"), nullable=True
+    )
 
     timetable = relationship("Timetable", back_populates="entries")
 

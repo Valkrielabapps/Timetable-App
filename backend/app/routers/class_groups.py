@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, SubjectRequirement, TimetableEntry
+from app.models.school import (
+    ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, TimetableEntry,
+)
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.class_group import (
@@ -122,6 +124,28 @@ def add_requirement(
     if not class_group:
         raise HTTPException(status_code=404, detail="Class group not found")
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
+
+    # The other half of the check in app/routers/elective_blocks.py: a subject
+    # is either common to the whole section or an option in one of its blocks,
+    # never both. Both would schedule it twice and quietly inflate the
+    # section's real periods per week.
+    in_block = (
+        db.query(ElectiveBlock)
+        .join(ElectiveOption, ElectiveOption.block_id == ElectiveBlock.id)
+        .filter(
+            ElectiveBlock.class_group_id == class_group_id,
+            ElectiveOption.subject_id == payload.subject_id,
+        )
+        .first()
+    )
+    if in_block:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This subject is already an option in {in_block.name} for this section. "
+                f"A subject can be common to everyone or an option in a block, not both."
+            ),
+        )
 
     # Upsert on (class_group_id, subject_id) rather than blind-insert: a
     # class group should only have one requirement per subject, and a

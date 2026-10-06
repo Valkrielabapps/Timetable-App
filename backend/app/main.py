@@ -21,6 +21,7 @@ from app.routers import (
     auth,
     class_groups,
     constraints,
+    elective_blocks,
     invites,
     periods,
     rooms,
@@ -75,6 +76,7 @@ app.include_router(rooms.router)
 app.include_router(periods.router)
 app.include_router(teachers.router)
 app.include_router(class_groups.router)
+app.include_router(elective_blocks.router)
 app.include_router(constraints.router)
 app.include_router(timetables.router)
 app.include_router(solver.router)
