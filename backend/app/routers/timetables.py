@@ -270,6 +270,7 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                     period_id=a["period_id"],
                     room_id=a.get("room_id"),
                     lab_batch=a.get("batch"),
+                    elective_block_id=a.get("elective_block_id"),
                     # Carries a lock forward from the previous timetable if
                     # this entry landed on the exact same (class group,
                     # subject, teacher, period) that was locked before —

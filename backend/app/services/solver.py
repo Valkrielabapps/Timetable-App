@@ -13,6 +13,7 @@ database and builds/solves a CP-SAT model from that real data.
 """
 import os
 from dataclasses import dataclass, field
+from itertools import combinations
 
 from ortools.sat.python import cp_model
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ from app.services.constraint_ir_compiler import Atom, SchoolIndex, compile_rules
 from app.models.school import (
     ClassGroup,
     Constraint,
+    ElectiveBlock,
     Period,
     Room,
     Subject,
@@ -82,6 +84,139 @@ def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
     slack = model.NewIntVar(0, 1000, name)
     model.Add(expr <= bound + slack)
     penalties.append(weight * slack)
+
+
+@dataclass(frozen=True)
+class _OptionReq:
+    """One option of an elective block, shaped like a SubjectRequirement.
+
+    The placement rules and the legacy constraint types are all written per
+    requirement, reading exactly these attributes. Wrapping each option this
+    way lets them apply to a subject in a block as they would to an ordinary
+    one, rather than each needing a block-aware copy that would drift.
+
+    `id` is the option's id negated, so it can share dicts keyed by
+    requirement id without colliding - requirement ids are always positive.
+    `periods_per_week` is the block's: every option runs whenever it does.
+    """
+
+    id: int
+    class_group_id: int
+    subject_id: int
+    periods_per_week: int
+    preferred_teacher_id: int | None
+    block_id: int
+    option_id: int
+    assistant_teacher_id: int | None = None
+
+
+def _can_staff_all(free: dict[int, list[int]]) -> bool:
+    """Whether every option can be given its own teacher at once.
+
+    A bipartite matching of options to free teachers, by augmenting paths.
+    A per-option check is not enough: Physics and Chemistry may each have a
+    free qualified teacher, and it may be the same person. Blocks have a
+    handful of options, so the simple algorithm is plenty.
+    """
+    teacher_of: dict[int, int] = {}
+
+    def assign(option_id: int, seen: set[int]) -> bool:
+        for teacher_id in free[option_id]:
+            if teacher_id in seen:
+                continue
+            seen.add(teacher_id)
+            holder = teacher_of.get(teacher_id)
+            if holder is None or assign(holder, seen):
+                teacher_of[teacher_id] = option_id
+                return True
+        return False
+
+    return all(assign(option_id, set()) for option_id in free)
+
+
+def _explain_unstaffable_block(
+    block_label: str,
+    needed: int,
+    possible: int,
+    opts: list,
+    candidates: dict[int, list[int]],
+    teachers_by_id: dict,
+    subjects_by_id: dict,
+) -> str:
+    """Say why a block cannot meet as often as it needs to.
+
+    The useful answer names people. "No timetable possible" leaves an admin
+    checking every teacher by hand; "Physics and Chemistry can only be taught
+    by Mrs. Rao" tells them exactly what to change. So this looks first for a
+    group of options that, between them, have fewer qualified teachers than
+    options - which no timetable can fix - and only falls back to availability
+    when there is no such group.
+    """
+    name = lambda o: subjects_by_id[o.subject_id].name if o.subject_id in subjects_by_id else "a subject"  # noqa: E731
+    # Smallest group of options whose qualified teachers are too few to cover
+    # them all at once (Hall's condition failing). Blocks are small, so trying
+    # every subset is cheap and finds the clearest explanation.
+    for size in range(2, len(opts) + 1):
+        for group in combinations(opts, size):
+            pool = set().union(*(candidates[o.id] for o in group))
+            if len(pool) < size:
+                subjects = ", ".join(name(o) for o in group[:-1]) + f" and {name(group[-1])}"
+                people = ", ".join(sorted(teachers_by_id[t].name for t in pool))
+                return (
+                    f"{block_label} can never meet: {subjects} run at the same time, but the only "
+                    f"teacher{'s' if len(pool) != 1 else ''} qualified for them "
+                    f"{'are' if len(pool) != 1 else 'is'} {people}, who can't teach "
+                    f"{size} classes at once. Qualify another teacher for one of these subjects."
+                )
+    if possible == 0:
+        return (
+            f"{block_label} can never meet: there is no period where all of its subjects can be "
+            f"given a teacher at the same time. Check the marked-unavailable periods of the "
+            f"teachers for {', '.join(name(o) for o in opts)}, and any placement rules on them."
+        )
+    return (
+        f"{block_label} needs {needed} periods a week, but its subjects can only all be given a "
+        f"teacher at the same time in {possible}. Check the marked-unavailable periods of the "
+        f"teachers for {', '.join(name(o) for o in opts)}, and any placement rules on them, or "
+        f"reduce the block's periods a week."
+    )
+
+
+def _block_atoms(block_occ, option_x, option_reqs, periods_by_id) -> list[Atom]:
+    """Rule-engine atoms for elective blocks.
+
+    Each option gets a class-side atom carrying its subject, all sharing the
+    block's one variable - so "no Physics in the last period" sees Physics in
+    a block, while "at most 6 periods a day" counts the block once, because the
+    compiler counts a shared variable once. Each teacher choice is a
+    teacher-side atom, exactly like a lab batch's.
+    """
+    by_option = {o.option_id: o for o in option_reqs}
+    options_of_block: dict[int, list] = {}
+    for o in option_reqs:
+        options_of_block.setdefault(o.block_id, []).append(o)
+
+    atoms: list[Atom] = []
+    for (block_id, period_id), occ in block_occ.items():
+        period = periods_by_id[period_id]
+        for o in options_of_block.get(block_id, []):
+            atoms.append(Atom(
+                var=occ, requirement_id=o.id, class_group_id=o.class_group_id,
+                subject_id=o.subject_id, teacher_id=None, period_id=period_id,
+                day_of_week=period.day_of_week, order=period.order,
+                occupies_class=True, occupies_teacher=False,
+            ))
+    for (block_id, period_id, option_id), choice in option_x.items():
+        o = by_option[option_id]
+        period = periods_by_id[period_id]
+        for teacher_id, var in choice:
+            atoms.append(Atom(
+                var=var, requirement_id=o.id, class_group_id=o.class_group_id,
+                subject_id=o.subject_id, teacher_id=teacher_id, period_id=period_id,
+                day_of_week=period.day_of_week, order=period.order,
+                occupies_class=False, occupies_teacher=True,
+            ))
+    return atoms
 
 
 def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
@@ -377,7 +512,26 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     for cg in class_groups:
         requirements.extend(cg.requirements)
 
-    if not requirements:
+    # Elective blocks (see ElectiveBlock): subjects a section studies at the
+    # same time, each student taking one. Each option is wrapped to look like
+    # a requirement, so the placement rules and the legacy constraint types
+    # below - which are all written per requirement - apply to a subject in a
+    # block exactly as they would to an ordinary one, without each of them
+    # needing a block-aware copy. What makes a block a block is handled in its
+    # own section further down: one shared "does the block meet here"
+    # variable per period, which every option's teacher choice is tied to.
+    all_blocks: list[ElectiveBlock] = [b for cg in class_groups for b in cg.elective_blocks]
+    blocks = [b for b in all_blocks if b.options]
+    option_reqs: list[_OptionReq] = [
+        _OptionReq(
+            id=-o.id, class_group_id=b.class_group_id, subject_id=o.subject_id,
+            periods_per_week=b.periods_per_week, preferred_teacher_id=o.preferred_teacher_id,
+            block_id=b.id, option_id=o.id,
+        )
+        for b in blocks for o in b.options
+    ]
+
+    if not requirements and not blocks:
         return TimetableSolveResult(
             status="no_requirements",
             errors=["No class group has any subject requirements yet. Add at least one before generating."],
@@ -422,7 +576,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # something. Weights accumulate when several preferences discourage the
     # same slot, so two mild objections outweigh one strong one.
     req_discouraged_periods: dict[int, dict[int, int]] = {}
-    for req in requirements:
+    # Options included: "no Physics in the last period" must keep the block
+    # holding Physics out of the last period, since every option of a block
+    # runs whenever the block does.
+    for req in [*requirements, *option_reqs]:
         restricted: set[int] = set()
         required: set[int] | None = None
         discouraged: dict[int, int] = {}
@@ -484,7 +641,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # max_consecutive_periods constraint further down to know whether a
     # requirement "occupies" a given period without needing a separate
     # aggregate variable.
-    req_period_vars: dict[int, dict[int, list]] = {r.id: {} for r in requirements}
+    req_period_vars: dict[int, dict[int, list]] = {r.id: {} for r in [*requirements, *option_reqs]}
     # Which teacher(s) could even be assigned to each requirement, before
     # any period-level filtering — kept around for _diagnose_infeasibility
     # below (specifically: spotting a sole qualified/preferred teacher
@@ -632,26 +789,179 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 # batches always land on the same period as each other.
                 model.Add(sum(v for _, v in batch_vars) == occ)
 
-    if errors:
-        return TimetableSolveResult(status="infeasible", errors=errors)
-
     # Honor locked entries from the previous generation: an admin can lock
     # a slot in TimetableTab.jsx (PATCH /api/timetables/entries/{id}) to
     # pin it in place, then regenerate to re-solve everything else around
     # it. Only the most recent "draft" timetable's locks are read — older
-    # ones are history, not the current schedule.
+    # ones are history, not the current schedule. Read before the blocks are
+    # built, because a locked block slot changes which variables a block gets.
     previous_timetable = (
         db.query(Timetable)
         .filter(Timetable.school_id == school_id, Timetable.status == "draft")
         .order_by(Timetable.id.desc())
         .first()
     )
-    req_by_class_subject = {(r.class_group_id, r.subject_id): r for r in requirements}
     locked_keys: set[tuple[int, int, int, int]] = set()
     locked_rooms: dict[tuple[int, int, int, int], int | None] = {}
+
+    # ------------------------------------------------------------------
+    # Elective blocks
+    # ------------------------------------------------------------------
+    # One "does the block meet here" variable per period (block_occ), and per
+    # option a teacher choice that sums to exactly that variable - so when the
+    # block meets, every option has exactly one teacher at that moment, and
+    # when it doesn't, none do. It is the lab-batch structure above with the
+    # parallel strands being different subjects rather than batches of one.
+    #
+    # block_occ reserves the section's slot ONCE. Each option's teacher
+    # variables reserve the teachers. Counting them the other way round would
+    # either fill the section three times over for a three-option block, or
+    # leave the teachers free to be booked elsewhere at the same moment.
+    #
+    # option_x[(block_id, period_id, option_id)] = [(teacher_id, var), ...]
+    option_x: dict[tuple[int, int, int], list[tuple[int, cp_model.IntVar]]] = {}
+    block_occ: dict[tuple[int, int], cp_model.IntVar] = {}
+    options_by_block: dict[int, list[_OptionReq]] = {b.id: [] for b in blocks}
+    for o in option_reqs:
+        options_by_block[o.block_id].append(o)
+
+    for b in all_blocks:
+        if not b.options:
+            cg = class_groups_by_id.get(b.class_group_id)
+            warnings.append(
+                f"{b.name} for {_class_group_label(cg) if cg else 'a section'} has no subjects "
+                f"in it, so it was left out of the timetable."
+            )
+
+    # Locked block slots from the previous draft, as (block_id, period_id) ->
+    # {option_id: (teacher_id, room_id)}. A lock is a deliberate admin
+    # override, so - exactly as for an ordinary locked entry - the slot is
+    # kept even if a placement rule or a teacher's availability has changed
+    # since it was locked.
+    locked_block_slots: dict[tuple[int, int], dict[int, tuple[int, int | None]]] = {}
+    if previous_timetable:
+        option_by_block_subject = {(o.block_id, o.subject_id): o for o in option_reqs}
+        for le in previous_timetable.entries:
+            if not le.locked or le.elective_block_id is None:
+                continue
+            option = option_by_block_subject.get((le.elective_block_id, le.subject_id))
+            if option is None or le.period_id not in periods_by_id or le.teacher_id not in teachers_by_id:
+                continue  # the block, the option, the period or the teacher is gone
+            locked_block_slots.setdefault((le.elective_block_id, le.period_id), {})[option.option_id] = (
+                le.teacher_id, le.room_id,
+            )
+
+    for block in blocks:
+        opts = options_by_block[block.id]
+        cg = class_groups_by_id.get(block.class_group_id)
+        block_label = f"{block.name} for {_class_group_label(cg) if cg else 'a section'}"
+
+        candidates: dict[int, list[int]] = {}
+        for o in opts:
+            candidates[o.id] = _candidate_teacher_ids(o, teachers, teachers_by_id, class_groups_by_id)
+            candidate_ids_by_req[o.id] = candidates[o.id]
+            if not candidates[o.id]:
+                subject = subjects_by_id.get(o.subject_id)
+                errors.append(
+                    f"No qualified teacher found for {subject.name if subject else 'a subject'} in "
+                    f"{block_label}. Assign a teacher qualified for this subject and grade, or set "
+                    f"a preferred teacher on that option."
+                )
+        if any(not candidates[o.id] for o in opts):
+            continue
+
+        # A period is usable only if EVERY option may be there - they all run
+        # whenever the block does - and every option can be given its own
+        # teacher at that moment. The second check is a matching, not a
+        # per-option one: two options whose only qualified teacher is the same
+        # person each have "a" teacher, but never both at once.
+        staffable: list[Period] = []
+        free_by_period: dict[int, dict[int, list[int]]] = {}
+        for period in periods:
+            locked_here = locked_block_slots.get((block.id, period.id), {})
+            if not locked_here and not all(
+                period.id not in req_restricted_periods.get(o.id, set())
+                and (req_required_periods.get(o.id) is None or period.id in req_required_periods[o.id])
+                for o in opts
+            ):
+                continue
+            free: dict[int, list[int]] = {}
+            for o in opts:
+                f = [
+                    t for t in candidates[o.id]
+                    if period.id not in set(teachers_by_id[t].unavailable_period_ids or [])
+                ]
+                locked_teacher = locked_here.get(o.option_id, (None, None))[0]
+                if locked_teacher is not None and locked_teacher not in f:
+                    f.append(locked_teacher)
+                free[o.id] = f
+            if all(free.values()) and _can_staff_all(free):
+                staffable.append(period)
+                free_by_period[period.id] = free
+
+        if len(staffable) < block.periods_per_week:
+            errors.append(_explain_unstaffable_block(
+                block_label, block.periods_per_week, len(staffable), opts, candidates,
+                teachers_by_id, subjects_by_id,
+            ))
+            continue
+
+        block_vars = []
+        for period in staffable:
+            occ = model.NewBoolVar(f"occ_b{block.id}_p{period.id}")
+            block_occ[(block.id, period.id)] = occ
+            block_vars.append(occ)
+            class_group_period_vars.setdefault((block.class_group_id, period.id), []).append(occ)
+            for o in opts:
+                # The option is present wherever the block is, which is what
+                # lets the legacy per-requirement rules read it.
+                req_period_vars[o.id].setdefault(period.id, []).append(occ)
+                choice = []
+                for teacher_id in free_by_period[period.id][o.id]:
+                    var = model.NewBoolVar(f"x_b{block.id}_o{o.option_id}_t{teacher_id}_p{period.id}")
+                    choice.append((teacher_id, var))
+                    teacher_period_vars.setdefault((teacher_id, period.id), []).append(var)
+                    teacher_total_vars.setdefault(teacher_id, []).append(var)
+                option_x[(block.id, period.id, o.option_id)] = choice
+                model.Add(sum(v for _, v in choice) == occ)
+        model.Add(sum(block_vars) == block.periods_per_week)
+
+        for (locked_block_id, period_id), by_option in locked_block_slots.items():
+            if locked_block_id != block.id:
+                continue
+            occ = block_occ.get((block.id, period_id))
+            if occ is None:
+                warnings.append(
+                    f"A locked {block_label} slot could not be kept, because its subjects can no "
+                    f"longer all be given a teacher at that time. It was scheduled again freshly."
+                )
+                continue
+            # Implied by pinning any of the slot's teachers below, since each
+            # option's teacher choice sums to occ - stated anyway so the slot is
+            # kept on its own terms rather than only as a side effect of which
+            # teacher variables happened to be found.
+            model.Add(occ == 1)
+            option_subject = {o.option_id: o.subject_id for o in opts}
+            for option_id, (teacher_id, room_id) in by_option.items():
+                choice = option_x.get((block.id, period_id, option_id), [])
+                var = next((v for t, v in choice if t == teacher_id), None)
+                if var is None:
+                    continue
+                model.Add(var == 1)
+                key = (block.class_group_id, option_subject[option_id], teacher_id, period_id)
+                locked_keys.add(key)
+                locked_rooms[key] = room_id
+
+    if errors:
+        return TimetableSolveResult(status="infeasible", errors=errors)
+
+    # Ordinary requirements only: a locked block entry was handled above, and
+    # matching one here by its subject would treat a block option as a
+    # standalone requirement it is not.
+    req_by_class_subject = {(r.class_group_id, r.subject_id): r for r in requirements}
     if previous_timetable:
         for le in previous_timetable.entries:
-            if not le.locked:
+            if not le.locked or le.elective_block_id is not None:
                 continue
             req = req_by_class_subject.get((le.class_group_id, le.subject_id))
             if not req:
@@ -699,6 +1009,13 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         for period_id, weight in req_discouraged_periods.get(req.id, {}).items():
             for var in req_period_vars[req.id].get(period_id, []):
                 penalties.append(weight * var)
+    # An option discouraging a period discourages its whole block there, since
+    # the option cannot be there without the block.
+    for o in option_reqs:
+        for period_id, weight in req_discouraged_periods.get(o.id, {}).items():
+            occ = block_occ.get((o.block_id, period_id))
+            if occ is not None:
+                penalties.append(weight * occ)
 
     # Each requirement must be met exactly (periods_per_week times).
     for req in requirements:
@@ -758,7 +1075,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         )
             continue
 
-        for req in requirements:
+        for req in [*requirements, *option_reqs]:
             if not _applies_to(p, req):
                 continue
             per_period_vars = req_period_vars.get(req.id, {})
@@ -792,7 +1109,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         max_per_day = p.get("max_per_day")
         if not isinstance(max_per_day, int) or max_per_day < 1:
             continue
-        for req in requirements:
+        for req in [*requirements, *option_reqs]:
             if not _applies_to(p, req):
                 continue
             per_period_vars = req_period_vars.get(req.id, {})
@@ -821,9 +1138,16 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         )
         .all()
     )
+    # Ordinary requirements and block options, by (section, subject).
+    subject_owner = {
+        **req_by_class_subject,
+        **{(o.class_group_id, o.subject_id): o for o in option_reqs},
+    }
+
+    def _same_block(a, b) -> bool:
+        return isinstance(a, _OptionReq) and isinstance(b, _OptionReq) and a.block_id == b.block_id
+
     if sequence_constraints:
-        # req_by_class_subject was already built above, when honoring
-        # locked entries — reused here rather than recomputed.
         for c in sequence_constraints:
             p = c.parameters or {}
             first_subject_id = p.get("first_subject_id")
@@ -832,9 +1156,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 continue
             class_group_ids = p.get("class_group_ids") or [cg.id for cg in class_groups]
             for cg_id in class_group_ids:
-                req1 = req_by_class_subject.get((cg_id, first_subject_id))
-                req2 = req_by_class_subject.get((cg_id, second_subject_id))
-                if not req1 or not req2:
+                req1 = subject_owner.get((cg_id, first_subject_id))
+                req2 = subject_owner.get((cg_id, second_subject_id))
+                if not req1 or not req2 or _same_block(req1, req2):
                     continue  # this class group doesn't have both subjects; nothing to constrain
                 for day_periods in teaching_runs:
                     for i in range(len(day_periods) - 1):
@@ -874,9 +1198,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             continue
         class_group_ids = p.get("class_group_ids") or [cg.id for cg in class_groups]
         for cg_id in class_group_ids:
-            req1 = req_by_class_subject.get((cg_id, first_subject_id))
-            req2 = req_by_class_subject.get((cg_id, second_subject_id))
-            if not req1 or not req2:
+            req1 = subject_owner.get((cg_id, first_subject_id))
+            req2 = subject_owner.get((cg_id, second_subject_id))
+            if not req1 or not req2 or _same_block(req1, req2):
                 continue  # this class group doesn't have both subjects; nothing to constrain
             for day_periods in sorted_periods_by_day.values():
                 for p1 in day_periods:
@@ -922,6 +1246,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     )
     if ir_constraints:
         atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id)
+        atoms.extend(_block_atoms(block_occ, option_x, option_reqs, periods_by_id))
         index = SchoolIndex(
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
             teacher_ids={t.name: t.id for t in teachers},
@@ -1020,6 +1345,23 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         }
                     )
                     break
+        # Block options, one entry each, tagged with their block so the grid can
+        # show them as one slot and dragging can move them together.
+        option_by_id = {o.option_id: o for o in option_reqs}
+        for (block_id, period_id, option_id), choice in option_x.items():
+            for teacher_id, var in choice:
+                if solver.Value(var):
+                    o = option_by_id[option_id]
+                    assignments.append(
+                        {
+                            "class_group_id": o.class_group_id,
+                            "subject_id": o.subject_id,
+                            "teacher_id": teacher_id,
+                            "period_id": period_id,
+                            "elective_block_id": block_id,
+                        }
+                    )
+                    break
         _assign_rooms(db, school_id, assignments, locked_rooms=locked_rooms)
 
     if status_name in ("infeasible", "unknown"):
@@ -1027,6 +1369,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             requirements, teachers_by_id, periods,
             req_restricted_periods, req_required_periods, candidate_ids_by_req,
             subjects_by_id, class_groups_by_id,
+            blocks=blocks, option_reqs=option_reqs,
         )
         # Only reachable for a *proven* infeasibility (not "unknown", a
         # timeout) — SufficientAssumptionsForInfeasibility() needs CP-SAT to
@@ -1056,6 +1399,8 @@ def _diagnose_infeasibility(
     candidate_ids_by_req: dict[int, list[int]],
     subjects_by_id: dict[int, Subject],
     class_groups_by_id: dict[int, ClassGroup],
+    blocks: list | None = None,
+    option_reqs: list | None = None,
 ) -> list[str]:
     """
     Best-effort explanation for why the solve came back infeasible (or
@@ -1093,6 +1438,9 @@ def _diagnose_infeasibility(
     demand_by_cg: dict[int, int] = {}
     for req in requirements:
         demand_by_cg[req.class_group_id] = demand_by_cg.get(req.class_group_id, 0) + req.periods_per_week
+    # A block occupies its section once, however many options it has.
+    for block in blocks or []:
+        demand_by_cg[block.class_group_id] = demand_by_cg.get(block.class_group_id, 0) + block.periods_per_week
     for cg_id, demand in demand_by_cg.items():
         if demand > total_periods:
             cg = class_groups_by_id.get(cg_id)
@@ -1122,7 +1470,9 @@ def _diagnose_infeasibility(
     # can give, either by their own cap or by how many periods they're
     # actually available for.
     load_by_teacher: dict[int, int] = {}
-    for req in requirements:
+    # Options count separately here: each one is a real class a teacher has to
+    # take, at the same moment as the block's other options.
+    for req in [*requirements, *(option_reqs or [])]:
         candidates = candidate_ids_by_req.get(req.id, [])
         if len(candidates) == 1:
             load_by_teacher[candidates[0]] = load_by_teacher.get(candidates[0], 0) + req.periods_per_week

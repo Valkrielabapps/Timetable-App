@@ -280,6 +280,38 @@ def _relate(model, penalties, expr, relation: str, value: int, weight: int | Non
 # ---------------------------------------------------------------------------
 
 
+def _distinct_vars(vars_) -> list:
+    """Each variable once, in first-seen order.
+
+    An elective block gives every option its own class-side atom so that a
+    rule about Physics can find Physics in a block - but all of them share the
+    block's single "does the block meet here" variable. Summed as-is, a
+    three-option block would count as three periods of the section's day, and
+    "at most 6 periods a day" would be tripped by half that. The variable is
+    the period, so it is counted once.
+
+    Identity, not equality: CP-SAT variables overload == to build constraints.
+    """
+    seen: set[int] = set()
+    out = []
+    for var in vars_:
+        if id(var) not in seen:
+            seen.add(id(var))
+            out.append(var)
+    return out
+
+
+def _simultaneous(a, b) -> bool:
+    """Two atoms that are strands of one slot rather than separate lessons.
+
+    A block's options, or a lab's batches, share a section and a period. They
+    happen at the same moment by construction, so a rule about two lessons
+    being too close together - or on the same day - is not about them, and
+    applying it would only stop the block from meeting at all.
+    """
+    return a.class_group_id == b.class_group_id and a.period_id == b.period_id
+
+
 def _count_expr(model, group, resolved, form: Count, name: str):
     """The quantity one group's constraint applies to, and whether it exists.
 
@@ -289,7 +321,8 @@ def _count_expr(model, group, resolved, form: Count, name: str):
     """
     selected = [a for a in group if _matches(a, resolved)]
     if not form.distinct:
-        return (sum(a.var for a in selected) if selected else 0), bool(selected)
+        vars_ = _distinct_vars(a.var for a in selected)
+        return (sum(vars_) if vars_ else 0), bool(vars_)
 
     keyer = _SCOPE_KEY[form.distinct]
     by_kind: dict = {}
@@ -407,7 +440,8 @@ def _balance(model, penalties, atoms, form: Balance, index, weight, tag: str) ->
             by_bucket[tuple(_SCOPE_KEY[d](atom) for d in form.across)].append(atom.var)
 
         counts = []
-        for i, (_bucket, vars_) in enumerate(sorted(by_bucket.items(), key=lambda kv: str(kv[0]))):
+        for i, (_bucket, raw) in enumerate(sorted(by_bucket.items(), key=lambda kv: str(kv[0]))):
+            vars_ = _distinct_vars(raw)
             c = model.NewIntVar(0, max(1, len(vars_)), f"{name}_b{i}")
             model.Add(c == (sum(vars_) if vars_ else 0))
             counts.append(c)
@@ -536,7 +570,7 @@ def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
                 # and needs no extra variables.
                 for start in range(0, max(0, len(run) - n)):
                     window = run[start:start + n + 1]
-                    vars_ = [a.var for slot in window for a in slot]
+                    vars_ = _distinct_vars(a.var for slot in window for a in slot)
                     _relate(model, penalties, sum(vars_), "<=", n, weight,
                             f"{name}_r{run_index}_w{start}")
 
@@ -553,7 +587,8 @@ def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
                         neighbours += [a.var for a in run[i - 1]]
                     if i + 1 < len(run):
                         neighbours += [a.var for a in run[i + 1]]
-                    here = [a.var for a in slot]
+                    neighbours = _distinct_vars(neighbours)
+                    here = _distinct_vars(a.var for a in slot)
                     if not neighbours:
                         # A run of one: nowhere to pair with, so nothing of
                         # this subject may go here at all.
@@ -622,7 +657,7 @@ def _adjacency(model, penalties, atoms, form: Adjacency, index, weight, tag: str
             for b in seconds:
                 if a.day_of_week != b.day_of_week:
                     continue
-                if a.var is b.var:
+                if a.var is b.var or _simultaneous(a, b):
                     continue
                 distance = b.order - a.order
                 if form.directional:
@@ -654,7 +689,7 @@ def _bucket(model, penalties, atoms, form: Bucket, index, weight, tag: str) -> N
             # Pairwise: two lessons that would share the bucket can't both run.
             for a in firsts:
                 for b in seconds:
-                    if keyer(a) != keyer(b) or a.var is b.var:
+                    if keyer(a) != keyer(b) or a.var is b.var or _simultaneous(a, b):
                         continue
                     _relate(model, penalties, a.var + b.var, "<=", 1, weight,
                             f"{name}_{a.period_id}_{b.period_id}_{a.requirement_id}_{b.requirement_id}")
@@ -700,7 +735,7 @@ def _conditional(model, penalties, atoms, form: Conditional, index, weight, tag:
 
     for key, group in _group(when_pool, form.scope).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
-        trigger_vars = [a.var for a in group if _matches(a, when_resolved)]
+        trigger_vars = _distinct_vars(a.var for a in group if _matches(a, when_resolved))
         if not trigger_vars:
             continue
 
@@ -734,7 +769,7 @@ def _conditional(model, penalties, atoms, form: Conditional, index, weight, tag:
                           if _matches(a, then_resolved)]
             if not then_group:
                 continue
-            expr = sum(a.var for a in then_group)
+            expr = sum(_distinct_vars(a.var for a in then_group))
             if weight is None:
                 if then.relation == "<=":
                     model.Add(expr <= then.value).OnlyEnforceIf(holds)

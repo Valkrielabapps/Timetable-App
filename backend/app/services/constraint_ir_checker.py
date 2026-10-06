@@ -91,10 +91,36 @@ class Violation:
     detail: str = ""
 
 
-def _count_in(group: list[Placement], resolved: dict, form: Count) -> tuple[int, list[Placement]]:
+def _slots(placements, side: str) -> int:
+    """How many periods these placements occupy, counted the way the solver does.
+
+    One period of a section is one slot, however many entries share it: an
+    elective block puts one entry per option into the same section and
+    period, and a split lab one per batch. The solver reserves that slot with
+    a single variable, so counting entries here would report "7 periods
+    today" where the solver saw 5 - a violation nobody can find, on a
+    timetable that honours the rule.
+
+    A teacher, on the other hand, really is busy once per entry.
+    """
+    if side == "teacher":
+        return len({(p.teacher_id, p.period_id) for p in placements})
+    return len({(p.class_group_id, p.period_id) for p in placements})
+
+
+def _simultaneous(a, b) -> bool:
+    """Strands of one slot - a block's options, a lab's batches - rather than
+    separate lessons. They happen at the same moment by construction, so a
+    rule about two lessons being too close, or sharing a day, is not about
+    them. Mirrors the compiler, which skips the same pairs."""
+    return a.class_group_id == b.class_group_id and a.period_id == b.period_id
+
+
+def _count_in(group: list[Placement], resolved: dict, form: Count,
+              side: str = "class") -> tuple[int, list[Placement]]:
     matching = [p for p in group if _matches(p, resolved)]
     if not form.distinct:
-        return len(matching), matching
+        return _slots(matching, side), matching
     keyer = _SCOPE_KEY[form.distinct]
     return len({keyer(p) for p in matching}), matching
 
@@ -123,9 +149,9 @@ def _unit(form: Count, n: int = 2) -> str:
 
 def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
     resolved = _resolve(form.selector, index)
+    side = _side(form.scope, form.selector)
     pool = [p for p in placements
-            if (p.occupies_teacher if _side(form.scope, form.selector) == "teacher"
-                else p.occupies_class)]
+            if (p.occupies_teacher if side == "teacher" else p.occupies_class)]
     members = [p for p in pool if _matches(p, resolved, ignore_time=True)]
     if not members:
         return []
@@ -137,7 +163,7 @@ def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
         for _key, outer_group in _group(members, outer).items():
             satisfied, everything = False, []
             for _inner_key, inner_group in _group(outer_group, inner).items():
-                actual, matching = _count_in(inner_group, resolved, form)
+                actual, matching = _count_in(inner_group, resolved, form, side)
                 everything.extend(matching)
                 if _holds(actual, form.relation, form.value):
                     satisfied = True
@@ -152,7 +178,7 @@ def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
 
     found = []
     for _key, group in _group(members, form.scope).items():
-        actual, matching = _count_in(group, resolved, form)
+        actual, matching = _count_in(group, resolved, form, side)
         if not _holds(actual, form.relation, form.value):
             found.append((
                 [p.entry_id for p in matching],
@@ -226,7 +252,7 @@ def _check_adjacency(placements, form: Adjacency, index) -> list[tuple[list[int]
 
         for a in firsts:
             for b in seconds:
-                if a.day_of_week != b.day_of_week or a.entry_id == b.entry_id:
+                if a.day_of_week != b.day_of_week or a.entry_id == b.entry_id or _simultaneous(a, b):
                     continue
                 distance = b.order - a.order
                 too_close = (0 < distance <= form.min_gap) if form.directional \
@@ -252,7 +278,7 @@ def _check_bucket(placements, form: Bucket, index) -> list[tuple[list[int], str]
         if form.relation == "different":
             for a in firsts:
                 for b in seconds:
-                    if a.entry_id != b.entry_id and keyer(a) == keyer(b):
+                    if a.entry_id != b.entry_id and keyer(a) == keyer(b) and not _simultaneous(a, b):
                         found.append(([a.entry_id, b.entry_id], f"both on the same {word}"))
         else:
             a_buckets = {keyer(p) for p in firsts}
@@ -293,10 +319,12 @@ def _check_balance(placements, form: Balance, index) -> list[tuple[list[int], st
     if len(all_buckets) < 2:
         return []
     found = []
+    side = _side(form.scope, form.selector)
     for _key, group in _group(members, form.scope).items():
-        counts = {b: 0 for b in all_buckets}
+        by_bucket: dict = {b: [] for b in all_buckets}
         for p in group:
-            counts[tuple(_SCOPE_KEY[d](p) for d in form.across)] += 1
+            by_bucket[tuple(_SCOPE_KEY[d](p) for d in form.across)].append(p)
+        counts = {b: _slots(ps, side) for b, ps in by_bucket.items()}
         spread = max(counts.values()) - min(counts.values())
         if spread > form.max_spread:
             found.append(([p.entry_id for p in group],
@@ -310,7 +338,8 @@ def _check_conditional(placements, form: Conditional, index) -> list[tuple[list[
     members = [p for p in placements if _matches(p, when_resolved, ignore_time=True)]
     found = []
     for key, group in _group(members, form.scope).items():
-        actual, _ = _count_in(group, when_resolved, form.when)
+        actual, _ = _count_in(group, when_resolved, form.when,
+                              _side(form.when.scope, form.when.selector))
         if not _holds(actual, form.when.relation, form.when.value):
             continue  # the condition doesn't hold here, so the rule says nothing
         # Only this group's placements are subject to the consequence.
@@ -341,11 +370,16 @@ def _check_form(placements, form: Form, index) -> list[tuple[list[int], str]]:
 def check_rule(placements: list[Placement], rule: Rule, index: SchoolIndex,
                constraint_id: int | None = None) -> list[Violation]:
     """Every way this timetable breaks one rule. Empty means it honours it."""
-    return [
-        Violation(constraint_id=constraint_id, description=rule.description,
-                  strength=rule.strength, entry_ids=sorted(set(ids)), detail=detail)
-        for ids, detail in _check_form(placements, rule.form, index)
-    ]
+    seen: set[tuple] = set()
+    out: list[Violation] = []
+    for ids, detail in _check_form(placements, rule.form, index):
+        key = (tuple(sorted(set(ids))), detail)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(Violation(constraint_id=constraint_id, description=rule.description,
+                             strength=rule.strength, entry_ids=list(key[0]), detail=detail))
+    return out
 
 
 def check_rules(placements: list[Placement], rules: list[tuple[int | None, Rule]],
