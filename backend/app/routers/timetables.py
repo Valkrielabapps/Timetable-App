@@ -40,6 +40,7 @@ from app.core.database import SessionLocal, get_db
 from app.models.school import (
     ClassGroup,
     Constraint,
+    ElectiveBlock,
     Period,
     Room,
     Subject,
@@ -51,6 +52,8 @@ from app.models.school import (
 from app.models.user import User
 from app.schemas.timetable import (
     EntryUpdateOut,
+    SlotLock,
+    SlotMove,
     TimetableSummaryOut,
     EditCommandRequest,
     EditCommandResponse,
@@ -88,6 +91,9 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
     rooms = {r.id: r for r in db.query(Room).filter(
         Room.school_id == timetable.school_id
     ).all()}
+    block_names = {b.id: b.name for b in db.query(ElectiveBlock).filter(
+        ElectiveBlock.school_id == timetable.school_id
+    ).all()}
 
     entries = []
     for e in timetable.entries:
@@ -111,6 +117,8 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
             "room_name": room.name if room else None,
             "locked": e.locked,
             "lab_batch": e.lab_batch,
+            "elective_block_id": e.elective_block_id,
+            "elective_block_name": block_names.get(e.elective_block_id),
         })
 
     return TimetableOut(
@@ -386,6 +394,7 @@ def _check_slot_conflict(
     new_teacher_id: int,
     new_room_id: int | None,
     exclude_entry_ids: set[int],
+    check_class_group: bool = True,
 ) -> None:
     """
     Raises a 400 if placing (class_group_id, new_teacher_id, new_room_id)
@@ -394,6 +403,12 @@ def _check_slot_conflict(
     period. `exclude_entry_ids` leaves out the entry (or entries, for a
     swap) being moved, so an entry doesn't conflict with its own old slot
     or with the other entry it's being swapped against.
+
+    `check_class_group` is off when the entry is staying in its period and
+    only its teacher or room is changing. A slot can legitimately hold several
+    entries for one section - an elective block's options, a split lab's
+    batches - and with the check on, giving one of them a different teacher
+    was refused as the section being "already scheduled" in its own period.
     """
     siblings = (
         db.query(TimetableEntry)
@@ -405,7 +420,7 @@ def _check_slot_conflict(
         .all()
     )
     for s in siblings:
-        if s.class_group_id == class_group_id:
+        if check_class_group and s.class_group_id == class_group_id:
             raise HTTPException(
                 status_code=400,
                 detail="This class group already has something scheduled in that period.",
@@ -473,6 +488,15 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
     the EXACT same conflict-checked update instead of a second copy of
     this logic. Callers are responsible for auth/status checks; this just
     validates the slot and applies the change."""
+    if "period_id" in data and entry.elective_block_id is not None \
+            and data["period_id"] != entry.period_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This lesson is part of an elective block, whose subjects always run "
+                "together. Move the whole block instead."
+            ),
+        )
     if "period_id" in data or "teacher_id" in data or "room_id" in data:
         new_period_id = data.get("period_id", entry.period_id)
         new_teacher_id = data.get("teacher_id", entry.teacher_id)
@@ -481,6 +505,7 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
             db, entry.timetable_id, entry.class_group_id,
             new_period_id, new_teacher_id, new_room_id,
             exclude_entry_ids={entry.id},
+            check_class_group=new_period_id != entry.period_id,
         )
 
     for field, value in data.items():
@@ -536,6 +561,14 @@ def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry)
     """The actual mutation behind POST /entries/{id}/swap-with/{id} —
     factored out for the same reason as _apply_entry_update above.
     Callers are responsible for auth/status/locked/same-timetable checks."""
+    if entry.elective_block_id is not None or other.elective_block_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "One of these lessons is part of an elective block, whose subjects always "
+                "run together. Move the whole block instead."
+            ),
+        )
     both_ids = {entry.id, other.id}
     _check_slot_conflict(
         db, entry.timetable_id, entry.class_group_id,
@@ -554,6 +587,119 @@ def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry)
     db.refresh(other)
 
     return [_entry_out(db, entry), _entry_out(db, other)]
+
+
+def _editable_timetable(db: Session, timetable_id: int, current_user: User) -> Timetable:
+    timetable = db.get(Timetable, timetable_id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found")
+    require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    if timetable.status != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail=f"This timetable isn't editable right now (status: {timetable.status}).",
+        )
+    return timetable
+
+
+def _slot_entries(db: Session, timetable_id: int, class_group_id: int, period_id: int) -> list[TimetableEntry]:
+    return (
+        db.query(TimetableEntry)
+        .filter(
+            TimetableEntry.timetable_id == timetable_id,
+            TimetableEntry.class_group_id == class_group_id,
+            TimetableEntry.period_id == period_id,
+        )
+        .all()
+    )
+
+
+@router.post("/{timetable_id}/move-slot", response_model=EntryUpdateOut)
+def move_slot(
+    timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Move everything in one section's period to another, swapping with
+    whatever is already there.
+
+    The drag unit is the slot, not the entry. A slot can hold several entries
+    - an elective block has one per option, a split lab one per batch - and
+    they always move together: moving one alone would leave a block's options
+    in different periods, which is no longer a block. Handling every case as
+    "exchange two slots" covers a single lesson moving into an empty cell, two
+    lessons swapping, and a block swapping with a lesson or with another block,
+    with one set of checks.
+
+    All-or-nothing. Every teacher and room arriving in a period is checked
+    against everything already there that is not itself moving; if any one
+    would double-book, nothing moves.
+    """
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    if payload.from_period_id == payload.to_period_id:
+        raise HTTPException(status_code=400, detail="That's the same period.")
+    for period_id in (payload.from_period_id, payload.to_period_id):
+        period = db.get(Period, period_id)
+        if not period or period.school_id != timetable.school_id:
+            raise HTTPException(status_code=404, detail="Period not found")
+        if period.is_break:
+            raise HTTPException(status_code=400, detail="Nothing can be scheduled in a break.")
+
+    source = _slot_entries(db, timetable.id, payload.class_group_id, payload.from_period_id)
+    target = _slot_entries(db, timetable.id, payload.class_group_id, payload.to_period_id)
+    if not source:
+        raise HTTPException(status_code=400, detail="There's nothing in that slot to move.")
+    if any(e.locked for e in source + target):
+        raise HTTPException(
+            status_code=400,
+            detail="One of these slots is locked. Unlock it before moving it.",
+        )
+
+    moving_ids = {e.id for e in source + target}
+    for entry in source:
+        _check_slot_conflict(db, timetable.id, entry.class_group_id, payload.to_period_id,
+                             entry.teacher_id, entry.room_id, exclude_entry_ids=moving_ids)
+    for entry in target:
+        _check_slot_conflict(db, timetable.id, entry.class_group_id, payload.from_period_id,
+                             entry.teacher_id, entry.room_id, exclude_entry_ids=moving_ids)
+
+    for entry in source:
+        entry.period_id = payload.to_period_id
+    for entry in target:
+        entry.period_id = payload.from_period_id
+    db.commit()
+    for entry in source + target:
+        db.refresh(entry)
+
+    return EntryUpdateOut(
+        entries=[_entry_out(db, e) for e in source + target],
+        violations=_violations_after_edit(db, timetable),
+    )
+
+
+@router.post("/{timetable_id}/lock-slot", response_model=EntryUpdateOut)
+def lock_slot(
+    timetable_id: int, payload: SlotLock, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lock or unlock a whole slot.
+
+    A block is locked as a unit: locking two of its three options would pin
+    the block's period anyway - they all run together - while leaving it
+    unclear which teachers were meant to stay.
+    """
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    entries = _slot_entries(db, timetable.id, payload.class_group_id, payload.period_id)
+    if not entries:
+        raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")
+    for entry in entries:
+        entry.locked = payload.locked
+    db.commit()
+    for entry in entries:
+        db.refresh(entry)
+    return EntryUpdateOut(
+        entries=[_entry_out(db, e) for e in entries],
+        violations=_violations_after_edit(db, timetable),
+    )
 
 
 def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
@@ -582,6 +728,10 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
         room_name=room.name if room else None,
         locked=entry.locked,
         lab_batch=entry.lab_batch,
+        elective_block_id=entry.elective_block_id,
+        elective_block_name=(
+            block.name if (block := db.get(ElectiveBlock, entry.elective_block_id)) else None
+        ) if entry.elective_block_id else None,
     )
 
 

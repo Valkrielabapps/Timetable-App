@@ -38,6 +38,34 @@ class TimetableEntryOut(BaseModel):
     room_name: str | None
     locked: bool
     lab_batch: int | None = None
+    # Set when this entry is one option of an elective block. Several entries
+    # then share one section and period; the grid groups them under the
+    # block's name, and moving or locking acts on all of them together.
+    elective_block_id: int | None = None
+    elective_block_name: str | None = None
+
+
+class SlotMove(BaseModel):
+    """Move everything in one section's period to another period.
+
+    The unit of a drag is a slot, not an entry. A slot can hold several
+    entries - an elective block has one per option, a split lab one per batch -
+    and moving one of them alone would tear the block apart. Whatever is
+    already in the target slot moves back to the source, so a drop onto an
+    occupied cell is a swap and a drop onto an empty one is a move.
+    """
+
+    class_group_id: int
+    from_period_id: int
+    to_period_id: int
+
+
+class SlotLock(BaseModel):
+    """Lock or unlock every entry in one section's period at once."""
+
+    class_group_id: int
+    period_id: int
+    locked: bool
 
 
 class ViolationOut(BaseModel):
