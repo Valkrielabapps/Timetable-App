@@ -65,7 +65,8 @@ from app.services.constraint_ir import IRError, rule_from_dict
 from app.services.constraint_ir_checker import Placement, check_rules
 from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
-from app.services.export import build_excel, build_pdf
+from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
+from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import _class_group_labels, generate_school_timetable
 
@@ -860,7 +861,14 @@ _EXPORT_CONTENT_TYPES = {
 
 
 @router.get("/{timetable_id}/export")
-def export_timetable(timetable_id: int, format: str = "xlsx", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def export_timetable(
+    timetable_id: int,
+    format: str = "xlsx",
+    class_group_id: int | None = None,
+    student_combinations: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Downloads a printable version of a generated timetable — one sheet
     (Excel) or page (PDF) per section, followed by one per teacher, so
@@ -882,8 +890,33 @@ def export_timetable(timetable_id: int, format: str = "xlsx", db: Session = Depe
             detail=f"This timetable isn't ready to export yet (status: {timetable.status}).",
         )
 
-    content = build_excel(db, timetable) if format == "xlsx" else build_pdf(db, timetable)
-    filename = f"timetable_{timetable_id}.{format}"
+    if student_combinations:
+        # One timetable per combination of elective choices, for one section -
+        # what a student actually attends. A separate, deliberate export rather
+        # than part of the whole-school one, which would otherwise grow by a
+        # page per combination per section.
+        if class_group_id is None:
+            raise HTTPException(status_code=400, detail="Choose a section to export student timetables for.")
+        class_group = db.get(ClassGroup, class_group_id)
+        if not class_group or class_group.school_id != timetable.school_id:
+            raise HTTPException(status_code=404, detail="Section not found")
+        try:
+            combinations = combinations_for(db, class_group.id)
+        except TooManyCombinations as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        if not combinations:
+            raise HTTPException(
+                status_code=400,
+                detail="This section has no elective blocks, so its timetable is the same for every student.",
+            )
+        build = build_student_excel if format == "xlsx" else build_student_pdf
+        content = build(db, timetable, class_group, combinations)
+        label = (f"{class_group.grade}_{class_group.name}" if class_group.grade else class_group.name)
+        safe = "".join(c if c.isalnum() else "_" for c in label).strip("_") or "section"
+        filename = f"student_timetables_{safe}.{format}"
+    else:
+        content = build_excel(db, timetable) if format == "xlsx" else build_pdf(db, timetable)
+        filename = f"timetable_{timetable_id}.{format}"
     return Response(
         content=content,
         media_type=_EXPORT_CONTENT_TYPES[format],

@@ -25,7 +25,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy.orm import Session
 
-from app.models.school import ClassGroup, Period, Room, Subject, Teacher, Timetable
+from app.models.school import ClassGroup, ElectiveBlock, Period, Room, Subject, Teacher, Timetable
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -45,6 +45,9 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
     teachers_by_id = {t.id: t for t in teachers}
     class_groups_by_id = {c.id: c for c in class_groups}
     rooms_by_id = {r.id: r for r in db.query(Room).filter(Room.school_id == school_id).all()}
+    block_names = {
+        b.id: b.name for b in db.query(ElectiveBlock).filter(ElectiveBlock.school_id == school_id).all()
+    }
 
     entries_by_class_period = defaultdict(list)
     entries_by_teacher_period = defaultdict(list)
@@ -62,6 +65,7 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
         "teachers_by_id": teachers_by_id,
         "class_groups_by_id": class_groups_by_id,
         "rooms_by_id": rooms_by_id,
+        "block_names": block_names,
         "entries_by_class_period": entries_by_class_period,
         "entries_by_teacher_period": entries_by_teacher_period,
     }
@@ -101,6 +105,11 @@ def _grid_rows(data: dict, entries_index: dict, entry_key_prefix, mode: str) -> 
             if period:
                 entries = entries_index.get((entry_key_prefix, period.id), [])
                 text = "\n".join(_cell_text(e, data, mode) for e in entries)
+                # A section's block slot holds every option at once; naming
+                # the block says why one cell has three subjects in it.
+                block_id = entries[0].elective_block_id if entries else None
+                if mode == "section" and block_id is not None and len(entries) > 1:
+                    text = f"{data['block_names'].get(block_id, 'Elective block')}\n{text}"
             row.append(text)
         rows.append(row)
     return rows
@@ -112,8 +121,51 @@ def _safe_sheet_name(name: str) -> str:
     return cleaned[:31] or "Sheet"
 
 
-def build_excel(db: Session, timetable: Timetable) -> bytes:
-    data = _load_grid_data(db, timetable)
+def _has_content(rows: list[list[str]]) -> bool:
+    return any(any(r[1:]) for r in rows[1:])
+
+
+def _school_grids(data: dict) -> list[tuple[str, str, list[list[str]]]]:
+    """(sheet name, page title, rows) for every section, then every teacher."""
+    grids = []
+    for cg in data["class_groups"]:
+        rows = _grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")
+        if _has_content(rows):
+            label = _class_group_label(cg)
+            grids.append((label, f"{label} — Timetable", rows))
+    for teacher in data["teachers"]:
+        rows = _grid_rows(data, data["entries_by_teacher_period"], teacher.id, mode="teacher")
+        if _has_content(rows):
+            grids.append((teacher.name, f"{teacher.name} — Teaching Schedule", rows))
+    return grids
+
+
+def _student_grids(data: dict, class_group: ClassGroup, combinations) -> list[tuple[str, str, list[list[str]]]]:
+    """One grid per combination of elective choices, for one section.
+
+    Each is the section's own timetable filtered to what that student
+    attends: the common subjects, plus only the chosen option from each block.
+    Numbered in the sheet name because Excel caps names at 31 characters, and
+    "Physics + Chemistry + Mathematics" truncated would collide with its
+    neighbours.
+    """
+    label = _class_group_label(class_group)
+    grids = []
+    for number, combination in enumerate(combinations, start=1):
+        index: dict = defaultdict(list)
+        for (cg_id, period_id), entries in data["entries_by_class_period"].items():
+            if cg_id == class_group.id:
+                index[(cg_id, period_id)] = [e for e in entries if combination.keeps(e)]
+        rows = _grid_rows(data, index, class_group.id, mode="section")
+        grids.append((
+            f"{number}. {combination.label}",
+            f"{label} — {combination.label}",
+            rows,
+        ))
+    return grids
+
+
+def _excel(grids) -> bytes:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
@@ -122,8 +174,8 @@ def build_excel(db: Session, timetable: Timetable) -> bytes:
     title_font = Font(bold=True, size=14)
     wrap = Alignment(wrap_text=True, vertical="top", horizontal="left")
 
-    def write_sheet(title: str, rows: list[list[str]]):
-        ws = wb.create_sheet(_safe_sheet_name(title))
+    for sheet_name, title, rows in grids:
+        ws = wb.create_sheet(_safe_sheet_name(sheet_name))
         ws.append([title])
         ws["A1"].font = title_font
         ws.append([])
@@ -141,16 +193,6 @@ def build_excel(db: Session, timetable: Timetable) -> bytes:
                 cell.alignment = wrap
             ws.row_dimensions[row[0].row].height = 42
 
-    for cg in data["class_groups"]:
-        rows = _grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")
-        if any(any(r[1:]) for r in rows[1:]):  # skip sections with nothing scheduled
-            write_sheet(f"{_class_group_label(cg)}", rows)
-
-    for teacher in data["teachers"]:
-        rows = _grid_rows(data, data["entries_by_teacher_period"], teacher.id, mode="teacher")
-        if any(any(r[1:]) for r in rows[1:]):
-            write_sheet(f"{teacher.name}", rows)
-
     if not wb.sheetnames:
         wb.create_sheet("Timetable").append(["This timetable has no entries yet."])
 
@@ -159,8 +201,7 @@ def build_excel(db: Session, timetable: Timetable) -> bytes:
     return buf.getvalue()
 
 
-def build_pdf(db: Session, timetable: Timetable) -> bytes:
-    data = _load_grid_data(db, timetable)
+def _pdf(grids, n_days: int) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -175,10 +216,12 @@ def build_pdf(db: Session, timetable: Timetable) -> bytes:
     cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
 
     story = []
-    n_cols = len(data["days"]) + 1
+    n_cols = n_days + 1
     col_width = (landscape(A4)[0] - 2.4 * cm) / n_cols
 
-    def add_table(title: str, rows: list[list[str]]):
+    for i, (_sheet_name, title, rows) in enumerate(grids):
+        if i:
+            story.append(PageBreak())
         story.append(Paragraph(title, title_style))
         # Wrap every non-header cell's text in a Paragraph so long entries
         # wrap instead of overflowing the column.
@@ -202,25 +245,28 @@ def build_pdf(db: Session, timetable: Timetable) -> bytes:
         story.append(table)
         story.append(Spacer(1, 0.6 * cm))
 
-    sections_added = 0
-    for cg in data["class_groups"]:
-        rows = _grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")
-        if any(any(r[1:]) for r in rows[1:]):
-            if sections_added:
-                story.append(PageBreak())
-            add_table(f"{_class_group_label(cg)} — Timetable", rows)
-            sections_added += 1
-
-    teachers_added = 0
-    for teacher in data["teachers"]:
-        rows = _grid_rows(data, data["entries_by_teacher_period"], teacher.id, mode="teacher")
-        if any(any(r[1:]) for r in rows[1:]):
-            story.append(PageBreak())
-            add_table(f"{teacher.name} — Teaching Schedule", rows)
-            teachers_added += 1
-
     if not story:
         story.append(Paragraph("This timetable has no entries yet.", styles["Normal"]))
 
     doc.build(story)
     return buf.getvalue()
+
+
+def build_excel(db: Session, timetable: Timetable) -> bytes:
+    return _excel(_school_grids(_load_grid_data(db, timetable)))
+
+
+def build_pdf(db: Session, timetable: Timetable) -> bytes:
+    data = _load_grid_data(db, timetable)
+    return _pdf(_school_grids(data), len(data["days"]))
+
+
+def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+    """One sheet per combination of elective choices in one section."""
+    return _excel(_student_grids(_load_grid_data(db, timetable), class_group, combinations))
+
+
+def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+    """One page per combination of elective choices in one section."""
+    data = _load_grid_data(db, timetable)
+    return _pdf(_student_grids(data, class_group, combinations), len(data["days"]))
