@@ -15,6 +15,11 @@ vi.mock('../api', () => ({
   },
 }))
 
+vi.mock('../hooks/useSchoolData', () => ({
+  useTimetables: () => ({ data: [] }),
+  useTimetable: () => ({ data: null }),
+}))
+
 /**
  * The two-step entry flow: read the rule back, then save what was read.
  *

@@ -20,6 +20,18 @@ class ConstraintUpdate(BaseModel):
     description: str | None = None
 
 
+class ConstraintAbout(BaseModel):
+    """Who and what a rule is about - see app/services/constraint_about.py.
+    The Constraints tab groups rules by this."""
+
+    teachers: list[str] = []
+    subjects: list[str] = []
+    class_groups: list[str] = []
+    # Dimensions the rule applies to one at a time without naming any:
+    # "teacher" for "no teacher teaches more than 6 a day".
+    every: list[str] = []
+
+
 class ConstraintOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,6 +60,7 @@ class ConstraintOut(BaseModel):
     # unable to satisfy it), so the admin can see and fix it rather than
     # the save silently succeeding with no way to know something's wrong.
     conflicts: list[str] = []
+    about: ConstraintAbout = ConstraintAbout()
 
 
 class ConstraintParseRequest(BaseModel):

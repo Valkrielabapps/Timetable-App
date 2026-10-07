@@ -22,6 +22,7 @@ from app.schemas.constraint import (
     ConstraintUpdate,
 )
 from app.services import constraint_parser as regex_parser
+from app.services.constraint_about import about as constraint_about
 from app.services.constraint_ir import IRError, referenced_names, rule_from_dict, rule_to_dict
 from app.services.constraint_ir_english import render as render_rule
 from app.services.llm_constraint_parser import (
@@ -189,7 +190,11 @@ def _find_day_conflicts(
     return conflicts
 
 
-def _to_out(db: Session, constraint: Constraint) -> ConstraintOut:
+def _to_out(db: Session, constraint: Constraint, data: "_ResolutionData | None" = None) -> ConstraintOut:
+    # Loaded once by list_constraints and passed in; a single-rule response
+    # loads it here. Per rule, it was a handful of queries times every rule.
+    if data is None:
+        data = _load_resolution_data(db, constraint.school_id)
     conflicts = _find_placement_conflicts(
         db, constraint.school_id, constraint.id, constraint.type, constraint.parameters or {}
     ) + _find_day_conflicts(
@@ -205,12 +210,19 @@ def _to_out(db: Session, constraint: Constraint) -> ConstraintOut:
         description=constraint.description,
         source_text=constraint.source_text,
         parsed_by=constraint.parsed_by,
-        enforced=_is_enforced(constraint) and not _names_missing(db, constraint),
+        enforced=_is_enforced(constraint) and not _names_missing(db, constraint, data),
         conflicts=conflicts,
+        about=constraint_about(
+            constraint.type,
+            constraint.parameters or {},
+            teacher_names={t.id: t.name for t in data.teacher_by_name.values()},
+            subject_names={sub.id: sub.name for sub in data.subject_by_name.values()},
+            class_group_labels=data.section_labels,
+        ),
     )
 
 
-def _names_missing(db: Session, constraint: Constraint) -> list[str]:
+def _names_missing(db: Session, constraint: Constraint, data: "_ResolutionData | None" = None) -> list[str]:
     """Names an IR rule uses that this school no longer has.
 
     A rule is only applied for the teachers, subjects and sections it can
@@ -229,7 +241,8 @@ def _names_missing(db: Session, constraint: Constraint) -> list[str]:
     except IRError:
         return []
 
-    data = _load_resolution_data(db, constraint.school_id)
+    if data is None:
+        data = _load_resolution_data(db, constraint.school_id)
     found = referenced_names(rule)
     return (
         [n for n in sorted(found["subject"]) if n not in data.subject_by_name]
@@ -310,7 +323,8 @@ def create_constraint(payload: ConstraintCreate, db: Session = Depends(get_db), 
 def list_constraints(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_school_access(db, current_user, school_id)
     query = db.query(Constraint).filter(Constraint.school_id == school_id)
-    return [_to_out(db, c) for c in query.all()]
+    data = _load_resolution_data(db, school_id)
+    return [_to_out(db, c, data) for c in query.all()]
 
 
 @router.get("/{constraint_id}", response_model=ConstraintOut)
@@ -394,6 +408,8 @@ class _ResolutionData:
     # in it) or one specific section, so constraint text can say either
     # "Grade 3" or "Grade 3 - A" and both resolve.
     label_to_class_groups: dict[str, list[ClassGroup]]
+    # One label per section, by id: "Grade 11 - A", never the grade alone.
+    section_labels: dict[int, str]
     teacher_names: list[str]
     subject_names: list[str]
     class_group_labels: list[str]
@@ -411,14 +427,17 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
     label_to_class_groups: dict[str, list[ClassGroup]] = {}
     for grade in sorted({cg.grade for cg in class_groups if cg.grade}):
         label_to_class_groups[grade] = [cg for cg in class_groups if cg.grade == grade]
+    section_labels: dict[int, str] = {}
     for cg in class_groups:
         label = f"{cg.grade} - {cg.name}" if cg.grade else cg.name
         label_to_class_groups[label] = [cg]
+        section_labels[cg.id] = label
 
     return _ResolutionData(
         teacher_by_name={t.name: t for t in teachers},
         subject_by_name={s.name: s for s in subjects},
         label_to_class_groups=label_to_class_groups,
+        section_labels=section_labels,
         teacher_names=[t.name for t in teachers],
         subject_names=[s.name for s in subjects],
         class_group_labels=list(label_to_class_groups.keys()),

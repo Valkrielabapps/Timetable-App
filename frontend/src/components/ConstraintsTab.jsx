@@ -1,20 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import ConstraintInterpretation from './ConstraintInterpretation.jsx'
-
-const TYPE_LABELS = {
-  workload_limit: 'Workload limit',
-  availability: 'Availability',
-  no_subject_period: 'Subject placement',
-  require_subject_period: 'Subject placement',
-  no_subject_day: 'Subject day restriction',
-  require_subject_day: 'Subject day restriction',
-  max_consecutive_periods: 'Consecutive periods limit',
-  min_gap_between_subjects: 'Subject spacing',
-  max_subject_periods_per_day: 'Periods per day limit',
-  subject_sequence: 'Subject sequencing',
-  scheduling_rule: 'Scheduling rule',
-}
+import { useTimetable, useTimetables } from '../hooks/useSchoolData'
+import { filterOptions, filtersActive, NO_FILTERS, organise } from '../constraintGroups'
 
 // Types whose parameters include an optional class_group_ids scope —
 // these are the ones that get the "Applies to" line and scope editor.
@@ -72,6 +60,11 @@ const SCOPABLE_TYPES = new Set([
  * contradicts another one already saved (two "must be" position rules for
  * the same subject, or two "must be"/"must not be" day rules for the same
  * subject, that can never both be true).
+ *
+ * Saved rules are listed grouped by who they are about - teachers, sections,
+ * subjects, the whole school - with anything that needs fixing pulled to the
+ * top, and a search box and filters over all of them. See
+ * src/constraintGroups.js for how a rule is filed.
  */
 export default function ConstraintsTab({ schoolId, classGroups, constraints, onReload, readOnly = false }) {
   const [input, setInput] = useState('')
@@ -96,6 +89,54 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   // actually did something, not a second source of truth for what was
   // created.
   const [batchResultCount, setBatchResultCount] = useState(null)
+  const [filters, setFilters] = useState(NO_FILTERS)
+  // Groups the admin opened or closed by hand, over the default below.
+  const [openOverrides, setOpenOverrides] = useState({})
+
+  // Rules the current timetable breaks - normally none, but a hand move can
+  // pass every physical check and still break one. Read from the same cached
+  // query the Timetable tab uses, so this costs nothing when it is warm.
+  const { data: timetableList = [] } = useTimetables(schoolId)
+  const latestTimetableId =
+    timetableList.length > 0 ? timetableList.reduce((a, b) => (b.id > a.id ? b : a)).id : null
+  const { data: timetable = null } = useTimetable(latestTimetableId)
+  const violatedIds = new Set(
+    (timetable?.status === 'draft' ? timetable.violations ?? [] : []).map((v) => v.constraint_id),
+  )
+
+  const organised = organise(constraints, { violatedIds, filters })
+  const options = filterOptions(constraints)
+  // A short list reads fine opened up; a long one is a wall again unless its
+  // groups start closed. Searching or filtering opens everything, since the
+  // point is then to see what matched.
+  const openByDefault = filtersActive(filters) || constraints.length <= 12
+  const isOpen = (key) => openOverrides[key] ?? openByDefault
+  const toggle = (key) => setOpenOverrides((prev) => ({ ...prev, [key]: !isOpen(key) }))
+
+  // A rule about two teachers is listed under both, so editing state is kept
+  // per row rather than per rule - otherwise both copies open at once.
+  function renderRow(c, place, reasons = []) {
+    const rowKey = `${place}|${c.id}`
+    return (
+      <ConstraintRow
+        key={rowKey}
+        constraint={c}
+        reasons={reasons}
+        classGroups={classGroups}
+        classGroupLabel={classGroupLabel}
+        isEditing={editingId === rowKey}
+        isEditingScope={scopeEditingId === rowKey}
+        readOnly={readOnly}
+        onStartEdit={() => setEditingId(rowKey)}
+        onCancelEdit={() => setEditingId(null)}
+        onSaveEdit={(text) => handleSaveEdit(c.id, text)}
+        onStartScopeEdit={() => setScopeEditingId(rowKey)}
+        onCancelScopeEdit={() => setScopeEditingId(null)}
+        onSaveScope={(ids) => handleSaveScope(c, ids)}
+        onRemove={() => handleRemove(c.id, c.description)}
+      />
+    )
+  }
 
   function classGroupLabel(cg) {
     return cg.grade ? `${cg.grade} - ${cg.name}` : cg.name
@@ -300,35 +341,162 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap gap-3">
-        {constraints.map((c) => (
-          <ConstraintCard
-            key={c.id}
-            constraint={c}
-            classGroups={classGroups}
-            classGroupLabel={classGroupLabel}
-            isEditing={editingId === c.id}
-            isEditingScope={scopeEditingId === c.id}
-            readOnly={readOnly}
-            onStartEdit={() => setEditingId(c.id)}
-            onCancelEdit={() => setEditingId(null)}
-            onSaveEdit={(text) => handleSaveEdit(c.id, text)}
-            onStartScopeEdit={() => setScopeEditingId(c.id)}
-            onCancelScopeEdit={() => setScopeEditingId(null)}
-            onSaveScope={(ids) => handleSaveScope(c, ids)}
-            onRemove={() => handleRemove(c.id, c.description)}
+      {constraints.length === 0 ? (
+        <p className="text-sm text-slate-500">No constraints added yet.</p>
+      ) : (
+        <div className="flex flex-col gap-5">
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            options={options}
+            shown={organised.shown}
+            total={constraints.length}
           />
-        ))}
-        {constraints.length === 0 && (
-          <p className="text-sm text-slate-500">No constraints added yet.</p>
-        )}
-      </div>
+
+          {organised.shown === 0 && (
+            <p className="text-sm text-slate-500">No rules match.</p>
+          )}
+
+          {organised.attention.length > 0 && (
+            <section aria-label="Needs attention" className="rounded-md border border-amber-300">
+              <h4 className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                Needs attention
+                <span className="font-normal text-amber-700">{organised.attention.length}</span>
+              </h4>
+              <ul className="divide-y divide-slate-100">
+                {organised.attention.map(({ constraint, reasons }) => renderRow(constraint, 'attention', reasons))}
+              </ul>
+            </section>
+          )}
+
+          {organised.categories.map((cat) => (
+            <section key={cat.key} aria-label={cat.label} className="flex flex-col gap-1.5">
+              <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                {cat.label}
+                <span className="font-normal text-slate-400">{cat.count}</span>
+              </h4>
+              <div className="divide-y divide-slate-200 rounded-md border border-slate-200">
+                {cat.groups.map((group) => {
+                  const key = `${cat.key}:${group.name}`
+                  // Whole school has nothing to group by, so its rules sit
+                  // straight in the category.
+                  if (group.name === null) {
+                    return (
+                      <ul key={key} className="divide-y divide-slate-100">
+                        {group.items.map((c) => renderRow(c, key))}
+                      </ul>
+                    )
+                  }
+                  const open = isOpen(key)
+                  return (
+                    <div key={key}>
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => toggle(key)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                      >
+                        <span className="font-medium text-slate-700">{group.name}</span>
+                        <span className="flex items-center gap-2 text-xs text-slate-400">
+                          {group.items.length} rule{group.items.length === 1 ? '' : 's'}
+                          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                        </span>
+                      </button>
+                      {open && (
+                        <ul className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/40">
+                          {group.items.map((c) => renderRow(c, key))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function ConstraintCard({
+/**
+ * Search box and filters over every saved rule.
+ *
+ * Only offers the teachers, subjects and sections that some rule actually
+ * mentions - a dropdown of the whole staff list would mostly lead to empty
+ * results.
+ */
+function FilterBar({ filters, onChange, options, shown, total }) {
+  const set = (field) => (value) => onChange({ ...filters, [field]: value })
+  const active = filtersActive(filters)
+  const select = (label, field, values, allLabel) =>
+    values.length > 0 && (
+      <select
+        aria-label={label}
+        value={filters[field]}
+        onChange={(e) => set(field)(e.target.value)}
+        className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+      >
+        <option value="">{allLabel}</option>
+        {values.map((v) => (
+          <option key={v} value={v}>
+            {v}
+          </option>
+        ))}
+      </select>
+    )
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="search"
+        aria-label="Search rules"
+        placeholder="Search rules"
+        value={filters.text}
+        onChange={(e) => set('text')(e.target.value)}
+        className="w-48 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+      />
+      {select('Filter by teacher', 'teacher', options.teachers, 'All teachers')}
+      {select('Filter by subject', 'subject', options.subjects, 'All subjects')}
+      {select('Filter by section', 'section', options.sections, 'All sections')}
+      <div className="inline-flex rounded-md border border-slate-300 p-0.5 text-xs">
+        {[
+          ['all', 'All'],
+          ['rules', 'Rules'],
+          ['preferences', 'Preferences'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={filters.strength === value}
+            onClick={() => set('strength')(value)}
+            className={`rounded px-2.5 py-1 ${
+              filters.strength === value ? 'bg-neutral-900 text-white' : 'text-slate-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {active && (
+        <button
+          type="button"
+          onClick={() => onChange(NO_FILTERS)}
+          className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+        >
+          Clear
+        </button>
+      )}
+      <span className="ml-auto text-xs text-slate-400">
+        {active ? `${shown} of ${total} rules` : `${total} rule${total === 1 ? '' : 's'}`}
+      </span>
+    </div>
+  )
+}
+
+function ConstraintRow({
   constraint: c,
+  reasons = [],
   classGroups,
   classGroupLabel,
   isEditing,
@@ -371,62 +539,66 @@ function ConstraintCard({
   }
 
   return (
-    <div className="w-72 rounded-lg border border-slate-200 p-3.5">
-      <div className="flex items-start justify-between gap-2">
-        <span className="flex flex-wrap items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">
-          {TYPE_LABELS[c.type] || c.type}
-          {c.is_hard === false && (
-            <span
-              className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal text-sky-800"
-              title="The timetable will avoid breaking this, but may do so if there is no other way to fit everything in."
-            >
-              Preference
-            </span>
+    <li className="px-3 py-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <div className="flex flex-col gap-1.5">
+              <textarea
+                autoFocus
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                rows={3}
+                className="w-full rounded border border-slate-300 p-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+              />
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => onSaveEdit(editText)}
+                  className="rounded bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700"
+                >
+                  Save
+                </button>
+                <button onClick={onCancelEdit} className="rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm leading-snug">{c.description}</p>
           )}
-        </span>
-        {!readOnly && (
-          <div className="flex items-center gap-2">
-            <button onClick={onStartEdit} className="text-xs text-slate-400 hover:text-slate-700" title="Edit" aria-label="Edit constraint">
-              ✎
-            </button>
-            <button onClick={onRemove} className="text-slate-300 hover:text-red-600" title="Delete" aria-label="Delete constraint">
-              ✕
-            </button>
-          </div>
-        )}
-      </div>
 
-      {isEditing ? (
-        <div className="mt-2 flex flex-col gap-1.5">
-          <textarea
-            autoFocus
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            rows={3}
-            className="w-full rounded border border-slate-300 p-1.5 text-sm focus:border-neutral-900 focus:outline-none"
-          />
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => onSaveEdit(editText)}
-              className="rounded bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-neutral-700"
-            >
-              Save
-            </button>
-            <button onClick={onCancelEdit} className="rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50">
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="mt-2 text-sm leading-snug">{c.description}</p>
-      )}
+          {(c.is_hard === false || reasons.length > 0 || (scopable && !isEditing)) && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {reasons.map((reason) => (
+                <span
+                  key={reason}
+                  className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900"
+                >
+                  {reason}
+                </span>
+              ))}
+              {c.is_hard === false && (
+                <span
+                  className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800"
+                  title="The timetable will avoid breaking this, but may do so if there is no other way to fit everything in."
+                >
+                  Preference
+                </span>
+              )}
+              {scopable && !isEditing && !isEditingScope && (
+                readOnly ? (
+                  <span className="text-xs text-slate-500">Applies to: {scopeLabel}</span>
+                ) : (
+                  <button onClick={onStartScopeEdit} className="text-left text-xs text-slate-500 hover:text-slate-700">
+                    Applies to: <span className="underline underline-offset-2">{scopeLabel}</span>
+                  </button>
+                )
+              )}
+            </div>
+          )}
 
-      {scopable && !isEditing && (
-        <div className="mt-2">
-          {readOnly ? (
-            <p className="text-xs text-slate-500">Applies to: {scopeLabel}</p>
-          ) : isEditingScope ? (
-            <div className="rounded border border-slate-200 p-2">
+          {scopable && !isEditing && isEditingScope && !readOnly && (
+            <div className="mt-2 rounded border border-slate-200 p-2">
               <p className="mb-1 text-xs text-slate-500">Applies to (none selected = whole school):</p>
               <div className="max-h-32 space-y-1 overflow-y-auto">
                 {classGroups.map((cg) => (
@@ -452,33 +624,33 @@ function ConstraintCard({
                 </button>
               </div>
             </div>
-          ) : (
-            <button onClick={onStartScopeEdit} className="text-left text-xs text-slate-500 hover:text-slate-700">
-              Applies to: <span className="underline underline-offset-2">{scopeLabel}</span>
-            </button>
+          )}
+
+          {!c.enforced && (
+            <p className="mt-1.5 text-xs text-amber-800">
+              Saved, but not applied when generating — this won't affect the timetable.
+            </p>
+          )}
+          {c.conflicts && c.conflicts.length > 0 && (
+            <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs text-red-600">
+              {c.conflicts.map((msg, i) => (
+                <li key={i}>{msg}</li>
+              ))}
+            </ul>
           )}
         </div>
-      )}
 
-      {!c.enforced && (
-        <div className="mt-2 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-none">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-            <path d="M12 9v4" />
-            <path d="M12 17h.01" />
-          </svg>
-          <span>
-            Saved, but not applied when generating — this won't affect the timetable.
-          </span>
-        </div>
-      )}
-      {c.conflicts && c.conflicts.length > 0 && (
-        <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-red-600">
-          {c.conflicts.map((msg, i) => (
-            <li key={i}>{msg}</li>
-          ))}
-        </ul>
-      )}
-    </div>
+        {!readOnly && (
+          <div className="flex flex-none items-center gap-2 pt-0.5">
+            <button onClick={onStartEdit} className="text-xs text-slate-400 hover:text-slate-700" title="Edit" aria-label="Edit constraint">
+              ✎
+            </button>
+            <button onClick={onRemove} className="text-slate-300 hover:text-red-600" title="Delete" aria-label="Delete constraint">
+              ✕
+            </button>
+          </div>
+        )}
+      </div>
+    </li>
   )
 }
