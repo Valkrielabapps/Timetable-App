@@ -30,8 +30,13 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
         setPeriods(periodsData)
         setLogs(logsData)
         
-        // Find the active timetable (first one that is draft or published)
-        const active = timetablesData.find(t => t.status === 'draft' || t.status === 'published')
+        // The newest usable timetable - the one the Timetable tab shows.
+        // Every generation adds a draft and the list comes back unordered, so
+        // taking the first match used to cover absences against an old one.
+        // Ids are assigned in creation order, so the highest is the newest.
+        const active = timetablesData
+          .filter(t => t.status === 'draft' || t.status === 'published')
+          .reduce((a, b) => (a && a.id > b.id ? a : b), null)
         if (active) {
           const tt = await api.getTimetable(active.id)
           setTimetable(tt)
@@ -312,8 +317,16 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                         <div>
                           <div className="font-semibold text-gray-900">{classGroup?.grade} {classGroup?.name}</div>
                           <div className="text-sm text-gray-600">
-                            {period?.label || `Period ${period?.order}`} • Absent: {absentTeacher?.name}
+                            {/* Periods are stored from zero and shown from one. */}
+                            {period?.label || `Period ${(period?.order ?? 0) + 1}`} • {entry.subject_name} • Absent: {absentTeacher?.name}
                           </div>
+                          {/* In a block the rest of the section is in its other
+                              options' lessons; the cover is for this group only. */}
+                          {entry.elective_block_id != null && (
+                            <div className="text-xs text-gray-500">
+                              {entry.elective_block_name ?? 'Elective block'} — only the {entry.subject_name} group
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-[220px]">
                           <select
@@ -380,7 +393,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                       return (
                         <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
                           <div className="font-semibold text-neutral-700">{classGroup?.grade} {classGroup?.name}</div>
-                          <div className="text-gray-600 mb-2">{period?.label || `Period ${period?.order}`}</div>
+                          <div className="text-gray-600 mb-2">{period?.label || `Period ${(period?.order ?? 0) + 1}`}</div>
                           <div className="flex items-center gap-2">
                             <span className="text-red-600 line-through truncate" title={absent?.name}>{absent?.name}</span>
                             <span className="text-gray-400">→</span>
