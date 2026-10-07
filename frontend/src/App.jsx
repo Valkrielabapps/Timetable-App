@@ -833,6 +833,7 @@ function App() {
                       classGroup={selectedClassGroup}
                       classGroups={classGroups}
                       teachers={teachers}
+                      subjects={subjects}
                       periods={periods}
                       constraints={constraints}
                       readOnly={isViewer}

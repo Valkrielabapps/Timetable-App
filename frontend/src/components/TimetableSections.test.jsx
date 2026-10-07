@@ -11,8 +11,8 @@ vi.mock('../hooks/useSchoolData', () => ({
   useTimetable: () => ({ data: mockTimetable() }),
   useGenerateTimetable: () => ({ generate: vi.fn(), isGenerating: false }),
   useApplyEntryUpdates: () => vi.fn(),
-  useOptimisticMove: () => vi.fn(),
-  useOptimisticSwap: () => vi.fn(),
+  useOptimisticSlotMove: () => vi.fn(),
+  useElectiveBlocks: () => ({ data: [] }),
 }))
 
 /**
@@ -99,7 +99,7 @@ describe('all sections on one page', () => {
   it('orders sections the way the sidebar lists them', () => {
     // Scrolling and clicking have to agree about what comes next.
     renderTab()
-    const headings = [...document.querySelectorAll('section > h4')].map((h) => h.textContent)
+    const headings = [...document.querySelectorAll('section h4')].map((h) => h.textContent)
     expect(headings).toEqual(['Grade 8 · A', 'Grade 8 · B', 'Grade 9 · A'])
   })
 

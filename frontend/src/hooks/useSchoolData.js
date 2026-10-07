@@ -156,30 +156,44 @@ export function useApplyEntryUpdates(timetableId) {
 }
 
 /**
- * Move a slot in the cache before the server has agreed to it.
+ * Move a whole slot in the cache before the server has agreed to it.
  *
  * Dragging used to wait for the round trip before the cell moved, so every
  * drag cost one API call of visible lag on something that should feel like
  * picking a card up and putting it down.
  *
+ * The unit is the slot - one section's period - not an entry, matching
+ * POST /timetables/{id}/move-slot. An elective block has one entry per option
+ * and a split lab one per batch, and they always move together. Whatever is
+ * already in the target comes back the other way, so a move into a free cell,
+ * a swap of two lessons and a block trading places with a lesson are all the
+ * same operation, applied in one cache write so nothing is ever briefly shown
+ * twice.
+ *
  * Returns a rollback. The move is a guess - the server can still refuse it,
- * usually because the target double-books a teacher - and putting the cell
+ * usually because the target double-books a teacher - and putting the cells
  * back is the only honest response to that.
  */
-export function useOptimisticMove(timetableId) {
+export function useOptimisticSlotMove(timetableId) {
   const queryClient = useQueryClient()
-  return (entryId, period) => {
+  return (classGroupId, fromPeriod, toPeriod) => {
     const key = keys.timetable(timetableId)
     const previous = queryClient.getQueryData(key)
+    const at = (period) => ({
+      period_id: period.id,
+      day_of_week: period.day_of_week,
+      order: period.order,
+    })
     queryClient.setQueryData(key, (prev) => {
       if (!prev) return prev
       return {
         ...prev,
-        entries: prev.entries.map((e) =>
-          e.id === entryId
-            ? { ...e, period_id: period.id, day_of_week: period.day_of_week, order: period.order }
-            : e,
-        ),
+        entries: prev.entries.map((e) => {
+          if (e.class_group_id !== classGroupId) return e
+          if (e.period_id === fromPeriod.id) return { ...e, ...at(toPeriod) }
+          if (e.period_id === toPeriod.id) return { ...e, ...at(fromPeriod) }
+          return e
+        }),
         // Deliberately not guessed at. Working out which rules the move breaks
         // would mean a second implementation of the rule engine in the
         // browser, and two of those drifting apart is worse than a banner that
@@ -191,31 +205,53 @@ export function useOptimisticMove(timetableId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Elective blocks
+// ---------------------------------------------------------------------------
+
 /**
- * Swap two slots in the cache before the server has agreed to it.
+ * Every elective block in the school, each with its options.
  *
- * Separate from a move because both rows change at once, and applying two
- * moves in sequence would briefly show both entries in the same cell.
+ * School-wide rather than per section: the Plan page switches sections
+ * without a round trip, and the Timetable tab needs every section's blocks at
+ * once to offer each one's student timetables.
  */
-export function useOptimisticSwap(timetableId) {
+export function useElectiveBlocks(schoolId) {
+  return useQuery({
+    queryKey: keys.electiveBlocks(schoolId),
+    queryFn: () => api.listElectiveBlocks(schoolId),
+    enabled: schoolId != null,
+  })
+}
+
+export function useElectiveBlockMutations(schoolId) {
   const queryClient = useQueryClient()
-  return (aId, bId) => {
-    const key = keys.timetable(timetableId)
-    const previous = queryClient.getQueryData(key)
-    queryClient.setQueryData(key, (prev) => {
-      if (!prev) return prev
-      const a = prev.entries.find((e) => e.id === aId)
-      const b = prev.entries.find((e) => e.id === bId)
-      if (!a || !b) return prev
-      const slotOf = (e) => ({ period_id: e.period_id, day_of_week: e.day_of_week, order: e.order })
-      return {
-        ...prev,
-        entries: prev.entries.map((e) =>
-          e.id === aId ? { ...e, ...slotOf(b) } : e.id === bId ? { ...e, ...slotOf(a) } : e,
-        ),
-        violations: prev.violations,
-      }
-    })
-    return () => queryClient.setQueryData(key, previous)
+  // Invalidated, not patched: the server validates the whole set of options
+  // against the section's other subjects and blocks, and the row it settles on
+  // is the one to show.
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: keys.electiveBlocks(schoolId) })
+
+  const create = useMutation({
+    mutationFn: (data) => api.createElectiveBlock(data),
+    onSuccess: invalidate,
+  })
+  const update = useMutation({
+    mutationFn: ({ id, data }) => api.updateElectiveBlock(id, data),
+    onSuccess: invalidate,
+  })
+  const remove = useMutation({
+    mutationFn: (id) => api.deleteElectiveBlock(id),
+    onSuccess: invalidate,
+  })
+
+  return {
+    create: (data) => create.mutateAsync(data),
+    update: (id, data) => update.mutateAsync({ id, data }),
+    delete: (id) => remove.mutateAsync(id),
+    // Deleting a subject removes it from every block (and a block left empty),
+    // and deleting a teacher clears them as an option's preferred teacher -
+    // both server-side, so the cached blocks have to be re-read afterwards.
+    invalidate,
   }
 }

@@ -3,7 +3,13 @@ import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import PeriodsPanel from './PeriodsPanel'
 import RoomsPanel from './RoomsPanel'
-import { useRoomMutations, useRooms } from '../hooks/useSchoolData'
+import {
+  useElectiveBlockMutations,
+  useElectiveBlocks,
+  useRoomMutations,
+  useRooms,
+} from '../hooks/useSchoolData'
+import ElectiveBlocksPanel from './ElectiveBlocksPanel'
 import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
@@ -101,6 +107,11 @@ export default function DataEntryTab({
   const [settingUpPeriods, setSettingUpPeriods] = useState(false)
 
   const requirements = allRequirements.filter((r) => r.class_group_id === activeSectionId)
+  // Elective blocks live in React Query rather than App.jsx's lifted state -
+  // like rooms, they are newer than that arrangement.
+  const { data: allElectiveBlocks = [] } = useElectiveBlocks(schoolId)
+  const electiveBlocks = allElectiveBlocks.filter((b) => b.class_group_id === activeSectionId)
+  const blockMutations = useElectiveBlockMutations(schoolId)
 
   // Full refresh — kept for the less-frequent call sites (bulk import,
   // quick period setup, a delete that could have cascaded into any
@@ -196,6 +207,9 @@ export default function DataEntryTab({
       // `subjects` first), and it self-heals on the next full load.
       await api.deleteSubject(id)
       setSubjects((prev) => prev.filter((s) => s.id !== id))
+      // The server also took the subject out of every elective block it was
+      // an option in, and removed any block that left empty.
+      blockMutations.invalidate()
     },
     reload: reloadAll,
   }
@@ -241,6 +255,8 @@ export default function DataEntryTab({
       // other sections' requirements (preferred_teacher_id).
       await api.deleteTeacher(id)
       await load()
+      // Also cleared as any block option's preferred teacher, server-side.
+      blockMutations.invalidate()
     },
     reload: reloadAll,
   }
@@ -554,6 +570,22 @@ export default function DataEntryTab({
           onCopyToOtherSections={handleCopyPeriodsToOtherSections}
           copyingPeriods={copyingPeriods}
           onGoToSubjects={() => onSubViewChange('subjects')}
+          electiveBlocks={electiveBlocks}
+          electiveBlocksPanel={
+            activeSectionId != null && (
+              <ElectiveBlocksPanel
+                schoolId={schoolId}
+                classGroupId={activeSectionId}
+                sectionGrade={activeSectionGrade}
+                blocks={electiveBlocks}
+                commonSubjectIds={requirements.map((r) => r.subject_id)}
+                subjects={subjects}
+                teachers={teachers}
+                mutations={blockMutations}
+                readOnly={readOnly}
+              />
+            )
+          }
           readOnly={readOnly}
         />
       )}
@@ -651,6 +683,8 @@ function PlanSection({
   onCopyToOtherSections,
   copyingPeriods,
   onGoToSubjects,
+  electiveBlocks = [],
+  electiveBlocksPanel = null,
   readOnly,
 }) {
   // Whether the subject picker (below) is showing instead of the periods/
@@ -700,7 +734,17 @@ function PlanSection({
     onToggleSectionSubject(subjectId, shouldSelect)
   }
 
-  const totalWeeklyPeriods = rows.reduce((sum, row) => sum + row.periodsPerWeek, 0)
+  // A block counts once: its options all run in the same periods, so a
+  // six-period block is six periods of the section's week, not six per option.
+  const totalWeeklyPeriods =
+    rows.reduce((sum, row) => sum + row.periodsPerWeek, 0) +
+    electiveBlocks.reduce((sum, b) => sum + b.periods_per_week, 0)
+  // Which block, if any, each subject is already an option in. Such a subject
+  // can't also be one everybody takes - the server refuses it - so the picker
+  // says where it is instead of offering it.
+  const blockOfSubject = new Map(
+    electiveBlocks.flatMap((b) => b.options.map((o) => [o.subject_id, b.name])),
+  )
   const selectedAll = selectedSubjectIds.length === rows.length && rows.length > 0
   const selectedCount = selectedSubjectIds.length
 
@@ -761,6 +805,7 @@ function PlanSection({
           subjects={availableSubjects}
           selectedSubjectIds={pickerSelectedSubjectIds}
           onToggleSubject={handlePickerToggle}
+          blockOfSubject={blockOfSubject}
           onDone={() => setSubjectPickerOpen(false)}
           canFinish={pickerSelectedSubjectIds.length > 0}
           readOnly={readOnly}
@@ -950,11 +995,14 @@ function PlanSection({
             <td className="py-3 pr-2 text-sm font-semibold">Total</td>
             <td className="py-3 pr-2 font-semibold">{totalWeeklyPeriods}</td>
             <td colSpan={3} className="py-3 text-sm text-slate-500">
-              Total periods/week configured for the section selected above.
+              Total periods/week configured for the section selected above
+              {electiveBlocks.length > 0 && ', including its elective blocks'}.
             </td>
           </tr>
         </tbody>
       </table>
+
+      {electiveBlocksPanel}
     </div>
   )
 }
@@ -968,25 +1016,40 @@ function PlanSection({
  * table); unchecking deletes it — same underlying operation as setting
  * periods/week back to 0 in the table, just a more discoverable way in.
  */
-function SectionSubjectPicker({ subjects, selectedSubjectIds, onToggleSubject, onDone, canFinish, readOnly }) {
+function SectionSubjectPicker({
+  subjects,
+  selectedSubjectIds,
+  onToggleSubject,
+  onDone,
+  canFinish,
+  readOnly,
+  blockOfSubject = new Map(),
+}) {
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4">
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
-        {subjects.map((s) => (
-          <label
-            key={s.id}
-            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50"
-          >
-            <input
-              type="checkbox"
-              checked={selectedSubjectIds.includes(s.id)}
-              disabled={readOnly}
-              onChange={(e) => onToggleSubject(s.id, e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-slate-900"
-            />
-            {s.name}
-          </label>
-        ))}
+        {subjects.map((s) => {
+          const inBlock = blockOfSubject.get(s.id)
+          return (
+            <label
+              key={s.id}
+              title={inBlock ? `An option in ${inBlock} — edit the block to change it` : undefined}
+              className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
+                inBlock ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer hover:bg-slate-50'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedSubjectIds.includes(s.id)}
+                disabled={readOnly || !!inBlock}
+                onChange={(e) => onToggleSubject(s.id, e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-900"
+              />
+              {s.name}
+              {inBlock && <span className="text-xs">({inBlock})</span>}
+            </label>
+          )
+        })}
       </div>
       {canFinish && (
         <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">

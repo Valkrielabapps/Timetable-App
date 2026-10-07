@@ -11,8 +11,14 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
  * stayed identical for long.
  *
  * Takes a slot lookup rather than a flat entry list because a slot can hold
- * several entries: a lab-batch-split subject produces one per batch at the
- * same class group and period, each with its own teacher and room.
+ * several entries: a lab-batch-split subject produces one per batch, and an
+ * elective block one per option, all at the same class group and period.
+ *
+ * The cell is the unit of editing, not the entry. Dragging a cell moves
+ * everything in it, and clicking it locks everything in it - see move-slot and
+ * lock-slot in backend/app/routers/timetables.py. A block's options always run
+ * together, so moving or locking one of them alone is not a thing that can
+ * mean anything.
  */
 export default function ScheduleGrid({
   days,
@@ -21,15 +27,20 @@ export default function ScheduleGrid({
   entriesAt,
   editable,
   violatingEntries,
+  // (day, order, entries) - the caller remembers where the drag began.
   onDragStart,
   onDragEnd,
   onDrop,
+  // (entries) - every entry in the clicked cell.
   onToggleLock,
   // Section view names the teacher in each cell; teacher view names the
   // section. Passed rather than branched on inside, so this component has no
   // opinion about which view it is serving.
   secondaryLine,
   showAssistant,
+  // A student's own timetable shows the one option they attend; calling that
+  // cell "Block 1" would read as if they still had a choice to make.
+  showBlockName = true,
 }) {
   return (
     <div className="overflow-x-auto rounded-md border border-slate-200">
@@ -53,18 +64,24 @@ export default function ScheduleGrid({
               {days.map((d) => {
                 const entries = entriesAt(d, order)
                 const period = periodAt(d, order)
-                // Lab-batch slots (2+ simultaneous entries) aren't
-                // drag/lock-editable in this version — see solver.py's note on
-                // locked entries not being honored for batched subjects.
-                // Editing one batch out of several needs its own interaction
-                // that hasn't been designed yet.
-                const isBatched = entries.length > 1
-                const singleEntry = entries.length === 1 ? entries[0] : null
+                const blockId = entries.find((e) => e.elective_block_id != null)?.elective_block_id
+                const isBlock = blockId != null
+                // A split lab: several batches of one subject at once. Moved as
+                // a unit like a block, but not lockable - the solver does not
+                // honour locks on batched subjects (see solver.py), so offering
+                // one would promise something regenerating would not keep.
+                const isBatched = !isBlock && entries.length > 1
+                const lockable = entries.length > 0 && !isBatched
+                // Any rather than every: a lock set on one option through the
+                // edit box still pins the whole slot on the server, which
+                // refuses to move a slot with anything locked in it.
+                const locked = entries.some((e) => e.locked)
+                const canDrag = editable && entries.length > 0 && !locked
                 // Locked/unlocked as a light background tint on the whole cell
                 // rather than an icon on the entry — red for locked, green for
                 // unlocked — so the state reads at a glance across the grid.
-                const lockTint = singleEntry
-                  ? singleEntry.locked
+                const lockTint = lockable
+                  ? locked
                     ? 'bg-red-50 hover:bg-red-100'
                     : 'bg-emerald-50 hover:bg-emerald-100'
                   : isBatched
@@ -75,6 +92,16 @@ export default function ScheduleGrid({
                 // the two say different things and both need to survive.
                 const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
                 const violationRing = broken.length ? 'ring-2 ring-inset ring-amber-400' : ''
+                const what = isBlock && entries.length > 1 ? 'the whole block' : isBatched ? 'every batch' : 'it'
+                const hint = !editable
+                  ? locked
+                    ? 'Locked in place'
+                    : undefined
+                  : locked
+                  ? 'Locked — click to unlock (movable, may change on regenerate)'
+                  : isBatched
+                  ? 'Drag to move every batch together. Split labs can’t be locked yet.'
+                  : `Drag to move ${what}, or click to lock ${what} in place before regenerating`
                 return (
                   <td
                     key={d}
@@ -82,70 +109,46 @@ export default function ScheduleGrid({
                     className={`border border-slate-200 px-3 py-2 transition-colors ${
                       editable ? 'align-top' : ''
                     } ${lockTint} ${violationRing}`}
-                    onDragOver={editable && !isBatched ? (e) => e.preventDefault() : undefined}
-                    onDrop={editable && !isBatched ? () => onDrop(d, order) : undefined}
+                    onDragOver={editable && period ? (e) => e.preventDefault() : undefined}
+                    onDrop={editable && period ? () => onDrop(d, order) : undefined}
                   >
                     {!period ? (
                       <span className="text-slate-300">—</span>
-                    ) : isBatched ? (
-                      <div className="flex flex-col gap-1.5">
-                        {entries
-                          .slice()
-                          .sort((a, b) => (a.lab_batch ?? 0) - (b.lab_batch ?? 0))
-                          .map((e) => (
-                            <div key={e.id} className="border-l-2 border-slate-200 pl-1.5">
-                              <div className="font-medium">
-                                {e.subject_name}
-                                {e.lab_batch && (
-                                  <span className="ml-1 text-xs font-normal text-slate-400">
-                                    Batch {e.lab_batch}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-slate-500">{secondaryLine(e)}</div>
-                              {showAssistant && e.assistant_teacher_name && (
-                                <div className="text-xs text-slate-400">
-                                  Asst: {e.assistant_teacher_name}
-                                </div>
-                              )}
-                              {e.room_name && (
-                                <div className="text-xs text-slate-400">{e.room_name}</div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    ) : singleEntry ? (
+                    ) : entries.length === 0 ? (
+                      <span className="text-xs text-slate-300">Free</span>
+                    ) : (
                       <div
-                        draggable={editable && !singleEntry.locked}
-                        onDragStart={editable ? () => onDragStart(singleEntry) : undefined}
+                        draggable={canDrag}
+                        onDragStart={canDrag ? () => onDragStart(d, order, entries) : undefined}
                         onDragEnd={onDragEnd}
-                        onClick={editable ? () => onToggleLock(singleEntry) : undefined}
-                        title={
-                          editable
-                            ? singleEntry.locked
-                              ? 'Locked — click to unlock (movable, may change on regenerate)'
-                              : 'Click to lock in place before regenerating'
-                            : singleEntry.locked
-                            ? 'Locked in place'
-                            : undefined
-                        }
+                        onClick={editable && lockable ? () => onToggleLock(entries) : undefined}
+                        title={hint}
                         className={
-                          editable ? (singleEntry.locked ? 'cursor-pointer' : 'cursor-move') : ''
+                          editable ? (canDrag ? 'cursor-move' : lockable ? 'cursor-pointer' : '') : ''
                         }
                       >
-                        <div className="font-medium">{singleEntry.subject_name}</div>
-                        <div className="text-xs text-slate-500">{secondaryLine(singleEntry)}</div>
-                        {showAssistant && singleEntry.assistant_teacher_name && (
-                          <div className="text-xs text-slate-400">
-                            Asst: {singleEntry.assistant_teacher_name}
+                        {entries.length === 1 ? (
+                          <Lesson
+                            entry={entries[0]}
+                            secondaryLine={secondaryLine}
+                            showAssistant={showAssistant}
+                            blockName={showBlockName ? entries[0].elective_block_name : null}
+                          />
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {isBlock && showBlockName && (
+                              <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                                {entries[0].elective_block_name ?? 'Elective block'}
+                              </div>
+                            )}
+                            {sortedForCell(entries, isBlock).map((e) => (
+                              <div key={e.id} className="border-l-2 border-slate-200 pl-1.5">
+                                <Lesson entry={e} secondaryLine={secondaryLine} showAssistant={showAssistant} />
+                              </div>
+                            ))}
                           </div>
                         )}
-                        {singleEntry.room_name && (
-                          <div className="text-xs text-slate-400">{singleEntry.room_name}</div>
-                        )}
                       </div>
-                    ) : (
-                      <span className="text-xs text-slate-300">Free</span>
                     )}
                   </td>
                 )
@@ -155,5 +158,39 @@ export default function ScheduleGrid({
         </tbody>
       </table>
     </div>
+  )
+}
+
+// Fixed order so a cell's contents don't reshuffle between renders: batches by
+// number, a block's options by subject.
+function sortedForCell(entries, isBlock) {
+  return entries
+    .slice()
+    .sort((a, b) =>
+      isBlock
+        ? (a.subject_name ?? '').localeCompare(b.subject_name ?? '')
+        : (a.lab_batch ?? 0) - (b.lab_batch ?? 0),
+    )
+}
+
+function Lesson({ entry, secondaryLine, showAssistant, blockName = null }) {
+  return (
+    <>
+      <div className="font-medium">
+        {entry.subject_name}
+        {entry.lab_batch && (
+          <span className="ml-1 text-xs font-normal text-slate-400">Batch {entry.lab_batch}</span>
+        )}
+        {/* A teacher's own timetable shows only their option of a block, so
+            the block is named alongside it - otherwise it reads as an
+            ordinary lesson that could be moved on its own. */}
+        {blockName && <span className="ml-1 text-xs font-normal text-slate-400">{blockName}</span>}
+      </div>
+      <div className="text-xs text-slate-500">{secondaryLine(entry)}</div>
+      {showAssistant && entry.assistant_teacher_name && (
+        <div className="text-xs text-slate-400">Asst: {entry.assistant_teacher_name}</div>
+      )}
+      {entry.room_name && <div className="text-xs text-slate-400">{entry.room_name}</div>}
+    </>
   )
 }

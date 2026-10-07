@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
+import { useElectiveBlocks } from '../hooks/useSchoolData'
 
 /**
  * "Who teaches what" — one row per teacher, their subjects shown as
@@ -39,9 +40,22 @@ function distinctGrades(classGroups) {
 // the app — knows yet who'll actually teach it; the true final total
 // (including solver-assigned subjects) only exists once a timetable has
 // been generated, which is a separate, later feature.
-function teacherWorkload(teacherId, allRequirements, subjects, classGroups) {
-  const rows = allRequirements
-    .filter((r) => r.preferred_teacher_id === teacherId)
+//
+// Includes elective block options pinned to this teacher: an option runs in
+// every one of its block's periods, so it is that many periods of their week.
+function teacherWorkload(teacherId, allRequirements, subjects, classGroups, electiveBlocks = []) {
+  const optionRows = electiveBlocks.flatMap((b) =>
+    b.options
+      .filter((o) => o.preferred_teacher_id === teacherId)
+      .map((o) => ({
+        id: `block-option-${o.id}`,
+        class_group_id: b.class_group_id,
+        subject_id: o.subject_id,
+        periods_per_week: b.periods_per_week,
+        blockName: b.name,
+      })),
+  )
+  const rows = [...allRequirements.filter((r) => r.preferred_teacher_id === teacherId), ...optionRows]
     .map((r) => ({
       ...r,
       subjectName: subjects.find((s) => s.id === r.subject_id)?.name ?? 'Unknown subject',
@@ -52,6 +66,7 @@ function teacherWorkload(teacherId, allRequirements, subjects, classGroups) {
 }
 
 export default function TeachersSection({ schoolId, teachers, subjects, classGroups, allRequirements, onTeachersChanged, readOnly }) {
+  const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
   const [error, setError] = useState(null)
   const [showImport, setShowImport] = useState(true)
   const [addTeacherOpen, setAddTeacherOpen] = useState(false)
@@ -198,7 +213,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
           const available = subjects.filter((s) => !s._pending && !teacher.qualified_subject_ids.includes(s.id))
           const qualifiedGrades = teacher.qualified_grades || []
           const availableGrades = allGrades.filter((g) => !qualifiedGrades.includes(g))
-          const workload = teacherWorkload(teacher.id, allRequirements, subjects, classGroups)
+          const workload = teacherWorkload(teacher.id, allRequirements, subjects, classGroups, electiveBlocks)
           const overLimit = teacher.max_periods_per_week != null && workload.total > teacher.max_periods_per_week
           const nearLimit =
             !overLimit && teacher.max_periods_per_week != null && workload.total >= teacher.max_periods_per_week * 0.9
@@ -420,7 +435,10 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                   <tbody>
                     {workload.rows.map((r) => (
                       <tr key={r.id}>
-                        <td className="border-b border-slate-100 py-1 pr-4 text-slate-700">{r.subjectName}</td>
+                        <td className="border-b border-slate-100 py-1 pr-4 text-slate-700">
+                          {r.subjectName}
+                          {r.blockName && <span className="ml-1 text-slate-400">({r.blockName})</span>}
+                        </td>
                         <td className="border-b border-slate-100 py-1 pr-4 text-slate-500">
                           {r.classGroup ? `${r.classGroup.grade ? `${r.classGroup.grade} · ` : ''}Sec ${r.classGroup.name}` : 'Unknown section'}
                         </td>

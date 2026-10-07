@@ -4,12 +4,13 @@ import { api } from '../api'
 import ScheduleGrid from './ScheduleGrid.jsx'
 import {
   useApplyEntryUpdates,
-  useOptimisticMove,
-  useOptimisticSwap,
+  useElectiveBlocks,
+  useOptimisticSlotMove,
   useGenerateTimetable,
   useTimetable,
   useTimetables,
 } from '../hooks/useSchoolData'
+import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
 import SubstitutionsTab from './SubstitutionsTab'
 
 // Where the sidebar scrolls to. Derived from the id rather than passed around,
@@ -39,16 +40,18 @@ const sectionAnchorId = (classGroupId) => `timetable-section-${classGroupId}`
  *
  * Once a timetable is generated, individual slots can be hand-edited in
  * the "By Section" view: click a slot to lock/unlock it (locked = the next
- * regenerate leaves it exactly where it is — see PATCH
- * /api/timetables/entries/{id} in backend/app/routers/timetables.py, and
- * the locked-entry handling in backend/app/services/solver.py), or drag
- * an unlocked entry to a different period to move it by hand. There's no
+ * regenerate leaves it exactly where it is — see lock-slot in
+ * backend/app/routers/timetables.py, and the locked-entry handling in
+ * backend/app/services/solver.py), or drag an unlocked slot to a different
+ * period to move it by hand, swapping with whatever is there. The unit is
+ * the slot, not the entry: an elective block (one entry per option) or a
+ * split lab (one per batch) moves as a whole, because its parts always run
+ * together. There's no
  * lock icon — locked/unlocked is shown as a light red/green tint on the
  * whole cell instead, so the state reads at a glance across the whole
- * grid. Both lock-toggling and moving go through the same PATCH endpoint,
- * which rejects the change with a message if it would double-book the
- * class, the teacher, or the room — that message is what ends up in
- * `error` and shown below the grid. Editing is section-view-only: the "By
+ * grid. Moving goes through move-slot, which rejects the change with a
+ * message if it would double-book a teacher or a room — that message is
+ * what ends up in `error` and shown below the grid. Editing is section-view-only: the "By
  * Teacher" view mixes entries from several different classes, where "move
  * this" is ambiguous (though the red/green tint still shows there, as
  * information).
@@ -79,6 +82,8 @@ export default function TimetableTab({
   classGroup,
   classGroups,
   teachers,
+  // Only to name the subjects in each section's elective combinations.
+  subjects = [],
   // periods/timetable/generating are App.jsx's own state now, not fetched
   // or held locally here — this component gets unmounted every time the
   // admin switches to another top-level tab
@@ -108,10 +113,10 @@ export default function TimetableTab({
   const [view, setView] = useState('section') // 'section' | 'teacher'
   const [selectedTeacherId, setSelectedTeacherId] = useState(teachers[0]?.id ?? null)
   const [error, setError] = useState(null)
-  const [dragEntryId, setDragEntryId] = useState(null)
-  // Which section the dragged slot came from, so a drop into another
-  // section's grid can be refused rather than quietly moving it.
-  const [dragClassGroupId, setDragClassGroupId] = useState(null)
+  // Where the dragged slot came from: { classGroupId, period }. The section
+  // is kept so a drop into another section's grid can be refused rather than
+  // quietly moving the slot inside its own.
+  const [dragSource, setDragSource] = useState(null)
   // Which export format is currently downloading, if any — guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
@@ -160,8 +165,9 @@ export default function TimetableTab({
   const { data: timetable = null } = useTimetable(latestTimetableId)
   const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
   const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
-  const optimisticMove = useOptimisticMove(timetable?.id)
-  const optimisticSwap = useOptimisticSwap(timetable?.id)
+  const optimisticSlotMove = useOptimisticSlotMove(timetable?.id)
+  const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
+  const subjectName = (id) => subjects.find((s) => s.id === id)?.name ?? '?'
 
   async function handleGenerate() {
     setError(null)
@@ -197,60 +203,62 @@ export default function TimetableTab({
     }
   }
 
-  async function handleToggleLock(entry) {
+  // Locks or unlocks everything in the clicked cell - a block's options are
+  // pinned together, since they always run together. Anything already locked
+  // counts as the slot being locked, so a click on a part-locked block frees
+  // all of it rather than locking the rest.
+  async function handleToggleLock(entries) {
+    if (entries.length === 0) return
     setError(null)
+    const { class_group_id: classGroupId, period_id: periodId } = entries[0]
+    const locked = !entries.some((e) => e.locked)
     try {
-      applyEntryUpdates(await api.updateTimetableEntry(entry.id, { locked: !entry.locked }))
+      applyEntryUpdates(await api.lockSlot(timetable.id, classGroupId, periodId, locked))
     } catch (err) {
       setError(err.message)
     }
   }
 
   async function handleDrop(day, order, classGroupId) {
-    const entryId = dragEntryId
-    const sourceClassGroupId = dragClassGroupId
-    setDragEntryId(null)
-    setDragClassGroupId(null)
-    if (!entryId) return
+    const source = dragSource
+    setDragSource(null)
+    if (!source) return
     // Every section's grid is on screen at once, so a drop can land in a grid
     // the dragged slot does not belong to. Moving it would quietly reposition
     // it inside its OWN section, which is not what dropping it over 8B looks
     // like it should do.
-    if (classGroupId != null && sourceClassGroupId !== classGroupId) {
+    if (source.classGroupId !== classGroupId) {
       setError("A slot can only be moved within its own section's timetable.")
       return
     }
     const targetPeriod = periodAt(day, order)
-    if (!targetPeriod) return
-    // Drop targets are never batched slots — batched cells don't attach
-    // onDrop at all (see the isBatched guard on <td> below) — so taking
-    // the first match here is safe.
-    const targetEntry = entriesFor(day, order, classGroupId)[0] ?? null
-    if (targetEntry && targetEntry.id === entryId) return // dropped back on itself
-    if (targetEntry && targetEntry.locked) {
+    if (!targetPeriod || targetPeriod.id === source.period.id) return // dropped back on itself
+    if (targetPeriod.is_break) {
+      setError('Nothing can be scheduled in a break.')
+      return
+    }
+    if (entriesFor(day, order, classGroupId).some((e) => e.locked)) {
       setError("That slot is locked — unlock it before swapping something into it.")
       return
     }
     setError(null)
-    // The cell moves now, not when the server answers. Waiting for the round
+    // The cells move now, not when the server answers. Waiting for the round
     // trip put a visible delay on every drag, on an interaction that should
     // feel like picking a card up and putting it down.
+    //
+    // Whatever was in the target comes back to where the dragged slot was, so
+    // moving into a free cell, swapping two lessons and trading a block for a
+    // lesson are one operation - and one request, which the server applies
+    // all-or-nothing.
     //
     // `rollback` restores the cache if the server refuses - usually because
     // the target double-books a teacher - which is the only honest response to
     // a move that turned out not to be allowed.
-    const rollback = targetEntry
-      ? optimisticSwap(entryId, targetEntry.id)
-      : optimisticMove(entryId, targetPeriod)
+    const rollback = optimisticSlotMove(classGroupId, source.period, targetPeriod)
     try {
-      if (targetEntry) {
-        // Target cell is already occupied — a plain move would look like
-        // a double-booking (the other entry is still "there" until it
-        // moves too), so swap both entries' periods in one request instead.
-        applyEntryUpdates(await api.swapTimetableEntries(entryId, targetEntry.id))
-      } else {
-        applyEntryUpdates(await api.updateTimetableEntry(entryId, { period_id: targetPeriod.id }))
-      }
+      applyEntryUpdates(
+        await api.moveSlot(timetable.id, classGroupId, source.period.id, targetPeriod.id),
+      )
     } catch (err) {
       rollback()
       setError(err.message)
@@ -344,15 +352,20 @@ export default function TimetableTab({
     }
   }
 
+  // Counted in slots, not entries: a block breaking a rule is one cell to
+  // move even when three of its options are named in the violation.
+  const entryById = new Map((timetable?.entries ?? []).map((e) => [e.id, e]))
+  const brokenSlots = new Set(
+    [...violatingEntries.keys()]
+      .map((id) => entryById.get(id))
+      .filter(Boolean)
+      .map((e) => `${e.class_group_id}:${e.period_id}`),
+  )
+
   // With every section stacked, the band above the grid says what broke but
   // not where to scroll. This puts the count on the section's own heading.
-  const sectionViolationCount = (classGroupId) => {
-    if (!timetable) return 0
-    const inSection = new Set(
-      timetable.entries.filter((e) => e.class_group_id === classGroupId).map((e) => e.id),
-    )
-    return [...violatingEntries.keys()].filter((id) => inSection.has(id)).length
-  }
+  const sectionViolationCount = (classGroupId) =>
+    [...brokenSlots].filter((key) => key.startsWith(`${classGroupId}:`)).length
 
 
   return (
@@ -386,7 +399,8 @@ export default function TimetableTab({
             you can drag a slot onto a free cell to move it, drag it onto
             another slot to swap the two, or click a slot to lock it in
             place before regenerating — locked slots are shown in red,
-            unlocked ones in green.
+            unlocked ones in green. An elective block moves and locks as
+            one slot, since its subjects always run together.
           </p>
         </div>
         {!readOnly && (
@@ -413,9 +427,9 @@ export default function TimetableTab({
           </svg>
           <div className="flex flex-col gap-1">
             <span className="font-medium">
-              {violatingEntries.size === 1
+              {brokenSlots.size === 1
                 ? '1 slot now breaks a rule you set'
-                : `${violatingEntries.size} slots now break rules you set`}
+                : `${brokenSlots.size} slots now break rules you set`}
             </span>
             {/* The rule's own confirmed sentence, not a paraphrase - it is what
                 the Constraints tab shows, and a warning that named it
@@ -615,42 +629,24 @@ export default function TimetableTab({
             // checked against itself.
             <div className="flex flex-col gap-8">
               {sections.map((cg) => (
-                <section
+                <SectionTimetable
                   key={cg.id}
-                  id={sectionAnchorId(cg.id)}
-                  // Clears the sticky header when the sidebar scrolls here.
-                  className="flex scroll-mt-6 flex-col gap-2"
-                >
-                  <h4 className="text-sm font-medium text-slate-700">
-                    {cg.grade ? `${cg.grade} · ${cg.name}` : cg.name}
-                    {sectionViolationCount(cg.id) > 0 && (
-                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-900">
-                        {sectionViolationCount(cg.id)} slot
-                        {sectionViolationCount(cg.id) === 1 ? '' : 's'} breaking a rule
-                      </span>
-                    )}
-                  </h4>
-                  <ScheduleGrid
-                    days={days}
-                    orders={orders}
-                    periodAt={periodAt}
-                    entriesAt={(d, o) => entriesFor(d, o, cg.id)}
-                    editable={!readOnly}
-                    violatingEntries={violatingEntries}
-                    onDragStart={(entry) => {
-                      setDragEntryId(entry.id)
-                      setDragClassGroupId(entry.class_group_id)
-                    }}
-                    onDragEnd={() => {
-                      setDragEntryId(null)
-                      setDragClassGroupId(null)
-                    }}
-                    onDrop={(d, o) => handleDrop(d, o, cg.id)}
-                    onToggleLock={handleToggleLock}
-                    secondaryLine={(e) => e.teacher_name}
-                    showAssistant
-                  />
-                </section>
+                  classGroup={cg}
+                  timetableId={timetable.id}
+                  combinations={combinationsFor(electiveBlocks, cg.id, subjectName)}
+                  violationCount={sectionViolationCount(cg.id)}
+                  onError={setError}
+                  days={days}
+                  orders={orders}
+                  periodAt={periodAt}
+                  entriesAt={(d, o) => entriesFor(d, o, cg.id)}
+                  editable={!readOnly}
+                  violatingEntries={violatingEntries}
+                  onDragStart={(d, o) => setDragSource({ classGroupId: cg.id, period: periodAt(d, o) })}
+                  onDragEnd={() => setDragSource(null)}
+                  onDrop={(d, o) => handleDrop(d, o, cg.id)}
+                  onToggleLock={handleToggleLock}
+                />
               ))}
             </div>
           ) : (
@@ -685,5 +681,124 @@ export default function TimetableTab({
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * One section's week, with what each of its students actually attends.
+ *
+ * A section with elective blocks has one timetable on paper but several in
+ * practice: the Physics + Chemistry student and the Accounts + Economics one
+ * sit in different rooms during every block. Picking a combination filters
+ * the grid to the common subjects plus the chosen option from each block -
+ * the same filter the student export prints, in the same order (see
+ * src/studentCombinations.js), so "3." here is sheet 3 there.
+ *
+ * A student's view is read-only. Dragging in it would still move the whole
+ * block, which is not what dragging the one subject on screen looks like it
+ * should do.
+ */
+function SectionTimetable({
+  classGroup,
+  timetableId,
+  // [] - no blocks, the same for everyone; null - too many to list.
+  combinations,
+  violationCount,
+  onError,
+  entriesAt,
+  editable,
+  ...gridProps
+}) {
+  const [studentIndex, setStudentIndex] = useState('') // '' = the whole section
+  const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
+  const combination =
+    studentIndex === '' || !combinations ? null : combinations[Number(studentIndex)] ?? null
+  const label = classGroup.grade ? `${classGroup.grade} · ${classGroup.name}` : classGroup.name
+
+  async function handleStudentExport(format) {
+    if (exporting) return
+    setExporting(format)
+    try {
+      await api.downloadStudentTimetables(
+        timetableId,
+        format,
+        classGroup.id,
+        classGroup.grade ? `${classGroup.grade} ${classGroup.name}` : classGroup.name,
+      )
+    } catch (err) {
+      onError(err.message)
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  return (
+    <section
+      id={sectionAnchorId(classGroup.id)}
+      // Clears the sticky header when the sidebar scrolls here.
+      className="flex scroll-mt-6 flex-col gap-2"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-medium text-slate-700">
+          {label}
+          {violationCount > 0 && (
+            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-900">
+              {violationCount} slot{violationCount === 1 ? '' : 's'} breaking a rule
+            </span>
+          )}
+        </h4>
+        {combinations === null && (
+          <span className="text-xs text-slate-400">
+            This section's blocks allow more than {MAX_COMBINATIONS} subject combinations — check
+            them for a mistake.
+          </span>
+        )}
+        {combinations?.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <label className="flex items-center gap-1.5 text-slate-500">
+              Show
+              <select
+                aria-label={`Whose timetable to show for ${label}`}
+                value={studentIndex}
+                onChange={(e) => setStudentIndex(e.target.value)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
+              >
+                <option value="">Whole section (every option)</option>
+                {combinations.map((c, i) => (
+                  <option key={c.label + i} value={i}>
+                    {i + 1}. {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="text-slate-400">Student timetables:</span>
+            <button
+              onClick={() => handleStudentExport('xlsx')}
+              disabled={!!exporting}
+              className="rounded-md border border-slate-300 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {exporting === 'xlsx' ? 'Preparing…' : 'Excel'}
+            </button>
+            <button
+              onClick={() => handleStudentExport('pdf')}
+              disabled={!!exporting}
+              className="rounded-md border border-slate-300 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {exporting === 'pdf' ? 'Preparing…' : 'PDF'}
+            </button>
+          </div>
+        )}
+      </div>
+      <ScheduleGrid
+        {...gridProps}
+        entriesAt={
+          combination ? (d, o) => entriesAt(d, o).filter((e) => keeps(combination, e)) : entriesAt
+        }
+        editable={editable && !combination}
+        secondaryLine={(e) => e.teacher_name}
+        showAssistant
+        showBlockName={!combination}
+      />
+    </section>
   )
 }

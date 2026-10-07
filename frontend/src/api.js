@@ -253,6 +253,24 @@ export const api = {
   // way too) — see POST .../entries/{id}/swap-with/{id} in the same router.
   swapTimetableEntries: (entryId, otherEntryId) =>
     post(`/timetables/entries/${entryId}/swap-with/${otherEntryId}`),
+  // Move everything in one section's period to another, swapping with
+  // whatever is already there. The drag unit is the slot, not the entry: an
+  // elective block has one entry per option and a split lab one per batch,
+  // and moving one of them alone would tear the block apart. All-or-nothing
+  // on the server. See move_slot in backend/app/routers/timetables.py.
+  moveSlot: (timetableId, classGroupId, fromPeriodId, toPeriodId) =>
+    post(`/timetables/${timetableId}/move-slot`, {
+      class_group_id: classGroupId,
+      from_period_id: fromPeriodId,
+      to_period_id: toPeriodId,
+    }),
+  // Lock or unlock a whole slot - a block is locked as a unit.
+  lockSlot: (timetableId, classGroupId, periodId, locked) =>
+    post(`/timetables/${timetableId}/lock-slot`, {
+      class_group_id: classGroupId,
+      period_id: periodId,
+      locked,
+    }),
   // Conversational editing — plain-English text resolved server-side
   // (via Claude, grounded against this timetable's actual entries and
   // the school's actual periods) into a lock/move/swap, applied through
@@ -264,6 +282,21 @@ export const api = {
   // above for why this can't just be a plain <a href> anymore.
   downloadTimetableExport: (id, format) =>
     downloadFile(`/timetables/${id}/export?format=${format}`, `timetable_${id}.${format}`),
+  // One timetable per combination of elective choices, for one section - what
+  // each student actually attends.
+  downloadStudentTimetables: (id, format, classGroupId, sectionLabel) =>
+    downloadFile(
+      `/timetables/${id}/export?format=${format}&class_group_id=${classGroupId}&student_combinations=true`,
+      `student_timetables_${sectionLabel.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "section"}.${format}`,
+    ),
+
+  // Elective blocks: subjects one section studies at the same time, each
+  // student taking one. Options are sent as a whole set, because every way a
+  // block goes wrong is about overlap - see backend/app/routers/elective_blocks.py.
+  listElectiveBlocks: (schoolId) => get(`/elective-blocks?school_id=${schoolId}`),
+  createElectiveBlock: (data) => post("/elective-blocks", data),
+  updateElectiveBlock: (id, data) => put(`/elective-blocks/${id}`, data),
+  deleteElectiveBlock: (id) => del(`/elective-blocks/${id}`),
 
   // Bulk import — upload a CSV/.xlsx of subjects, rooms, teachers, or
   // class groups instead of adding them one at a time. See
