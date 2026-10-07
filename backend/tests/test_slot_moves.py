@@ -339,6 +339,46 @@ def test_locking_an_empty_slot_is_refused(client, world):
     assert r.status_code == 400
 
 
+def _add_split_lab(w, locked=False):
+    db = SessionLocal()
+    try:
+        batches = [
+            TimetableEntry(timetable_id=w["tt"], class_group_id=w["a"],
+                           subject_id=w["subjects"]["Chemistry"], teacher_id=w["teachers"][t],
+                           period_id=w["p"][3], lab_batch=n, locked=locked)
+            for n, t in ((1, "Iyer"), (2, "Nair"))
+        ]
+        db.add_all(batches)
+        db.commit()
+        return [e.id for e in batches]
+    finally:
+        db.close()
+
+
+def test_a_split_lab_cannot_be_locked(client, world):
+    """The solver re-places every batch on each regeneration, so a lock here
+    would promise something the next generate would not keep."""
+    w, h = world
+    _add_split_lab(w)
+    r = client.post(f"/api/timetables/{w['tt']}/lock-slot", json={
+        "class_group_id": w["a"], "period_id": w["p"][3], "locked": True,
+    }, headers=h)
+    assert r.status_code == 400
+    assert "Split labs" in r.json()["detail"]
+    full = client.get(f"/api/timetables/{w['tt']}", headers=h).json()
+    assert not any(e["locked"] for e in full["entries"] if e["period_id"] == w["p"][3])
+
+
+def test_an_old_lock_on_a_split_lab_can_still_be_cleared(client, world):
+    w, h = world
+    ids = _add_split_lab(w, locked=True)
+    r = client.post(f"/api/timetables/{w['tt']}/lock-slot", json={
+        "class_group_id": w["a"], "period_id": w["p"][3], "locked": False,
+    }, headers=h)
+    assert r.status_code == 200, r.text
+    assert {e["id"] for e in r.json()["entries"] if not e["locked"]} == set(ids)
+
+
 def test_a_lesson_cannot_be_moved_onto_a_period_its_section_already_uses(client, world):
     """The class double-booking check, isolated. English (Verma) onto period 1,
     where 11A already has its block (Rao, Khan, Das): no teacher clashes, so

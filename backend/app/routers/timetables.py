@@ -692,6 +692,15 @@ def lock_slot(
     entries = _slot_entries(db, timetable.id, payload.class_group_id, payload.period_id)
     if not entries:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")
+    if payload.locked and any(e.lab_batch is not None for e in entries):
+        # The solver re-places every batch of a split lab on each regeneration
+        # (see the lock handling in app/services/solver.py), so accepting the
+        # lock would promise something the next generate would not keep.
+        # Unlocking stays allowed, so an old lock can still be cleared.
+        raise HTTPException(
+            status_code=400,
+            detail="Split labs can't be locked yet - regenerating re-places every batch.",
+        )
     for entry in entries:
         entry.locked = payload.locked
     db.commit()
