@@ -1,7 +1,7 @@
 """add elective blocks
 
 Revision ID: a1e3c7b2d904
-Revises: f0d72579b20b
+Revises: a4c1e9d2b7f3
 Create Date: 2026-10-07 12:00:00.000000
 
 Elective blocks: sets of subjects a section studies at the same time, each
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1e3c7b2d904'
-down_revision: Union[str, None] = 'f0d72579b20b'
+down_revision: Union[str, None] = 'a4c1e9d2b7f3'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
