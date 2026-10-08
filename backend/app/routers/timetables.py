@@ -238,6 +238,51 @@ def _edge_orders(school_periods: list[Period], first: bool) -> dict[int, int]:
     return {day: (min(orders) if first else max(orders)) for day, orders in by_day.items()}
 
 
+# How many successful timetables a school keeps. The newest is the one on
+# screen and the one the solver reads locks from; two more are a margin, not a
+# feature - nothing in the app shows an older timetable.
+KEEP_DRAFTS = 3
+
+
+def _prune_old_timetables(db: Session, school_id: int) -> None:
+    """Delete timetables nobody can reach any more.
+
+    Every Generate adds a timetable of about a thousand rows and nothing ever
+    removed one, so the entries table grew forever with history the app never
+    shows. Kept:
+
+      - the newest timetable, whatever its status - it is what the Timetable
+        tab shows, including a failure and its explanation;
+      - the newest KEEP_DRAFTS successful ones - the newest of those is where
+        the next generation reads its locked slots from;
+      - anything published, archived or still generating - published is a
+        decision someone made, and a generating row belongs to a job that is
+        still running.
+
+    Everything else - older drafts and older failures - goes. Entries are
+    deleted in one statement rather than through the ORM cascade, which would
+    load every row into memory first.
+    """
+    rows = (
+        db.query(Timetable.id, Timetable.status)
+        .filter(Timetable.school_id == school_id)
+        .order_by(Timetable.id.desc())
+        .all()
+    )
+    if not rows:
+        return
+    keep = {rows[0].id}
+    keep.update([r.id for r in rows if r.status == "draft"][:KEEP_DRAFTS])
+    doomed = [r.id for r in rows if r.status in ("draft", "failed") and r.id not in keep]
+    if not doomed:
+        return
+    db.query(TimetableEntry).filter(TimetableEntry.timetable_id.in_(doomed)).delete(
+        synchronize_session=False
+    )
+    db.query(Timetable).filter(Timetable.id.in_(doomed)).delete(synchronize_session=False)
+    db.commit()
+
+
 def _run_generation_job(timetable_id: int, school_id: int) -> None:
     """
     Runs on a background thread — must open its own DB session rather
@@ -327,6 +372,13 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                 )
 
         db.commit()
+        # After the result is safely committed, and never allowed to undo it:
+        # housekeeping failing is not a reason to report a generation as failed.
+        try:
+            _prune_old_timetables(db, school_id)
+        except Exception as exc:  # noqa: BLE001
+            sentry_sdk.capture_exception(exc)
+            db.rollback()
     except Exception as exc:  # noqa: BLE001 - background job, must not crash silently
         # Report before the traceback is flattened into error_message below.
         # This runs on a background thread with no HTTP response to carry the
