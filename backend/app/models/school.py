@@ -8,7 +8,7 @@ schema assuming a fixed structure.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, UniqueConstraint, func
+    Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 
@@ -20,7 +20,7 @@ class School(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # "school" or "college" — chosen once at creation (see routers/schools.py
     # and frontend App.jsx's create-school modal). Purely a UI hint for
     # smart defaults (terminology, which optional fields to show) — nothing
@@ -87,7 +87,7 @@ class Subject(Base):
     __tablename__ = "subjects"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     # If set, the solver will only assign this subject to a Room whose
     # room_type matches exactly (e.g. "lab" for Chemistry). Null means any
@@ -114,7 +114,7 @@ class Room(Base):
     __tablename__ = "rooms"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     capacity = Column(Integer, nullable=True)
     room_type = Column(String, nullable=True)  # e.g. "lab", "regular", "auditorium"
@@ -126,7 +126,7 @@ class Teacher(Base):
     __tablename__ = "teachers"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     email = Column(String, nullable=True)
     # subject_ids this teacher is qualified to teach
@@ -165,7 +165,7 @@ class ClassGroup(Base):
     __tablename__ = "class_groups"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     grade = Column(String, nullable=True)
     name = Column(String, nullable=False)
     student_count = Column(Integer, nullable=True)
@@ -231,8 +231,8 @@ class ElectiveBlock(Base):
     __tablename__ = "elective_blocks"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
-    class_group_id = Column(Integer, ForeignKey("class_groups.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    class_group_id = Column(Integer, ForeignKey("class_groups.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     periods_per_week = Column(Integer, nullable=False)
 
@@ -278,7 +278,7 @@ class Constraint(Base):
     __tablename__ = "constraints"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     type = Column(String, nullable=False)
     parameters = Column(JSON, default=dict)
     is_hard = Column(Boolean, default=True)
@@ -312,7 +312,7 @@ class Timetable(Base):
     __tablename__ = "timetables"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     status = Column(String, default="generating")  # generating, draft, failed, published, archived
     solver_status = Column(String, nullable=True)  # optimal, feasible, infeasible, unknown, no_periods, ...
     error_message = Column(Text, nullable=True)
@@ -363,6 +363,15 @@ class TimetableEntry(Base):
 
     timetable = relationship("Timetable", back_populates="entries")
 
+    # Every read of a timetable filters by timetable_id, and edits look up one
+    # section's period (a slot) or everything in one period (conflict checks).
+    # Without these each of those scans every entry of every timetable ever
+    # generated, by every school - about a thousand more rows per Generate.
+    __table_args__ = (
+        Index("ix_timetable_entries_timetable_class_period", "timetable_id", "class_group_id", "period_id"),
+        Index("ix_timetable_entries_timetable_period", "timetable_id", "period_id"),
+    )
+
 
 class SchoolMembership(Base):
     """
@@ -388,7 +397,7 @@ class SchoolMembership(Base):
 
     id = Column(Integer, primary_key=True)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     role = Column(String, nullable=False, default="viewer")  # "admin" | "viewer"
 
     school = relationship("School")
@@ -410,7 +419,7 @@ class SchoolInvite(Base):
     __tablename__ = "school_invites"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     email = Column(String, nullable=False, index=True)
     role = Column(String, nullable=False, default="viewer")  # "admin" | "viewer"
     token = Column(String, nullable=False, unique=True, index=True)
@@ -440,7 +449,7 @@ class SubstitutionLog(Base):
     __tablename__ = "substitution_logs"
 
     id = Column(Integer, primary_key=True)
-    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     day_of_week = Column(Integer, nullable=False)  # 0 = Monday ... 6 = Sunday
     changes = Column(JSON, default=list)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
