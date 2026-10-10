@@ -12,6 +12,7 @@ teachers, class groups, subject requirements, and periods from the
 database and builds/solves a CP-SAT model from that real data.
 """
 import os
+import random
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -1304,6 +1305,18 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # more cores scale further.
     solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
     solver.parameters.max_time_in_seconds = settings.solver_time_limit_seconds
+    # Without this the search is effectively deterministic: the same school
+    # data produces the same first feasible timetable on every run, so where
+    # a subject lands is decided by the order variables were built in, not by
+    # the rules. That looked exactly like a deleted rule still being applied
+    # (French never again in period 1 after "French in period 1" was removed)
+    # when nothing was enforcing it - the solver simply kept returning the
+    # same answer. A fresh seed per generation, plus randomized branching,
+    # makes every placement the rules allow actually reachable.
+    # SOLVER_RANDOM_SEED pins it for reproducible debugging and tests.
+    seed = settings.solver_random_seed
+    solver.parameters.random_seed = seed if seed is not None else random.randrange(2**31 - 1)
+    solver.parameters.randomize_search = True
     status = solver.Solve(model)
 
     status_name = {

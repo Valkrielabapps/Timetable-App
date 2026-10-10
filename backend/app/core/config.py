@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # the result instead of waiting on one long request.
     solver_time_limit_seconds: int = 60
 
+    # Seed for the solver's randomized search (see app/services/solver.py).
+    # Unset = a fresh random seed per generation, so regenerating can give a
+    # different valid timetable. Set it to get the same timetable every time
+    # for the same data, e.g. when reproducing a bug.
+    solver_random_seed: int | None = None
+
     # Used by app/services/llm_constraint_parser.py. If unset, constraint
     # parsing silently falls back to the regex-based parser
     # (app/services/constraint_parser.py) — the app works either way, the
