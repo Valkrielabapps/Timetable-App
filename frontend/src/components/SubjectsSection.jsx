@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkImportPanel from './BulkImportPanel'
+import { confirmDialog } from './confirmDialog'
 
 /**
  * "What does your school teach" — subject name plus optional advanced
@@ -52,9 +53,13 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
   }
 
   async function handleRemoveSubject(id, name) {
-    if (!window.confirm(`Remove "${name}"? This also removes its periods/week and teacher qualifications for this subject.`)) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Remove ${name}?`,
+      message: 'This also removes its periods/week and teacher qualifications for this subject.',
+      confirmLabel: 'Remove',
+      danger: true,
+    })
+    if (!ok) return
     try {
       await onSubjectsChanged.delete(id)
     } catch (err) {

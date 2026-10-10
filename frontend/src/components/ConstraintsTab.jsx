@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import ConstraintInterpretation from './ConstraintInterpretation.jsx'
+import { confirmDialog } from './confirmDialog'
 import { useTimetable, useTimetables } from '../hooks/useSchoolData'
 import { filterOptions, filtersActive, NO_FILTERS, organise } from '../constraintGroups'
 
@@ -207,7 +208,14 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   }
 
   async function handleRemove(id, description) {
-    if (!window.confirm(`Remove this constraint?\n\n"${description}"`)) return
+    const ok = await confirmDialog({
+      title: 'Remove this constraint?',
+      message: 'The solver stops applying it from the next timetable you generate.',
+      detail: description,
+      confirmLabel: 'Remove',
+      danger: true,
+    })
+    if (!ok) return
     setError(null)
     try {
       await api.deleteConstraint(id)

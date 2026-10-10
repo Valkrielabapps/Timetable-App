@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
+import { confirmDialog } from './confirmDialog'
 import { useElectiveBlocks } from '../hooks/useSchoolData'
 
 /**
@@ -133,9 +134,13 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
   }
 
   async function handleDeleteTeacher(teacher) {
-    if (!window.confirm(`Remove ${teacher.name}? This also removes them from every subject and section they're assigned to.`)) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Remove ${teacher.name}?`,
+      message: "This also removes them from every subject and section they're assigned to.",
+      confirmLabel: 'Remove',
+      danger: true,
+    })
+    if (!ok) return
     try {
       await onTeachersChanged.delete(teacher.id)
     } catch (err) {

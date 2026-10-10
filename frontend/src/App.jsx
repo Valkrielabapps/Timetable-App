@@ -19,6 +19,7 @@ import CalendarTab from './components/CalendarTab'
 import DemoTab from './components/DemoTab'
 import SettingsTab from './components/SettingsTab'
 import SupportWidget from './components/SupportWidget'
+import { confirmDialog } from './components/confirmDialog'
 import DataEntryTab from './components/DataEntryTab'
 import ConstraintsTab from './components/ConstraintsTab'
 import TimetableTab from './components/TimetableTab'
@@ -405,13 +406,13 @@ function App() {
 
   async function handleDeleteClassGroup(classGroup) {
     const label = classGroup.grade ? `${classGroup.grade} - ${classGroup.name}` : classGroup.name
-    if (
-      !window.confirm(
-        `Delete Section ${label}? This also removes its subject requirements and any generated timetable entries for this section. This can't be undone.`
-      )
-    ) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Delete Section ${label}?`,
+      message: "This also removes its subject requirements and any generated timetable entries for this section. This can't be undone.",
+      confirmLabel: 'Delete section',
+      danger: true,
+    })
+    if (!ok) return
     try {
       await api.deleteClassGroup(classGroup.id)
       setError(null)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { confirmDialog } from './confirmDialog'
 
 /**
  * A section's elective blocks: subjects it studies at the same time, each
@@ -59,13 +60,13 @@ export default function ElectiveBlocksPanel({
   }
 
   async function handleDelete(block) {
-    if (
-      !window.confirm(
-        `Delete ${block.name}? Its subjects stop being scheduled for this section until you add them again.`,
-      )
-    ) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Delete ${block.name}?`,
+      message: 'Its subjects stop being scheduled for this section until you add them again.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     setError(null)
     try {
       await mutations.delete(block.id)

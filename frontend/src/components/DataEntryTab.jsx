@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
+import { confirmDialog } from './confirmDialog'
 import PeriodsPanel from './PeriodsPanel'
 import RoomsPanel from './RoomsPanel'
 import {
@@ -419,9 +420,14 @@ export default function DataEntryTab({
       return
     }
 
-    if (!window.confirm(`Copy ${rowsToCopy.length} subject assignment${rowsToCopy.length === 1 ? '' : 's'} to ${targets.length} section${targets.length === 1 ? '' : 's'}?`)) {
-      return
-    }
+    const ok = await confirmDialog({
+      title: `Copy ${rowsToCopy.length} subject assignment${rowsToCopy.length === 1 ? '' : 's'}?`,
+      message: `They'll be copied to ${targets.length} section${targets.length === 1 ? '' : 's'}: ${targets
+        .map((cg) => (cg.grade ? `${cg.grade} - ${cg.name}` : cg.name))
+        .join(', ')}.`,
+      confirmLabel: 'Copy',
+    })
+    if (!ok) return
 
     setCopyingPeriods(true)
     setError(null)
