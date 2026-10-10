@@ -60,7 +60,7 @@ We may suspend or terminate accounts that violate these Terms.
 
 ## 6. Plans and pricing
 
-The Service is offered under the pricing plans described on our website at [WEBSITE_URL] (Free, Pro at ₹4,999 + GST per month, and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are exclusive of applicable taxes (e.g. GST), which will be added at checkout or invoicing.
+The Service is offered under the pricing plans described on our website at [WEBSITE_URL] (Free, Pro at ₹4,999 + GST per year, and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are exclusive of applicable taxes (e.g. GST), which will be added at checkout or invoicing.
 
 ## 7. Payment and billing
 

@@ -47,7 +47,7 @@ const PRICING_TIERS = [
   {
     name: 'Pro',
     priceInr: 4999,
-    period: '+ GST /month',
+    period: '+ GST /year',
     tagline: 'For a school that needs more room to grow',
     highlights: ['Everything in Free, plus:', 'Up to 500 students', 'AI-assisted setup & constraints', 'Priority support'],
     highlighted: true,
@@ -86,7 +86,7 @@ const BILLING_FAQS = [
   },
   {
     q: 'How does billing actually work?',
-    a: 'Pro is billed in advance on a recurring monthly basis through Razorpay, our payment processor. You can cancel any time from your account settings; cancellation takes effect at the end of your current billing period, and you keep access until then.',
+    a: 'Pro is billed in advance once a year through Razorpay, our payment processor. You can cancel any time from your account settings; cancellation takes effect at the end of your current billing period, and you keep access until then.',
   },
   {
     q: 'What happens if I cancel?',

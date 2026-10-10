@@ -357,12 +357,75 @@ def update_constraint(constraint_id: int, payload: ConstraintUpdate, db: Session
     return _to_out(db, constraint)
 
 
+def _availability_period_ids(db: Session, school_id: int, params: dict) -> set[int]:
+    """The period ids an availability rule blocked, rebuilt from its stored
+    parameters with the same day / period-order filters used when it was
+    created. A rule that stored neither (it matched nothing) blocked nothing."""
+    day = params.get("day_of_week")
+    orders = params.get("period_orders")
+    if day is None and not orders:
+        return set()
+    query = db.query(Period).filter(Period.school_id == school_id)
+    if day is not None:
+        query = query.filter(Period.day_of_week == day)
+    if orders:
+        query = query.filter(Period.order.in_(orders))
+    return {p.id for p in query.all()}
+
+
+def _revert_teacher_side_effects(db: Session, constraint: Constraint) -> None:
+    """Undo what a workload or availability rule wrote onto its Teacher row.
+
+    Those two types are enforced by editing the Teacher (max_periods_per_week,
+    unavailable_period_ids), not by the Constraint row, which is only the
+    record shown in the UI. So removing or rewording the row on its own left
+    the teacher blocked / capped and the solver kept honouring a rule that no
+    longer existed.
+
+    Anything another remaining rule for the same teacher still needs is kept:
+    a workload cap falls back to the newest other cap (else unlimited), and a
+    period stays blocked while any other availability rule covers it.
+    """
+    if constraint.type not in ("workload_limit", "availability"):
+        return
+    teacher_id = (constraint.parameters or {}).get("teacher_id")
+    teacher = db.get(Teacher, teacher_id) if teacher_id else None
+    if teacher is None:
+        return
+
+    others = [
+        c
+        for c in db.query(Constraint)
+        .filter(
+            Constraint.school_id == constraint.school_id,
+            Constraint.type == constraint.type,
+            Constraint.id != constraint.id,
+        )
+        .order_by(Constraint.id)
+        .all()
+        if (c.parameters or {}).get("teacher_id") == teacher_id
+    ]
+
+    if constraint.type == "workload_limit":
+        teacher.max_periods_per_week = next(
+            (c.parameters.get("max_periods_per_week") for c in reversed(others) if c.parameters.get("max_periods_per_week")),
+            None,
+        )
+        return
+
+    release = _availability_period_ids(db, constraint.school_id, constraint.parameters or {})
+    for c in others:
+        release -= _availability_period_ids(db, c.school_id, c.parameters or {})
+    teacher.unavailable_period_ids = sorted(set(teacher.unavailable_period_ids or []) - release)
+
+
 @router.delete("/{constraint_id}", status_code=204)
 def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     constraint = db.get(Constraint, constraint_id)
     if not constraint:
         raise HTTPException(status_code=404, detail="Constraint not found")
     require_school_access(db, current_user, constraint.school_id, min_role="admin")
+    _revert_teacher_side_effects(db, constraint)
     db.delete(constraint)
     db.commit()
 
@@ -822,6 +885,9 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
         raise HTTPException(status_code=404, detail="Constraint not found")
     require_school_access(db, current_user, constraint.school_id, min_role="admin")
 
+    # The old rule's effect on the teacher goes first; resolving the new text
+    # below re-applies whatever the reworded rule still asks for.
+    _revert_teacher_side_effects(db, constraint)
     resolved = _resolve_constraint_text(db, constraint.school_id, payload.text)
     constraint.type = resolved.db_type
     constraint.parameters = resolved.parameters
