@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
-import PeriodsPanel from './PeriodsPanel'
+import TimetableStructurePanel from './TimetableStructurePanel'
 import RoomsPanel from './RoomsPanel'
 import {
   useElectiveBlockMutations,
@@ -11,6 +11,7 @@ import {
   useRooms,
 } from '../hooks/useSchoolData'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
+import { DEFAULT_STRUCTURE } from '../timetableStructure'
 import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
@@ -83,6 +84,9 @@ export default function DataEntryTab({
   periods,
   setPeriods,
   classGroups,
+  // Patched in place when a section's class teacher changes, rather than
+  // reloading every section for one field.
+  setClassGroups,
   // Every SubjectRequirement in the school, owned by App.jsx (same
   // reasoning as subjects/teachers/periods/rooms above — this component
   // unmounts on every tab switch, so state kept locally here would be
@@ -131,25 +135,23 @@ export default function DataEntryTab({
     setActiveSectionId(classGroupId)
   }, [classGroupId])
 
+  async function handleSetClassTeacher(teacherId) {
+    try {
+      const updated = await api.updateClassGroup(activeSectionId, { class_teacher_id: teacherId })
+      setClassGroups?.((prev) => prev.map((cg) => (cg.id === updated.id ? updated : cg)))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function handleQuickSetupPeriods() {
     if (settingUpPeriods) return
     setSettingUpPeriods(true)
     try {
-      const calls = []
-      for (let day = 0; day < 5; day++) {
-        for (let order = 0; order < 8; order++) {
-          calls.push(
-            api.createPeriod({
-              school_id: schoolId,
-              day_of_week: day,
-              order,
-              label: `Period ${order + 1}`,
-            })
-          )
-        }
-      }
-      await Promise.all(calls)
-      await load()
+      // The same structure the Setup page starts from - Mon-Fri, 8 periods -
+      // saved in one request rather than forty.
+      await api.saveTimetableStructure(schoolId, DEFAULT_STRUCTURE)
+      await reloadPeriods()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -215,27 +217,15 @@ export default function DataEntryTab({
     reload: reloadAll,
   }
 
-  // Handed to PeriodsPanel/RoomsPanel (via SetupSection) so they read/write
-  // App.jsx's lifted `periods`/`rooms` state directly instead of each
-  // independently re-fetching its own list on mount — see PeriodsPanel's
-  // and RoomsPanel's docstrings for why that round trip was the visible
-  // lag on opening Setup.
-  const periodsApi = {
-    async create(data) {
-      const created = await api.createPeriod(data)
-      setPeriods((prev) => [...prev, created])
-      return created
-    },
-    async update(id, data) {
-      const updated = await api.updatePeriod(id, data)
-      setPeriods((prev) => prev.map((p) => (p.id === id ? updated : p)))
-      return updated
-    },
-    async delete(id) {
-      await api.deletePeriod(id)
-      setPeriods((prev) => prev.filter((p) => p.id !== id))
-    },
+  // Saving the week's structure can add, remove and renumber periods all at
+  // once, so the list is re-read whole rather than patched.
+  async function reloadPeriods() {
+    setPeriods(await api.listPeriods(schoolId))
   }
+
+  const grades = [...new Set(classGroups.map((cg) => cg.grade).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true }),
+  )
 
   // Rooms are the first resource off App.jsx's lifted state: fetched and
   // cached by React Query here rather than arriving as props from a
@@ -545,7 +535,8 @@ export default function DataEntryTab({
         <SetupSection
           schoolId={schoolId}
           periods={periods}
-          onPeriodsChanged={periodsApi}
+          grades={grades}
+          onPeriodsSaved={reloadPeriods}
           rooms={rooms}
           onRoomsChanged={roomsApi}
           onImported={load}
@@ -577,6 +568,17 @@ export default function DataEntryTab({
           copyingPeriods={copyingPeriods}
           onGoToSubjects={() => onSubViewChange('subjects')}
           electiveBlocks={electiveBlocks}
+          classTeacherPicker={
+            activeSection && (
+              <ClassTeacherPicker
+                section={activeSection}
+                teachers={teachers}
+                classGroups={classGroups}
+                onChange={handleSetClassTeacher}
+                readOnly={readOnly}
+              />
+            )
+          }
           electiveBlocksPanel={
             activeSectionId != null && (
               <ElectiveBlocksPanel
@@ -608,7 +610,7 @@ export default function DataEntryTab({
  * entry" as those two — a school can't get a working timetable without
  * its periods and rooms configured.
  */
-function SetupSection({ schoolId, periods, onPeriodsChanged, rooms, onRoomsChanged, onImported, readOnly }) {
+function SetupSection({ schoolId, periods, grades, onPeriodsSaved, rooms, onRoomsChanged, onImported, readOnly }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -622,14 +624,13 @@ function SetupSection({ schoolId, periods, onPeriodsChanged, rooms, onRoomsChang
       <div className="divide-y divide-slate-200 rounded-md border border-slate-200">
         <div className="p-4">
           <h5 className="mb-3 text-sm font-medium text-slate-700">
-            Periods {periods.length > 0 && <span className="text-slate-400">({periods.length})</span>}
+            Timetable structure{' '}
+            {periods.length > 0 && <span className="text-slate-400">({periods.length} periods a week)</span>}
           </h5>
-          <PeriodsPanel
+          <TimetableStructurePanel
             schoolId={schoolId}
-            periods={periods}
-            onCreate={onPeriodsChanged.create}
-            onUpdate={onPeriodsChanged.update}
-            onDelete={onPeriodsChanged.delete}
+            grades={grades}
+            onSaved={onPeriodsSaved}
             readOnly={readOnly}
           />
         </div>
@@ -690,6 +691,7 @@ function PlanSection({
   copyingPeriods,
   onGoToSubjects,
   electiveBlocks = [],
+  classTeacherPicker = null,
   electiveBlocksPanel = null,
   readOnly,
 }) {
@@ -899,6 +901,8 @@ function PlanSection({
         </div>
       </div>
 
+      {classTeacherPicker}
+
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
@@ -1009,6 +1013,50 @@ function PlanSection({
       </table>
 
       {electiveBlocksPanel}
+    </div>
+  )
+}
+
+/**
+ * Who this section's class teacher is - the teacher with them in the class
+ * teacher period. One per section; a teacher who is class teacher of two
+ * sections can't be in both at once, so that is pointed out rather than
+ * refused (it is sometimes a stopgap while someone is away).
+ */
+function ClassTeacherPicker({ section, teachers, classGroups, onChange, readOnly }) {
+  const others = classGroups.filter(
+    (cg) => cg.id !== section.id && section.class_teacher_id != null && cg.class_teacher_id === section.class_teacher_id,
+  )
+  const teacherName = teachers.find((t) => t.id === section.class_teacher_id)?.name
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <label htmlFor="class-teacher-select" className="font-medium text-slate-700">
+        Class teacher
+      </label>
+      <select
+        id="class-teacher-select"
+        value={section.class_teacher_id ?? ''}
+        disabled={readOnly}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+      >
+        <option value="">Not set</option>
+        {[...teachers]
+          .filter((t) => !t._pending)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+      </select>
+      {others.length > 0 && (
+        <span className="text-xs text-amber-700">
+          {teacherName} is also class teacher of{' '}
+          {others.map((cg) => (cg.grade ? `${cg.grade} · ${cg.name}` : cg.name)).join(', ')} - they can only be
+          in one class teacher period at a time.
+        </span>
+      )}
     </div>
   )
 }

@@ -452,16 +452,16 @@ function DayGrid({ weekday, date, view, entries, periods, teachers, classGroups,
             p.is_break ? (
               <tr key={p.id}>
                 <th scope="row" className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-xs font-medium text-slate-400">
-                  {p.label || 'Break'}
+                  {p.kind === 'class_teacher' ? 'Class teacher' : p.kind === 'zero' ? 'Zero period' : p.label || 'Break'}
                 </th>
                 <td colSpan={columns.length} className="border-b border-slate-200 bg-slate-50/60 px-3 py-1.5 text-center text-xs text-slate-400">
-                  Break
+                  {p.kind === 'class_teacher' ? 'Class teacher period' : p.kind === 'zero' ? 'Zero period' : 'Break'}
                 </td>
               </tr>
             ) : (
               <tr key={p.id}>
                 <th scope="row" className="sticky left-0 z-10 border-b border-r border-slate-200 bg-white px-3 py-3 text-left align-top text-xs font-medium text-slate-600">
-                  {p.label || `Period ${p.order}`}
+                  {p.number != null ? `Period ${p.number}` : p.label || `Period ${p.order + 1}`}
                 </th>
                 {columns.map((c) => {
                   const items = cellFor(c.id, p.id)

@@ -1,5 +1,12 @@
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+const SPECIAL_TONE = {
+  muted: 'bg-slate-50 text-slate-400',
+  class_teacher: 'bg-violet-50 text-violet-800',
+  zero: 'bg-emerald-50 text-emerald-800',
+  warn: 'bg-amber-50 text-amber-800',
+}
+
 /**
  * One week's grid: periods down, days across.
  *
@@ -41,6 +48,13 @@ export default function ScheduleGrid({
   // A student's own timetable shows the one option they attend; calling that
   // cell "Block 1" would read as if they still had a choice to make.
   showBlockName = true,
+  // "Period 3" for a lesson row, the slot's own name for a break or the class
+  // teacher period. Rows are slots in the day, and only lessons are numbered.
+  rowLabel = (order) => `Period ${order + 1}`,
+  // (day, order) -> { text, tone } for a slot that isn't an ordinary lesson
+  // here - a break, the class teacher period, a zero period - or null. Such a
+  // slot shows its text and takes no drops.
+  specialCell = () => null,
 }) {
   return (
     <div className="overflow-x-auto rounded-md border border-slate-200">
@@ -59,11 +73,22 @@ export default function ScheduleGrid({
           {orders.map((order) => (
             <tr key={order}>
               <td className="border border-slate-200 px-3 py-2 font-medium text-slate-500">
-                Period {order + 1}
+                {rowLabel(order)}
               </td>
               {days.map((d) => {
                 const entries = entriesAt(d, order)
                 const period = periodAt(d, order)
+                const special = period ? specialCell(d, order) : null
+                if (special) {
+                  return (
+                    <td
+                      key={d}
+                      className={`border border-slate-200 px-3 py-2 text-xs ${SPECIAL_TONE[special.tone] ?? SPECIAL_TONE.muted}`}
+                    >
+                      {special.text}
+                    </td>
+                  )
+                }
                 const blockId = entries.find((e) => e.elective_block_id != null)?.elective_block_id
                 const isBlock = blockId != null
                 // A split lab: several batches of one subject at once. Moved as

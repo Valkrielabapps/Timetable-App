@@ -257,6 +257,17 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                     </button>
                   )}
                 </div>
+                {classGroups.some((cg) => cg.class_teacher_id === teacher.id) && (
+                  <div className="mt-0.5 flex flex-wrap gap-1">
+                    {classGroups
+                      .filter((cg) => cg.class_teacher_id === teacher.id)
+                      .map((cg) => (
+                        <span key={cg.id} className="rounded-full bg-violet-50 px-2 py-0.5 text-xs text-violet-800">
+                          Class teacher · {cg.grade ? `${cg.grade} ${cg.name}` : cg.name}
+                        </span>
+                      ))}
+                  </div>
+                )}
                 <div
                   className={`text-xs font-medium ${
                     overLimit ? 'text-red-600' : nearLimit ? 'text-amber-600' : 'text-slate-400'

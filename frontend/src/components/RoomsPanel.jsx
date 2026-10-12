@@ -11,7 +11,7 @@ import { useState } from 'react'
  *
  * `rooms` and the `onCreate`/`onDelete` callbacks are owned by the parent
  * (DataEntryTab, backed by App.jsx's lifted state) rather than fetched
- * independently here — same reasoning as PeriodsPanel: rooms are already
+ * independently here — same reasoning as the periods: rooms are already
  * loaded school-wide, so a second independent fetch on mount was pure
  * extra latency for data the app already had.
  */
