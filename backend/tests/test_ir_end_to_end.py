@@ -333,7 +333,9 @@ def test_an_exists_over_rule_compiles_against_a_real_school(db):
     result = generate_school_timetable(db, school.id)
     assert result.status in ("optimal", "feasible"), result.errors
     assert not result.warnings, result.warnings
-    per_day = {}
+    # Both days counted, including one with no Maths at all - an empty day
+    # is the lightest day there is, and a valid answer to this rule.
+    per_day = {0: 0, 1: 0}
     for day, _order in _periods_used(result, db, school, "Maths"):
         per_day[day] = per_day.get(day, 0) + 1
     assert min(per_day.values()) <= 1, per_day

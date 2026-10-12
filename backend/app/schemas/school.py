@@ -1,5 +1,7 @@
 """Pydantic schemas for School — what the API accepts/returns, separate from
 the SQLAlchemy model that defines what the database stores."""
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -24,6 +26,9 @@ class SchoolOut(BaseModel):
     # treats a missing/None value the same as an empty list.
     grade_order: list[str] | None = None
     profile: dict | None = None
+    # Paid plan ("pro") and when it lapses; both null on the Free plan.
+    plan: str | None = None
+    plan_valid_until: datetime | None = None
     # The current user's role for THIS school specifically ("admin" or
     # "viewer") — not a column on the School model, computed per-request
     # by whichever router endpoint builds this (see app/core/access.py).

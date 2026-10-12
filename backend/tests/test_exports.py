@@ -191,7 +191,8 @@ def test_the_title_names_the_section_and_the_combination(client, world):
     sheets = _sheets(_export(client, w, h, format="xlsx", class_group_id=w["a"],
                              student_combinations="true").content)
     name = next(n for n in sheets if n.endswith("Physics + Chemistry"))
-    assert sheets[name][0][0] == "Grade 11 - A — Physics + Chemistry"
+    assert sheets[name][0][0] == "Grade 11 - A"
+    assert "Physics + Chemistry" in sheets[name][1][0]
 
 
 def test_student_timetables_as_a_pdf(client, world):

@@ -119,12 +119,32 @@ class Settings(BaseSettings):
     # email or shared inbox, so it shouldn't stay usable indefinitely.
     password_reset_expire_minutes: int = 60
 
+    # Cashfree Payment Gateway (app/services/cashfree_service.py). Unset by
+    # default: the payment endpoints return a clear 503 until both keys are
+    # present, and nothing else in the app depends on them. CASHFREE_ENV is
+    # "sandbox" unless explicitly set to "production" - test keys against the
+    # live API (or the reverse) simply fail, but defaulting to sandbox means a
+    # misconfiguration can never take real money.
+    cashfree_app_id: str | None = None
+    cashfree_secret_key: str | None = None
+    cashfree_env: str = "sandbox"
+    # Optional per-order webhook URL (must be public https), e.g.
+    # https://<your-backend>/api/payments/webhook. Leave unset if the webhook
+    # is configured in the Cashfree dashboard instead; either works.
+    cashfree_notify_url: str | None = None
+    # Price of the Pro plan in whole rupees, charged per year. Server-side on
+    # purpose: the client only ever says which plan, never how much.
+    pro_plan_price_inr: int = 4999
+
 
     @field_validator(
         "anthropic_api_key",
         "sentry_dsn",
         "google_client_id",
         "resend_api_key",
+        "cashfree_app_id",
+        "cashfree_secret_key",
+        "cashfree_notify_url",
         mode="before",
     )
     @classmethod

@@ -46,6 +46,12 @@ class School(Base):
     # app/schemas/school.py (SchoolProfile), which is what actually
     # validates what goes in here. Null for schools created before this.
     profile = Column(JSON, nullable=True)
+    # Paid plan. Null plan = Free. Set only by app/routers/payments.py, and
+    # only after Cashfree has confirmed the payment server-side; a renewal
+    # extends plan_valid_until from whichever is later, now or the current
+    # expiry, so paying early never loses days.
+    plan = Column(String(20), nullable=True)
+    plan_valid_until = Column(DateTime, nullable=True)
 
     owner = relationship("User", back_populates="schools")
     teachers = relationship("Teacher", back_populates="school", cascade="all, delete-orphan")

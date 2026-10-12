@@ -42,6 +42,7 @@ def _school_out(school: School, role: str) -> SchoolOut:
     return SchoolOut(
         id=school.id, name=school.name, institution_type=school.institution_type,
         grade_order=school.grade_order, profile=school.profile, role=role,
+        plan=school.plan, plan_valid_until=school.plan_valid_until,
     )
 
 

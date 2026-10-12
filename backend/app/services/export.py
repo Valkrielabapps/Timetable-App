@@ -165,33 +165,147 @@ def _student_grids(data: dict, class_group: ClassGroup, combinations) -> list[tu
     return grids
 
 
-def _excel(grids) -> bytes:
+def _excel(grids, school_name: str = "") -> bytes:
+    """Same design as the PDF (see _pdf below): heading block, black header
+    row, shaded period column, striped rows of equal height, each lesson as
+    a bold subject over a muted teacher/section and room, breaks as one
+    green band across the week. Set up to print on one landscape page.
+
+    Cells use rich text for the bold/muted split. A reader that ignores rich
+    text (or openpyxl loading the file back) still sees the same plain text,
+    one item per line."""
+    from datetime import date
+
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
+    from openpyxl.styles import Border, Side
+    from openpyxl.worksheet.properties import PageSetupProperties
+
+    generated = date.today().strftime("%d %b %Y").lstrip("0")
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
-    header_font = Font(color="FFFFFF", bold=True)
-    header_fill = PatternFill("solid", fgColor=HEADER_FILL)
-    title_font = Font(bold=True, size=14)
-    wrap = Alignment(wrap_text=True, vertical="top", horizontal="left")
+    thin = Side(style="thin", color="E5E5E5")
+    frame = Side(style="thin", color="D4D4D4")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    fill = lambda hex_: PatternFill("solid", fgColor=hex_)  # noqa: E731
+    centre = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    left_mid = Alignment(horizontal="left", vertical="center", wrap_text=True, indent=1)
 
-    for sheet_name, title, rows, *_ in grids:
+    subj_font = InlineFont(rFont="Calibri", b=True, sz=11, color="171717")
+    who_font = InlineFont(rFont="Calibri", sz=9, color="525252")
+    room_font = InlineFont(rFont="Calibri", sz=8, color="737373")
+    block_font = InlineFont(rFont="Calibri", b=True, sz=8, color="047857")
+
+    for sheet_name, _title, rows, meta in grids:
         ws = wb.create_sheet(_safe_sheet_name(sheet_name))
-        ws.append([title])
-        ws["A1"].font = title_font
-        ws.append([])
-        for row in rows:
-            ws.append(row)
-        header_row_num = 3
-        for col in range(1, len(rows[0]) + 1):
-            cell = ws.cell(row=header_row_num, column=col)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center")
+        ws.sheet_view.showGridLines = False
+        n_days = len(rows[0]) - 1
+        last_col = n_days + 1
+
+        # Heading block
+        ws.cell(row=1, column=1, value=meta["heading"]).font = Font(name="Calibri", bold=True, size=18, color="171717")
+        ws.cell(row=2, column=1, value=meta["kind"]).font = Font(name="Calibri", size=10, color="737373")
+        brand = ws.cell(row=1, column=last_col, value="Timetablz")
+        brand.font = Font(name="Calibri", bold=True, size=10, color="171717")
+        brand.alignment = Alignment(horizontal="right", vertical="center")
+        if school_name:
+            sc = ws.cell(row=2, column=last_col, value=school_name)
+            sc.font = Font(name="Calibri", size=10, color="737373")
+            sc.alignment = Alignment(horizontal="right")
+        ws.row_dimensions[1].height = 28
+        ws.row_dimensions[3].height = 8
+
+        # Header row
+        head_row = 4
+        for col, label in enumerate(rows[0], start=1):
+            c = ws.cell(row=head_row, column=col, value=label)
+            c.font = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+            c.fill = fill("171717")
+            c.alignment = centre
+            c.border = Border(left=Side(style="thin", color="404040"), right=Side(style="thin", color="404040"))
+        ws.row_dimensions[head_row].height = 26
+        ws.column_dimensions["A"].width = 14
+        for col in range(2, last_col + 1):
             ws.column_dimensions[get_column_letter(col)].width = 24
-        for row in ws.iter_rows(min_row=header_row_num + 1, max_row=ws.max_row):
-            for cell in row:
-                cell.alignment = wrap
-            ws.row_dimensions[row[0].row].height = 42
+
+        teaching_index = 0
+        r = head_row
+        for row in meta["cells"]:
+            r += 1
+            if row["is_break"]:
+                ws.cell(row=r, column=1).fill = fill("ECFDF5")
+                ws.cell(row=r, column=1).border = border
+                band = ws.cell(row=r, column=2, value=row["label"])
+                band.font = Font(name="Calibri", italic=True, size=10, color="047857")
+                band.alignment = centre
+                for col in range(2, last_col + 1):
+                    ws.cell(row=r, column=col).fill = fill("ECFDF5")
+                    ws.cell(row=r, column=col).border = border
+                if n_days > 1:
+                    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=last_col)
+                ws.row_dimensions[r].height = 20
+                continue
+
+            stripe = "FAFAFA" if teaching_index % 2 else "FFFFFF"
+            teaching_index += 1
+            p = ws.cell(row=r, column=1, value=row["label"])
+            p.font = Font(name="Calibri", bold=True, size=10, color="171717")
+            p.fill = fill("F5F5F5")
+            p.alignment = left_mid
+            p.border = border
+
+            lines_needed = 2
+            for d, cell in enumerate(row["cells"]):
+                c = ws.cell(row=r, column=d + 2)
+                c.fill = fill(stripe)
+                c.alignment = centre
+                c.border = border
+                blocks = []
+                if cell["block"]:
+                    blocks.append(TextBlock(block_font, cell["block"]))
+                for subject, who, room in cell["lessons"]:
+                    if blocks:
+                        blocks.append(TextBlock(who_font, "\n"))
+                    blocks.append(TextBlock(subj_font, subject))
+                    if who:
+                        blocks.append(TextBlock(who_font, "\n" + who))
+                    if room:
+                        blocks.append(TextBlock(room_font, "\n" + room))
+                if blocks:
+                    c.value = CellRichText(*blocks)
+                    lines = (1 if cell["block"] else 0) + sum(1 + bool(w) + bool(rm) for _s, w, rm in cell["lessons"])
+                    lines_needed = max(lines_needed, lines)
+                elif cell["exists"] and meta["mode"] == "teacher":
+                    c.value = "Free"
+                    c.font = Font(name="Calibri", size=9, color="A3A3A3")
+            ws.row_dimensions[r].height = max(40, lines_needed * 14 + 10)
+
+        # Outer frame round the whole table
+        for col in range(1, last_col + 1):
+            top = ws.cell(row=head_row, column=col)
+            bottom = ws.cell(row=r, column=col)
+            bottom.border = Border(left=bottom.border.left, right=bottom.border.right, top=bottom.border.top, bottom=frame)
+            top.border = Border(left=top.border.left, right=top.border.right, top=frame, bottom=top.border.bottom)
+
+        ws.freeze_panes = ws.cell(row=head_row + 1, column=2)
+
+        # Print: one landscape page, centred, with the same footer as the PDF
+        ws.page_setup.orientation = "landscape"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        ws.print_options.horizontalCentered = True
+        ws.page_margins.left = ws.page_margins.right = 0.5
+        ws.page_margins.top = ws.page_margins.bottom = 0.6
+        ws.print_area = f"A1:{get_column_letter(last_col)}{r}"
+        ws.oddFooter.left.text = f"Generated {generated}  ·  timetablz.com"
+        ws.oddFooter.left.size = 8
+        ws.oddFooter.left.color = "A3A3A3"
+        ws.oddFooter.right.text = "Page &P"
+        ws.oddFooter.right.size = 8
+        ws.oddFooter.right.color = "A3A3A3"
 
     if not wb.sheetnames:
         wb.create_sheet("Timetable").append(["This timetable has no entries yet."])
@@ -412,13 +526,7 @@ def _school_name(db: Session, timetable: Timetable) -> str:
     return school.name if school else ""
 
 
-def build_excel(db: Session, timetable: Timetable) -> bytes:
-    return _excel(_school_grids(_load_grid_data(db, timetable)))
-
-
-def build_pdf(db: Session, timetable: Timetable) -> bytes:
-    data = _load_grid_data(db, timetable)
-    grids = _school_grids(data)
+def _school_grids_with_meta(data: dict) -> list:
     kinds = []
     for cg in data["class_groups"]:
         if _has_content(_grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")):
@@ -426,18 +534,10 @@ def build_pdf(db: Session, timetable: Timetable) -> bytes:
     for t in data["teachers"]:
         if _has_content(_grid_rows(data, data["entries_by_teacher_period"], t.id, mode="teacher")):
             kinds.append((t.name, "Teaching schedule", data["entries_by_teacher_period"], t.id, "teacher"))
-    return _pdf(_with_pdf_meta(data, grids, kinds), len(data["days"]), _school_name(db, timetable))
+    return _with_pdf_meta(data, _school_grids(data), kinds)
 
 
-def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
-    """One sheet per combination of elective choices in one section."""
-    return _excel(_student_grids(_load_grid_data(db, timetable), class_group, combinations))
-
-
-def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
-    """One page per combination of elective choices in one section."""
-    data = _load_grid_data(db, timetable)
-    grids = _student_grids(data, class_group, combinations)
+def _student_grids_with_meta(data: dict, class_group: ClassGroup, combinations) -> list:
     label = _class_group_label(class_group)
     kinds = []
     for combination in combinations:
@@ -446,4 +546,26 @@ def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup
             if cg_id == class_group.id:
                 index[(cg_id, period_id)] = [e for e in entries if combination.keeps(e)]
         kinds.append((label, f"Student timetable  ·  {combination.label}", index, class_group.id, "section"))
-    return _pdf(_with_pdf_meta(data, grids, kinds), len(data["days"]), _school_name(db, timetable))
+    return _with_pdf_meta(data, _student_grids(data, class_group, combinations), kinds)
+
+
+def build_excel(db: Session, timetable: Timetable) -> bytes:
+    data = _load_grid_data(db, timetable)
+    return _excel(_school_grids_with_meta(data), _school_name(db, timetable))
+
+
+def build_pdf(db: Session, timetable: Timetable) -> bytes:
+    data = _load_grid_data(db, timetable)
+    return _pdf(_school_grids_with_meta(data), len(data["days"]), _school_name(db, timetable))
+
+
+def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+    """One sheet per combination of elective choices in one section."""
+    data = _load_grid_data(db, timetable)
+    return _excel(_student_grids_with_meta(data, class_group, combinations), _school_name(db, timetable))
+
+
+def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+    """One page per combination of elective choices in one section."""
+    data = _load_grid_data(db, timetable)
+    return _pdf(_student_grids_with_meta(data, class_group, combinations), len(data["days"]), _school_name(db, timetable))
