@@ -6,7 +6,7 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, TimetableEntry,
+    ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
@@ -73,8 +73,27 @@ def update_class_group(class_group_id: int, payload: ClassGroupUpdate, db: Sessi
     if not class_group:
         raise HTTPException(status_code=404, detail="Class group not found")
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    teacher_id = changes.get("class_teacher_id")
+    if teacher_id is not None:
+        teacher = db.get(Teacher, teacher_id)
+        if not teacher or teacher.school_id != class_group.school_id:
+            raise HTTPException(status_code=404, detail="Teacher not found")
+    old_grade = class_group.grade
+    for field, value in changes.items():
         setattr(class_group, field, value)
+    db.flush()
+    # Zero periods are kept per grade by name. Renaming a grade's last section
+    # renames the grade, so its zero periods follow; while another section
+    # still has the old name, they stay with that one.
+    if "grade" in changes and old_grade and class_group.grade != old_grade:
+        still_used = db.query(ClassGroup).filter(
+            ClassGroup.school_id == class_group.school_id, ClassGroup.grade == old_grade
+        ).first()
+        if still_used is None:
+            db.query(ZeroPeriod).filter(
+                ZeroPeriod.school_id == class_group.school_id, ZeroPeriod.grade == old_grade
+            ).update({ZeroPeriod.grade: class_group.grade}, synchronize_session=False)
     db.commit()
     db.refresh(class_group)
     return class_group

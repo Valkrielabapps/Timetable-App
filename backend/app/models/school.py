@@ -76,17 +76,72 @@ class Period(Base):
     day_of_week = Column(Integer, nullable=False)  # 0 = Monday ... 6 = Sunday
     order = Column(Integer, nullable=False)  # position within the day
     label = Column(String, nullable=True)  # e.g. "Period 3", "9:00-9:45", "Lunch"
-    # A slot in the day that exists in the ordering but is never taught in -
-    # lunch, assembly, games. Kept as a Period rather than a gap in `order`
-    # so "the period after lunch" resolves to something, and so a teacher's
-    # back-to-back run is correctly interrupted by it (see
-    # app/services/solver.py, which splits each day into runs at breaks
-    # rather than treating periods 3 and 5 as adjacent).
-    is_break = Column(Boolean, nullable=False, default=False, server_default="false")
+    # What the slot is for. Only "lesson" slots are timetabled and numbered;
+    # the others sit in the day's order without a number, so "period 1" is
+    # always the first lesson whatever comes before it:
+    #
+    #   lesson         an ordinary period
+    #   break          lunch, recess - nothing happens
+    #   class_teacher  each section with its own class teacher (attendance);
+    #                  shown, never solved, not counted towards workload
+    #   zero           a free slot for activities, the same for the whole
+    #                  school. A zero period that differs by grade or by day is
+    #                  not a kind of slot but a ZeroPeriod reservation on a
+    #                  lesson slot - see below.
+    #
+    # Non-lesson slots are kept as rows rather than gaps in `order` so a
+    # teacher's back-to-back run is correctly interrupted by them (see
+    # app/services/solver.py, which splits each day into runs at them).
+    kind = Column(String, nullable=False, default="lesson", server_default="lesson")
 
     school = relationship("School", back_populates="periods")
+    zero_reservations = relationship(
+        "ZeroPeriod", back_populates="period", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     __table_args__ = (UniqueConstraint("school_id", "day_of_week", "order"),)
+
+    KINDS = ("lesson", "break", "class_teacher", "zero")
+
+    @property
+    def is_break(self) -> bool:
+        """Whether nothing is ever timetabled here - any kind but a lesson.
+
+        Kept under its old name because that is the question every caller asks
+        (the solver, the exports, the edit checks); before kinds existed a
+        break was the only slot without lessons.
+        """
+        return self.kind not in (None, "lesson")
+
+    @is_break.setter
+    def is_break(self, value: bool) -> None:
+        # Lets older callers (and tests) keep saying is_break=True. Turning it
+        # off only undoes a break - it never turns a class teacher period into
+        # a lesson behind someone's back.
+        if value:
+            if self.kind in (None, "lesson"):
+                self.kind = "break"
+        elif self.kind == "break":
+            self.kind = "lesson"
+
+
+class ZeroPeriod(Base):
+    """A lesson slot kept free for one grade (or, grade=None, everyone).
+
+    The form a zero period takes when it differs by grade or by day: the slot
+    is an ordinary numbered period that other grades are taught in, and this
+    row keeps lessons for the named grade out of it. A school-wide zero period
+    at the same point every day is a Period of kind "zero" instead.
+    """
+    __tablename__ = "zero_periods"
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    period_id = Column(Integer, ForeignKey("periods.id", ondelete="CASCADE"), nullable=False, index=True)
+    # ClassGroup.grade label; None = every section in the school.
+    grade = Column(String, nullable=True)
+
+    period = relationship("Period", back_populates="zero_reservations")
 
 
 class Subject(Base):
@@ -175,6 +230,11 @@ class ClassGroup(Base):
     grade = Column(String, nullable=True)
     name = Column(String, nullable=False)
     student_count = Column(Integer, nullable=True)
+    # Takes the section in the class teacher period (attendance and the like).
+    # Cleared, not cascaded, when the teacher is deleted.
+    class_teacher_id = Column(
+        Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     school = relationship("School", back_populates="class_groups")
     requirements = relationship(

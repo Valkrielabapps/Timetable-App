@@ -69,6 +69,7 @@ from app.services.export import build_excel, build_pdf, build_student_excel, bui
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import _class_group_labels, generate_school_timetable
+from app.services.timetable_structure import lesson_numbers, zero_period_ids_for
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
 
@@ -219,12 +220,13 @@ def _violations_after_edit(db: Session, timetable: Timetable) -> list[dict]:
 
 
 def _orders_by_day(school_periods: list[Period]) -> dict[int, list[int]]:
-    """Every period of each day, breaks included - positions count rows the
-    admin can see. Mirrors the solver's own table so the check and the
-    enforcement agree about what "period 5" means."""
+    """The lesson slots of each day - "period 5" is the fifth lesson, with
+    breaks and the class teacher period between numbers. Mirrors the
+    solver's own table so the check and the enforcement agree about it."""
     by_day: dict[int, list[int]] = {}
     for period in school_periods:
-        by_day.setdefault(period.day_of_week, []).append(period.order)
+        if not period.is_break:
+            by_day.setdefault(period.day_of_week, []).append(period.order)
     return {day: sorted(orders) for day, orders in by_day.items()}
 
 
@@ -535,6 +537,35 @@ def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Dep
     return EntryUpdateOut(entries=[updated], violations=_violations_after_edit(db, timetable))
 
 
+_NO_LESSONS_IN = {
+    "break": "a break",
+    "class_teacher": "the class teacher period",
+    "zero": "the zero period",
+}
+
+
+def _check_lesson_slot(db: Session, period_id: int, class_group_id: int) -> None:
+    """Refuse a lesson in a slot that has none: a break, the class teacher
+    period, a zero period - including a zero period kept free for just this
+    section's grade, which is an ordinary slot for everyone else."""
+    period = db.get(Period, period_id)
+    if period is None:
+        raise HTTPException(status_code=404, detail="Period not found")
+    if period.is_break:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nothing can be scheduled in {_NO_LESSONS_IN.get(period.kind, 'a break')}.",
+        )
+    class_group = db.get(ClassGroup, class_group_id)
+    grade = class_group.grade if class_group else None
+    if period_id in zero_period_ids_for(db, period.school_id, grade):
+        whose = grade or "this section"
+        raise HTTPException(
+            status_code=400,
+            detail=f"That's {whose}'s zero period - no lessons are scheduled in it.",
+        )
+
+
 def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:
     """The actual mutation behind PATCH /entries/{id} — factored out so
     POST /timetables/{id}/edit-command (conversational editing) performs
@@ -550,6 +581,8 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
                 "together. Move the whole block instead."
             ),
         )
+    if "period_id" in data and data["period_id"] != entry.period_id:
+        _check_lesson_slot(db, data["period_id"], entry.class_group_id)
     if "period_id" in data or "teacher_id" in data or "room_id" in data:
         new_period_id = data.get("period_id", entry.period_id)
         new_teacher_id = data.get("teacher_id", entry.teacher_id)
@@ -623,6 +656,8 @@ def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry)
             ),
         )
     both_ids = {entry.id, other.id}
+    _check_lesson_slot(db, other.period_id, entry.class_group_id)
+    _check_lesson_slot(db, entry.period_id, other.class_group_id)
     _check_slot_conflict(
         db, entry.timetable_id, entry.class_group_id,
         other.period_id, entry.teacher_id, entry.room_id,
@@ -695,12 +730,18 @@ def move_slot(
         if not period or period.school_id != timetable.school_id:
             raise HTTPException(status_code=404, detail="Period not found")
         if period.is_break:
-            raise HTTPException(status_code=400, detail="Nothing can be scheduled in a break.")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nothing can be scheduled in {_NO_LESSONS_IN.get(period.kind, 'a break')}.",
+            )
 
     source = _slot_entries(db, timetable.id, payload.class_group_id, payload.from_period_id)
     target = _slot_entries(db, timetable.id, payload.class_group_id, payload.to_period_id)
     if not source:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to move.")
+    _check_lesson_slot(db, payload.to_period_id, payload.class_group_id)
+    if target:
+        _check_lesson_slot(db, payload.from_period_id, payload.class_group_id)
     if any(e.locked for e in source + target):
         raise HTTPException(
             status_code=400,
@@ -840,6 +881,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == timetable.school_id).all()}
     teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == timetable.school_id).all()}
     periods = {p.id: p for p in db.query(Period).filter(Period.school_id == timetable.school_id).all()}
+    numbers = lesson_numbers(periods.values())
 
     def _class_group_label(cg) -> str:
         return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
@@ -851,15 +893,19 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
             "subject_name": subjects[e.subject_id].name if e.subject_id in subjects else "?",
             "teacher_name": teachers[e.teacher_id].name if e.teacher_id in teachers else "?",
             "day_of_week": periods[e.period_id].day_of_week if e.period_id in periods else None,
-            "order": periods[e.period_id].order if e.period_id in periods else None,
+            # The number a person says - "period 5" is the fifth lesson, with
+            # breaks and the class teacher period between numbers.
+            "period_number": numbers.get(e.period_id),
             "period_label": periods[e.period_id].label if e.period_id in periods else None,
             "locked": e.locked,
         }
         for e in entries
     ]
+    # Lesson slots only: a lesson can't be moved into a break or the class
+    # teacher period, so offering them would only invite a refused edit.
     periods_context = [
-        {"id": p.id, "day_of_week": p.day_of_week, "order": p.order, "label": p.label}
-        for p in periods.values()
+        {"id": p.id, "day_of_week": p.day_of_week, "period_number": numbers[p.id], "label": p.label}
+        for p in periods.values() if p.id in numbers
     ]
     teachers_context = [{"id": t.id, "name": t.name} for t in teachers.values()]
 

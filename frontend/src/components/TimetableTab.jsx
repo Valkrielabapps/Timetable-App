@@ -233,8 +233,14 @@ export default function TimetableTab({
     }
     const targetPeriod = periodAt(day, order)
     if (!targetPeriod || targetPeriod.id === source.period.id) return // dropped back on itself
-    if (targetPeriod.is_break) {
-      setError('Nothing can be scheduled in a break.')
+    if (kindOf(targetPeriod) !== 'lesson') {
+      const what = { class_teacher: 'the class teacher period', zero: 'the zero period' }[kindOf(targetPeriod)]
+      setError(`Nothing can be scheduled in ${what ?? 'a break'}.`)
+      return
+    }
+    const section = classGroups.find((cg) => cg.id === classGroupId)
+    if (section && isZeroFor(targetPeriod, section)) {
+      setError(`That's ${section.grade ?? 'this section'}'s zero period - no lessons are scheduled in it.`)
       return
     }
     if (entriesFor(day, order, classGroupId).some((e) => e.locked)) {
@@ -296,6 +302,62 @@ export default function TimetableTab({
   }
 
   const classGroupName = (id) => classGroups.find((c) => c.id === id)?.name
+
+  // What a slot is for: a lesson, a break, the class teacher period or a
+  // whole-school zero period. Older responses only said is_break.
+  const kindOf = (p) => p?.kind ?? (p?.is_break ? 'break' : 'lesson')
+
+  // Only lessons are numbered, so the row after a class teacher period is
+  // "Period 1" - the same numbers saved rules and the exports use.
+  function rowLabel(order) {
+    const here = periods.filter((p) => p.order === order)
+    const lesson = here.find((p) => kindOf(p) === 'lesson')
+    if (lesson) return `Period ${lesson.number ?? order + 1}`
+    const kind = kindOf(here[0])
+    if (kind === 'class_teacher') return 'Class teacher'
+    if (kind === 'zero') return 'Zero period'
+    return here.find((p) => p.label)?.label || 'Break'
+  }
+
+  // A zero period kept free for this section's grade (or everyone) on an
+  // otherwise ordinary lesson slot.
+  const isZeroFor = (period, cg) =>
+    !!period && (period.zero_all || (cg.grade != null && (period.zero_grades ?? []).includes(cg.grade)))
+
+  // What a section's grid shows in a slot that isn't a lesson for it.
+  function sectionSpecial(day, order, cg) {
+    const period = periodAt(day, order)
+    const kind = kindOf(period)
+    if (kind === 'class_teacher') {
+      const teacher = teachers.find((t) => t.id === cg.class_teacher_id)
+      return teacher
+        ? { text: teacher.name, tone: 'class_teacher' }
+        : { text: 'No class teacher set', tone: 'warn' }
+    }
+    if (kind === 'zero') return { text: 'Zero period', tone: 'zero' }
+    if (kind === 'break') return { text: period.label || 'Break', tone: 'muted' }
+    // A lesson left there from before the zero period existed still shows.
+    if (isZeroFor(period, cg) && entriesFor(day, order, cg.id).length === 0) {
+      return { text: 'Zero period', tone: 'zero' }
+    }
+    return null
+  }
+
+  // The same for a teacher's grid: their own sections in the class teacher
+  // period, and the school's breaks and zero period.
+  function teacherSpecial(day, order) {
+    const period = periodAt(day, order)
+    const kind = kindOf(period)
+    if (kind === 'class_teacher') {
+      const own = classGroups.filter((cg) => cg.class_teacher_id === selectedTeacherId)
+      return own.length
+        ? { text: `Class teacher · ${own.map((cg) => (cg.grade ? `${cg.grade} ${cg.name}` : cg.name)).join(', ')}`, tone: 'class_teacher' }
+        : { text: '', tone: 'muted' }
+    }
+    if (kind === 'zero') return { text: 'Zero period', tone: 'zero' }
+    if (kind === 'break') return { text: period.label || 'Break', tone: 'muted' }
+    return null
+  }
 
 
   // In By Teacher view, an entry can show up because the selected teacher
@@ -646,6 +708,8 @@ export default function TimetableTab({
                   onDragEnd={() => setDragSource(null)}
                   onDrop={(d, o) => handleDrop(d, o, cg.id)}
                   onToggleLock={handleToggleLock}
+                  rowLabel={rowLabel}
+                  specialCell={(d, o) => sectionSpecial(d, o, cg)}
                 />
               ))}
             </div>
@@ -667,6 +731,8 @@ export default function TimetableTab({
                 }`
               }
               showAssistant={false}
+              rowLabel={rowLabel}
+              specialCell={teacherSpecial}
             />
           )}
         </motion.div>

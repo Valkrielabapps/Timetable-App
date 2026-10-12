@@ -325,30 +325,55 @@ _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 _GENERIC_LABEL = re.compile(r"^\s*(p|period)?\s*\d+\s*$", re.IGNORECASE)
 
 
-def _period_summary(periods: list[tuple[int, int, str | None, bool]]) -> str:
+_NON_LESSON = {
+    "break": "a break - nothing is scheduled then",
+    "class_teacher": "the class teacher period - each section with its class teacher, not a lesson",
+    "zero": "the zero period - free for activities, no lessons",
+}
+
+
+def _kind(value) -> str:
+    """The fourth field of a period tuple: a kind, or the older is_break flag."""
+    if value is True:
+        return "break"
+    if value is False or value is None:
+        return "lesson"
+    return value
+
+
+def _period_summary(periods: list[tuple[int, int, str | None, object]]) -> str:
     """Describe the school's week compactly enough to be worth sending.
 
     Without this the model has no idea what "the last period" or "period 3"
     refer to - it sees teachers, subjects and class groups, and has to guess
     at the shape of the timetable those sit in.
 
+    Only lessons are numbered: "period 5" is the fifth lesson of the day,
+    which is what the timetable shows and what the solver matches. Breaks,
+    the class teacher period and a school-wide zero period sit between numbers
+    and are described by where they fall - "after period 4" - because that is
+    how "after lunch" gets resolved.
+
     Deliberately a summary, not the rows: a school with 8 periods across 5
     days has 40 Period rows, and enumerating them costs several hundred
     tokens per parse to say what two sentences say. Irregular weeks (days
     with different period counts) fall back to a per-day breakdown, and any
     label that isn't just a number is listed individually - a period named
-    "Lunch" is exactly the thing rules get phrased around.
+    "Assembly" is exactly the thing rules get phrased around.
+
+    Each tuple is (day, order, label, kind) - kind may also be the older
+    is_break flag.
     """
     if not periods:
         return ""
 
-    by_day: dict[int, list[tuple[int, str | None, bool]]] = {}
-    for day, order, label, is_break in periods:
-        by_day.setdefault(day, []).append((order, label, is_break))
+    by_day: dict[int, list[tuple[int, str | None, str]]] = {}
+    for day, order, label, kind in periods:
+        by_day.setdefault(day, []).append((order, label, _kind(kind)))
 
     days = sorted(by_day)
     day_names = [_DAY_NAMES[d] if 0 <= d < 7 else f"day {d}" for d in days]
-    counts = {d: len(by_day[d]) for d in days}
+    counts = {d: sum(1 for _, _, k in by_day[d] if k == "lesson") for d in days}
 
     if len(set(counts.values())) == 1:
         n = counts[days[0]]
@@ -365,27 +390,36 @@ def _period_summary(periods: list[tuple[int, int, str | None, bool]]) -> str:
             "\"Last period\" means the highest-numbered period on the day in question."
         )
 
-    # Collapse labels that sit at the same slot every day - a school with a
-    # lunch period has one on all five days, and saying so five times is five
-    # times the tokens for the same fact.
-    slots: dict[tuple[int, str], set[int]] = {}
+    # Collapse what sits at the same point every day - a school with a lunch
+    # break has one on all five days, and saying so five times is five times
+    # the tokens for the same fact.
+    slots: dict[tuple[str, str], set[int]] = {}
     for day in days:
-        for order, label, is_break in by_day[day]:
-            # A break is worth naming even without a label - it is the thing
-            # "after lunch" and "before the break" resolve against, and the
-            # model needs to know nothing is ever scheduled in it.
-            if is_break:
-                slots.setdefault((order, f"{label or 'Break'} (a break - nothing is scheduled then)"), set()).add(day)
-            elif label and not _GENERIC_LABEL.match(label):
-                slots.setdefault((order, label), set()).add(day)
+        lessons = 0
+        for order, label, kind in sorted(by_day[day]):
+            if kind == "lesson":
+                lessons += 1
+                if label and not _GENERIC_LABEL.match(label):
+                    slots.setdefault((f"period {lessons}", f'"{label}"'), set()).add(day)
+                continue
+            # A non-lesson slot is worth naming even without a label - it is
+            # the thing "after lunch" and "before the break" resolve against,
+            # and the model needs to know nothing is ever scheduled in it.
+            where = "at the start of the day" if lessons == 0 else f"after period {lessons}"
+            name = label or {"break": "Break", "class_teacher": "Class teacher period", "zero": "Zero period"}[kind]
+            slots.setdefault((where, f'"{name}" ({_NON_LESSON[kind]})'), set()).add(day)
 
     named = []
-    for (order, label), on_days in sorted(slots.items()):
-        if on_days == set(days):
-            named.append(f'period {order} is "{label}" every day')
+    for (where, what), on_days in sorted(slots.items()):
+        if where.startswith("period "):
+            phrase = f"{where} is {what}"
         else:
-            where = ", ".join(_DAY_NAMES[d] if 0 <= d < 7 else str(d) for d in sorted(on_days))
-            named.append(f'period {order} is "{label}" on {where}')
+            phrase = f"{what} comes {where}"
+        if on_days == set(days):
+            named.append(f"{phrase} every day")
+        else:
+            on = ", ".join(_DAY_NAMES[d] if 0 <= d < 7 else str(d) for d in sorted(on_days))
+            named.append(f"{phrase} on {on}")
     if named:
         structure += " Named periods: " + "; ".join(named) + "."
 

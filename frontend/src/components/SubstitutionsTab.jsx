@@ -318,7 +318,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                           <div className="font-semibold text-gray-900">{classGroup?.grade} {classGroup?.name}</div>
                           <div className="text-sm text-gray-600">
                             {/* Periods are stored from zero and shown from one. */}
-                            {period?.label || `Period ${(period?.order ?? 0) + 1}`} • {entry.subject_name} • Absent: {absentTeacher?.name}
+                            {period?.number != null ? `Period ${period.number}` : period?.label || `Period ${(period?.order ?? 0) + 1}`} • {entry.subject_name} • Absent: {absentTeacher?.name}
                           </div>
                           {/* In a block the rest of the section is in its other
                               options' lessons; the cover is for this group only. */}
@@ -393,7 +393,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                       return (
                         <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
                           <div className="font-semibold text-neutral-700">{classGroup?.grade} {classGroup?.name}</div>
-                          <div className="text-gray-600 mb-2">{period?.label || `Period ${(period?.order ?? 0) + 1}`}</div>
+                          <div className="text-gray-600 mb-2">{period?.number != null ? `Period ${period.number}` : period?.label || `Period ${(period?.order ?? 0) + 1}`}</div>
                           <div className="flex items-center gap-2">
                             <span className="text-red-600 line-through truncate" title={absent?.name}>{absent?.name}</span>
                             <span className="text-gray-400">→</span>

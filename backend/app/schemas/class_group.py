@@ -12,6 +12,8 @@ class ClassGroupUpdate(BaseModel):
     grade: str | None = None
     name: str | None = None
     student_count: int | None = None
+    # Sent as null to clear it.
+    class_teacher_id: int | None = None
 
 
 class ClassGroupOut(BaseModel):
@@ -22,6 +24,7 @@ class ClassGroupOut(BaseModel):
     grade: str | None
     name: str
     student_count: int | None
+    class_teacher_id: int | None = None
 
 
 class SubjectRequirementCreate(BaseModel):

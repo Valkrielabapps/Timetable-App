@@ -4,7 +4,10 @@ import { api } from '../api'
 const RESOURCES = {
   subjects: { label: 'Subjects', columns: 'name, required_room_type' },
   rooms: { label: 'Rooms', columns: 'name, capacity, room_type' },
-  teachers: { label: 'Teachers', columns: 'name, email, max_periods_per_week, qualified_subjects' },
+  teachers: {
+    label: 'Teachers',
+    columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
+  },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
 
@@ -18,7 +21,9 @@ const RESOURCES = {
  *
  * Teachers' "qualified_subjects" column is matched against subjects
  * already in this school, so import subjects first if you're doing a
- * from-scratch setup.
+ * from-scratch setup. Their "qualified_grades" column is matched against
+ * the grades of the school's sections ("6", "Class 6" and "Grade 6" all
+ * work, "6-8" is a range), and an empty cell means every grade.
  *
  * `resource` locks this panel to exactly one resource type — no dropdown
  * to switch it. Each embedding page (Subjects, Teachers) is already

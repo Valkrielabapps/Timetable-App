@@ -183,6 +183,13 @@ export const api = {
   createPeriod: (data) => post("/periods", data),
   updatePeriod: (id, data) => put(`/periods/${id}`, data),
   deletePeriod: (id) => del(`/periods/${id}`),
+  // The week described once - periods a day, breaks, class teacher and zero
+  // periods - instead of period by period. Saving makes the periods and
+  // returns a report of anything that had to change with them. See
+  // backend/app/services/timetable_structure.py.
+  getTimetableStructure: (schoolId) => get(`/schools/${schoolId}/timetable-structure`),
+  saveTimetableStructure: (schoolId, structure) =>
+    put(`/schools/${schoolId}/timetable-structure`, structure),
 
   // Teachers
   listTeachers: (schoolId) => get(`/teachers?school_id=${schoolId}`),

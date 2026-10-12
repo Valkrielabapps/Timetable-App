@@ -32,6 +32,7 @@ from app.models.school import (
     SubjectRequirement,
     Teacher,
     Timetable,
+    ZeroPeriod,
 )
 
 
@@ -233,19 +234,6 @@ def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
     for cg in class_groups:
         labels[_class_group_label(cg)] = [cg.id]
     return labels
-
-
-def _all_periods_by_day(all_periods: list[Period]) -> dict[int, list[Period]]:
-    """Every period of each day, breaks included.
-
-    Distinct from the solver's `periods_by_day`, which drops breaks because
-    nothing is scheduled in them. Positions have to count breaks: a rule saying
-    "period 5" means the fifth row of the timetable, and lunch is a row.
-    """
-    by_day: dict[int, list[Period]] = {}
-    for period in all_periods:
-        by_day.setdefault(period.day_of_week, []).append(period)
-    return by_day
 
 
 def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id) -> list[Atom]:
@@ -568,6 +556,17 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         )
         .all()
     )
+    # Zero periods that differ by grade or by day are reservations on ordinary
+    # lesson slots - other grades are taught in them. (A whole-school zero
+    # period at a fixed point is a non-lesson slot and never reaches here.)
+    zero_by_grade: dict[str | None, set[int]] = {}
+    for z in db.query(ZeroPeriod).filter(ZeroPeriod.school_id == school_id).all():
+        zero_by_grade.setdefault(z.grade, set()).add(z.period_id)
+    zero_period_ids_by_class_group: dict[int, set[int]] = {
+        cg.id: zero_by_grade.get(None, set()) | zero_by_grade.get(cg.grade, set())
+        for cg in class_groups
+    }
+
     req_restricted_periods: dict[int, set[int]] = {}
     req_required_periods: dict[int, set[int] | None] = {}
     # Soft placement preferences, as period_id -> accumulated penalty weight.
@@ -613,6 +612,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             target = matched if bans else {p.id for p in periods} - matched
             for period_id in target:
                 discouraged[period_id] = discouraged.get(period_id, 0) + weight
+
+        # A zero period kept free for this section's grade (or the whole
+        # school) is a slot it has no lessons in, whatever the subject.
+        restricted |= zero_period_ids_by_class_group.get(req.class_group_id, set())
 
         if required is not None:
             required -= restricted  # a ban always wins over a same-subject requirement
@@ -1252,13 +1255,13 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
             teacher_ids={t.name: t.id for t in teachers},
             class_group_ids=_class_group_labels(class_groups),
-            # Every period of the day, breaks included, because a position
-            # counts rows the admin can see: the timetable grid shows lunch as
-            # a row, and the prompt's "8 periods per day" counts it too, so
-            # "period 5" has to mean the fifth row either way.
+            # Lesson slots only: "period 5" is the fifth lesson of the day.
+            # Breaks, the class teacher period and a school-wide zero period
+            # sit between numbers, so adding one never shifts a saved rule -
+            # see app/services/timetable_structure.py.
             orders_by_day={
                 day: sorted(p.order for p in day_periods)
-                for day, day_periods in _all_periods_by_day(all_periods).items()
+                for day, day_periods in periods_by_day.items()
             },
             # Teaching periods only, and per day, so "the last period" on a
             # half-day Saturday is that day's last rather than the week's - and

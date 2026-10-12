@@ -829,6 +829,7 @@ function App() {
                     periods={periods}
                     setPeriods={setPeriods}
                     classGroups={classGroups}
+                    setClassGroups={setClassGroups}
                     allRequirements={allRequirements}
                     setAllRequirements={setAllRequirements}
                     onReloadSchoolData={() => loadSchoolData(selectedSchoolId)}

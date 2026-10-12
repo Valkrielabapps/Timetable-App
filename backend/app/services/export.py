@@ -25,7 +25,8 @@ from reportlab.lib.units import cm
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy.orm import Session
 
-from app.models.school import ClassGroup, ElectiveBlock, Period, Room, Subject, Teacher, Timetable
+from app.models.school import ClassGroup, ElectiveBlock, Period, Room, Subject, Teacher, Timetable, ZeroPeriod
+from app.services.timetable_structure import lesson_numbers
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -49,6 +50,13 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
         b.id: b.name for b in db.query(ElectiveBlock).filter(ElectiveBlock.school_id == school_id).all()
     }
 
+    # Rows are labelled by lesson number, not row position: "Period 1" is the
+    # first lesson even when a class teacher period comes before it.
+    numbers = lesson_numbers(periods)
+    zero_grades: dict[int, set] = defaultdict(set)
+    for z in db.query(ZeroPeriod).filter(ZeroPeriod.school_id == school_id).all():
+        zero_grades[z.period_id].add(z.grade)
+
     entries_by_class_period = defaultdict(list)
     entries_by_teacher_period = defaultdict(list)
     for e in timetable.entries:
@@ -66,6 +74,8 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
         "class_groups_by_id": class_groups_by_id,
         "rooms_by_id": rooms_by_id,
         "block_names": block_names,
+        "numbers": numbers,
+        "zero_grades": zero_grades,
         "entries_by_class_period": entries_by_class_period,
         "entries_by_teacher_period": entries_by_teacher_period,
     }
@@ -73,6 +83,49 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
 
 def _class_group_label(cg: ClassGroup) -> str:
     return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
+
+
+def _row_label(data: dict, order: int) -> str:
+    """"Period 3" for a lesson row; the slot's own name for anything else."""
+    present = [data["period_by_day_order"].get((d, order)) for d in data["days"]]
+    present = [p for p in present if p]
+    lesson = next((p for p in present if p.id in data["numbers"]), None)
+    if lesson is not None:
+        return f"Period {data['numbers'][lesson.id]}"
+    kind = present[0].kind if present else "break"
+    if kind == "break":
+        return next((p.label for p in present if p.label), None) or "Break"
+    return {"class_teacher": "Class teacher", "zero": "Zero period"}.get(kind, "Break")
+
+
+def _special(data: dict, period, key, mode: str) -> list[tuple[str, str]] | None:
+    """What a slot shows when it isn't an ordinary lesson: (title, who) pairs,
+    or None for a lesson slot that has lessons as usual.
+
+    The class teacher period shows each section with its class teacher - it is
+    never in the timetable's entries, since nobody solves it. A zero period
+    kept free for a section's grade shows as such, so the gap reads as
+    intended rather than as a free period someone forgot to fill.
+    """
+    if period.kind == "class_teacher":
+        if mode == "section":
+            cg = data["class_groups_by_id"].get(key)
+            teacher = data["teachers_by_id"].get(cg.class_teacher_id) if cg and cg.class_teacher_id else None
+            return [("Class teacher", teacher.name if teacher else "")]
+        sections = [
+            _class_group_label(cg) for cg in data["class_groups"] if cg.class_teacher_id == key
+        ]
+        return [("Class teacher", ", ".join(sorted(sections)))] if sections else []
+    if period.kind == "zero":
+        return [("Zero period", "")]
+    if period.kind == "break":
+        return []
+    if mode == "section":
+        cg = data["class_groups_by_id"].get(key)
+        grades = data["zero_grades"].get(period.id, set())
+        if cg and (None in grades or cg.grade in grades):
+            return [("Zero period", "")]
+    return None
 
 
 def _cell_text(entry, data: dict, mode: str) -> str:
@@ -98,11 +151,14 @@ def _grid_rows(data: dict, entries_index: dict, entry_key_prefix, mode: str) -> 
     entry_key_prefix is the class_group_id or teacher_id to look up."""
     rows = [["Period"] + [DAY_NAMES[d] for d in data["days"]]]
     for order in data["orders"]:
-        row = [f"Period {order + 1}"]
+        row = [_row_label(data, order)]
         for day in data["days"]:
             period = data["period_by_day_order"].get((day, order))
             text = ""
-            if period:
+            special = _special(data, period, entry_key_prefix, mode) if period else None
+            if special is not None:
+                text = "\n".join(f"{title}\n({who})" if who else title for title, who in special)
+            elif period:
                 entries = entries_index.get((entry_key_prefix, period.id), [])
                 text = "\n".join(_cell_text(e, data, mode) for e in entries)
                 # A section's block slot holds every option at once; naming
@@ -355,12 +411,17 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
     for order in data["orders"]:
         day_periods = [data["period_by_day_order"].get((d, order)) for d in data["days"]]
         present = [p for p in day_periods if p]
-        is_break = bool(present) and all(p.is_break for p in present)
-        label = next((p.label for p in present if p.label), None)
+        # A band across the whole row: a break, or a zero period for the whole
+        # school. The class teacher period is not one - it names a different
+        # teacher in each section, so it keeps its cells.
+        is_break = bool(present) and all(p.kind in ("break", "zero") for p in present)
         cells = []
         for period in day_periods:
             lessons, block = [], None
-            if period and not period.is_break:
+            special = _special(data, period, key, mode) if period else None
+            if special is not None:
+                lessons = [(title, who, "") for title, who in special]
+            elif period and not period.is_break:
                 entries = entries_index.get((key, period.id), [])
                 for e in entries:
                     subject = data["subjects_by_id"].get(e.subject_id)
@@ -376,7 +437,7 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
                     block = data["block_names"].get(entries[0].elective_block_id, "Elective block")
             cells.append({"lessons": lessons, "block": block, "exists": period is not None})
         rows.append({
-            "label": (label or "Break") if is_break else f"Period {order + 1}",
+            "label": _row_label(data, order),
             "is_break": is_break,
             "cells": cells,
         })

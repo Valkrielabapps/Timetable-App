@@ -77,20 +77,17 @@ class SchoolIndex:
     subject_ids: dict[str, int]
     teacher_ids: dict[str, int]
     class_group_ids: dict[str, list[int]]
-    # Every period of each day, by day_of_week, sorted. This is what turns a
-    # position into a row: "period 5" is the fifth entry here, whatever its
+    # The lesson slots of each day, by day_of_week, sorted. This is what turns
+    # a number into a slot: "period 5" is the fifth entry here, whatever its
     # stored `order` happens to be.
     #
-    # It has to be a lookup rather than arithmetic because `order` is typed in
-    # by hand when a school is set up - it may start at 0 or 1, and deleting
-    # and re-adding periods leaves holes. Everything a person sees is 1-based
-    # (the timetable grid renders `Period {order + 1}`, and the prompt tells
-    # the model the periods are "numbered 1 to N"), so a rule saying "period 5"
-    # means the fifth row, not the row whose stored order is 5.
+    # It has to be a lookup rather than arithmetic because `order` counts
+    # every row of the day - breaks, the class teacher period - and older
+    # schools typed it in by hand, from 0 or 1, with holes. Only lessons are
+    # numbered (the grid shows "Period 5" on the fifth lesson, and the prompt
+    # counts lessons), so a rule saying "period 5" means the fifth lesson.
     orders_by_day: dict[int, list[int]] = field(default_factory=dict)
-    # The first and last TEACHING period of each day. Separate from the above
-    # because breaks count as rows a person can see, but "the last period" of a
-    # day means its last lesson slot, not lunch.
+    # The first and last lesson of each day - "the last period" is never lunch.
     first_order_by_day: dict[int, int] = field(default_factory=dict)
     last_order_by_day: dict[int, int] = field(default_factory=dict)
 

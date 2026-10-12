@@ -189,11 +189,14 @@ describe('moving a block', () => {
     expect(screen.getByText(/That slot is locked/)).toBeInTheDocument()
   })
 
-  it('refuses a drop onto a break', () => {
+  it('does not take a drop onto a break', () => {
+    // A break shows its name and takes no drops at all, so nothing is moved
+    // and nothing is asked of the server.
     renderTab()
     drag(cellOf('Block 1'), cellAt('Grade 11 · A', 3))
     expect(api.moveSlot).not.toHaveBeenCalled()
-    expect(screen.getByText('Nothing can be scheduled in a break.')).toBeInTheDocument()
+    expect(hooks.optimisticSlotMove).not.toHaveBeenCalled()
+    expect(cellAt('Grade 11 · A', 3)).toHaveTextContent('Break')
   })
 
   it('moves an ordinary lesson into a free cell the same way', async () => {
