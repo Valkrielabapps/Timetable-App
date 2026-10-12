@@ -1,30 +1,10 @@
-<!--
-  PLACEHOLDER GUIDE — replace every remaining [BRACKETED] value before
-  publishing. [PRODUCT_NAME] and [PLAN_NAMES/PRICES] below are now filled
-  in (Timetablz; Free/Pro/Business synced with frontend/src/components/
-  PricingPage.jsx — re-sync this if those prices ever change). Still
-  open, deferred pending real business decisions:
-  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as Timetablz"
-  [WEBSITE_URL]       — e.g. https://yourname.com (domain not finalized yet)
-  [SUPPORT_EMAIL]     — e.g. hello@yourname.com or support@yourname.com
-  [BUSINESS_ADDRESS]  — your registered/current-account address
-  [JURISDICTION]      — e.g. "the courts of [City], India"
-  [EFFECTIVE_DATE]    — the date you actually publish this
-  [FREE TRIAL / PILOT PERIOD length, and the refund policy in Section 8]
-                      — a real business decision, not yet made
-
-  This is a starting draft, not a substitute for review by a lawyer
-  before you go live and start accepting payments. Pay particular
-  attention to Section 8 (Refunds) once Razorpay is live — its wording
-  must match your actual refund practice, since Razorpay's own KYC
-  review checks that these are consistent.
--->
+<!-- Edit the source in docs/legal/TERMS_OF_SERVICE.md as well; keep the refund section in step with refund-policy.md. -->
 
 # Terms of Service
 
-**Effective date: [EFFECTIVE_DATE]**
+**Effective date: 12 October 2026**
 
-These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by [LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
+These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Allen Davis Marokey, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
 ## 1. Who may use the Service
 
@@ -60,17 +40,15 @@ We may suspend or terminate accounts that violate these Terms.
 
 ## 6. Plans and pricing
 
-The Service is offered under the pricing plans described on our website at [WEBSITE_URL] (Free, Pro at ₹4,999 + GST per year, and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are exclusive of applicable taxes (e.g. GST), which will be added at checkout or invoicing.
+The Service is offered under the pricing plans described on our website at https://www.timetablz.com (Free; Pro at ₹4,999 per year; and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are shown in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
 
 ## 7. Payment and billing
 
-Paid subscriptions are billed in advance on a recurring monthly or annual basis through our payment processor, Razorpay. By subscribing, you authorize us to charge your chosen payment method on each renewal until you cancel. You can cancel at any time from your account settings or by contacting [SUPPORT_EMAIL]; cancellation takes effect at the end of your current billing period, and you will retain access until then.
+The Pro plan is paid in advance for one year at a time, through our payment processor, Cashfree Payments. It does not renew automatically: you renew by making a new payment, and an early renewal is added on after your current year ends. Payment card, UPI and net banking details are entered on Cashfree's secure checkout and are never seen or stored by us. The plan is activated only after the payment is confirmed.
 
 ## 8. Refunds and cancellations
 
-[TO BE FINALIZED WITH YOUR ACTUAL POLICY — a placeholder starting position is below; align this with what you tell Razorpay during KYC, since inconsistency between your stated policy and actual practice is a common cause of account review flags.]
-
-We offer a [FREE TRIAL / PILOT PERIOD] before any charge is made. Once a paid subscription begins, fees already paid for the current billing period are non-refundable, except where required by applicable law, or at our discretion in cases of documented technical failure on our part that prevented you from using the Service. Refund requests can be sent to [SUPPORT_EMAIL] and will be reviewed on a case-by-case basis.
+You can cancel the Pro plan at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of your current year on a pro-rata basis: the amount paid, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and your school moves to the Free plan when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://www.timetablz.com/?page=refunds.
 
 ## 9. Free trials and pilots
 
@@ -82,11 +60,11 @@ The Service, including its software, design, and underlying scheduling engine, i
 
 ## 11. Third-party services
 
-The Service relies on third-party infrastructure and processors, including hosting (Railway, Vercel, Supabase), AI processing (Anthropic), email delivery (Resend), payments (Razorpay), and optional sign-in (Google). We are not responsible for outages or failures caused solely by these third parties, though we will make reasonable efforts to minimize any impact on you.
+The Service relies on third-party infrastructure and processors, including hosting (Railway, Vercel, Supabase), AI processing (Anthropic), email delivery (Resend), payments (Cashfree Payments), and optional sign-in (Google). We are not responsible for outages or failures caused solely by these third parties, though we will make reasonable efforts to minimize any impact on you.
 
 ## 12. Availability and support
 
-We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is provided by email at [SUPPORT_EMAIL]; response times may vary by plan.
+We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is provided by email at support@timetablz.com; response times may vary by plan.
 
 ## 13. Disclaimer of warranties
 
@@ -94,7 +72,7 @@ THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KI
 
 ## 14. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, [LEGAL_ENTITY_NAME] SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, REVENUE, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, Allen Davis Marokey, sole proprietor, trading as Timetablz SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, REVENUE, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
 
 Nothing in these Terms limits liability that cannot be limited under applicable law.
 
@@ -108,11 +86,11 @@ We may update these Terms from time to time. If we make material changes, we wil
 
 ## 17. Governing law
 
-These Terms are governed by the laws of India, without regard to conflict-of-law principles. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of [JURISDICTION].
+These Terms are governed by the laws of India, without regard to conflict-of-law principles. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of the courts of Kerala, India.
 
 ## 18. Contact us
 
-Questions about these Terms can be sent to **[SUPPORT_EMAIL]**, or by mail to:
+Questions about these Terms can be sent to **support@timetablz.com**, or by mail to:
 
-[LEGAL_ENTITY_NAME]
-[BUSINESS_ADDRESS]
+Allen Davis Marokey, sole proprietor, trading as Timetablz
+Kerala, India

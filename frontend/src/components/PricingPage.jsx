@@ -47,7 +47,7 @@ const PRICING_TIERS = [
   {
     name: 'Pro',
     priceInr: 4999,
-    period: '+ GST /year',
+    period: '/year',
     tagline: 'For a school that needs more room to grow',
     highlights: ['Everything in Free, plus:', 'Up to 500 students', 'AI-assisted setup & constraints', 'Priority support'],
     highlighted: true,
@@ -78,7 +78,7 @@ const fadeUp = {
 const BILLING_FAQS = [
   {
     q: 'Does the price include GST?',
-    a: 'No — prices shown are exclusive of applicable taxes. GST is added at checkout or on your invoice, same as the Terms of Service state.',
+    a: 'The price shown is what you pay, in Indian Rupees. If GST becomes applicable to us, it will be shown separately at checkout and on your invoice.',
   },
   {
     q: 'Can I switch plans later?',
@@ -86,7 +86,7 @@ const BILLING_FAQS = [
   },
   {
     q: 'How does billing actually work?',
-    a: 'Pro is billed in advance once a year through Razorpay, our payment processor. You can cancel any time from your account settings; cancellation takes effect at the end of your current billing period, and you keep access until then.',
+    a: 'Pro is paid in advance for one year at a time through Cashfree, our payment processor, and it does not renew automatically. If you cancel during the year, we refund the unused full months (see our Refund and Cancellation Policy).',
   },
   {
     q: 'What happens if I cancel?',

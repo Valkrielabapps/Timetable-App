@@ -150,15 +150,6 @@ export default function LegalPage({ title, markdown, onBack }) {
       </div>
 
       <div className="mx-auto max-w-3xl px-6 py-14">
-        {/* See this file's top docstring — both source documents still have
-            unfilled [BRACKETED] placeholders (address, support email,
-            effective date). This notice stays until those are filled in
-            for real; removing it while placeholders remain would make the
-            page look finished when it isn't. */}
-        <div className="mb-10 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Draft — {title} is still a working draft. Bracketed placeholders (business address, support
-          email, effective date) haven't been filled in yet.
-        </div>
         {renderMarkdown(markdown)}
       </div>
     </div>

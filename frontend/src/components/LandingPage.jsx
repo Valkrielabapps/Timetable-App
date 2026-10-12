@@ -1333,6 +1333,8 @@ const FOOTER_COLUMNS = [
     links: [
       { label: 'Privacy Policy', href: '?page=privacy' },
       { label: 'Terms of Service', href: '?page=terms' },
+      { label: 'Refunds & Cancellations', href: '?page=refunds' },
+      { label: 'Contact Us', href: '?page=contact' },
     ],
   },
 ]

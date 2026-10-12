@@ -19,6 +19,9 @@ import CalendarTab from './components/CalendarTab'
 import DemoTab from './components/DemoTab'
 import SettingsTab from './components/SettingsTab'
 import SupportWidget from './components/SupportWidget'
+import PaymentStatusPage from './components/PaymentStatusPage'
+import RefundPolicyPage from './components/RefundPolicyPage'
+import ContactPage from './components/ContactPage'
 import { confirmDialog } from './components/confirmDialog'
 import DataEntryTab from './components/DataEntryTab'
 import ConstraintsTab from './components/ConstraintsTab'
@@ -508,8 +511,24 @@ function App() {
   // out visitor, or someone with an unrelated ?invite=/?reset= link still
   // in their address bar, should see the legal page they clicked through
   // to, not get routed into an unrelated flow first).
+  // Cashfree's return_url. Checks the order with the backend itself; see
+  // PaymentStatusPage for why arriving here proves nothing on its own.
+  if (legalPage === 'payment-status') {
+    return (
+      <PaymentStatusPage
+        orderId={new URLSearchParams(window.location.search).get('order_id')}
+        onDone={() => window.location.assign(window.location.pathname)}
+      />
+    )
+  }
   if (legalPage === 'privacy') {
     return <PrivacyPolicyPage onBack={() => window.location.assign(window.location.pathname)} />
+  }
+  if (legalPage === 'refunds') {
+    return <RefundPolicyPage onBack={() => window.location.assign(window.location.pathname)} />
+  }
+  if (legalPage === 'contact') {
+    return <ContactPage onBack={() => window.location.assign(window.location.pathname)} />
   }
   if (legalPage === 'terms') {
     return <TermsOfServicePage onBack={() => window.location.assign(window.location.pathname)} />

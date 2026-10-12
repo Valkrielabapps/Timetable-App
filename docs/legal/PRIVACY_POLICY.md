@@ -1,25 +1,10 @@
-<!--
-  PLACEHOLDER GUIDE — replace every remaining [BRACKETED] value before
-  publishing. [PRODUCT_NAME] is now filled in (Timetablz). Still open,
-  deferred pending real business decisions:
-  [LEGAL_ENTITY_NAME] — e.g. "Allen Davis, sole proprietor trading as Timetablz"
-                         (update to the LLP's name if/when you convert)
-  [WEBSITE_URL]      — e.g. https://yourname.com (domain not finalized yet)
-  [SUPPORT_EMAIL]    — e.g. hello@yourname.com or privacy@yourname.com
-  [BUSINESS_ADDRESS] — your registered/current-account address
-  [EFFECTIVE_DATE]   — the date you actually publish this
-
-  This document is a starting draft, not a substitute for review by a
-  lawyer or CA familiar with India's Digital Personal Data Protection
-  Act (DPDP Act, 2023) before you go live and start collecting real
-  user data or accepting payments.
--->
+<!-- Edit the source in docs/legal/ as well. -->
 
 # Privacy Policy
 
-**Effective date: [EFFECTIVE_DATE]**
+**Effective date: 12 October 2026**
 
-[LEGAL_ENTITY_NAME] ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
+Allen Davis Marokey, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
 
 By using the Service, you agree to the collection and use of information as described in this policy. If you do not agree, please do not use the Service.
 
@@ -76,7 +61,7 @@ We share information only with the service providers who help us run the Service
 | Supabase | Hosts our production database (PostgreSQL) |
 | Anthropic | Powers optional AI features (see Section 4) |
 | Resend | Sends transactional emails (invites, password resets) |
-| Razorpay | Processes subscription payments, once billing is enabled |
+| Cashfree Payments | Processes plan payments; card, UPI and bank details are entered on Cashfree's checkout and are not stored by us |
 | Google | Provides "Sign in with Google," if you choose to use it |
 
 We do not share your information with data brokers or advertisers. We may disclose information if required by law, subpoena, or to protect our rights, users, or the public from harm.
@@ -91,7 +76,7 @@ We use industry-standard measures to protect your information, including encrypt
 
 ## 8. Your rights
 
-Depending on your location, you may have rights to access, correct, delete, or export your personal information, and to object to or restrict certain processing. To exercise any of these rights, contact us at [SUPPORT_EMAIL]. If you are located in India, these rights are provided consistent with the Digital Personal Data Protection Act, 2023.
+Depending on your location, you may have rights to access, correct, delete, or export your personal information, and to object to or restrict certain processing. To exercise any of these rights, contact us at support@timetablz.com. If you are located in India, these rights are provided consistent with the Digital Personal Data Protection Act, 2023.
 
 You can delete individual records (teachers, subjects, etc.) yourself at any time within the app. To delete your entire account or school, contact us.
 
@@ -109,7 +94,7 @@ We may update this Privacy Policy from time to time. If we make material changes
 
 ## 12. Contact us
 
-Questions about this policy or how we handle your data can be sent to **[SUPPORT_EMAIL]**, or by mail to:
+Questions about this policy or how we handle your data can be sent to **support@timetablz.com**, or by mail to:
 
-[LEGAL_ENTITY_NAME]
-[BUSINESS_ADDRESS]
+Allen Davis Marokey, sole proprietor, trading as Timetablz
+Kerala, India

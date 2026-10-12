@@ -162,6 +162,10 @@ export const api = {
   // Support ticket from the floating help button - emailed to the
   // support inbox (backend/app/routers/support.py).
   createSupportTicket: (data) => post("/support/tickets", data),
+  // Cashfree checkout (backend app/routers/payments.py). The server picks
+  // the amount; the client only says which school and plan.
+  createPaymentOrder: (data) => post("/payments/create-order", data),
+  getPaymentOrder: (orderId) => get(`/payments/orders/${encodeURIComponent(orderId)}`),
 
   // Subjects
   listSubjects: (schoolId) => get(`/subjects?school_id=${schoolId}`),

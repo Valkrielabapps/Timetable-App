@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import TeamTab from './TeamTab'
+import BillingSection from './BillingSection'
 
 /**
  * Settings, opened from the header (left of Sign out). Three sections in a
@@ -32,6 +33,7 @@ export default function SettingsTab({
   const sections = [
     { id: 'school', label: 'School profile', hint: 'Details, contact, address' },
     { id: 'account', label: 'My account', hint: 'Name, email, password' },
+    { id: 'billing', label: 'Plan & billing', hint: 'Your plan, upgrade to Pro' },
     ...(isAdmin ? [{ id: 'team', label: 'Team', hint: 'Who has access' }] : []),
   ]
   const [section, setSection] = useState(
@@ -74,6 +76,7 @@ export default function SettingsTab({
             />
           )}
           {section === 'account' && <MyAccount user={user} onUserUpdated={onUserUpdated} />}
+          {section === 'billing' && <BillingSection school={school} isAdmin={isAdmin} />}
           {section === 'team' && isAdmin && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               <TeamTab schoolId={school.id} members={members} invites={invites} onReload={onReloadTeam} />
