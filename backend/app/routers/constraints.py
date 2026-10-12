@@ -31,6 +31,7 @@ from app.services.llm_constraint_parser import (
     parse_constraints_batch_llm,
 )
 from app.services.llm_ir_parser import parse_rule_llm
+from app.services.timetable_structure import lesson_numbers
 
 router = APIRouter(prefix="/api/constraints", tags=["constraints"])
 
@@ -55,7 +56,9 @@ def _is_enforced(constraint: Constraint) -> bool:
     if constraint.type == "workload_limit":
         return "teacher_id" in p and "max_periods_per_week" in p
     if constraint.type == "availability":
-        return "teacher_id" in p and ("day_of_week" in p or p.get("period_orders"))
+        return "teacher_id" in p and (
+            "day_of_week" in p or p.get("period_numbers") or p.get("period_orders")
+        )
     if constraint.type in ("no_subject_period", "require_subject_period"):
         return "subject_id" in p and p.get("position") in ("first", "last")
     if constraint.type in ("no_subject_day", "require_subject_day"):
@@ -357,11 +360,31 @@ def update_constraint(constraint_id: int, payload: ConstraintUpdate, db: Session
     return _to_out(db, constraint)
 
 
+def _periods_numbered(db: Session, school_id: int, day: int | None, numbers) -> list[Period]:
+    """The lesson periods called "period N" for the given numbers - on one day,
+    or every day. Numbered the way the timetable shows them: lessons only, so
+    the class teacher period or lunch before them doesn't shift the count."""
+    wanted = set(numbers)
+    periods = db.query(Period).filter(Period.school_id == school_id).all()
+    numbered = lesson_numbers(periods)
+    return [
+        p for p in periods
+        if numbered.get(p.id) in wanted and (day is None or p.day_of_week == day)
+    ]
+
+
 def _availability_period_ids(db: Session, school_id: int, params: dict) -> set[int]:
     """The period ids an availability rule blocked, rebuilt from its stored
-    parameters with the same day / period-order filters used when it was
-    created. A rule that stored neither (it matched nothing) blocked nothing."""
+    parameters with the same day / period filters used when it was created.
+    A rule that stored neither (it matched nothing) blocked nothing.
+
+    Rules store `period_numbers` ("period 5", as the timetable shows it).
+    Older ones stored `period_orders`, matched against the raw row position at
+    the time; those are rebuilt the same way, so deleting one frees exactly
+    the periods it took."""
     day = params.get("day_of_week")
+    if params.get("period_numbers"):
+        return {p.id for p in _periods_numbered(db, school_id, day, params["period_numbers"])}
     orders = params.get("period_orders")
     if day is None and not orders:
         return set()
@@ -504,7 +527,7 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
         teacher_names=[t.name for t in teachers],
         subject_names=[s.name for s in subjects],
         class_group_labels=list(label_to_class_groups.keys()),
-        periods=[(p.day_of_week, p.order, p.label, p.is_break) for p in periods],
+        periods=[(p.day_of_week, p.order, p.label, p.kind) for p in periods],
     )
 
 
@@ -610,12 +633,17 @@ def _apply_parsed_constraint(
         # second arrived as the first and quietly cost the teacher the day -
         # while the UI reported it as enforced. See
         # docs/research/constraint-catalogue.tsv R005.
-        query = db.query(Period).filter(Period.school_id == school_id)
-        if parsed.day_of_week is not None:
-            query = query.filter(Period.day_of_week == parsed.day_of_week)
+        # "Period 5" is the fifth lesson, as the timetable numbers them and as
+        # the prompt describes the day - not the fifth row.
         if parsed.period_orders:
-            query = query.filter(Period.order.in_(parsed.period_orders))
-        matched_period_ids = [p.id for p in query.all()]
+            matched_period_ids = [
+                p.id for p in _periods_numbered(db, school_id, parsed.day_of_week, parsed.period_orders)
+            ]
+        else:
+            query = db.query(Period).filter(Period.school_id == school_id)
+            if parsed.day_of_week is not None:
+                query = query.filter(Period.day_of_week == parsed.day_of_week)
+            matched_period_ids = [p.id for p in query.all()]
 
         existing = set(matched_teacher.unavailable_period_ids or [])
         matched_teacher.unavailable_period_ids = sorted(existing | set(matched_period_ids))
@@ -626,7 +654,7 @@ def _apply_parsed_constraint(
             # Recorded even when it matched nothing, so a rule naming period 9
             # in an 8-period school reads as "asked for 9, blocked nothing"
             # rather than looking like a whole-day rule that did nothing.
-            parameters["period_orders"] = sorted(parsed.period_orders)
+            parameters["period_numbers"] = sorted(parsed.period_orders)
 
     elif parsed.type == "subject_period_position":
         db_type = {"exclude": "no_subject_period", "require": "require_subject_period"}.get(parsed.mode, "scheduling_rule")

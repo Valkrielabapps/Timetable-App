@@ -26,8 +26,8 @@ parsers do for teacher/subject names), this grounds the model against the
 timetable's actual entries and the school's actual periods, each tagged
 with its own id, and asks the model to return those ids directly. This
 pushes ALL of the disambiguation (which of the 3 weekly Math slots did
-they mean? does "period 2" mean order=2 or the period labeled "Period
-2"?) into the one place that already has full context to resolve it,
+they mean? which slot is "period 2" when lunch or the class teacher
+period comes first? - each lesson slot carries its period_number) into the one place that already has full context to resolve it,
 instead of the router trying to re-derive partial matches from scratch.
 Every returned id is re-validated against the same lists server-side
 before anything is mutated — a hallucinated id that doesn't appear in
@@ -99,8 +99,9 @@ def parse_edit_command_llm(
     what's in scope rather than this function reaching into the database
     itself:
       - entries: {id, class_group_name, subject_name, teacher_name,
-        day_of_week, order, period_label, locked}
-      - periods: {id, day_of_week, order, label}
+        day_of_week, period_number, period_label, locked}
+      - periods: {id, day_of_week, period_number, label} - lesson slots
+        only; period_number is "period N" as the timetable shows it
       - teachers: {id, name}
 
     Returns the raw tool-input dict (action, entry_id, target_period_id,

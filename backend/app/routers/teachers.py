@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ElectiveOption, SubjectRequirement, Teacher
+from app.models.school import ClassGroup, ElectiveOption, SubjectRequirement, Teacher
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.teacher import TeacherCreate, TeacherOut, TeacherUpdate
@@ -68,6 +68,11 @@ def delete_teacher(teacher_id: int, db: Session = Depends(get_db), current_user:
     )
     db.query(ElectiveOption).filter(ElectiveOption.preferred_teacher_id == teacher_id).update(
         {ElectiveOption.preferred_teacher_id: None}
+    )
+    # The database clears this too (ON DELETE SET NULL), but SQLite only does
+    # when foreign keys are switched on - doing it here doesn't depend on that.
+    db.query(ClassGroup).filter(ClassGroup.class_teacher_id == teacher_id).update(
+        {ClassGroup.class_teacher_id: None}
     )
     db.delete(teacher)
     db.commit()

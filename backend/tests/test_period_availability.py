@@ -139,7 +139,7 @@ def test_period_scoped_availability_reports_as_enforced(client):
     )
 
     assert resolved.db_type == "availability"
-    assert resolved.parameters["period_orders"] == [1]
+    assert resolved.parameters["period_numbers"] == [1]
 
 
 def test_malformed_period_orders_from_the_model_do_not_reach_the_query():
@@ -155,3 +155,62 @@ def test_malformed_period_orders_from_the_model_do_not_reach_the_query():
     assert _int_list([]) is None          # "no scoping", not "no periods"
     assert _int_list("abc") is None
     assert _int_list({"a": 1}) is None
+
+
+def test_period_numbers_count_lessons_not_rows(client):
+    """With a class teacher period first and lunch after period 2, "period 3"
+    is the lesson after lunch - the timetable's "Period 3" - not the third row."""
+    _, headers = signup(client)
+    school = create_school(client, headers)
+    client.post("/api/teachers", json={"school_id": school["id"], "name": "Mr. Khan",
+                                       "qualified_subject_ids": []}, headers=headers)
+    client.put(f"/api/schools/{school['id']}/timetable-structure", json={
+        "days": [0], "periods_per_day": 4, "breaks": [{"after": 2, "label": "Lunch"}],
+        "class_teacher_period": {"enabled": True}}, headers=headers)
+    db = SessionLocal()
+    try:
+        lunch = db.query(Period).filter(Period.kind == "break").one()
+        after_lunch = db.query(Period).filter(Period.order == lunch.order + 1).one()
+    finally:
+        db.close()
+    _, blocked = _apply(
+        school["id"],
+        ParsedConstraint(type="availability", description="Mr. Khan can't take period 3",
+                         teacher_name="Mr. Khan", period_orders=[3]),
+    )
+    assert blocked == {(0, after_lunch.order)}
+
+
+def test_an_older_rule_frees_exactly_what_it_took(client):
+    """Rules saved before numbering counted lessons matched the raw row; when
+    one is deleted it must give back those same periods."""
+    from app.routers.constraints import _availability_period_ids
+    _, headers = signup(client)
+    school = _school_with_a_week(client, headers)
+    db = SessionLocal()
+    try:
+        ids = _availability_period_ids(db, school["id"], {"day_of_week": 1, "period_orders": [2]})
+        rows = db.query(Period).filter(Period.id.in_(ids)).all()
+        assert [(p.day_of_week, p.order) for p in rows] == [(1, 2)]
+    finally:
+        db.close()
+
+
+def test_a_rule_frees_its_periods_when_deleted(client):
+    """What a rule blocked is rebuilt from what it stored, so deleting it
+    gives back exactly those periods - and not the whole day."""
+    from app.routers.constraints import _availability_period_ids
+    _, headers = signup(client)
+    school = _school_with_a_week(client, headers)
+    resolved, blocked = _apply(
+        school["id"],
+        ParsedConstraint(type="availability", description="Mr. Khan can't take period 3 on Tuesdays",
+                         teacher_name="Mr. Khan", day_of_week=1, period_orders=[3]),
+    )
+    db = SessionLocal()
+    try:
+        ids = _availability_period_ids(db, school["id"], resolved.parameters)
+        assert {(p.day_of_week, p.order) for p in db.query(Period).filter(Period.id.in_(ids))} == blocked
+        assert len(blocked) == 1
+    finally:
+        db.close()

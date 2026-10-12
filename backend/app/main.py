@@ -32,6 +32,7 @@ from app.routers import (
     substitutions,
     support,
     teachers,
+    timetable_structure,
     timetables,
 )
 
@@ -74,6 +75,7 @@ app.include_router(invites.router)
 app.include_router(subjects.router)
 app.include_router(rooms.router)
 app.include_router(periods.router)
+app.include_router(timetable_structure.router)
 app.include_router(teachers.router)
 app.include_router(class_groups.router)
 app.include_router(elective_blocks.router)
