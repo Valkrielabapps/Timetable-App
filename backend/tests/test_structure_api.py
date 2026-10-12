@@ -266,10 +266,14 @@ def test_the_export_names_the_special_periods(client, world):
     r = client.get(f"/api/timetables/{tt}/export?format=xlsx", headers=h)
     wb = openpyxl.load_workbook(io.BytesIO(r.content))
     sheet = [[c.value for c in row] for row in wb["Grade 6 - A"].iter_rows()]
-    labels = [row[0] for row in sheet[3:]]
+    # Layout: heading, subtitle, spacer, header row, then the periods. A break
+    # is one band across the week, so its name sits in the day cells and the
+    # period column is left empty.
+    rows = sheet[4:]
+    labels = [row[0] or row[1] for row in rows]
     assert labels == ["Class teacher", "Period 1", "Lunch", "Period 2", "Period 3", "Period 4"]
-    assert sheet[3][1] == "Class teacher\n(Mrs. Rao)"
-    assert sheet[7][1] == "Zero period"
+    assert rows[0][1] == "Class teacher\nMrs. Rao"
+    assert rows[4][1] == "Zero period"
     pdf = client.get(f"/api/timetables/{tt}/export?format=pdf", headers=h)
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
 

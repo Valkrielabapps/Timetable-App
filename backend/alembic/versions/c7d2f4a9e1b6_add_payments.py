@@ -1,7 +1,7 @@
 """add payment_orders and schools.plan
 
 Revision ID: c7d2f4a9e1b6
-Revises: 9d05544c358d
+Revises: 7433831f2744
 Create Date: 2026-10-12 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c7d2f4a9e1b6'
-down_revision: Union[str, None] = '9d05544c358d'
+down_revision: Union[str, None] = '7433831f2744'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
