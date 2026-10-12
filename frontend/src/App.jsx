@@ -37,10 +37,15 @@ import { useTimetables } from './hooks/useSchoolData'
 // — different lens), not a distinct workflow, so it now lives as a
 // Schedule/Substitutions toggle inside TimetableTab.jsx instead of adding
 // to this top-level count.
+// The header's numbered steps, in the order the work is done. The first
+// three are pages of the same Data Entry screen (tab 'entry' + a sub-view),
+// so each step names both; Constraints and Timetable are tabs of their own.
 const BASE_TABS = [
-  { id: 'entry', label: 'Data Entry' },
-  { id: 'constraints', label: 'Constraints' },
-  { id: 'timetable', label: 'Timetable' },
+  { id: 'setup', label: 'Setup', tab: 'entry', subView: 'setup' },
+  { id: 'subjects', label: 'Subjects', tab: 'entry', subView: 'subjects' },
+  { id: 'teachers', label: 'Teachers', tab: 'entry', subView: 'teachers' },
+  { id: 'constraints', label: 'Constraints', tab: 'constraints' },
+  { id: 'timetable', label: 'Timetable', tab: 'timetable' },
 ]
 
 /**
@@ -700,15 +705,21 @@ function App() {
                   // fail) — muted rather than hidden or disabled, so
                   // someone who wants to peek still can.
                   const muted = ['constraints', 'timetable'].includes(t.id) && !setupProgress.allRequiredDone
+                  // A section's weekly plan (sub-view 'plan') is where its
+                  // subjects get their periods, so it lights up Subjects.
+                  const active =
+                    tab === t.tab &&
+                    (!t.subView || dataEntrySubView === t.subView || (t.subView === 'subjects' && dataEntrySubView === 'plan'))
                   return (
                     <button
                       key={t.id}
-                      onClick={() => setTab(t.id)}
+                      onClick={() => handleNavigate(t.tab, t.subView)}
+                      aria-current={active ? 'page' : undefined}
                       className={`relative rounded-md px-3 py-1.5 font-medium ${
-                        tab === t.id ? 'text-white' : muted ? 'text-slate-300 hover:bg-slate-100 hover:text-slate-500' : 'text-slate-500 hover:bg-slate-100'
+                        active ? 'text-white' : muted ? 'text-slate-300 hover:bg-slate-100 hover:text-slate-500' : 'text-slate-500 hover:bg-slate-100'
                       }`}
                     >
-                      {tab === t.id && (
+                      {active && (
                         <motion.span
                           layoutId="tab-active-pill"
                           transition={{ type: 'spring', stiffness: 500, damping: 40 }}
@@ -716,7 +727,7 @@ function App() {
                         />
                       )}
                       <span className="relative z-10 flex items-center gap-2">
-                        {/* Step number: the three tabs are the order of work. */}
+                        {/* Step number: the tabs are the order of work. */}
                         <span
                           aria-hidden="true"
                           className="flex h-6 w-6 flex-none items-center justify-center rounded-full border-4 border-current text-[11px] font-semibold leading-none"

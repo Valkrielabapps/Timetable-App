@@ -16,12 +16,6 @@ import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
 
-const SUB_VIEWS = [
-  { id: 'subjects', label: 'Subjects' },
-  { id: 'teachers', label: 'Teachers' },
-  { id: 'setup', label: 'Setup' },
-]
-
 /**
  * Data Entry is four separate sub-pages, not one combined table:
  * Subjects (what the school teaches), Teachers (who teaches, and which
@@ -479,34 +473,15 @@ export default function DataEntryTab({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {subView === 'plan' ? (
+      {/* Subjects / Teachers / Setup are steps in the header (App.jsx
+          BASE_TABS), so the page doesn't repeat them as tabs of its own. */}
+      {subView === 'plan' && (
         <button
           onClick={() => onSubViewChange('subjects')}
           className="w-fit text-xs font-medium text-neutral-900 hover:underline"
         >
           ← Manage school subjects &amp; teachers
         </button>
-      ) : (
-        <nav className="flex gap-1 border-b border-slate-200 text-sm">
-          {SUB_VIEWS.map((v) => {
-            const count =
-              v.id === 'subjects' ? subjects.length : v.id === 'teachers' ? teachers.length : periods.length
-            return (
-              <button
-                key={v.id}
-                onClick={() => onSubViewChange(v.id)}
-                className={`-mb-px border-b-2 px-3 py-2 font-medium ${
-                  subView === v.id
-                    ? 'border-neutral-900 text-neutral-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {v.label}
-                <span className="ml-1 text-xs text-slate-400">({count})</span>
-              </button>
-            )
-          })}
-        </nav>
       )}
 
       {subView === 'subjects' && (
