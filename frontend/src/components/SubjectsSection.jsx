@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
@@ -21,6 +21,31 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
   // has an advanced field set starts expanded so existing settings are
   // never hidden without a trace.
   const [expandedAdvanced, setExpandedAdvanced] = useState(new Set())
+
+  // Display-only: a stable React key per row. A new subject first appears
+  // with a temporary id while it saves, then comes back from the server with
+  // its real id. Keyed on the id alone, that swap made React treat it as a
+  // different row - the "Saving..." row faded out while the saved one faded
+  // in just below it, so the row dipped and slid back up. Here the saved
+  // subject inherits the temporary row's key instead, so the same row simply
+  // stops saying "Saving...". Nothing about the subject itself, or what's
+  // sent to the server, changes.
+  const rowKeys = useRef(new Map()) // real subject id -> key of the row it replaced
+  const lastRender = useRef({ ids: new Set(), pending: [] })
+  {
+    const currentIds = new Set(subjects.map((s) => s.id))
+    for (const temp of lastRender.current.pending) {
+      if (currentIds.has(temp.id)) continue // still saving
+      const saved = subjects.find(
+        (s) => !s._pending && s.name === temp.name && !lastRender.current.ids.has(s.id) && !rowKeys.current.has(s.id)
+      )
+      if (saved) rowKeys.current.set(saved.id, rowKeys.current.get(temp.id) ?? temp.id)
+    }
+  }
+  useEffect(() => {
+    lastRender.current = { ids: new Set(subjects.map((s) => s.id)), pending: subjects.filter((s) => s._pending) }
+  }, [subjects])
+  const rowKey = (subject) => rowKeys.current.get(subject.id) ?? subject.id
 
   useEffect(() => {
     setExpandedAdvanced((prev) => {
@@ -165,7 +190,7 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
           <AnimatePresence initial={false}>
             {subjects.map((subject) => (
               <motion.tr
-                key={subject.id}
+                key={rowKey(subject)}
                 layout="position"
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -185,7 +210,20 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
                   className="w-full max-w-sm rounded px-1.5 py-1 text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:bg-transparent disabled:text-slate-700"
                 />
                 {subject._pending && <span className="ml-1.5 text-[11px] text-slate-400">Saving…</span>}
-                {subject._pending ? null : expandedAdvanced.has(subject.id) ? (
+                {subject._pending ? (
+                  // Holds the "+ Advanced" line's space while saving, so the
+                  // row doesn't grow by a line the moment the save finishes.
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    disabled
+                    aria-hidden="true"
+                    className="invisible mt-0.5 text-[11px] underline underline-offset-2"
+                  >
+                    + Advanced (room type
+                    {institutionType === 'college' ? ', credits, lab batches' : ''})
+                  </button>
+                ) : expandedAdvanced.has(subject.id) ? (
                   <>
                     <label htmlFor={`subject-room-type-${subject.id}`} className="sr-only">
                       Required room type (optional)
