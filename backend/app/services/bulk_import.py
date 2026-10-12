@@ -26,6 +26,7 @@ Design choices:
 """
 import csv
 import io
+import re
 from dataclasses import dataclass, field
 
 import openpyxl
@@ -138,17 +139,89 @@ def import_rooms(db: Session, school_id: int, rows: list[dict]) -> BulkImportRes
     return result
 
 
+# Accepted headers for the grades column. Schools write their own sheets, and
+# a header the importer doesn't recognise is skipped without a word - which is
+# exactly how a "subjects" column went missing once.
+GRADE_COLUMNS = ("qualified_grades", "grades", "eligible_grades")
+
+
+_ROMAN = {r: str(n) for n, r in enumerate(
+    ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"], start=1)}
+
+
+def _grade_key(label: str) -> str:
+    """A grade label reduced to what people actually vary: "Grade 6",
+    "Class 6", "Class VI", "Std. 6", "6th", "6" - and "6.0", which is how
+    Excel hands back a cell holding just the number - all become "6"."""
+    key = re.sub(r"\s+", " ", label.strip().lower())
+    key = re.sub(r"^(grade|class|std\.?|standard)\s*", "", key)
+    key = re.sub(r"^(\d+)(st|nd|rd|th|\.0)$", r"\1", key)
+    return _ROMAN.get(key, key)
+
+
+def _resolve_grades(raw: str, grades: list[str]) -> tuple[list[str], list[str]]:
+    """Turn a grades cell into the school's own grade labels.
+
+    Returns (resolved, unresolved). Each item may be a grade as the school
+    writes it ("Grade 6"), loosely ("6", "Class 6", "6th"), or a range of
+    numbered grades ("6-8", "Grade 6 to Grade 8"). Resolved labels are the
+    school's exact strings, because that is what the solver compares against
+    each section's grade.
+    """
+    exact = {g.lower(): g for g in grades}
+    by_key: dict[str, str] = {}
+    for g in grades:
+        by_key.setdefault(_grade_key(g), g)
+
+    resolved: list[str] = []
+    unresolved: list[str] = []
+    for item in [t.strip() for t in raw.replace(";", ",").split(",") if t.strip()]:
+        # Whole item first, so a grade with a hyphen in its name ("Pre-KG")
+        # is never mistaken for a range.
+        match = exact.get(item.lower()) or by_key.get(_grade_key(item))
+        if match:
+            found = [match]
+        else:
+            ends = re.split(r"\s*(?:-|–|\bto\b)\s*", item, flags=re.IGNORECASE)
+            low, high = (_grade_key(e) for e in ends) if len(ends) == 2 else ("", "")
+            if low.isdigit() and high.isdigit():
+                lo, hi = sorted((int(low), int(high)))
+                found = [g for g in grades if _grade_key(g).isdigit() and lo <= int(_grade_key(g)) <= hi]
+            else:
+                found = []
+        if not found:
+            unresolved.append(item)
+        for g in found:
+            if g not in resolved:
+                resolved.append(g)
+    return resolved, unresolved
+
+
 def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImportResult:
     """
     Expected columns: name (required), email (optional),
     max_periods_per_week (optional int), qualified_subjects (optional —
     subject names separated by ';' or ',', matched case-insensitively
     against this school's existing subjects; add the subjects first if
-    they don't exist yet, or they're silently skipped with a warning).
+    they don't exist yet, or they're silently skipped with a warning),
+    qualified_grades (optional — also accepted as "grades" or
+    "eligible_grades"; see below).
+
+    Grades: the grades a teacher may teach, separated by ';' or ','. Matched
+    against the grades of the school's sections, loosely - "6", "Class 6" and
+    "Grade 6" are the same grade - and "6-8" is a range. An EMPTY cell means
+    every grade. With no grades column at all, a teacher's existing grades are
+    left as they are.
     """
     result = BulkImportResult()
     existing = {t.name.lower(): t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
     subjects_by_name = {s.name.lower(): s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
+    # Natural order - "Grade 6" before "Grade 11" - so ranges and the grades
+    # listed in an error read the way the school counts them.
+    school_grades = sorted(
+        {g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id) if g},
+        key=lambda g: [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", g.lower())],
+    )
 
     for i, row in enumerate(rows, start=2):
         name = row.get("name", "").strip()
@@ -175,12 +248,45 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
                     f"add them as subjects first, then re-import to pick them up."
                 )
 
+        # None = leave as is. [] = every grade.
+        grades_column = next((c for c in GRADE_COLUMNS if c in row), None)
+        qualified_grades: list[str] | None = None
+        if grades_column is not None:
+            raw_grades = row.get(grades_column, "").strip()
+            if not raw_grades:
+                qualified_grades = []
+            else:
+                resolved, unresolved_grades = _resolve_grades(raw_grades, school_grades)
+                is_existing = name.lower() in existing
+                if unresolved_grades:
+                    where = (
+                        f"this school's grades are {', '.join(school_grades)}"
+                        if school_grades
+                        else "this school has no sections with a grade yet - add them first"
+                    )
+                    if resolved:
+                        kept = "the rest were applied"
+                    elif is_existing:
+                        kept = "grades left unchanged"
+                    else:
+                        kept = "teacher left eligible for every grade"
+                    result.errors.append(
+                        f"Row {i} ({name}): couldn't match grade(s) {', '.join(unresolved_grades)} "
+                        f"({where}); {kept}."
+                    )
+                # Nothing matched: don't widen an existing teacher to every
+                # grade because of a typo.
+                if resolved or not is_existing:
+                    qualified_grades = resolved
+
         match = existing.get(name.lower())
         if match:
             match.email = email
             match.max_periods_per_week = max_periods
             if qualified_ids:
                 match.qualified_subject_ids = qualified_ids
+            if qualified_grades is not None:
+                match.qualified_grades = qualified_grades
             result.updated += 1
         else:
             teacher = Teacher(
@@ -189,6 +295,7 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
                 email=email,
                 max_periods_per_week=max_periods,
                 qualified_subject_ids=qualified_ids,
+                qualified_grades=qualified_grades or [],
             )
             db.add(teacher)
             existing[name.lower()] = teacher
@@ -233,7 +340,8 @@ def import_class_groups(db: Session, school_id: int, rows: list[dict]) -> BulkIm
 TEMPLATES: dict[str, str] = {
     "subjects": "name,required_room_type\nChemistry,lab\nMath,\n",
     "rooms": "name,capacity,room_type\nRoom 101,35,\nChem Lab,30,lab\n",
-    "teachers": "name,email,max_periods_per_week,qualified_subjects\n"
-                "Priya Sharma,priya@example.com,24,Math;Science\n",
+    "teachers": "name,email,max_periods_per_week,qualified_subjects,qualified_grades\n"
+                "Priya Sharma,priya@example.com,24,Math;Science,Grade 6;Grade 7\n"
+                "Rahul Mehta,rahul@example.com,28,English,\n",
     "class_groups": "name,grade,student_count\nA,Grade 8,32\nB,Grade 8,30\n",
 }
