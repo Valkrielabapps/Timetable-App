@@ -133,8 +133,11 @@ export default function Sidebar({
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(cg)
     }
+    // Sections within a grade read A, B, C... regardless of the order they
+    // were created in. Numeric-aware, so "Section 2" comes before "Section 10".
+    const bySection = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
     const sortedKeys = sortGradeKeys([...map.keys()], effectiveGradeOrder)
-    return sortedKeys.map((key) => [key, map.get(key)])
+    return sortedKeys.map((key) => [key, [...map.get(key)].sort(bySection)])
   }, [classGroups, effectiveGradeOrder])
 
   // "Ungrouped" is pinned last by sortGradeKeys and isn't a real grade, so
