@@ -174,7 +174,7 @@ def _excel(grids) -> bytes:
     title_font = Font(bold=True, size=14)
     wrap = Alignment(wrap_text=True, vertical="top", horizontal="left")
 
-    for sheet_name, title, rows in grids:
+    for sheet_name, title, rows, *_ in grids:
         ws = wb.create_sheet(_safe_sheet_name(sheet_name))
         ws.append([title])
         ws["A1"].font = title_font
@@ -201,55 +201,215 @@ def _excel(grids) -> bytes:
     return buf.getvalue()
 
 
-def _pdf(grids, n_days: int) -> bytes:
+# ---------------------------------------------------------------------------
+# PDF
+# ---------------------------------------------------------------------------
+#
+# One page per grid, laid out like a printed school timetable rather than a
+# spreadsheet dump: a heading block, a dark header row, a shaded period
+# column, every lesson as subject (bold) over teacher/section and room
+# (muted), centred in rows of equal height that fill the page, and breaks as
+# a single band across the week. Colours are the app's own neutral palette
+# with the brand green used only for breaks and elective-block labels.
+
+_INK = colors.HexColor("#171717")       # neutral-900, the app's primary dark
+_BODY = colors.HexColor("#404040")      # neutral-700
+_MUTED = colors.HexColor("#737373")     # neutral-500
+_FAINT = colors.HexColor("#A3A3A3")     # neutral-400
+_LINE = colors.HexColor("#E5E5E5")      # neutral-200
+_FRAME = colors.HexColor("#D4D4D4")     # neutral-300
+_STRIPE = colors.HexColor("#FAFAFA")    # neutral-50
+_PERIOD_COL = colors.HexColor("#F5F5F5")  # neutral-100
+_GREEN = colors.HexColor("#047857")     # emerald-700, readable on white
+_GREEN_TINT = colors.HexColor("#ECFDF5")  # emerald-50
+
+_PAGE = landscape(A4)
+_MARGIN_X = 1.4 * cm
+_MARGIN_TOP = 1.9 * cm
+_MARGIN_BOTTOM = 1.5 * cm
+
+
+def _esc(text: str) -> str:
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
+    """The same grid as _grid_rows, kept structured for the PDF: one dict per
+    period order with its label, whether it's a break, and per day the list
+    of (subject, who, room) lessons plus the elective block name if any."""
+    rows = []
+    for order in data["orders"]:
+        day_periods = [data["period_by_day_order"].get((d, order)) for d in data["days"]]
+        present = [p for p in day_periods if p]
+        is_break = bool(present) and all(p.is_break for p in present)
+        label = next((p.label for p in present if p.label), None)
+        cells = []
+        for period in day_periods:
+            lessons, block = [], None
+            if period and not period.is_break:
+                entries = entries_index.get((key, period.id), [])
+                for e in entries:
+                    subject = data["subjects_by_id"].get(e.subject_id)
+                    if mode == "section":
+                        who = data["teachers_by_id"].get(e.teacher_id)
+                        who = who.name if who else ""
+                    else:
+                        cg = data["class_groups_by_id"].get(e.class_group_id)
+                        who = _class_group_label(cg) if cg else ""
+                    room = data["rooms_by_id"].get(e.room_id) if e.room_id else None
+                    lessons.append((subject.name if subject else "?", who, room.name if room else ""))
+                if mode == "section" and entries and entries[0].elective_block_id is not None and len(entries) > 1:
+                    block = data["block_names"].get(entries[0].elective_block_id, "Elective block")
+            cells.append({"lessons": lessons, "block": block, "exists": period is not None})
+        rows.append({
+            "label": (label or "Break") if is_break else f"Period {order + 1}",
+            "is_break": is_break,
+            "cells": cells,
+        })
+    return rows
+
+
+def _pdf(grids, n_days: int, school_name: str = "") -> bytes:
+    from datetime import date
+
     buf = io.BytesIO()
+    generated = date.today().strftime("%d %b %Y").lstrip("0")
+
+    def decorate(canvas, doc):
+        width, height = _PAGE
+        canvas.saveState()
+        canvas.setFont("Helvetica-Bold", 10)
+        canvas.setFillColor(_INK)
+        canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Timetablz")
+        canvas.setFont("Helvetica", 9)
+        canvas.setFillColor(_MUTED)
+        if school_name:
+            canvas.drawRightString(width - _MARGIN_X, height - 1.05 * cm, school_name)
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(_FAINT)
+        canvas.drawString(_MARGIN_X, 0.8 * cm, f"Generated {generated}  ·  timetablz.com")
+        canvas.drawRightString(width - _MARGIN_X, 0.8 * cm, f"Page {doc.page}")
+        canvas.restoreState()
+
     doc = SimpleDocTemplate(
-        buf,
-        pagesize=landscape(A4),
-        topMargin=1.2 * cm,
-        bottomMargin=1.2 * cm,
-        leftMargin=1.2 * cm,
-        rightMargin=1.2 * cm,
+        buf, pagesize=_PAGE,
+        leftMargin=_MARGIN_X, rightMargin=_MARGIN_X, topMargin=_MARGIN_TOP, bottomMargin=_MARGIN_BOTTOM,
+        title=school_name or "Timetable", author="Timetablz",
     )
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("TimetableTitle", parent=styles["Heading1"], spaceAfter=10)
-    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
+    heading = ParagraphStyle("H", fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=_INK)
+    sub = ParagraphStyle("S", fontName="Helvetica", fontSize=9.5, leading=12, textColor=_MUTED, spaceBefore=2, spaceAfter=12)
+    head_cell = ParagraphStyle("HC", fontName="Helvetica-Bold", fontSize=9.5, leading=11, textColor=colors.white, alignment=1)
+    period_cell = ParagraphStyle("PC", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=_INK)
+    lesson = ParagraphStyle("L", fontName="Helvetica", fontSize=8, leading=10.5, textColor=_BODY, alignment=1)
+    free = ParagraphStyle("F", parent=lesson, textColor=_FAINT)
+    break_style = ParagraphStyle("B", fontName="Helvetica-Oblique", fontSize=8.5, leading=10, textColor=_GREEN, alignment=1)
+
+    usable_w = _PAGE[0] - 2 * _MARGIN_X - 12  # frame padding, so the table lines up with the heading
+    period_w = 2.6 * cm
+    day_w = (usable_w - period_w) / max(n_days, 1)
+    # Frame height, less the frame's own 6pt padding top and bottom, the
+    # heading block (24pt title + 2 + 12 + 12pt subtitle) and a little slack,
+    # so a normal week always fits on one page.
+    usable_h = _PAGE[1] - _MARGIN_TOP - _MARGIN_BOTTOM - 12 - 50 - 8
+    header_h = 0.85 * cm
 
     story = []
-    n_cols = n_days + 1
-    col_width = (landscape(A4)[0] - 2.4 * cm) / n_cols
-
-    for i, (_sheet_name, title, rows) in enumerate(grids):
+    for i, grid in enumerate(grids):
+        _sheet, _title, rows, meta = grid
         if i:
             story.append(PageBreak())
-        story.append(Paragraph(title, title_style))
-        # Wrap every non-header cell's text in a Paragraph so long entries
-        # wrap instead of overflowing the column.
-        wrapped_rows = [rows[0]] + [
-            [row[0]] + [Paragraph(cell.replace("\n", "<br/>"), cell_style) if cell else "" for cell in row[1:]]
-            for row in rows[1:]
+        story.append(Paragraph(_esc(meta["heading"]), heading))
+        story.append(Paragraph(_esc(meta["kind"]), sub))
+
+        cells_rows = meta["cells"]
+        days_header = rows[0][1:]
+        table_rows = [[Paragraph("Period", head_cell)] + [Paragraph(_esc(d), head_cell) for d in days_header]]
+        style = [
+            ("BACKGROUND", (0, 0), (-1, 0), _INK),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 1), (0, -1), 10),
+            ("BOX", (0, 0), (-1, -1), 0.75, _FRAME),
+            ("INNERGRID", (0, 1), (-1, -1), 0.5, _LINE),
+            ("LINEAFTER", (0, 0), (-2, 0), 0.5, colors.HexColor("#404040")),
         ]
-        table = Table(wrapped_rows, colWidths=[col_width] * n_cols, repeatRows=1)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(f"#{HEADER_FILL}")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 9),
-            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-            ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 1), (0, -1), 8),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
-        ]))
+
+        n_breaks = sum(1 for r in cells_rows if r["is_break"])
+        n_lessons = max(len(cells_rows) - n_breaks, 1)
+        break_h = 0.6 * cm
+        base_h = min(1.6 * cm, max(1.0 * cm, (usable_h - header_h - n_breaks * break_h) / n_lessons))
+        heights = [header_h]
+        teaching_index = 0
+
+        for r_i, row in enumerate(cells_rows, start=1):
+            if row["is_break"]:
+                table_rows.append(["", Paragraph(_esc(row["label"]), break_style)] + [""] * (n_days - 1))
+                style += [
+                    ("SPAN", (1, r_i), (-1, r_i)),
+                    ("BACKGROUND", (0, r_i), (-1, r_i), _GREEN_TINT),
+                ]
+                heights.append(break_h)
+                continue
+
+            line_count = 2
+            out = [Paragraph(_esc(row["label"]), period_cell)]
+            for cell in row["cells"]:
+                parts = []
+                if cell["block"]:
+                    parts.append(f'<font color="#047857" size="7"><b>{_esc(cell["block"].upper())}</b></font>')
+                for subject, who, room in cell["lessons"]:
+                    piece = f'<font color="#171717" size="9"><b>{_esc(subject)}</b></font>'
+                    if who:
+                        piece += f"<br/>{_esc(who)}"
+                    if room:
+                        piece += f'<br/><font color="#737373" size="7.5">{_esc(room)}</font>'
+                    parts.append(piece)
+                if parts:
+                    out.append(Paragraph("<br/>".join(parts), lesson))
+                    lines = (1 if cell["block"] else 0) + sum(1 + bool(w) + bool(r) for _s, w, r in cell["lessons"])
+                    line_count = max(line_count, lines)
+                elif cell["exists"] and meta["mode"] == "teacher":
+                    out.append(Paragraph("Free", free))
+                else:
+                    out.append("")
+            table_rows.append(out)
+            stripe = _STRIPE if teaching_index % 2 else colors.white
+            style += [
+                ("BACKGROUND", (1, r_i), (-1, r_i), stripe),
+                ("BACKGROUND", (0, r_i), (0, r_i), _PERIOD_COL),
+            ]
+            teaching_index += 1
+            heights.append(max(base_h, line_count * 10.5 + 12))
+
+        table = Table(table_rows, colWidths=[period_w] + [day_w] * n_days, rowHeights=heights, repeatRows=1)
+        table.setStyle(TableStyle(style))
         story.append(table)
-        story.append(Spacer(1, 0.6 * cm))
 
     if not story:
-        story.append(Paragraph("This timetable has no entries yet.", styles["Normal"]))
+        story.append(Paragraph("This timetable has no entries yet.", sub))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=decorate, onLaterPages=decorate)
     return buf.getvalue()
+
+
+def _with_pdf_meta(data: dict, grids, kinds) -> list:
+    """Attach the structured PDF cells to each (sheet, title, rows) grid."""
+    out = []
+    for (sheet, title, rows), (heading, kind, index, key, mode) in zip(grids, kinds):
+        out.append((sheet, title, rows, {
+            "heading": heading, "kind": kind, "mode": mode,
+            "cells": _pdf_cells(data, index, key, mode),
+        }))
+    return out
+
+
+def _school_name(db: Session, timetable: Timetable) -> str:
+    from app.models.school import School
+    school = db.get(School, timetable.school_id)
+    return school.name if school else ""
 
 
 def build_excel(db: Session, timetable: Timetable) -> bytes:
@@ -258,7 +418,15 @@ def build_excel(db: Session, timetable: Timetable) -> bytes:
 
 def build_pdf(db: Session, timetable: Timetable) -> bytes:
     data = _load_grid_data(db, timetable)
-    return _pdf(_school_grids(data), len(data["days"]))
+    grids = _school_grids(data)
+    kinds = []
+    for cg in data["class_groups"]:
+        if _has_content(_grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")):
+            kinds.append((_class_group_label(cg), "Class timetable", data["entries_by_class_period"], cg.id, "section"))
+    for t in data["teachers"]:
+        if _has_content(_grid_rows(data, data["entries_by_teacher_period"], t.id, mode="teacher")):
+            kinds.append((t.name, "Teaching schedule", data["entries_by_teacher_period"], t.id, "teacher"))
+    return _pdf(_with_pdf_meta(data, grids, kinds), len(data["days"]), _school_name(db, timetable))
 
 
 def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
@@ -269,4 +437,13 @@ def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGro
 def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
     """One page per combination of elective choices in one section."""
     data = _load_grid_data(db, timetable)
-    return _pdf(_student_grids(data, class_group, combinations), len(data["days"]))
+    grids = _student_grids(data, class_group, combinations)
+    label = _class_group_label(class_group)
+    kinds = []
+    for combination in combinations:
+        index: dict = defaultdict(list)
+        for (cg_id, period_id), entries in data["entries_by_class_period"].items():
+            if cg_id == class_group.id:
+                index[(cg_id, period_id)] = [e for e in entries if combination.keeps(e)]
+        kinds.append((label, f"Student timetable  ·  {combination.label}", index, class_group.id, "section"))
+    return _pdf(_with_pdf_meta(data, grids, kinds), len(data["days"]), _school_name(db, timetable))
