@@ -30,6 +30,10 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db_path}"
 # itself is covered directly in tests/test_rate_limit.py, which re-enables it.
 os.environ["RATE_LIMIT_ENABLED"] = "false"
 
+# Same for plan limits (app/services/plans.py): most tests build schools far
+# bigger than the Free plan allows. tests/test_plans.py turns them back on.
+os.environ["PLAN_LIMITS_ENABLED"] = "false"
+
 # The suite must not inherit a developer's real key. Two reasons, and the
 # second is the serious one:
 #

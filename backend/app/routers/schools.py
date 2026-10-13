@@ -34,6 +34,7 @@ from app.schemas.school import (
     SchoolProfile,
 )
 from app.services.email_service import send_invite_email
+from app.services import plans
 
 router = APIRouter(prefix="/api/schools", tags=["schools"])
 
@@ -52,6 +53,7 @@ def create_school(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    plans.require_school_capacity(db, current_user.id)
     school = School(name=payload.name, owner_id=current_user.id, institution_type=payload.institution_type)
     db.add(school)
     db.commit()
@@ -260,6 +262,7 @@ def create_invite(
     require_school_access(db, current_user, school_id, min_role="admin")
     if payload.role not in ("admin", "viewer"):
         raise HTTPException(status_code=400, detail="role must be 'admin' or 'viewer'")
+    plans.require_member_capacity(db, db.get(School, school_id))
     existing_pending = (
         db.query(SchoolInvite)
         .filter(SchoolInvite.school_id == school_id, SchoolInvite.email == payload.email, SchoolInvite.status == "pending")

@@ -38,6 +38,7 @@ from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import SessionLocal, get_db
 from app.models.school import (
+    School,
     ClassGroup,
     Constraint,
     ElectiveBlock,
@@ -65,6 +66,7 @@ from app.services.constraint_ir import IRError, rule_from_dict
 from app.services.constraint_ir_checker import Placement, check_rules
 from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
+from app.services import plans
 from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
@@ -872,6 +874,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     # Sends the timetable's entries as context on every call, so this is a
     # larger prompt than constraint parsing and worth its own allowance.
     check_quota(f"llm-edit:{current_user.id}", limit=40, window_seconds=3600)
+    plans.require_ai(db, db.get(School, timetable.school_id))
 
     entries = db.query(TimetableEntry).filter(TimetableEntry.timetable_id == timetable_id).all()
     if not entries:

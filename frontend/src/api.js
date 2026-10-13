@@ -45,6 +45,20 @@ async function toError(res) {
     // response wasn't JSON; fall back to statusText
   }
 
+  // 402 = a plan limit (backend app/services/plans.py). The message is
+  // written for the admin ("The Free plan includes up to 5 sections..."), so
+  // it's shown without the status code, and UpgradePrompt is told so it can
+  // offer the upgrade wherever in the app the limit was hit.
+  if (res.status === 402) {
+    const error = new Error(detail);
+    error.status = 402;
+    error.planLimit = true;
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("timetablz:plan-limit", { detail: { message: detail } }));
+    }
+    return error;
+  }
+
   if (res.status === 429) {
     const seconds = parseInt(res.headers.get("Retry-After") || "", 10);
     const wait = Number.isFinite(seconds)
@@ -166,6 +180,9 @@ export const api = {
   // the amount; the client only says which school and plan.
   createPaymentOrder: (data) => post("/payments/create-order", data),
   getPaymentOrder: (orderId) => get(`/payments/orders/${encodeURIComponent(orderId)}`),
+  // Plans (backend app/services/plans.py is the source of truth).
+  getPlans: () => get("/plans"),
+  getEntitlements: (schoolId) => get(`/schools/${schoolId}/entitlements`),
 
   // Subjects
   listSubjects: (schoolId) => get(`/subjects?school_id=${schoolId}`),

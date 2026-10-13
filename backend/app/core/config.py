@@ -135,6 +135,11 @@ class Settings(BaseSettings):
     # Price of the Pro plan in whole rupees, charged per year. Server-side on
     # purpose: the client only ever says which plan, never how much.
     pro_plan_price_inr: int = 4999
+    # Plan limits (app/services/plans.py). On by default; the test suite
+    # turns them off the same way it turns off rate limiting, since most
+    # tests build schools far bigger than the Free plan allows. The plan
+    # tests switch them back on.
+    plan_limits_enabled: bool = True
 
 
     @field_validator(

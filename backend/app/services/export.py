@@ -221,7 +221,7 @@ def _student_grids(data: dict, class_group: ClassGroup, combinations) -> list[tu
     return grids
 
 
-def _excel(grids, school_name: str = "") -> bytes:
+def _excel(grids, school_name: str = "", free_plan: bool = False) -> bytes:
     """Same design as the PDF (see _pdf below): heading block, black header
     row, shaded period column, striped rows of equal height, each lesson as
     a bold subject over a muted teacher/section and room, breaks as one
@@ -356,7 +356,10 @@ def _excel(grids, school_name: str = "") -> bytes:
         ws.page_margins.left = ws.page_margins.right = 0.5
         ws.page_margins.top = ws.page_margins.bottom = 0.6
         ws.print_area = f"A1:{get_column_letter(last_col)}{r}"
-        ws.oddFooter.left.text = f"Generated {generated}  ·  timetablz.com"
+        ws.oddFooter.left.text = (
+            f"Made with Timetablz Free  ·  timetablz.com  ·  {generated}" if free_plan
+            else f"Generated {generated}  ·  timetablz.com"
+        )
         ws.oddFooter.left.size = 8
         ws.oddFooter.left.color = "A3A3A3"
         ws.oddFooter.right.text = "Page &P"
@@ -444,7 +447,7 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
     return rows
 
 
-def _pdf(grids, n_days: int, school_name: str = "") -> bytes:
+def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False) -> bytes:
     from datetime import date
 
     buf = io.BytesIO()
@@ -463,6 +466,11 @@ def _pdf(grids, n_days: int, school_name: str = "") -> bytes:
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(_FAINT)
         canvas.drawString(_MARGIN_X, 0.8 * cm, f"Generated {generated}  ·  timetablz.com")
+        if free_plan:
+            # Free-plan exports carry the product name, centred in the footer.
+            canvas.setFont("Helvetica-Bold", 8)
+            canvas.setFillColor(_MUTED)
+            canvas.drawCentredString(width / 2, 0.8 * cm, "Made with Timetablz Free")
         canvas.drawRightString(width - _MARGIN_X, 0.8 * cm, f"Page {doc.page}")
         canvas.restoreState()
 
@@ -587,6 +595,13 @@ def _school_name(db: Session, timetable: Timetable) -> str:
     return school.name if school else ""
 
 
+def _free_plan(db: Session, timetable: Timetable) -> bool:
+    from app.models.school import School
+    from app.services import plans
+    school = db.get(School, timetable.school_id)
+    return school is not None and not plans.clean_exports(school)
+
+
 def _school_grids_with_meta(data: dict) -> list:
     kinds = []
     for cg in data["class_groups"]:
@@ -612,21 +627,21 @@ def _student_grids_with_meta(data: dict, class_group: ClassGroup, combinations) 
 
 def build_excel(db: Session, timetable: Timetable) -> bytes:
     data = _load_grid_data(db, timetable)
-    return _excel(_school_grids_with_meta(data), _school_name(db, timetable))
+    return _excel(_school_grids_with_meta(data), _school_name(db, timetable), _free_plan(db, timetable))
 
 
 def build_pdf(db: Session, timetable: Timetable) -> bytes:
     data = _load_grid_data(db, timetable)
-    return _pdf(_school_grids_with_meta(data), len(data["days"]), _school_name(db, timetable))
+    return _pdf(_school_grids_with_meta(data), len(data["days"]), _school_name(db, timetable), _free_plan(db, timetable))
 
 
 def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
     """One sheet per combination of elective choices in one section."""
     data = _load_grid_data(db, timetable)
-    return _excel(_student_grids_with_meta(data, class_group, combinations), _school_name(db, timetable))
+    return _excel(_student_grids_with_meta(data, class_group, combinations), _school_name(db, timetable), _free_plan(db, timetable))
 
 
 def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
     """One page per combination of elective choices in one section."""
     data = _load_grid_data(db, timetable)
-    return _pdf(_student_grids_with_meta(data, class_group, combinations), len(data["days"]), _school_name(db, timetable))
+    return _pdf(_student_grids_with_meta(data, class_group, combinations), len(data["days"]), _school_name(db, timetable), _free_plan(db, timetable))

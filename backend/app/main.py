@@ -24,6 +24,7 @@ from app.routers import (
     elective_blocks,
     invites,
     payments,
+    plans,
     periods,
     rooms,
     schools,
@@ -87,6 +88,7 @@ app.include_router(substitutions.router)
 app.include_router(setup_extraction.router)
 app.include_router(support.router)
 app.include_router(payments.router)
+app.include_router(plans.router)
 
 
 @app.get("/health")

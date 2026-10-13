@@ -7,7 +7,8 @@ from app.core.access import require_school_access
 from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, Constraint, Period, Subject, Teacher
+from app.models.school import ClassGroup, Constraint, Period, School, Subject, Teacher
+from app.services import plans
 from app.models.user import User
 from app.schemas.constraint import (
     ConstraintBatchParseRequest,
@@ -531,7 +532,7 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
     )
 
 
-def _parse_text_to_constraint(text: str, data: _ResolutionData) -> ParsedConstraint:
+def _parse_text_to_constraint(text: str, data: _ResolutionData, allow_llm: bool = True) -> ParsedConstraint:
     """Parsing tries Claude first (app/services/llm_constraint_parser.py),
     which understands far more phrasing and constraint types than the
     regex parser. If no ANTHROPIC_API_KEY is configured, or the API call
@@ -539,9 +540,12 @@ def _parse_text_to_constraint(text: str, data: _ResolutionData) -> ParsedConstra
     (app/services/constraint_parser.py) — via _adapt_legacy, since that
     parser predates the unified output shape — so constraint entry never
     just breaks because of an LLM/network issue."""
+    # allow_llm=False when the school's plan has used its monthly AI
+    # allowance (app/services/plans.py): the rule still gets read, by the
+    # regex parser, rather than being refused.
     parsed = parse_constraint_llm(
         text, data.teacher_names, data.subject_names, data.class_group_labels, data.periods
-    )
+    ) if allow_llm else None
     if parsed is None:
         legacy = regex_parser.parse_constraint(text, data.teacher_names, data.subject_names)
         parsed = _adapt_legacy(legacy)
@@ -755,7 +759,7 @@ def _apply_parsed_constraint(
     )
 
 
-def _resolve_constraint_text(db: Session, school_id: int, text: str) -> _ResolvedConstraint:
+def _resolve_constraint_text(db: Session, school_id: int, text: str, allow_llm: bool = True) -> _ResolvedConstraint:
     """
     Shared by both POST /parse (new constraint) and PUT /{id}/reparse
     (editing an existing one's text in place): turns plain-English text
@@ -765,11 +769,11 @@ def _resolve_constraint_text(db: Session, school_id: int, text: str) -> _Resolve
     type resolves to.
     """
     data = _load_resolution_data(db, school_id)
-    parsed = _parse_text_to_constraint(text, data)
+    parsed = _parse_text_to_constraint(text, data, allow_llm)
     return _apply_parsed_constraint(db, school_id, parsed, data, source_text=text)
 
 
-def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> list[_ResolvedConstraint]:
+def _resolve_constraints_batch_text(db: Session, school_id: int, text: str, allow_llm: bool = True) -> list[_ResolvedConstraint]:
     """
     Batch counterpart to _resolve_constraint_text, used by POST
     /api/constraints/batch: turns a whole block of text — several rules
@@ -792,13 +796,13 @@ def _resolve_constraints_batch_text(db: Session, school_id: int, text: str) -> l
 
     parsed_list = parse_constraints_batch_llm(
         text, data.teacher_names, data.subject_names, data.class_group_labels, data.periods
-    )
+    ) if allow_llm else None
     if not parsed_list:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         # The per-line fallback knows exactly which line produced which rule,
         # so each row records its own sentence rather than the whole paste.
         return [
-            _apply_parsed_constraint(db, school_id, _parse_text_to_constraint(line, data), data, source_text=line)
+            _apply_parsed_constraint(db, school_id, _parse_text_to_constraint(line, data, allow_llm), data, source_text=line)
             for line in lines
         ]
 
@@ -821,7 +825,8 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
     # realistic overspend is one authenticated client looping, not anonymous
     # abuse. Generous enough that entering rules by hand never trips it.
     check_quota(f"llm:{current_user.id}", limit=60, window_seconds=3600)
-    resolved = _resolve_constraint_text(db, payload.school_id, payload.text)
+    allow_llm = plans.use_ai(db, db.get(School, payload.school_id))
+    resolved = _resolve_constraint_text(db, payload.school_id, payload.text, allow_llm)
 
     constraint = Constraint(
         school_id=payload.school_id,
@@ -866,7 +871,8 @@ def parse_and_create_constraints_batch(
     # Tighter than /parse: a batch sends a whole pasted block in one prompt,
     # so each call costs several times what a single-sentence parse does.
     check_quota(f"llm-batch:{current_user.id}", limit=20, window_seconds=3600)
-    resolved = _resolve_constraints_batch_text(db, payload.school_id, payload.text)
+    allow_llm = plans.use_ai(db, db.get(School, payload.school_id))
+    resolved = _resolve_constraints_batch_text(db, payload.school_id, payload.text, allow_llm)
     if not resolved:
         raise HTTPException(
             status_code=400,
@@ -916,7 +922,8 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
     # The old rule's effect on the teacher goes first; resolving the new text
     # below re-applies whatever the reworded rule still asks for.
     _revert_teacher_side_effects(db, constraint)
-    resolved = _resolve_constraint_text(db, constraint.school_id, payload.text)
+    allow_llm = plans.use_ai(db, db.get(School, constraint.school_id))
+    resolved = _resolve_constraint_text(db, constraint.school_id, payload.text, allow_llm)
     constraint.type = resolved.db_type
     constraint.parameters = resolved.parameters
     constraint.is_hard = resolved.is_hard
@@ -983,6 +990,7 @@ def interpret_constraint(
     """
     require_school_access(db, current_user, payload.school_id, min_role="admin")
     check_quota(f"llm:{current_user.id}", limit=60, window_seconds=3600)
+    plans.require_ai(db, db.get(School, payload.school_id))
 
     data = _load_resolution_data(db, payload.school_id)
     result = parse_rule_llm(

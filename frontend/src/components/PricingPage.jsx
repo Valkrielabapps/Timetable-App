@@ -39,8 +39,8 @@ const PRICING_TIERS = [
   {
     name: 'Free',
     priceInr: 0,
-    tagline: 'Try it out with your first section',
-    highlights: ['1 school', 'Up to 100 students', 'Unlimited timetables', 'Email support'],
+    tagline: 'Try it with a few sections',
+    highlights: ['Up to 5 sections', '1 admin', '10 AI actions a month', 'Unlimited timetables', 'Exports carry "Made with Timetablz"'],
     highlighted: false,
     ctaLabel: 'Get started free',
   },
@@ -49,7 +49,7 @@ const PRICING_TIERS = [
     priceInr: 4999,
     period: '/year',
     tagline: 'For a school that needs more room to grow',
-    highlights: ['Everything in Free, plus:', 'Up to 500 students', 'AI-assisted setup & constraints', 'Priority support'],
+    highlights: ['Up to 60 sections', 'Up to 5 people with access', 'Unlimited AI setup, rules and edits', 'Clean PDF and Excel exports', 'Priority support'],
     highlighted: true,
     ctaLabel: 'Get started',
   },
@@ -57,7 +57,7 @@ const PRICING_TIERS = [
     name: 'Business',
     priceInr: null,
     tagline: 'For a group running several schools',
-    highlights: ['Everything in Pro, plus:', 'Multiple schools', 'Dedicated onboarding', 'Custom terms'],
+    highlights: ['Everything in Pro, plus:', 'Unlimited sections and people', 'Several schools in one account', 'Dedicated onboarding', 'Custom terms'],
     highlighted: false,
     ctaLabel: 'Get in touch',
   },
@@ -87,6 +87,10 @@ const BILLING_FAQS = [
   {
     q: 'How does billing actually work?',
     a: 'Pro is paid in advance for one year at a time through Cashfree, our payment processor, and it does not renew automatically. If you cancel during the year, we refund the unused full months (see our Refund and Cancellation Policy).',
+  },
+  {
+    q: 'What happens when my year of Pro ends?',
+    a: "Nothing is deleted. For 15 days after the end date everything keeps working while you renew. After that the school moves to the Free plan's limits: you can still see and export everything, but can't add more sections or people than Free allows until you renew.",
   },
   {
     q: 'What happens if I cancel?',

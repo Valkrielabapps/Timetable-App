@@ -305,9 +305,17 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
     return result
 
 
-def import_class_groups(db: Session, school_id: int, rows: list[dict]) -> BulkImportResult:
-    """Expected columns: name (required), grade (optional), student_count (optional int)."""
+def import_class_groups(
+    db: Session, school_id: int, rows: list[dict],
+    max_new: int | None = None, limit_message: str | None = None,
+) -> BulkImportResult:
+    """Expected columns: name (required), grade (optional), student_count (optional int).
+
+    max_new caps how many *new* sections may be created (the school's plan
+    allowance, app/services/plans.py); updates to existing sections are never
+    capped. Rows past the cap are skipped and reported, not silently dropped."""
     result = BulkImportResult()
+    skipped_for_plan = 0
     groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
     existing = {(g.grade or "").lower(): {} for g in groups}
     for g in groups:
@@ -325,12 +333,19 @@ def import_class_groups(db: Session, school_id: int, rows: list[dict]) -> BulkIm
         if match:
             match.student_count = student_count
             result.updated += 1
+        elif max_new is not None and result.created >= max_new:
+            skipped_for_plan += 1
         else:
             cg = ClassGroup(school_id=school_id, grade=grade, name=name, student_count=student_count)
             db.add(cg)
             existing.setdefault((grade or "").lower(), {})[name.lower()] = cg
             result.created += 1
 
+    if skipped_for_plan:
+        result.errors.append(
+            f"{skipped_for_plan} section{'s' if skipped_for_plan != 1 else ''} not added. "
+            + (limit_message or "Your plan's section limit has been reached.")
+        )
     db.commit()
     return result
 

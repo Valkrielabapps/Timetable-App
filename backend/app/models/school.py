@@ -52,6 +52,11 @@ class School(Base):
     # expiry, so paying early never loses days.
     plan = Column(String(20), nullable=True)
     plan_valid_until = Column(DateTime, nullable=True)
+    # AI actions used this calendar month ("2026-10"), for plans with a
+    # monthly allowance (app/services/plans.py: use_ai). Resets lazily when
+    # the month changes rather than with a scheduled job.
+    ai_usage_month = Column(String(7), nullable=True)
+    ai_usage_count = Column(Integer, nullable=True)
 
     owner = relationship("User", back_populates="schools")
     teachers = relationship("Teacher", back_populates="school", cascade="all, delete-orphan")

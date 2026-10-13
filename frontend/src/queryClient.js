@@ -58,4 +58,5 @@ export const keys = {
   timetable: (timetableId) => ['timetable', timetableId],
   requirements: (schoolId) => ['requirements', schoolId],
   electiveBlocks: (schoolId) => ['electiveBlocks', schoolId],
+  entitlements: (schoolId) => ['entitlements', schoolId],
 }

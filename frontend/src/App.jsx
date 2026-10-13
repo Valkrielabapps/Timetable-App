@@ -20,6 +20,9 @@ import DemoTab from './components/DemoTab'
 import SettingsTab from './components/SettingsTab'
 import SupportWidget from './components/SupportWidget'
 import PaymentStatusPage from './components/PaymentStatusPage'
+import UpgradePrompt from './components/UpgradePrompt'
+import PlanBanner from './components/PlanBanner'
+import { useEntitlements } from './hooks/useEntitlements'
 import RefundPolicyPage from './components/RefundPolicyPage'
 import ContactPage from './components/ContactPage'
 import { confirmDialog } from './components/confirmDialog'
@@ -109,6 +112,9 @@ function App() {
   // hooks/useSchoolData.js, which also replaces the polling that lived
   // here).
   const [tab, setTab] = useState('dashboard')
+  // Which Settings section opens; set when something sends the admin
+  // straight to Plan & billing (an upgrade prompt or the renewal banner).
+  const [settingsSection, setSettingsSection] = useState('school')
   // Which of Data Entry's three sub-pages (subjects/teachers/plan) is
   // active — lifted up here rather than kept local to DataEntryTab so
   // the header progress bar and OverviewTab's step cards can jump
@@ -489,6 +495,11 @@ function App() {
   // key, so React Query serves both from one request rather than each
   // fetching its own copy.
   const { data: schoolTimetables = [] } = useTimetables(selectedSchoolId)
+  const { data: entitlements } = useEntitlements(user ? selectedSchoolId : null)
+  function openBilling() {
+    setSettingsSection('billing')
+    setTab('settings')
+  }
   const latestTimetable =
     schoolTimetables.length > 0
       ? schoolTimetables.reduce((a, b) => (b.id > a.id ? b : a))
@@ -673,7 +684,10 @@ function App() {
           onGoToDashboard={() => setTab('dashboard')}
           onGoToCalendar={() => setTab('calendar')}
           onGoToDemo={() => setTab('demo')}
-          onGoToSettings={() => setTab('settings')}
+          onGoToSettings={() => {
+            setSettingsSection('school')
+            setTab('settings')
+          }}
           onSignOut={handleLogout}
           readOnly={isViewer}
         />
@@ -786,6 +800,8 @@ function App() {
             // in the DOM forever, pushing the new content down. Plain
             // key-based remounting has no exit phase to get stuck in, so
             // this can't happen; the enter animation below still plays.
+            <>
+            <PlanBanner entitlements={entitlements} isAdmin={isAdmin} onRenew={openBilling} />
             <motion.div
               key={tab}
               initial={{ opacity: 0, y: 6 }}
@@ -889,6 +905,8 @@ function App() {
                 {tab === 'demo' && <DemoTab />}
                 {tab === 'settings' && (
                   <SettingsTab
+                    key={settingsSection}
+                    initialSection={settingsSection}
                     user={user}
                     onUserUpdated={setUser}
                     school={selectedSchool}
@@ -902,11 +920,13 @@ function App() {
                   />
                 )}
             </motion.div>
+            </>
           )}
         </div>
       </div>
 
       <SupportWidget schoolId={selectedSchoolId} />
+      <UpgradePrompt isAdmin={isAdmin} onSeePlans={openBilling} />
 
       <AnimatePresence>
       {addSchoolOpen && (

@@ -6,7 +6,7 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
+    School, ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
@@ -19,6 +19,7 @@ from app.schemas.class_group import (
     SubjectRequirementUpdate,
 )
 from app.services.bulk_import import TEMPLATES, import_class_groups, parse_rows
+from app.services import plans
 
 router = APIRouter(prefix="/api/class-groups", tags=["class groups"])
 
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/class-groups", tags=["class groups"])
 @router.post("", response_model=ClassGroupOut, status_code=201)
 def create_class_group(payload: ClassGroupCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_school_access(db, current_user, payload.school_id, min_role="admin")
+    plans.require_section_capacity(db, db.get(School, payload.school_id))
     class_group = ClassGroup(**payload.model_dump())
     db.add(class_group)
     db.commit()
@@ -268,5 +270,9 @@ async def bulk_import_class_groups(
         rows = parse_rows(file.filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    result = import_class_groups(db, school_id, rows)
+    school = db.get(School, school_id)
+    result = import_class_groups(
+        db, school_id, rows,
+        max_new=plans.sections_remaining(db, school), limit_message=plans.sections_limit_message(school),
+    )
     return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors)

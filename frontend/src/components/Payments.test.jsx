@@ -9,6 +9,16 @@ vi.mock('../api', () => ({
   getToken: vi.fn(() => 'token'),
 }))
 
+const entitlements = { current: null }
+vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: entitlements.current, isLoading: false }) }))
+
+const FREE = {
+  plan: 'free', paid_plan: null, status: 'free', plan_valid_until: null, grace_ends_at: null,
+  limits: { max_sections: 5, max_members: 1, ai_actions_per_month: 10, clean_exports: false },
+  usage: { sections: 5, members: 1, ai_actions_this_month: 3 },
+  pro_price_inr: 4999,
+}
+
 import { api } from '../api'
 import BillingSection from './BillingSection'
 import PaymentStatusPage from './PaymentStatusPage'
@@ -17,6 +27,7 @@ const school = { id: 7, plan: null, plan_valid_until: null, profile: { phone: '9
 
 describe('BillingSection', () => {
   beforeEach(() => {
+    entitlements.current = FREE
     checkout.mockReset()
     api.createPaymentOrder.mockReset()
   })
@@ -52,9 +63,33 @@ describe('BillingSection', () => {
   })
 
   it('shows Pro when the plan is active', () => {
-    render(<BillingSection school={{ ...school, plan: 'pro', plan_valid_until: '2099-01-01T00:00:00' }} isAdmin />)
+    entitlements.current = { ...FREE, plan: 'pro', paid_plan: 'pro', status: 'active', plan_valid_until: '2099-01-01T00:00:00',
+      limits: { ...FREE.limits, max_sections: 60, ai_actions_per_month: null } }
+    render(<BillingSection school={school} isAdmin />)
     expect(screen.getByText('Pro')).toBeInTheDocument()
     expect(screen.getByText(/renew pro/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /renew now/i })).toBeInTheDocument()
+  })
+
+  it('shows usage against the plan limits', () => {
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.getByText('Sections')).toBeInTheDocument()
+    expect(screen.getByText('5 / 5')).toBeInTheDocument()
+    expect(screen.getByText('3 / 10')).toBeInTheDocument()
+  })
+
+  it('explains the grace period', () => {
+    entitlements.current = { ...FREE, plan: 'pro', paid_plan: 'pro', status: 'grace',
+      plan_valid_until: '2026-10-01T00:00:00', grace_ends_at: '2026-10-16T00:00:00' }
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.getByText(/features stay on until/i)).toBeInTheDocument()
+  })
+
+  it('does not offer checkout to a Business school', () => {
+    entitlements.current = { ...FREE, plan: 'business', paid_plan: 'business', status: 'active' }
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/business plan/i)).toBeInTheDocument()
   })
 })
 

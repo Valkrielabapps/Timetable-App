@@ -13,6 +13,8 @@ from app.schemas.setup_extraction import (
 )
 from app.services.bulk_import import import_class_groups, import_subjects, import_teachers
 from app.services.setup_extractor import extract_setup_llm, read_spreadsheet_rows
+from app.services import plans
+from app.models.school import School
 
 router = APIRouter(prefix="/api/schools/{school_id}/setup-extraction", tags=["setup extraction"])
 
@@ -41,6 +43,10 @@ async def extract_setup(
     content = await file.read()
     try:
         rows = read_spreadsheet_rows(file.filename, content)
+        # Counted only once the file is readable, so a wrong file type
+        # doesn't use up an AI action.
+        if rows:
+            plans.require_ai(db, db.get(School, school_id))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -93,7 +99,11 @@ def commit_setup(
     class_group_rows = [
         {"name": g.name, "grade": g.grade or "", "student_count": ""} for g in payload.class_groups
     ]
-    class_group_result = import_class_groups(db, school_id, class_group_rows)
+    school = db.get(School, school_id)
+    class_group_result = import_class_groups(
+        db, school_id, class_group_rows,
+        max_new=plans.sections_remaining(db, school), limit_message=plans.sections_limit_message(school),
+    )
 
     return SetupExtractionCommitOut(
         subjects_created=subject_result.created,

@@ -41,6 +41,7 @@ from app.models.payment import PaymentOrder
 from app.models.school import School
 from app.models.user import User
 from app.services import cashfree_service as cashfree
+from app.services import plans
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,10 @@ _STATUS_MAP = {
 
 
 def _price_rupees(plan: str) -> int:
-    if plan == "pro":
-        return settings.pro_plan_price_inr
-    raise HTTPException(status_code=422, detail="That plan can't be bought online.")
+    p = plans.get_plan(plan)
+    if p.id != plan or not p.sold_online or not p.price_inr:
+        raise HTTPException(status_code=422, detail="That plan can't be bought online.")
+    return p.price_inr
 
 
 def _require_configured():
