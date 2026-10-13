@@ -21,6 +21,9 @@ import SettingsTab from './components/SettingsTab'
 import SupportWidget from './components/SupportWidget'
 import PaymentStatusPage from './components/PaymentStatusPage'
 import UpgradePrompt from './components/UpgradePrompt'
+import PlanPicker from './components/PlanPicker'
+import LockedScreen from './components/LockedScreen'
+import FreeCountdown from './components/FreeCountdown'
 import PlanBanner from './components/PlanBanner'
 import { useEntitlements } from './hooks/useEntitlements'
 import RefundPolicyPage from './components/RefundPolicyPage'
@@ -43,6 +46,10 @@ import { useTimetables } from './hooks/useSchoolData'
 // The header's numbered steps, in the order the work is done. The first
 // three are pages of the same Data Entry screen (tab 'entry' + a sub-view),
 // so each step names both; Constraints and Timetable are tabs of their own.
+// Set when someone picks Pro on the plan picker before signing up; read
+// once they have a school, to send them to checkout.
+const PLAN_INTENT_KEY = 'timetablz:plan-intent'
+
 const BASE_TABS = [
   { id: 'setup', label: 'Setup', tab: 'entry', subView: 'setup' },
   { id: 'subjects', label: 'Subjects', tab: 'entry', subView: 'subjects' },
@@ -154,12 +161,20 @@ function App() {
   const [showAuth, setShowAuth] = useState(
     () => new URLSearchParams(window.location.search).get('start') === 'auth'
   )
+  // "Get started free" shows the plan picker first (PlanPicker); picking
+  // Free or Pro then opens AuthPage on its sign-up form. ?start=plans is the
+  // same thing from the public pages, which navigate with a full reload.
+  const [showPlans, setShowPlans] = useState(
+    () => new URLSearchParams(window.location.search).get('start') === 'plans'
+  )
+  const [authMode, setAuthMode] = useState('login')
 
   // Drop `?start=auth` once read above — same reasoning as
   // handleInviteAccepted/handlePasswordReset below (replaceState, not a
   // real navigation, so it doesn't re-trigger on a later refresh/back).
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('start') === 'auth') {
+    const start = new URLSearchParams(window.location.search).get('start')
+    if (start === 'auth' || start === 'plans') {
       window.history.replaceState(null, '', window.location.pathname)
     }
   }, [])
@@ -461,6 +476,7 @@ function App() {
     setInvites([])
     setAllRequirements([])
     setShowAuth(false)
+    setShowPlans(false)
     setSchoolsReady(false)
     setSchoolDataReady(false)
   }
@@ -500,6 +516,17 @@ function App() {
     setSettingsSection('billing')
     setTab('settings')
   }
+  // Chose Pro on the plan picker: once signed up with a school selected,
+  // go straight to Plan & billing to pay (the order needs a school, and
+  // Cashfree needs a phone number, which that page asks for).
+  useEffect(() => {
+    if (!user || !selectedSchoolId) return
+    if (sessionStorage.getItem(PLAN_INTENT_KEY) === 'pro') {
+      sessionStorage.removeItem(PLAN_INTENT_KEY)
+      openBilling()
+    }
+  }, [user, selectedSchoolId])
+  const locked = entitlements?.status === 'locked'
   const latestTimetable =
     schoolTimetables.length > 0
       ? schoolTimetables.reduce((a, b) => (b.id > a.id ? b : a))
@@ -553,7 +580,7 @@ function App() {
     return (
       <PricingPage
         onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
       />
     )
   }
@@ -561,7 +588,7 @@ function App() {
     return (
       <SupportPage
         onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
       />
     )
   }
@@ -569,7 +596,7 @@ function App() {
     return (
       <WhyTimetablzPage
         onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
       />
     )
   }
@@ -577,7 +604,7 @@ function App() {
     return (
       <AboutPage
         onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
       />
     )
   }
@@ -585,7 +612,7 @@ function App() {
     return (
       <CustomersPage
         onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=auth`)}
+        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
       />
     )
   }
@@ -610,11 +637,32 @@ function App() {
   }
 
   if (!user) {
-    return showAuth ? (
-      <AuthPage onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
-    ) : (
-      <LandingPage onGetStarted={() => setShowAuth(true)} />
-    )
+    const signIn = () => {
+      setAuthMode('login')
+      setShowAuth(true)
+    }
+    if (showAuth) {
+      return <AuthPage initialMode={authMode} onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
+    }
+    if (showPlans) {
+      return (
+        <PlanPicker
+          onBack={() => setShowPlans(false)}
+          onSignIn={signIn}
+          onChoose={(planId) => {
+            if (planId === 'business') {
+              window.location.assign(`${window.location.pathname}?page=contact`)
+              return
+            }
+            if (planId === 'pro') sessionStorage.setItem(PLAN_INTENT_KEY, 'pro')
+            else sessionStorage.removeItem(PLAN_INTENT_KEY)
+            setAuthMode('signup')
+            setShowAuth(true)
+          }}
+        />
+      )
+    }
+    return <LandingPage onGetStarted={() => setShowPlans(true)} onSignIn={signIn} />
   }
 
   const isViewer = selectedSchool?.role === 'viewer'
@@ -683,6 +731,7 @@ function App() {
           activeTab={tab}
           onGoToDashboard={() => setTab('dashboard')}
           onGoToCalendar={() => setTab('calendar')}
+          planBadge={<FreeCountdown entitlements={entitlements} onUpgrade={openBilling} />}
           onGoToDemo={() => setTab('demo')}
           onGoToSettings={() => {
             setSettingsSection('school')
@@ -802,6 +851,9 @@ function App() {
             // this can't happen; the enter animation below still plays.
             <>
             <PlanBanner entitlements={entitlements} isAdmin={isAdmin} onRenew={openBilling} />
+            {locked && tab !== 'settings' ? (
+              <LockedScreen entitlements={entitlements} isAdmin={isAdmin} onUpgrade={openBilling} />
+            ) : (
             <motion.div
               key={tab}
               initial={{ opacity: 0, y: 6 }}
@@ -920,6 +972,7 @@ function App() {
                   />
                 )}
             </motion.div>
+            )}
             </>
           )}
         </div>

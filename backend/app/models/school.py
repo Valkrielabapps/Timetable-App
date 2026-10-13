@@ -55,6 +55,9 @@ class School(Base):
     # AI actions used this calendar month ("2026-10"), for plans with a
     # monthly allowance (app/services/plans.py: use_ai). Resets lazily when
     # the month changes rather than with a scheduled job.
+    # End of the 14 free days a school gets on creation (app/services/plans.py:
+    # FREE_DAYS). After it, an unpaid school is locked until it upgrades.
+    free_trial_ends_at = Column(DateTime, nullable=True)
     ai_usage_month = Column(String(7), nullable=True)
     ai_usage_count = Column(Integer, nullable=True)
 

@@ -80,6 +80,7 @@ export default function Sidebar({
   activeTab,
   onGoToDashboard,
   onGoToCalendar,
+  planBadge,
   onGoToDemo,
   onGoToSettings,
   onSignOut,
@@ -576,6 +577,7 @@ export default function Sidebar({
       </div>
 
       <div className="mt-auto flex flex-none flex-col gap-2">
+        {planBadge}
         <div className="h-px bg-slate-200" />
         <button
           onClick={onAddSchool}

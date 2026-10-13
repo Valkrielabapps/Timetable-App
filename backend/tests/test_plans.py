@@ -43,7 +43,7 @@ def test_catalogue_is_public_and_uses_sections(client):
 @pytest.mark.parametrize("offset_days,status,plan", [
     (30, "active", "pro"),
     (-5, "grace", "pro"),
-    (-16, "expired", "free"),
+    (-16, "locked", "free"),
 ])
 def test_lifecycle(offset_days, status, plan):
     s = School(name="x", plan="pro", plan_valid_until=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=offset_days))
@@ -85,10 +85,11 @@ def test_grace_keeps_pro_limits_and_expiry_drops_to_free(client, limits_on):
 
     _set_plan(school["id"], "pro", datetime.utcnow() - timedelta(days=20))
     ent = client.get(f"/api/schools/{school['id']}/entitlements", headers=h).json()
-    assert ent["status"] == "expired" and ent["plan"] == "free"
-    # Over the Free limit: nothing is taken away, but nothing more is added.
+    assert ent["status"] == "locked"
+    # Locked: nothing is taken away and it can still be read, but nothing changes.
     assert ent["usage"]["sections"] == 6
-    assert _add_section(client, h, school["id"], "S6").status_code == 402
+    r = _add_section(client, h, school["id"], "S6")
+    assert r.status_code == 402 and "free period has ended" in r.json()["detail"]
     assert len(client.get(f"/api/class-groups?school_id={school['id']}", headers=h).json()) == 6
 
 
@@ -160,3 +161,46 @@ def test_payment_price_comes_from_the_catalogue(monkeypatch):
     assert _price_rupees("pro") == 1
     with pytest.raises(Exception):
         _price_rupees("business")
+
+
+def _set_trial_end(school_id, when):
+    db = SessionLocal()
+    try:
+        db.get(School, school_id).free_trial_ends_at = when
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_new_school_gets_fourteen_free_days(client, limits_on):
+    _, h = signup(client)
+    school = create_school(client, h)
+    ent = client.get(f"/api/schools/{school['id']}/entitlements", headers=h).json()
+    assert ent["status"] == "free"
+    assert ent["free_days_left"] == 14
+
+
+def test_after_fourteen_days_an_unpaid_school_is_locked(client, limits_on):
+    _, h = signup(client)
+    school = create_school(client, h)
+    _add_section(client, h, school["id"], "A")
+    _set_trial_end(school["id"], datetime.utcnow() - timedelta(minutes=1))
+
+    ent = client.get(f"/api/schools/{school['id']}/entitlements", headers=h).json()
+    assert ent["status"] == "locked"
+    assert _add_section(client, h, school["id"], "B").status_code == 402
+    assert client.put(f"/api/schools/{school['id']}/name", json={"name": "New"}, headers=h).status_code == 402
+    # Reading still works, so the school can see what it has.
+    assert len(client.get(f"/api/class-groups?school_id={school['id']}", headers=h).json()) == 1
+    # Paying is never blocked by the lock (503 here = past the lock, payments not configured).
+    r = client.post("/api/payments/create-order", json={"school_id": school["id"], "phone": "9876543210"}, headers=h)
+    assert r.status_code == 503
+
+
+def test_paying_unlocks(client, limits_on):
+    _, h = signup(client)
+    school = create_school(client, h)
+    _set_trial_end(school["id"], datetime.utcnow() - timedelta(days=1))
+    assert _add_section(client, h, school["id"], "A").status_code == 402
+    _set_plan(school["id"], "pro", datetime.utcnow() + timedelta(days=365))
+    assert _add_section(client, h, school["id"], "A").status_code == 201

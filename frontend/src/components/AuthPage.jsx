@@ -18,8 +18,8 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
  * backend/app/routers/auth.py's /auth/google endpoint, never trusted
  * as-is from the client.
  */
-export default function AuthPage({ onAuthenticated, onBack }) {
-  const [mode, setMode] = useState('login') // 'login' | 'signup' | 'forgot'
+export default function AuthPage({ onAuthenticated, onBack, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode) // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')

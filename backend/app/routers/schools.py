@@ -54,7 +54,10 @@ def create_school(
     current_user: User = Depends(get_current_user),
 ):
     plans.require_school_capacity(db, current_user.id)
-    school = School(name=payload.name, owner_id=current_user.id, institution_type=payload.institution_type)
+    school = School(
+        name=payload.name, owner_id=current_user.id, institution_type=payload.institution_type,
+        free_trial_ends_at=plans.new_school_trial_end(),
+    )
     db.add(school)
     db.commit()
     db.refresh(school)

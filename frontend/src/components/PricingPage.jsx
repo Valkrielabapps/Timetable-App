@@ -39,7 +39,8 @@ const PRICING_TIERS = [
   {
     name: 'Free',
     priceInr: 0,
-    tagline: 'Try it with a few sections',
+    period: 'for 14 days',
+    tagline: 'Free for 14 days, no card needed',
     highlights: ['Up to 5 sections', '1 admin', '10 AI actions a month', 'Unlimited timetables', 'Exports carry "Made with Timetablz"'],
     highlighted: false,
     ctaLabel: 'Get started free',
@@ -90,7 +91,11 @@ const BILLING_FAQS = [
   },
   {
     q: 'What happens when my year of Pro ends?',
-    a: "Nothing is deleted. For 15 days after the end date everything keeps working while you renew. After that the school moves to the Free plan's limits: you can still see and export everything, but can't add more sections or people than Free allows until you renew.",
+    a: "Nothing is deleted. For 15 days after the end date everything keeps working while you renew. After that the school is paused until you renew, and everything comes back exactly as you left it.",
+  },
+  {
+    q: 'How does the free plan work?',
+    a: 'Every new school gets 14 days free on the Free plan: up to 5 sections, one admin and 10 AI actions a month, no card needed. After 14 days the school is paused until it upgrades to Pro. Nothing you set up is deleted.',
   },
   {
     q: 'What happens if I cancel?',

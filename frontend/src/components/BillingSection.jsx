@@ -38,7 +38,7 @@ export default function BillingSection({ school, isAdmin }) {
   const priceText = `₹${price.toLocaleString('en-IN')}`
   const status = ent?.status ?? 'free'
   const paidPlan = ent?.paid_plan
-  const onBusiness = paidPlan === 'business' && status !== 'expired'
+  const onBusiness = paidPlan === 'business' && status !== 'locked'
   const renewing = paidPlan === 'pro'
 
   async function handlePay(e) {
@@ -61,10 +61,14 @@ export default function BillingSection({ school, isAdmin }) {
   }
 
   const statusLine = {
-    free: null,
+    free: ent?.free_days_left != null
+      ? `${ent.free_days_left} ${ent.free_days_left === 1 ? 'day' : 'days'} left of your 14 free days`
+      : null,
+    locked: paidPlan
+      ? `Your ${PLAN_NAMES[paidPlan] ?? 'paid'} plan has ended. Renew to unlock the school.`
+      : 'Your 14 free days are over. Upgrade to unlock the school.',
     active: ent?.plan_valid_until ? `Active until ${formatDate(ent.plan_valid_until)}` : 'Active',
     grace: `Ended on ${formatDate(ent?.plan_valid_until)}. ${PLAN_NAMES[paidPlan] ?? 'Paid'} features stay on until ${formatDate(ent?.grace_ends_at)}.`,
-    expired: `Your ${PLAN_NAMES[paidPlan] ?? 'paid'} plan ended on ${formatDate(ent?.plan_valid_until)}.`,
   }[status]
 
   return (
@@ -74,13 +78,15 @@ export default function BillingSection({ school, isAdmin }) {
 
       <div
         className={`mt-5 rounded-lg border px-5 py-4 ${
-          status === 'grace' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'
+          status === 'grace' || status === 'locked' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'
         }`}
       >
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <p className="text-sm text-slate-500">Current plan</p>
-            <p className="mt-0.5 text-lg font-semibold">{isLoading ? '…' : PLAN_NAMES[ent?.plan] ?? 'Free'}</p>
+            <p className="mt-0.5 text-lg font-semibold">
+              {isLoading ? '…' : status === 'locked' ? 'Paused' : PLAN_NAMES[ent?.plan] ?? 'Free'}
+            </p>
           </div>
           {statusLine && <p className="text-sm text-slate-600">{statusLine}</p>}
         </div>

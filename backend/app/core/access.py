@@ -60,7 +60,9 @@ def get_membership_role(db: Session, user: User, school_id: int) -> str | None:
     return membership_role
 
 
-def require_school_access(db: Session, user: User, school_id: int, min_role: str = "viewer") -> str:
+def require_school_access(
+    db: Session, user: User, school_id: int, min_role: str = "viewer", allow_locked: bool = False,
+) -> str:
     """
     Raises 404 (not 403) when the user has no access at all — same
     reasoning as schools.py's existing get_school check: a school you
@@ -81,4 +83,15 @@ def require_school_access(db: Session, user: User, school_id: int, min_role: str
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You have read-only access to this school — an admin can make this change.",
         )
+    # A school whose free days (or paid plan's grace period) are over is
+    # locked: it can still be read, but nothing can be changed until it pays
+    # (app/services/plans.py). Every write goes through here as min_role
+    # "admin", which makes this the one place to enforce it. The payment
+    # endpoint passes allow_locked=True, since paying is how a school unlocks.
+    if min_role == "admin" and not allow_locked:
+        from app.services import plans
+
+        school = db.get(School, school_id)
+        if school is not None and plans.is_locked(school):
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=plans.LOCKED_MESSAGE)
     return role

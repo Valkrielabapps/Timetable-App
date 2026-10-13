@@ -123,10 +123,10 @@ function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs 
 }
 
 
-export default function LandingPage({ onGetStarted }) {
+export default function LandingPage({ onGetStarted, onSignIn = onGetStarted }) {
   return (
     <div className="min-h-screen bg-white text-neutral-900">
-      <LandingNav onGetStarted={onGetStarted} />
+      <LandingNav onGetStarted={onGetStarted} onSignIn={onSignIn} />
       <Hero onGetStarted={onGetStarted} />
       <WorkflowDemo />
       <MetricsSection />
@@ -142,7 +142,7 @@ export default function LandingPage({ onGetStarted }) {
   )
 }
 
-function LandingNav({ onGetStarted }) {
+function LandingNav({ onGetStarted, onSignIn }) {
   return (
     <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
       {/* No max-w-6xl/mx-auto here unlike the rest of the page's sections —
@@ -170,7 +170,7 @@ function LandingNav({ onGetStarted }) {
           </nav>
         </div>
         <div className="ml-auto flex items-center gap-6">
-          <button onClick={onGetStarted} className="text-[15px] font-medium text-neutral-300 hover:text-white">
+          <button onClick={onSignIn} className="text-[15px] font-medium text-neutral-300 hover:text-white">
             Sign in
           </button>
           <button

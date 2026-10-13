@@ -205,7 +205,7 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_school_access(db, current_user, payload.school_id, min_role="admin")
+    require_school_access(db, current_user, payload.school_id, min_role="admin", allow_locked=True)
     _require_configured()
     check_quota(f"payment-order:{current_user.id}", limit=10, window_seconds=3600)
 

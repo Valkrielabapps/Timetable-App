@@ -7,16 +7,19 @@ asks `entitlements()` for the school's *effective* plan and limits, so
 changing a number here changes it everywhere. The public catalogue
 (GET /api/plans) and Settings > Plan & billing read from here too.
 
-Lifecycle of a paid plan (School.plan + School.plan_valid_until):
+Lifecycle:
 
-    active   now < plan_valid_until                    -> that plan's limits
-    grace    plan_valid_until <= now < +GRACE_DAYS     -> still that plan's
-             limits, but the app shows "renew by ..." everywhere
-    expired  after the grace period                    -> Free limits
+    free     a new school: Free limits for FREE_DAYS (School.free_trial_ends_at)
+    active   paid, now < plan_valid_until               -> that plan's limits
+    grace    plan_valid_until <= now < +GRACE_DAYS      -> still that plan's
+             limits, with "renew by ..." shown everywhere
+    locked   the free days are over and nothing is paid, or a paid plan's
+             grace period is over -> nothing can be changed until the school
+             pays (see is_locked; enforced in app/core/access.py). Data is
+             kept and can still be viewed by signing in.
 
 A Business plan with no plan_valid_until never expires (set by hand for a
-school on custom terms). Nothing is ever deleted when a plan lapses: a school
-over the Free limits keeps everything it has, it just can't add more.
+school on custom terms). Nothing is ever deleted.
 """
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -28,6 +31,7 @@ from app.core.config import settings
 from app.models.school import ClassGroup, School, SchoolInvite, SchoolMembership
 
 GRACE_DAYS = 15
+FREE_DAYS = 14
 
 # None = unlimited.
 @dataclass(frozen=True)
@@ -82,6 +86,16 @@ def _aware(dt: datetime | None) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def _days_left(end: datetime | None, now: datetime) -> int | None:
+    end = _aware(end)
+    if end is None:
+        return None
+    seconds = (end - now).total_seconds()
+    # Rounded up: with 13.2 days to go the countdown says 14, and it shows
+    # 1 on the last day rather than 0.
+    return max(0, -int(-seconds // 86400))
+
+
 def _month(now: datetime) -> str:
     return now.strftime("%Y-%m")
 
@@ -93,6 +107,8 @@ class Entitlements:
     status: str           # free | active | grace | expired
     plan_valid_until: datetime | None
     grace_ends_at: datetime | None
+    free_trial_ends_at: datetime | None
+    free_days_left: int | None
     limits: dict
     usage: dict
 
@@ -105,17 +121,39 @@ def effective_plan(school: School, now: datetime | None = None) -> tuple[Plan, s
     now = now or datetime.now(timezone.utc)
     paid = school.plan if school.plan in ("pro", "business") else None
     if paid is None:
-        return get_plan("free"), "free", None
+        trial_end = _aware(school.free_trial_ends_at)
+        # No end date recorded = treated as still free; every school gets one
+        # on creation (and the migration gave existing schools one).
+        if trial_end is None or now < trial_end:
+            return get_plan("free"), "free", None
+        return get_plan("free"), "locked", None
     valid_until = _aware(school.plan_valid_until)
     if valid_until is None:
         # Only Business is ever set without an end date.
-        return (get_plan(paid), "active", None) if paid == "business" else (get_plan("free"), "expired", None)
+        return (get_plan(paid), "active", None) if paid == "business" else (get_plan("free"), "locked", None)
     grace_end = valid_until + timedelta(days=GRACE_DAYS)
     if now < valid_until:
         return get_plan(paid), "active", grace_end
     if now < grace_end:
         return get_plan(paid), "grace", grace_end
-    return get_plan("free"), "expired", grace_end
+    return get_plan("free"), "locked", grace_end
+
+
+def is_locked(school: School, now: datetime | None = None) -> bool:
+    if not settings.plan_limits_enabled:
+        return False
+    return effective_plan(school, now)[1] == "locked"
+
+
+def new_school_trial_end(now: datetime | None = None) -> datetime:
+    now = now or datetime.now(timezone.utc)
+    return (now + timedelta(days=FREE_DAYS)).replace(tzinfo=None)
+
+
+LOCKED_MESSAGE = (
+    "This school's free period has ended. Upgrade to Pro to keep building and editing timetables. "
+    "Nothing has been deleted."
+)
 
 
 def _member_count(db: Session, school: School) -> int:
@@ -142,6 +180,8 @@ def entitlements(db: Session, school: School, now: datetime | None = None) -> En
         status=status,
         plan_valid_until=school.plan_valid_until,
         grace_ends_at=grace_end.replace(tzinfo=None) if grace_end else None,
+        free_trial_ends_at=school.free_trial_ends_at,
+        free_days_left=_days_left(school.free_trial_ends_at, now) if status == "free" else None,
         limits={
             "max_sections": plan.max_sections,
             "max_members": plan.max_members,
