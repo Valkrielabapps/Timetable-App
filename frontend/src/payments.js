@@ -39,11 +39,14 @@ function cashfreeSdk() {
  * With `_modal` the promise resolves when the popup closes, and whatever it
  * reports, we go to the same status page so the backend confirms it.
  */
-export async function startCheckout({ schoolId, phone, plan = 'pro' }) {
+export async function startCheckout({ schoolId, phone, plan = 'pro', offerId = null }) {
   const { order_id: orderId, payment_session_id: paymentSessionId } = await api.createPaymentOrder({
     school_id: schoolId,
     phone,
     plan,
+    // A custom offer made for this school: the server takes the price,
+    // length and limits from the offer.
+    ...(offerId != null ? { offer_id: offerId } : {}),
   })
 
   const cashfree = await cashfreeSdk()

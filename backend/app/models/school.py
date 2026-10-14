@@ -52,6 +52,11 @@ class School(Base):
     # expiry, so paying early never loses days.
     plan = Column(String(20), nullable=True)
     plan_valid_until = Column(DateTime, nullable=True)
+    # Limits from a custom offer (PlanOffer) the school has paid for, e.g.
+    # {"max_sections": 150, "max_members": 15}; a missing or null key means
+    # unlimited. Applied on top of the Business plan by app/services/plans.py.
+    custom_limits = Column(JSON, nullable=True)
+    custom_plan_name = Column(String(80), nullable=True)
     # AI actions used this calendar month ("2026-10"), for plans with a
     # monthly allowance (app/services/plans.py: use_ai). Resets lazily when
     # the month changes rather than with a scheduled job.

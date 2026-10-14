@@ -23,6 +23,14 @@ class User(Base):
 
     schools = relationship("School", back_populates="owner")
 
+    @property
+    def is_platform_admin(self) -> bool:
+        """Timetablz staff (PLATFORM_ADMIN_EMAILS), not a school admin."""
+        from app.core.config import settings
+
+        allowed = {e.strip().lower() for e in (settings.platform_admin_emails or "").split(",") if e.strip()}
+        return bool(self.email) and self.email.lower() in allowed
+
 
 class PasswordResetToken(Base):
     """

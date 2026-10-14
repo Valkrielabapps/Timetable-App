@@ -21,7 +21,7 @@ Lifecycle:
 A Business plan with no plan_valid_until never expires (set by hand for a
 school on custom terms). Nothing is ever deleted.
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
@@ -80,6 +80,22 @@ def get_plan(plan_id: str | None) -> Plan:
     return catalogue().get(plan_id or "free", catalogue()["free"])
 
 
+def plan_for_school(school: School, plan_id: str) -> Plan:
+    """The catalogue plan, with a paid custom offer's limits laid over the
+    Business plan (School.custom_limits; a missing key means unlimited)."""
+    plan = get_plan(plan_id)
+    if plan_id == "business" and school.custom_limits:
+        lim = school.custom_limits
+        plan = replace(
+            plan,
+            name=school.custom_plan_name or plan.name,
+            max_sections=lim.get("max_sections"),
+            max_members=lim.get("max_members"),
+            max_owned_schools=lim.get("max_owned_schools"),
+        )
+    return plan
+
+
 def _aware(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
@@ -109,6 +125,7 @@ class Entitlements:
     grace_ends_at: datetime | None
     free_trial_ends_at: datetime | None
     free_days_left: int | None
+    plan_name: str
     limits: dict
     usage: dict
 
@@ -130,12 +147,12 @@ def effective_plan(school: School, now: datetime | None = None) -> tuple[Plan, s
     valid_until = _aware(school.plan_valid_until)
     if valid_until is None:
         # Only Business is ever set without an end date.
-        return (get_plan(paid), "active", None) if paid == "business" else (get_plan("free"), "locked", None)
+        return (plan_for_school(school, paid), "active", None) if paid == "business" else (get_plan("free"), "locked", None)
     grace_end = valid_until + timedelta(days=GRACE_DAYS)
     if now < valid_until:
-        return get_plan(paid), "active", grace_end
+        return plan_for_school(school, paid), "active", grace_end
     if now < grace_end:
-        return get_plan(paid), "grace", grace_end
+        return plan_for_school(school, paid), "grace", grace_end
     return get_plan("free"), "locked", grace_end
 
 
@@ -182,6 +199,7 @@ def entitlements(db: Session, school: School, now: datetime | None = None) -> En
         grace_ends_at=grace_end.replace(tzinfo=None) if grace_end else None,
         free_trial_ends_at=school.free_trial_ends_at,
         free_days_left=_days_left(school.free_trial_ends_at, now) if status == "free" else None,
+        plan_name=plan.name,
         limits={
             "max_sections": plan.max_sections,
             "max_members": plan.max_members,

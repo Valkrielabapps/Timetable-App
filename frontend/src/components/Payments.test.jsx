@@ -9,6 +9,8 @@ vi.mock('../api', () => ({
   getToken: vi.fn(() => 'token'),
 }))
 
+vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: [] }) }))
+
 const entitlements = { current: null }
 vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: entitlements.current, isLoading: false }) }))
 
@@ -83,6 +85,17 @@ describe('BillingSection', () => {
       plan_valid_until: '2026-10-01T00:00:00', grace_ends_at: '2026-10-16T00:00:00' }
     render(<BillingSection school={school} isAdmin />)
     expect(screen.getByText(/features stay on until/i)).toBeInTheDocument()
+  })
+
+  it('pays a custom offer with the offer id', async () => {
+    entitlements.current = { ...FREE, offer: { id: 42, name: 'Sunrise Business', price_inr: 18000, period_days: 365, max_sections: 150, max_members: 15 } }
+    api.createPaymentOrder.mockResolvedValue({ order_id: 'tz_7_x', payment_session_id: 's' })
+    checkout.mockResolvedValue({})
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.getByText('Your custom plan')).toBeInTheDocument()
+    expect(screen.getByText(/up to 150 sections/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /pay now · ₹18,000/i }))
+    await waitFor(() => expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'pro', offer_id: 42 }))
   })
 
   it('does not offer checkout to a Business school', () => {

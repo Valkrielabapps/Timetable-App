@@ -25,6 +25,8 @@ class UserOut(BaseModel):
     id: int
     email: str
     name: str | None
+    # Timetablz staff: sees the admin page. Read off User.is_platform_admin.
+    is_platform_admin: bool = False
 
 
 class TokenResponse(BaseModel):

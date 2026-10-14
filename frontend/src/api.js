@@ -183,6 +183,20 @@ export const api = {
   // Plans (backend app/services/plans.py is the source of truth).
   getPlans: () => get("/plans"),
   getEntitlements: (schoolId) => get(`/schools/${schoolId}/entitlements`),
+  getInvoices: (schoolId) => get(`/schools/${schoolId}/invoices`),
+  downloadInvoice: (invoice) => downloadFile(`/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`),
+  // Timetablz staff only (backend app/routers/admin.py).
+  admin: {
+    schools: (q) => get(`/admin/schools${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    createOffer: (schoolId, data) => post(`/admin/schools/${schoolId}/offers`, data),
+    cancelOffer: (offerId) => del(`/admin/offers/${offerId}`),
+    markPaid: (schoolId, data) => post(`/admin/schools/${schoolId}/mark-paid`, data),
+    extendFree: (schoolId, days) => post(`/admin/schools/${schoolId}/extend-free`, { days }),
+    downgrade: (schoolId) => post(`/admin/schools/${schoolId}/downgrade`, {}),
+    invoices: () => get('/admin/invoices'),
+    stats: () => get('/admin/stats'),
+    accounts: (q) => get(`/admin/accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  },
 
   // Subjects
   listSubjects: (schoolId) => get(`/subjects?school_id=${schoolId}`),

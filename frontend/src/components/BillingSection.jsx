@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '../api'
 import { startCheckout } from '../payments'
 import { useEntitlements } from '../hooks/useEntitlements'
 
@@ -40,6 +42,14 @@ export default function BillingSection({ school, isAdmin }) {
   const paidPlan = ent?.paid_plan
   const onBusiness = paidPlan === 'business' && status !== 'locked'
   const renewing = paidPlan === 'pro'
+  // A custom plan offered to this school from the admin page. When there is
+  // one, Pay now pays it (price, length and limits come from the offer).
+  const offer = ent?.offer ?? null
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices', school?.id],
+    queryFn: () => api.getInvoices(school.id),
+    enabled: school?.id != null,
+  })
 
   async function handlePay(e) {
     e.preventDefault()
@@ -51,7 +61,7 @@ export default function BillingSection({ school, isAdmin }) {
     }
     setBusy(true)
     try {
-      await startCheckout({ schoolId: school.id, phone: digits })
+      await startCheckout({ schoolId: school.id, phone: digits, ...(offer ? { offerId: offer.id } : {}) })
       // _self: the browser is leaving for Cashfree. _modal: we've navigated
       // to the status page. Either way there's nothing more to do here.
     } catch (err) {
@@ -104,7 +114,22 @@ export default function BillingSection({ school, isAdmin }) {
         )}
       </div>
 
-      {onBusiness ? (
+      {offer && (
+        <div className="mt-5 rounded-lg border border-neutral-900 px-5 py-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Your custom plan</p>
+          <p className="mt-1 text-lg font-semibold">{offer.name}</p>
+          <p className="mt-1 text-sm text-slate-600">
+            ₹{offer.price_inr.toLocaleString('en-IN')} for {offer.period_days === 365 ? '1 year' : `${offer.period_days} days`}
+            {' · '}
+            {offer.max_sections == null ? 'unlimited sections' : `up to ${offer.max_sections} sections`}
+            {' · '}
+            {offer.max_members == null ? 'unlimited people' : `up to ${offer.max_members} people`}
+          </p>
+          {offer.note && <p className="mt-2 text-sm text-slate-500">{offer.note}</p>}
+        </div>
+      )}
+
+      {onBusiness && !offer ? (
         <p className="mt-5 text-sm text-slate-500">
           Your school is on a Business plan. For changes, write to{' '}
           <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a>.
@@ -112,12 +137,18 @@ export default function BillingSection({ school, isAdmin }) {
       ) : isAdmin ? (
         <form onSubmit={handlePay} className="mt-6 flex flex-col gap-4">
           <div>
-            <p className="text-sm font-medium text-slate-900">{renewing ? 'Renew Pro for a year' : 'Upgrade to Pro'}</p>
+            <p className="text-sm font-medium text-slate-900">
+              {offer ? `Pay for ${offer.name}` : renewing ? 'Renew Pro for a year' : 'Upgrade to Pro'}
+            </p>
             <p className="mt-1 text-sm text-slate-500">
-              {priceText} for one year.{' '}
-              {renewing && status === 'active'
-                ? 'The new year starts when your current one ends, so renewing early loses nothing.'
-                : 'Up to 60 sections, up to 5 people, every AI feature, and clean exports.'}
+              {offer
+                ? 'Your plan starts as soon as the payment is confirmed.'
+                : <>
+                    {priceText} for one year.{' '}
+                    {renewing && status === 'active'
+                      ? 'The new year starts when your current one ends, so renewing early loses nothing.'
+                      : 'Up to 60 sections, up to 5 people, every AI feature, and clean exports.'}
+                  </>}
             </p>
           </div>
           <label className="flex max-w-xs flex-col gap-1">
@@ -139,7 +170,11 @@ export default function BillingSection({ school, isAdmin }) {
               disabled={busy}
               className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-60"
             >
-              {busy ? 'Opening secure checkout…' : `${renewing ? 'Renew now' : 'Pay now'} · ${priceText}`}
+              {busy
+                ? 'Opening secure checkout…'
+                : offer
+                  ? `Pay now · ₹${offer.price_inr.toLocaleString('en-IN')}`
+                  : `${renewing ? 'Renew now' : 'Pay now'} · ${priceText}`}
             </button>
             <p className="mt-2 text-xs text-slate-400">
               Payments are processed securely by Cashfree. Need more than 60 sections or several schools?{' '}
@@ -149,6 +184,28 @@ export default function BillingSection({ school, isAdmin }) {
         </form>
       ) : (
         <p className="mt-5 text-sm text-slate-500">Only a school admin can change the plan.</p>
+      )}
+
+      {invoices.length > 0 && (
+        <div className="mt-8">
+          <h4 className="text-sm font-semibold">Invoices</h4>
+          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {invoices.map((inv) => (
+              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                <span>
+                  <span className="font-medium">{inv.number}</span>
+                  <span className="text-slate-500"> · {formatDate(inv.issued_at)} · {inv.description}</span>
+                </span>
+                <span className="flex items-center gap-4">
+                  <span>₹{Number(inv.amount).toLocaleString('en-IN')}</span>
+                  <button onClick={() => api.downloadInvoice(inv)} className="text-xs font-medium underline underline-offset-2">
+                    Download PDF
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )

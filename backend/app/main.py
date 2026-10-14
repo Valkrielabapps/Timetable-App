@@ -18,6 +18,7 @@ from app.core.observability import init_sentry, log_llm_availability
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.models import payment, school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
+    admin,
     auth,
     class_groups,
     constraints,
@@ -89,6 +90,7 @@ app.include_router(setup_extraction.router)
 app.include_router(support.router)
 app.include_router(payments.router)
 app.include_router(plans.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

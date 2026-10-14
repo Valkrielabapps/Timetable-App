@@ -37,7 +37,8 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import check_quota
-from app.models.payment import PaymentOrder
+from app.models.payment import PaymentOrder, PlanOffer
+from app.services import billing
 from app.models.school import School
 from app.models.user import User
 from app.services import cashfree_service as cashfree
@@ -92,6 +93,9 @@ class CreateOrderIn(BaseModel):
     # Cashfree requires a phone number for every order. Ten digits, Indian
     # mobile, optionally written with +91 / 0 / spaces / dashes.
     phone: str = Field(min_length=10, max_length=20)
+    # Paying a custom offer made for this school (admin page). When set, the
+    # offer decides the price, length and limits; `plan` is ignored.
+    offer_id: int | None = None
 
     @field_validator("phone")
     @classmethod
@@ -166,12 +170,20 @@ def _apply_cashfree_status(db: Session, order: PaymentOrder, fetched: cashfree.F
 
         school = db.get(School, order.school_id)
         if school is not None:
-            current = school.plan_valid_until
-            if current is not None and current.tzinfo is None:
-                current = current.replace(tzinfo=timezone.utc)
-            start = current if (current and current > now and school.plan == order.plan) else now
-            school.plan = order.plan
-            school.plan_valid_until = _naive_utc(start + timedelta(days=PLAN_DAYS[order.plan]))
+            offer = db.get(PlanOffer, order.offer_id) if order.offer_id else None
+            period = billing.grant_plan(
+                db, school, order.plan, order.period_days or PLAN_DAYS.get(order.plan, 365), offer=offer, now=now,
+            )
+            db.commit()
+            billing.issue_invoice(
+                db, school,
+                description=f"{billing.plan_label(order.plan, offer)}, {(order.period_days or 365)} days",
+                amount_paise=order.amount_paise,
+                method="online",
+                reference=order.cf_order_id or order.order_id,
+                payment_order_id=order.id,
+                period=period,
+            )
         logger.info("Order %s paid; plan %s granted to school %s", order.order_id, order.plan, order.school_id)
     elif new_status != order.status:
         order.status = new_status
@@ -209,7 +221,17 @@ def create_order(
     _require_configured()
     check_quota(f"payment-order:{current_user.id}", limit=10, window_seconds=3600)
 
-    price = _price_rupees(payload.plan)
+    offer = None
+    if payload.offer_id is not None:
+        offer = db.get(PlanOffer, payload.offer_id)
+        if offer is None or offer.school_id != payload.school_id or offer.status != "open":
+            raise HTTPException(status_code=404, detail="That offer isn't available any more.")
+        price, plan_id, period_days = offer.price_inr, "business", offer.period_days
+        note = f"{offer.name}, {period_days} days"
+    else:
+        price, plan_id, period_days = _price_rupees(payload.plan), payload.plan, PLAN_DAYS[payload.plan]
+        note = f"Timetablz {payload.plan.title()} plan, 1 year"
+
     # Alphanumeric plus '_'; Cashfree allows 3-45 characters. Random part so
     # the id in the return URL can't be guessed to probe other orders.
     order_id = f"tz_{payload.school_id}_{secrets.token_hex(8)}"
@@ -217,10 +239,12 @@ def create_order(
         order_id=order_id,
         school_id=payload.school_id,
         user_id=current_user.id,
-        plan=payload.plan,
+        plan=plan_id,
         amount_paise=price * 100,
         currency="INR",
         status="PENDING",
+        offer_id=offer.id if offer else None,
+        period_days=period_days,
     )
     db.add(order)
     db.commit()
@@ -235,7 +259,7 @@ def create_order(
             customer_email=current_user.email,
             customer_phone=payload.phone,
             return_url=return_url,
-            note=f"Timetablz {payload.plan.title()} plan, 1 year",
+            note=note[:200],
         )
     except cashfree.PaymentsNotConfigured:
         order.status = "FAILED"

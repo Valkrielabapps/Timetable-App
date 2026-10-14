@@ -140,6 +140,17 @@ class Settings(BaseSettings):
     # tests build schools far bigger than the Free plan allows. The plan
     # tests switch them back on.
     plan_limits_enabled: bool = True
+    # Who can open the Timetablz admin page (timetablz.com/admin): custom
+    # offers, mark paid, extend free days, downgrade, all accounts. Only the
+    # Valkyrie Labs account by default; PLATFORM_ADMIN_EMAILS overrides it
+    # (comma-separated) if that ever needs to change.
+    platform_admin_emails: str = "valkyrielabapps@gmail.com"
+    # Seller details printed on invoices (app/services/billing.py).
+    invoice_seller_name: str = "Allen Davis Marokey, trading as Timetablz"
+    invoice_seller_address: str = "Kerala, India"
+    invoice_seller_email: str = "support@timetablz.com"
+    # Leave unset until GST-registered; when set it's printed on invoices.
+    invoice_seller_gstin: str | None = None
 
 
     @field_validator(
@@ -150,6 +161,7 @@ class Settings(BaseSettings):
         "cashfree_app_id",
         "cashfree_secret_key",
         "cashfree_notify_url",
+        "invoice_seller_gstin",
         mode="before",
     )
     @classmethod

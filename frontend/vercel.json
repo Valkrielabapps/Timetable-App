@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://timetable-app-production-f6bb.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
     }
   ],
   "headers": [

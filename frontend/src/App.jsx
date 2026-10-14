@@ -24,6 +24,7 @@ import UpgradePrompt from './components/UpgradePrompt'
 import PlanPicker from './components/PlanPicker'
 import LockedScreen from './components/LockedScreen'
 import FreeCountdown from './components/FreeCountdown'
+import AdminPage from './components/AdminPage'
 import PlanBanner from './components/PlanBanner'
 import { useEntitlements } from './hooks/useEntitlements'
 import RefundPolicyPage from './components/RefundPolicyPage'
@@ -589,6 +590,11 @@ function App() {
   // to, not get routed into an unrelated flow first).
   // Cashfree's return_url. Checks the order with the backend itself; see
   // PaymentStatusPage for why arriving here proves nothing on its own.
+  // timetablz.com/admin: the separate Valkyrie Labs admin console, with its
+  // own sign-in and nothing from the school app around it (AdminPage).
+  if (window.location.pathname.replace(/\/+$/, '') === '/admin' || legalPage === 'admin') {
+    return <AdminPage />
+  }
   if (legalPage === 'payment-status') {
     return (
       <PaymentStatusPage
