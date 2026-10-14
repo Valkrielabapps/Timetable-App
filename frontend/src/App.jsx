@@ -48,6 +48,8 @@ import { useTimetables } from './hooks/useSchoolData'
 // so each step names both; Constraints and Timetable are tabs of their own.
 // Set when someone picks Pro on the plan picker before signing up; read
 // once they have a school, to send them to checkout.
+// Set once the visitor has gone from the homepage into the app this tab.
+const IN_APP_KEY = 'timetablz:in-app'
 const PLAN_INTENT_KEY = 'timetablz:plan-intent'
 
 const BASE_TABS = [
@@ -168,6 +170,29 @@ function App() {
     () => new URLSearchParams(window.location.search).get('start') === 'plans'
   )
   const [authMode, setAuthMode] = useState('login')
+  // A signed-in visitor still lands on the homepage first, with "Open app"
+  // in place of "Sign in" / "Get started". Remembered for the browser tab
+  // (sessionStorage), so a refresh while working stays in the app but a new
+  // visit to timetablz.com starts at the homepage. Links that are clearly
+  // meant for the app (invites, password resets, the payment return page,
+  // or a CTA from a public page) go straight in.
+  const [enteredApp, setEnteredApp] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('start') || params.get('invite') || params.get('reset')) return true
+    try {
+      return sessionStorage.getItem(IN_APP_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  function enterApp() {
+    try {
+      sessionStorage.setItem(IN_APP_KEY, '1')
+    } catch {
+      // storage unavailable: just enter for this page load
+    }
+    setEnteredApp(true)
+  }
 
   // Drop `?start=auth` once read above — same reasoning as
   // handleInviteAccepted/handlePasswordReset below (replaceState, not a
@@ -477,6 +502,12 @@ function App() {
     setAllRequirements([])
     setShowAuth(false)
     setShowPlans(false)
+    try {
+      sessionStorage.removeItem(IN_APP_KEY)
+    } catch {
+      // ignore
+    }
+    setEnteredApp(false)
     setSchoolsReady(false)
     setSchoolDataReady(false)
   }
@@ -487,12 +518,14 @@ function App() {
     // re-show this screen — replaceState rather than a real navigation
     // since there's no router to do it "properly" with.
     window.history.replaceState(null, '', window.location.pathname)
+    enterApp()
     setUser(acceptedUser)
   }
 
   function handlePasswordReset(resetUser) {
     setResetHandled(true)
     window.history.replaceState(null, '', window.location.pathname)
+    enterApp()
     setUser(resetUser)
   }
 
@@ -642,7 +675,16 @@ function App() {
       setShowAuth(true)
     }
     if (showAuth) {
-      return <AuthPage initialMode={authMode} onAuthenticated={setUser} onBack={() => setShowAuth(false)} />
+      return (
+        <AuthPage
+          initialMode={authMode}
+          onAuthenticated={(u) => {
+            enterApp()
+            setUser(u)
+          }}
+          onBack={() => setShowAuth(false)}
+        />
+      )
     }
     if (showPlans) {
       return (
@@ -663,6 +705,12 @@ function App() {
       )
     }
     return <LandingPage onGetStarted={() => setShowPlans(true)} onSignIn={signIn} />
+  }
+
+  // Signed in, but arrived fresh at timetablz.com: show the homepage, with
+  // every CTA opening the app.
+  if (!enteredApp) {
+    return <LandingPage signedIn onGetStarted={enterApp} onSignIn={enterApp} />
   }
 
   const isViewer = selectedSchool?.role === 'viewer'

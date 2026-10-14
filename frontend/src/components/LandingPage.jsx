@@ -123,11 +123,11 @@ function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs 
 }
 
 
-export default function LandingPage({ onGetStarted, onSignIn = onGetStarted }) {
+export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, signedIn = false }) {
   return (
     <div className="min-h-screen bg-white text-neutral-900">
-      <LandingNav onGetStarted={onGetStarted} onSignIn={onSignIn} />
-      <Hero onGetStarted={onGetStarted} />
+      <LandingNav onGetStarted={onGetStarted} onSignIn={onSignIn} signedIn={signedIn} />
+      <Hero onGetStarted={onGetStarted} signedIn={signedIn} />
       <WorkflowDemo />
       <MetricsSection />
       <WhyChoose />
@@ -142,7 +142,7 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted }) {
   )
 }
 
-function LandingNav({ onGetStarted, onSignIn }) {
+function LandingNav({ onGetStarted, onSignIn, signedIn }) {
   return (
     <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
       {/* No max-w-6xl/mx-auto here unlike the rest of the page's sections —
@@ -170,14 +170,18 @@ function LandingNav({ onGetStarted, onSignIn }) {
           </nav>
         </div>
         <div className="ml-auto flex items-center gap-6">
-          <button onClick={onSignIn} className="text-[15px] font-medium text-neutral-300 hover:text-white">
-            Sign in
-          </button>
+          {/* Signed in already: one button into the app instead of the
+              sign-in / sign-up pair. */}
+          {!signedIn && (
+            <button onClick={onSignIn} className="text-[15px] font-medium text-neutral-300 hover:text-white">
+              Sign in
+            </button>
+          )}
           <button
             onClick={onGetStarted}
             className="rounded-md bg-white px-4 py-2 text-[15px] font-medium text-black hover:bg-neutral-200"
           >
-            Get started free
+            {signedIn ? 'Open app' : 'Get started free'}
           </button>
         </div>
       </div>
@@ -303,7 +307,7 @@ function HeroSideArt({ side, className = '' }) {
   )
 }
 
-function Hero({ onGetStarted }) {
+function Hero({ onGetStarted, signedIn }) {
   return (
     <section className="relative overflow-hidden bg-black">
       {/* Faint line-art filling the empty sides of the centered hero — the
@@ -339,7 +343,7 @@ function Hero({ onGetStarted }) {
               onClick={onGetStarted}
               className="rounded-full bg-white px-6 py-3 text-sm font-medium text-black hover:bg-neutral-200"
             >
-              Get started free
+              {signedIn ? 'Go to your dashboard' : 'Get started free'}
             </button>
             <a
               href="#features"
