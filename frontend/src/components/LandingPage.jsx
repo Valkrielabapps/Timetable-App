@@ -1330,6 +1330,7 @@ const FOOTER_COLUMNS = [
       { label: 'About', href: '?page=about' },
       { label: 'Customers', href: '?page=customers' },
       { label: 'Support', href: '?page=support' },
+      { label: 'Admin', href: '/admin' },
     ],
   },
   {
