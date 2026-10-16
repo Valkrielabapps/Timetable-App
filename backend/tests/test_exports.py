@@ -247,3 +247,36 @@ def test_an_absurd_number_of_combinations_is_refused_with_a_reason(client, world
     r = _export(client, w, h, format="xlsx", class_group_id=w["a"], student_combinations="true")
     assert r.status_code == 400
     assert "combinations" in r.json()["detail"]
+
+
+def test_pages_follow_grade_then_section_order(client):
+    import io as _io
+    import openpyxl as _xl
+    from app.core.database import SessionLocal
+    from app.models.school import ClassGroup, Period, Subject, Teacher, Timetable, TimetableEntry
+    from tests.conftest import create_school, signup
+
+    _, h = signup(client, email="order@x.com")
+    school = create_school(client, h)
+    db = SessionLocal()
+    sid = school["id"]
+    period = Period(school_id=sid, day_of_week=0, order=0)
+    subject = Subject(school_id=sid, name="Maths")
+    teacher = Teacher(school_id=sid, name="Rao", qualified_subject_ids=[])
+    # Created out of order on purpose.
+    groups = [ClassGroup(school_id=sid, grade=g, name=n) for g, n in
+              [("Grade 9", "B"), ("Grade 10", "B"), ("Grade 9", "C"), ("Grade 10", "A"), ("Grade 9", "A")]]
+    db.add_all([period, subject, teacher, *groups])
+    db.flush()
+    tt = Timetable(school_id=sid, status="draft")
+    db.add(tt)
+    db.flush()
+    for cg in groups:
+        db.add(TimetableEntry(timetable_id=tt.id, class_group_id=cg.id, subject_id=subject.id, teacher_id=teacher.id, period_id=period.id))
+    db.commit()
+    tt_id = tt.id
+    db.close()
+
+    r = client.get(f"/api/timetables/{tt_id}/export?format=xlsx", headers=h)
+    names = _xl.load_workbook(_io.BytesIO(r.content)).sheetnames
+    assert names[:5] == ["Grade 9 - A", "Grade 9 - B", "Grade 9 - C", "Grade 10 - A", "Grade 10 - B"]

@@ -33,6 +33,11 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 HEADER_FILL = "1E293B"  # slate-800, matches the frontend's dark header rows
 
 
+def _natural_key(text: str) -> list:
+    """Sort key that orders "Grade 2" before "Grade 10" and is case-blind."""
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", text)]
+
+
 def _load_grid_data(db: Session, timetable: Timetable) -> dict:
     school_id = timetable.school_id
     periods = db.query(Period).filter(Period.school_id == school_id).all()
@@ -40,8 +45,28 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
     orders = sorted({p.order for p in periods})
     period_by_day_order = {(p.day_of_week, p.order): p for p in periods}
 
-    class_groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
-    teachers = db.query(Teacher).filter(Teacher.school_id == school_id).all()
+    # Pages come out in the order a school reads them: grades in the sidebar's
+    # order (the admin's custom grade order if set, else natural order so
+    # "Grade 9" comes before "Grade 10"), sections A, B, C within each grade,
+    # then teachers alphabetically. Unsorted, the database's own row order
+    # gave 9-B, 10-B, 9-C...
+    from app.models.school import School
+
+    school = db.get(School, school_id)
+    grade_rank = {g: i for i, g in enumerate((school.grade_order or []) if school else [])}
+    class_groups = sorted(
+        db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all(),
+        key=lambda cg: (
+            cg.grade is None,  # ungrouped sections last
+            grade_rank.get(cg.grade, len(grade_rank)),
+            _natural_key(cg.grade or ""),
+            _natural_key(cg.name or ""),
+        ),
+    )
+    teachers = sorted(
+        db.query(Teacher).filter(Teacher.school_id == school_id).all(),
+        key=lambda t: _natural_key(t.name or ""),
+    )
     subjects_by_id = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
     teachers_by_id = {t.id: t for t in teachers}
     class_groups_by_id = {c.id: c for c in class_groups}
