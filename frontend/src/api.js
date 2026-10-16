@@ -239,6 +239,9 @@ export const api = {
   listAllRequirements: (schoolId) => get(`/class-groups/requirements?school_id=${schoolId}`),
   createRequirement: (classGroupId, data) =>
     post(`/class-groups/${classGroupId}/requirements`, data),
+  // One request for "Copy N subjects to M sections" (was N x M in parallel).
+  copyRequirements: (classGroupId, data) =>
+    post(`/class-groups/${classGroupId}/requirements/copy`, data),
   updateRequirement: (id, data) => put(`/class-groups/requirements/${id}`, data),
   deleteRequirement: (id) => del(`/class-groups/requirements/${id}`),
 

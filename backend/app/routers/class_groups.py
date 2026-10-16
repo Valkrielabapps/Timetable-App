@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    School, ClassGroup, ElectiveBlock, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
+    School, ClassGroup, ElectiveBlock, ElectiveOption, Subject, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
@@ -195,6 +196,82 @@ def add_requirement(
     db.commit()
     db.refresh(requirement)
     return requirement
+
+
+class CopyRequirementsIn(BaseModel):
+    target_ids: list[int] = Field(min_length=1, max_length=500)
+    # Which of the source section's subjects to copy; omitted = every subject
+    # with periods set.
+    subject_ids: list[int] | None = None
+
+
+@router.post("/{class_group_id}/requirements/copy")
+def copy_requirements(
+    class_group_id: int,
+    payload: CopyRequirementsIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Copy this section's periods/week for some subjects to other sections,
+    in one request and one transaction.
+
+    Replaces the frontend firing one request per subject per section at once
+    (8 subjects x 7 sections = 56 in parallel), which could run the database
+    out of connections and come back as a 500 part-way through. A target that
+    already has the subject keeps its own teacher choices; only the periods
+    change. A subject that is an elective option in a target section is
+    skipped and reported, since it can't also be a common subject there."""
+    source = db.get(ClassGroup, class_group_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Class group not found")
+    require_school_access(db, current_user, source.school_id, min_role="admin")
+
+    targets = (
+        db.query(ClassGroup)
+        .filter(ClassGroup.id.in_(set(payload.target_ids) - {class_group_id}), ClassGroup.school_id == source.school_id)
+        .all()
+    )
+    if not targets:
+        raise HTTPException(status_code=400, detail="Pick at least one other section to copy to.")
+
+    query = db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id == class_group_id)
+    if payload.subject_ids:
+        query = query.filter(SubjectRequirement.subject_id.in_(payload.subject_ids))
+    source_rows = [r for r in query.all() if r.periods_per_week and r.periods_per_week > 0]
+    if not source_rows:
+        raise HTTPException(status_code=400, detail="Nothing to copy: set some periods/week in this section first.")
+
+    target_ids = [t.id for t in targets]
+    existing = {
+        (r.class_group_id, r.subject_id): r
+        for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(target_ids)).all()
+    }
+    in_blocks = {
+        (cg_id, subject_id)
+        for cg_id, subject_id in db.query(ElectiveBlock.class_group_id, ElectiveOption.subject_id)
+        .join(ElectiveOption, ElectiveOption.block_id == ElectiveBlock.id)
+        .filter(ElectiveBlock.class_group_id.in_(target_ids))
+        .all()
+    }
+    labels = {t.id: (f"{t.grade} - {t.name}" if t.grade else t.name) for t in targets}
+    subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_([r.subject_id for r in source_rows])).all()}
+
+    created = updated = 0
+    skipped: list[str] = []
+    for target in targets:
+        for row in source_rows:
+            key = (target.id, row.subject_id)
+            if key in in_blocks:
+                skipped.append(f"{subject_names.get(row.subject_id, 'A subject')} in {labels[target.id]} (it's an elective option there)")
+                continue
+            if key in existing:
+                existing[key].periods_per_week = row.periods_per_week
+                updated += 1
+            else:
+                db.add(SubjectRequirement(class_group_id=target.id, subject_id=row.subject_id, periods_per_week=row.periods_per_week))
+                created += 1
+    db.commit()
+    return {"created": created, "updated": updated, "skipped": skipped, "sections": len(targets)}
 
 
 @router.get("/{class_group_id}/requirements", response_model=list[SubjectRequirementOut])

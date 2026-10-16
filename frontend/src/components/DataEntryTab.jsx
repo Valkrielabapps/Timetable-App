@@ -416,20 +416,17 @@ export default function DataEntryTab({
     setCopyingPeriods(true)
     setError(null)
     try {
-      const calls = []
-      for (const target of targets) {
-        for (const row of rowsToCopy) {
-          calls.push(
-            api.createRequirement(target.id, {
-              class_group_id: target.id,
-              subject_id: row.subject.id,
-              periods_per_week: row.periodsPerWeek,
-            })
-          )
-        }
-      }
-      await Promise.all(calls)
+      // One request, done in one transaction on the server. Sending one
+      // request per subject per section all at once (56 for 8 x 7) could run
+      // the backend out of database connections and fail with a 500.
+      const result = await api.copyRequirements(activeSectionId, {
+        target_ids: targets.map((t) => t.id),
+        subject_ids: rowsToCopy.map((row) => row.subject.id),
+      })
       await load()
+      if (result?.skipped?.length) {
+        setError(`Copied, except: ${result.skipped.join('; ')}.`)
+      }
       setCopyTargetIds([])
       setCopyPickerOpen(false)
     } catch (err) {
