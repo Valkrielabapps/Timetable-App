@@ -25,6 +25,7 @@ import PlanPicker from './components/PlanPicker'
 import LockedScreen from './components/LockedScreen'
 import FreeCountdown from './components/FreeCountdown'
 import AdminPage from './components/AdminPage'
+import { prefetchTimetableStructure } from './components/TimetableStructurePanel'
 import PlanBanner from './components/PlanBanner'
 import { useEntitlements } from './hooks/useEntitlements'
 import RefundPolicyPage from './components/RefundPolicyPage'
@@ -251,6 +252,8 @@ function App() {
 
   useEffect(() => {
     if (!selectedSchoolId) return
+    // So Setup's week structure is already there the first time it's opened.
+    prefetchTimetableStructure(selectedSchoolId)
     setSchoolDataReady(false)
     loadSchoolData(selectedSchoolId)
   }, [selectedSchoolId])

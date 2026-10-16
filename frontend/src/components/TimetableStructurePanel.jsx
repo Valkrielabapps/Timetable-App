@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import {
   DAY_FULL,
@@ -27,27 +27,59 @@ import {
  * for the whole school every day; otherwise it is an ordinary numbered
  * period kept free for the grades it belongs to, and each day gains one.
  */
+
+// Last structure fetched (or saved) per school, kept for the browser session.
+// The panel is unmounted every time the admin leaves Setup, and fetching it
+// again each time is what showed "Loading…" for a second or two on every
+// visit. Now a revisit draws the cached week straight away and refreshes it
+// in the background (stale-while-revalidate); the refresh only replaces what
+// is on screen if the admin hasn't started editing.
+const structureCache = new Map()
+
+function fetchStructure(schoolId) {
+  return api.getTimetableStructure(schoolId).then((r) => {
+    structureCache.set(schoolId, r)
+    return r
+  })
+}
+
+/** Warm the cache before Setup is opened (App calls this on school select). */
+export function prefetchTimetableStructure(schoolId) {
+  if (schoolId == null || structureCache.has(schoolId)) return
+  fetchStructure(schoolId).catch(() => {})
+}
+
 export default function TimetableStructurePanel({ schoolId, grades, onSaved, readOnly = false }) {
-  const [structure, setStructure] = useState(DEFAULT_STRUCTURE)
-  const [loaded, setLoaded] = useState(false)
-  const [hasPeriods, setHasPeriods] = useState(false)
-  const [irregular, setIrregular] = useState(false)
+  const cached = structureCache.get(schoolId)
+  const [structure, setStructure] = useState(() => (cached ? fromServer(cached.structure) : DEFAULT_STRUCTURE))
+  const [loaded, setLoaded] = useState(!!cached)
+  const [hasPeriods, setHasPeriods] = useState(cached ? cached.structure != null : false)
+  const [irregular, setIrregular] = useState(cached ? cached.irregular : false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [report, setReport] = useState(null)
+  const edited = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    setLoaded(false)
-    api
-      .getTimetableStructure(schoolId)
+    edited.current = false
+    const fromCache = structureCache.get(schoolId)
+    if (fromCache) {
+      setStructure(fromServer(fromCache.structure))
+      setHasPeriods(fromCache.structure != null)
+      setIrregular(fromCache.irregular)
+      setLoaded(true)
+    } else {
+      setLoaded(false)
+    }
+    fetchStructure(schoolId)
       .then((r) => {
-        if (cancelled) return
+        if (cancelled || edited.current) return
         setStructure(fromServer(r.structure))
         setHasPeriods(r.structure != null)
         setIrregular(r.irregular)
       })
-      .catch((err) => !cancelled && setError(err.message))
+      .catch((err) => !cancelled && !fromCache && setError(err.message))
       .finally(() => !cancelled && setLoaded(true))
     return () => {
       cancelled = true
@@ -55,6 +87,7 @@ export default function TimetableStructurePanel({ schoolId, grades, onSaved, rea
   }, [schoolId])
 
   const update = (patch) => {
+    edited.current = true
     setReport(null)
     setStructure((prev) => ({ ...prev, ...patch }))
   }
@@ -76,6 +109,8 @@ export default function TimetableStructurePanel({ schoolId, grades, onSaved, rea
         breaks: s.breaks.map((b) => ({ after: Number(b.after), label: b.label || 'Break' })),
       })
       setStructure(fromServer(r.structure))
+      structureCache.set(schoolId, { structure: r.structure, irregular: false })
+      edited.current = false
       setReport(r.report)
       setHasPeriods(true)
       setIrregular(false)

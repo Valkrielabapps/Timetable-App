@@ -225,3 +225,18 @@ describe('saving', () => {
     expect(screen.queryByRole('button', { name: /Save changes/ })).toBeNull()
   })
 })
+
+describe('revisiting Setup', () => {
+  it('draws the saved week straight away the second time, without "Loading…"', async () => {
+    api.getTimetableStructure.mockResolvedValue({ structure: SAVED, irregular: false })
+    const first = render(<TimetableStructurePanel schoolId={99} grades={[]} onSaved={() => {}} />)
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    await screen.findByText('Working days')
+    first.unmount()
+
+    api.getTimetableStructure.mockReturnValue(new Promise(() => {})) // server slow this time
+    render(<TimetableStructurePanel schoolId={99} grades={[]} onSaved={() => {}} />)
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.getByText('Working days')).toBeInTheDocument()
+  })
+})
