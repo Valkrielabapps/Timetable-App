@@ -13,6 +13,8 @@ database and builds/solves a CP-SAT model from that real data.
 """
 import os
 import random
+import threading
+import time
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -64,6 +66,119 @@ class TimetableSolveResult:
     # this is not a failure, but a rule silently doing nothing while the UI
     # reports it as enforced is the failure mode the IR exists to end.
     warnings: list[str] = field(default_factory=list)
+
+
+# Quick passes (no presolve) tried, each from a new random start, before
+# falling back to one full pass. A quick pass that has found no timetable at
+# all within FAST_PASS_SECONDS is cut short and restarted.
+FAST_PASSES = 2
+FAST_PASS_SECONDS = 12
+# With preference rules the solver is minimising a penalty, and it would
+# otherwise keep searching for a better answer until the time limit even
+# when it stopped finding one long ago. This long without an improvement
+# counts as settled.
+SETTLE_SECONDS = 4.0
+
+
+class _SettleWatch(cp_model.CpSolverSolutionCallback):
+    """Remembers when the last better timetable turned up."""
+
+    def __init__(self):
+        super().__init__()
+        self.last_improvement = None
+
+    def on_solution_callback(self):
+        self.last_improvement = time.monotonic()
+
+
+def _new_solver(time_limit: float, fast: bool, seed: int) -> cp_model.CpSolver:
+    solver = cp_model.CpSolver()
+    # Every core up to a cap - CP-SAT's parallel search scales well.
+    solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
+    solver.parameters.max_time_in_seconds = max(1.0, time_limit)
+    # A fresh seed per generation plus randomized branching, so every
+    # placement the rules allow is reachable rather than the same first
+    # answer every run (which looked exactly like a deleted rule still being
+    # applied). SOLVER_RANDOM_SEED pins it for debugging and tests.
+    solver.parameters.random_seed = seed
+    solver.parameters.randomize_search = True
+    if fast:
+        # Measured on the 30- and 50-section stress schools: the default
+        # presolve (mostly symmetry detection over interchangeable teachers)
+        # took 15 of 16 seconds and 30 of 34, and the search itself under a
+        # second. Skipping it finds the same timetable in 2-5 seconds.
+        solver.parameters.cp_model_presolve = False
+        solver.parameters.symmetry_level = 0
+    return solver
+
+
+def _run(solver: cp_model.CpSolver, model: cp_model.CpModel, has_objective: bool,
+         first_answer_within: float | None):
+    """Solve, stopping early in two cases:
+
+    - no timetable at all within `first_answer_within` seconds (an unlucky
+      quick pass - the caller restarts it from a new random start), and
+    - with preference rules, SETTLE_SECONDS after the last improvement.
+      While better timetables keep turning up it keeps going, up to the
+      solver's own time limit, so a school with many preferences loses none
+      of the quality it had; it just stops when the answer stops changing.
+    """
+    watch = _SettleWatch()
+    done = threading.Event()
+    started = time.monotonic()
+
+    def watch_and_stop():
+        while not done.wait(0.25):
+            last = watch.last_improvement
+            now = time.monotonic()
+            if last is None:
+                if first_answer_within is not None and now - started >= first_answer_within:
+                    solver.StopSearch()
+                    return
+            elif has_objective and now - last >= SETTLE_SECONDS:
+                solver.StopSearch()
+                return
+
+    watcher = threading.Thread(target=watch_and_stop, daemon=True)
+    watcher.start()
+    try:
+        return solver.Solve(model, watch)
+    finally:
+        done.set()
+        watcher.join()
+
+
+def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
+    """Solve quickly where possible, thoroughly where needed.
+
+    Quick passes skip presolve and almost always settle a school in seconds -
+    with a timetable, or with proof there isn't one. How long one takes
+    depends heavily on its random starting point (3s or 25s for the same
+    school), so an unlucky pass is cut short and restarted from a new one
+    rather than waited out. Only if FAST_PASSES quick passes all end undecided
+    does the full pass run, with whatever time is left.
+    """
+    limit = float(settings.solver_time_limit_seconds)
+    pinned = settings.solver_random_seed
+    rng = random.Random(pinned) if pinned is not None else random.SystemRandom()
+    started = time.monotonic()
+
+    def remaining():
+        return limit - (time.monotonic() - started)
+
+    solver, status = None, cp_model.UNKNOWN
+    for _ in range(FAST_PASSES):
+        if solver is not None and remaining() < 2:
+            return solver, status
+        solver = _new_solver(remaining(), fast=True, seed=rng.randrange(2**31 - 1))
+        status = _run(solver, model, has_objective, first_answer_within=FAST_PASS_SECONDS)
+        if status != cp_model.UNKNOWN:
+            return solver, status
+
+    if remaining() < 2:
+        return solver, status
+    solver = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1))
+    return solver, _run(solver, model, has_objective, first_answer_within=None)
 
 
 def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
@@ -1297,30 +1412,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     if penalties:
         model.Minimize(sum(penalties))
 
-    solver = cp_model.CpSolver()
-    # Use every core the machine has, up to a reasonable cap — CP-SAT's
-    # parallel search scales well and this is the single biggest lever for
-    # solving larger schools (many sections/teachers) within the time
-    # budget. Stress-tested: with fully symmetric teacher pools (a
-    # deliberately worst-case setup — real schools have more natural
-    # variation, which helps the solver), this handles ~40 sections'
-    # worth of a school optimally in well under a minute on 2 cores;
-    # more cores scale further.
-    solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
-    solver.parameters.max_time_in_seconds = settings.solver_time_limit_seconds
-    # Without this the search is effectively deterministic: the same school
-    # data produces the same first feasible timetable on every run, so where
-    # a subject lands is decided by the order variables were built in, not by
-    # the rules. That looked exactly like a deleted rule still being applied
-    # (French never again in period 1 after "French in period 1" was removed)
-    # when nothing was enforcing it - the solver simply kept returning the
-    # same answer. A fresh seed per generation, plus randomized branching,
-    # makes every placement the rules allow actually reachable.
-    # SOLVER_RANDOM_SEED pins it for reproducible debugging and tests.
-    seed = settings.solver_random_seed
-    solver.parameters.random_seed = seed if seed is not None else random.randrange(2**31 - 1)
-    solver.parameters.randomize_search = True
-    status = solver.Solve(model)
+    solver, status = _solve_timetable_model(model, bool(penalties))
 
     status_name = {
         cp_model.OPTIMAL: "optimal",

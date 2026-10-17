@@ -114,21 +114,21 @@ def test_an_ir_rule_reaches_the_solver_and_moves_a_lesson(db):
     before = generate_school_timetable(db, school.id)
     assert before.status in ("optimal", "feasible"), before.errors
     unconstrained = _periods_used(before, db, school, "PE")
-    # Left to itself the solver puts PE on day 1, so the rule below bans day 1:
-    # banning day 0 would "pass" whether or not it reached the model, which is
+    # Left to itself the solver puts PE on day 0, so the rule below bans day 0:
+    # banning day 1 would "pass" whether or not it reached the model, which is
     # how the first version of this test passed against a disabled compiler.
-    assert unconstrained == [(1, 1)], (
+    assert unconstrained == [(0, 1)], (
         "the solver's free choice moved; flip the day the rule bans"
     )
 
     _ir(db, school, {"form": "count", "scope": ["class_group"],
-                     "selector": {"subjects": ["PE"], "days": [1]},
+                     "selector": {"subjects": ["PE"], "days": [0]},
                      "relation": "==", "value": 0},
-        description="No PE on Tuesdays")
+        description="No PE on Mondays")
 
     after = generate_school_timetable(db, school.id)
     assert after.status in ("optimal", "feasible"), after.errors
-    assert _periods_used(after, db, school, "PE") == [(0, 1)]
+    assert _periods_used(after, db, school, "PE") == [(1, 1)]
     assert _periods_used(after, db, school, "PE") != unconstrained
 
 
