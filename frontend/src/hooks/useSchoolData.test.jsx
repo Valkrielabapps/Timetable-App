@@ -226,4 +226,20 @@ describe('useGenerateTimetable', () => {
     expect(created.id).toBe(9)
     expect(api.generateTimetable).toHaveBeenCalledWith(7)
   })
+
+  it('adds the new timetable to the list at once, so the old one is never shown in between', async () => {
+    api.generateTimetable.mockResolvedValue({ id: 9, status: 'generating', entries: [] })
+    api.getTimetable.mockResolvedValue({ id: 9, status: 'generating', entries: [] })
+    // The refetch never answers, so only the immediate update can put 9 in.
+    api.listTimetables.mockReturnValue(new Promise(() => {}))
+
+    const { Wrapper, client } = wrapper()
+    client.setQueryData(['timetables', 7], [{ id: 4, status: 'draft' }])
+    const { result } = renderHook(() => useGenerateTimetable(7), { wrapper: Wrapper })
+    await result.current.generate()
+
+    const list = client.getQueryData(['timetables', 7])
+    expect(list.map((t) => t.id)).toEqual([4, 9])
+    expect(list[1].entries).toBeUndefined()
+  })
 })

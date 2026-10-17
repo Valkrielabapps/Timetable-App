@@ -124,6 +124,14 @@ export function useGenerateTimetable(schoolId) {
       // query starts from it rather than waiting a round trip to discover a
       // timetable it was already handed.
       queryClient.setQueryData(keys.timetable(created.id), created)
+      // Put the new row in the list straight away too. The tab shows the
+      // newest id in this list; left to the refetch, it kept pointing at the
+      // previous timetable for a round trip after the request returned, so
+      // the old grid flashed up between the spinner and the new result.
+      const { entries: _entries, ...summary } = created
+      queryClient.setQueryData(keys.timetables(schoolId), (prev = []) =>
+        prev.some((t) => t.id === created.id) ? prev : [...prev, summary],
+      )
       queryClient.invalidateQueries({ queryKey: keys.timetables(schoolId) })
     },
   })
