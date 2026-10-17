@@ -277,6 +277,17 @@ class Run:
     English" is max 1). block_size requires one ("practicals need two periods
     together"). At least one must be set.
 
+    `blocks` counts the blocks instead of requiring every lesson to be one -
+    the shape of "once a week Physics gets a double, the other days single
+    periods only", one of the commonest rules a school has:
+
+        scope=["class_group"], block_size=2, blocks=1, blocks_relation="=="
+
+    Read as: for each group, across the week, exactly `blocks` days hold one
+    block of `block_size` back-to-back lessons and nothing else of the
+    subject; every other day holds at most one. Without `blocks`, block_size
+    alone would force EVERY lesson into a double - the opposite of "only once".
+
     Runs are counted within a day and broken by breaks, so a lesson before lunch
     and one after are not adjacent - the solver already splits days this way for
     the legacy max_consecutive type.
@@ -286,6 +297,8 @@ class Run:
     selector: Selector
     max_consecutive: int | None = None
     block_size: int | None = None
+    blocks: int | None = None
+    blocks_relation: str = "=="
 
 
 @dataclass(frozen=True)
@@ -497,14 +510,41 @@ def _count_from_dict(data: dict) -> Count:
 def _run_from_dict(data: dict) -> Run:
     max_consecutive = data.get("max_consecutive")
     block_size = data.get("block_size")
+    blocks = data.get("blocks")
+    if blocks is not None and block_size is None:
+        raise IRError("counting blocks needs block_size - how long each block is")
     if max_consecutive is None and block_size is None:
         raise IRError("a run rule needs max_consecutive or block_size")
+    blocks_relation = str(data.get("blocks_relation") or "==").strip()
+    if blocks_relation not in RELATIONS:
+        raise IRError(
+            f"blocks_relation must be one of {', '.join(RELATIONS)}, got {blocks_relation!r}"
+        )
     run = Run(
         scope=_scope_from(data.get("scope")),
         selector=selector_from_dict(data.get("selector")),
         max_consecutive=None if max_consecutive is None else _int_from(max_consecutive, "max_consecutive", 1, 30),
         block_size=None if block_size is None else _int_from(block_size, "block_size", 2, 30),
+        # 0 would be "no blocks at all", which max_consecutive already says.
+        blocks=None if blocks is None else _int_from(blocks, "blocks", 1, 7),
+        blocks_relation=blocks_relation,
     )
+    if run.blocks is not None:
+        if run.max_consecutive is not None:
+            # A counted block already says every other day has at most one, so
+            # a cap alongside it is either redundant or contradicts the block.
+            raise IRError(
+                "a rule counting blocks already allows only single periods outside "
+                "them - leave max_consecutive out"
+            )
+        timed = [d for d in run.scope if d in ("day", "period", "period_order")]
+        if timed:
+            # The blocks are counted across the week; grouping by day would ask
+            # for that many blocks on every single day.
+            raise IRError(
+                f"blocks are counted across the week, so scope cannot group by "
+                f"{', '.join(timed)}"
+            )
     if run.max_consecutive is not None and run.block_size is not None and run.block_size > run.max_consecutive:
         raise IRError(
             f"a block of {run.block_size} cannot fit under a maximum run of {run.max_consecutive}"
@@ -625,6 +665,10 @@ def _conditional_from_dict(data: dict) -> Conditional:
         raise IRError("a conditional rule needs both when and then")
     when_form = _count_from_dict(when)
     then_form = form_from_dict(then)
+    if isinstance(then_form, Run) and then_form.blocks is not None:
+        # Blocks are counted across the week; a condition per group would
+        # leave it unclear which days the count runs over.
+        raise IRError("a conditional rule cannot count blocks")
     if isinstance(then_form, Conditional):
         # Nested conditionals are representable but nothing in the catalogue
         # needs one, and they make the echo-back unreadable - which is the one
@@ -691,6 +735,9 @@ def _form_to_dict(form: Form) -> dict:
             out["max_consecutive"] = form.max_consecutive
         if form.block_size is not None:
             out["block_size"] = form.block_size
+        if form.blocks is not None:
+            out["blocks"] = form.blocks
+            out["blocks_relation"] = form.blocks_relation
         return out
     if isinstance(form, Adjacency):
         return {

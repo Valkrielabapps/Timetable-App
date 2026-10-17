@@ -253,7 +253,10 @@ def test_a_rule_the_schema_refuses_is_not_filed_as_the_admin_being_unclear(
     assert body["understood"] is False
     # The validator's own words must not be shown as though the admin caused them.
     assert "min_gap" not in (body["explanation"] or "")
-    assert "say it another way" in body["explanation"]
+    # Reached only after the model was told why and still couldn't fix it, so
+    # it is said as a limit of the app, not a fault in the sentence.
+    assert body["reason"] == "not_supported"
+    assert "may not be supported yet" in body["explanation"]
 
 
 def test_a_rule_naming_a_missing_subject_does_not_claim_to_be_enforced(client, school):
