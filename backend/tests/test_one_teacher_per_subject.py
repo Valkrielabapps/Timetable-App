@@ -54,3 +54,21 @@ def test_a_load_that_only_fits_by_splitting_is_refused(db):  # noqa: F811
 
     result = generate_school_timetable(db, school.id)
     assert result.status not in ("optimal", "feasible")
+
+
+def test_the_reason_names_the_subject_and_its_teachers(db):  # noqa: F811
+    school = _school(db, days=2, per_day=4)
+    english = _subject(db, school, "English")
+    a = _teacher(db, school, "Rao", [english.id])
+    b = _teacher(db, school, "Iyer", [english.id])
+    db.get(Teacher, a.id).max_periods_per_week = 3
+    db.get(Teacher, b.id).max_periods_per_week = 5
+    db.commit()
+    for n in ("A", "B"):
+        _require(db, _class_group(db, school, name=n), english, 4)
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status == "infeasible"
+    (reason,) = result.errors
+    assert reason.startswith("English can't be shared out")
+    assert "Rao (up to 3)" in reason and "Iyer (up to 5)" in reason

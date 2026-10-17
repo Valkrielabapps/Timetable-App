@@ -1472,6 +1472,19 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     if penalties:
         model.Minimize(sum(penalties))
 
+    # Cheap and decisive: if whole sections can't be shared out between the
+    # teachers at all, no timetable exists - say so in a second rather than
+    # after the full search budget.
+    staffing = _diagnose_teacher_assignment(
+        requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
+        subjects_by_id, class_groups_by_id, _batch_count,
+    )
+    if staffing:
+        return TimetableSolveResult(
+            status="infeasible", assignments=[], locked_keys=locked_keys,
+            errors=errors + staffing, warnings=warnings,
+        )
+
     solver, status = _solve_timetable_model(model, bool(penalties))
 
     status_name = {
@@ -1539,6 +1552,14 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             subjects_by_id, class_groups_by_id,
             blocks=blocks, option_reqs=option_reqs,
         )
+        # Whole sections have to be shared out between teachers now that a
+        # section keeps one teacher per subject - the commonest new cause,
+        # and invisible to the period-counting checks above.
+        if not errors:
+            errors = errors + _diagnose_teacher_assignment(
+                requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
+                subjects_by_id, class_groups_by_id, _batch_count,
+            )
         # Only reachable for a *proven* infeasibility (not "unknown", a
         # timeout) — SufficientAssumptionsForInfeasibility() needs CP-SAT to
         # have actually established there's no solution, not just failed to
@@ -1556,6 +1577,112 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         status=status_name, assignments=assignments, locked_keys=locked_keys,
         errors=errors, warnings=warnings,
     )
+
+
+def _diagnose_teacher_assignment(
+    requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
+    subjects_by_id, class_groups_by_id, batch_count,
+) -> list[str]:
+    """Can every section be given ONE teacher per subject at all?
+
+    Ignores when lessons happen and asks only who teaches what: each strand
+    (a section's subject, each batch of a split lab, each option of a block)
+    takes one of its qualified teachers, and no teacher may end up with more
+    periods than their weekly limit (or than the lesson periods they are
+    available for). If that alone is impossible, no timetable exists, and the
+    reason can be said in terms an admin can act on.
+
+    The whole school is tried first; when that fails, each subject on its own,
+    so the message can name the subject (or, if every subject fits alone but
+    not together, the teachers who teach several of them).
+    """
+    lesson_ids = [p.id for p in periods if not p.is_break]
+
+    def capacity(t) -> int:
+        free = sum(1 for pid in lesson_ids if pid not in set(t.unavailable_period_ids or []))
+        return min(t.max_periods_per_week, free) if t.max_periods_per_week else free
+
+    strands = []  # (subject_id, class_group_id, periods, candidates, group) - group: strands that run at once
+    for r in requirements:
+        cands = candidate_ids_by_req.get(r.id) or []
+        if not cands or not r.periods_per_week:
+            continue
+        for b in range(batch_count(r)):
+            strands.append((r.subject_id, r.class_group_id, r.periods_per_week, cands, ("r", r.id)))
+    for o in option_reqs:
+        cands = candidate_ids_by_req.get(o.id) or []
+        if cands and o.periods_per_week:
+            strands.append((o.subject_id, o.class_group_id, o.periods_per_week, cands, ("b", o.block_id)))
+    if not strands:
+        return []
+
+    def fits(selected) -> bool:
+        m = cp_model.CpModel()
+        y = {}
+        for i, (_, _, _, cands, _) in enumerate(selected):
+            for t in cands:
+                y[(i, t)] = m.NewBoolVar("")
+            m.AddExactlyOne(y[(i, t)] for t in cands)
+        by_group: dict = {}
+        for i, (_, _, _, cands, group) in enumerate(selected):
+            for t in cands:
+                by_group.setdefault((group, t), []).append(y[(i, t)])
+        for vs in by_group.values():
+            if len(vs) > 1:
+                m.AddAtMostOne(vs)  # strands that run at once need different teachers
+        load: dict = {}
+        for (i, t), v in y.items():
+            load.setdefault(t, []).append(selected[i][2] * v)
+        for t, terms in load.items():
+            m.Add(sum(terms) <= capacity(teachers_by_id[t]))
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 5
+        solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
+        return solver.Solve(m) != cp_model.INFEASIBLE
+
+    if fits(strands):
+        return []
+
+    def label(cg_id):
+        cg = class_groups_by_id.get(cg_id)
+        return _class_group_label(cg) if cg else "a section"
+
+    messages = []
+    subject_ids = sorted({st[0] for st in strands}, key=lambda sid: subjects_by_id[sid].name if sid in subjects_by_id else "")
+    for sid in subject_ids:
+        mine = [st for st in strands if st[0] == sid]
+        if fits(mine):
+            continue
+        name = subjects_by_id[sid].name if sid in subjects_by_id else "A subject"
+        need = sum(st[2] for st in mine)
+        teacher_ids = sorted({t for st in mine for t in st[3]}, key=lambda t: teachers_by_id[t].name)
+        sections = ", ".join(f"{label(st[1])} ({st[2]})" for st in mine)
+        staff = ", ".join(f"{teachers_by_id[t].name} (up to {capacity(teachers_by_id[t])})" for t in teacher_ids)
+        messages.append(
+            f"{name} can't be shared out: each section keeps one {name} teacher all week, and the "
+            f"sections need {need} periods in total - {sections} - but the qualified teachers, "
+            f"{staff}, can't take whole sections without someone going over their limit. "
+            f"Raise a teacher's max periods/week, qualify another teacher for {name} "
+            f"(or for more grades), or reduce {name}'s periods/week."
+        )
+    if messages:
+        return messages
+
+    # Every subject fits alone; they clash through teachers who teach several.
+    shared = {}
+    for st in strands:
+        for t in st[3]:
+            shared.setdefault(t, set()).add(st[0])
+    busy = [t for t, subs in shared.items() if len(subs) > 1]
+    names = ", ".join(
+        f"{teachers_by_id[t].name} ({' and '.join(sorted(subjects_by_id[x].name for x in shared[t] if x in subjects_by_id))})"
+        for t in sorted(busy, key=lambda t: teachers_by_id[t].name)[:6]
+    )
+    return [
+        "Each subject can be staffed on its own, but not all at once: teachers who teach more than one "
+        f"subject don't have enough periods for every section they'd need to take whole - {names}. "
+        "Raise their max periods/week or add another teacher for one of those subjects."
+    ]
 
 
 def _diagnose_infeasibility(
