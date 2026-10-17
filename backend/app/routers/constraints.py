@@ -41,7 +41,16 @@ def _is_enforced(constraint: Constraint) -> bool:
     """Whether this constraint row is actually read by the solver — see
     app/services/solver.py. Kept in one place so the API response
     (ConstraintOut.enforced) and the /parse endpoint agree, instead of two
-    copies of this logic drifting apart."""
+    copies of this logic drifting apart.
+
+    Always a real bool: several checks below are `a and (b or c.get(...))`,
+    which hands back None or [] rather than False when a list is missing or
+    empty - and ConstraintOut refuses anything but a bool, which turned one
+    oddly-parsed availability rule into a 500 for a whole batch."""
+    return bool(_is_enforced_raw(constraint))
+
+
+def _is_enforced_raw(constraint: Constraint):
     p = constraint.parameters or {}
     if constraint.type == "ir":
         # An IR rule is compiled and run by the solver whatever its shape, so
@@ -214,7 +223,7 @@ def _to_out(db: Session, constraint: Constraint, data: "_ResolutionData | None" 
         description=constraint.description,
         source_text=constraint.source_text,
         parsed_by=constraint.parsed_by,
-        enforced=_is_enforced(constraint) and not _names_missing(db, constraint, data),
+        enforced=bool(_is_enforced(constraint) and not _names_missing(db, constraint, data)),
         conflicts=conflicts,
         about=constraint_about(
             constraint.type,
