@@ -2,57 +2,101 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 /**
- * Standalone Support page — contact info + FAQ — reached via
+ * Standalone Support page - contact details and FAQ - reached via
  * `?page=support` (same no-router pattern as PricingPage/AboutPage; see
- * App.jsx). Every FAQ answer below describes something the product
- * actually does today (see docs/ARCHITECTURE.md, docs/GETTING_STARTED.md,
- * and docs/legal/PRIVACY_POLICY.md), nothing invented, same standard
- * applied to PricingPage's feature list.
+ * App.jsx). Every answer describes something the product does today; keep
+ * it that way when editing. Plan numbers mirror app/services/plans.py and
+ * the refund wording mirrors src/legal/refund-policy.md.
  *
- * Dark theme and wide two-column section layout, matching AboutPage.jsx
- * by explicit request ("adjust the support page accordingly") rather
- * than the narrower white-background layout this page used before.
- *
- * The contact email is a `[SUPPORT_EMAIL]` placeholder, not a real
- * address, same unresolved gap as the footer's dropped "Contact us" link
- * and the legal pages' unfilled placeholders (business email/domain
- * hasn't been decided yet). Still flagged with a warning-colored notice,
- * adapted to the dark theme, rather than a fake mailto that would
- * silently bounce.
+ * Dark theme and wide two-column rows, matching AboutPage.jsx.
  */
 
-const FAQS = [
+const SUPPORT_EMAIL = 'support@timetablz.com'
+
+const FAQ_GROUPS = [
   {
-    q: "What happens if a timetable can't be generated?",
-    a: 'Some combinations of rules are mathematically impossible to satisfy at the same time. The solver detects this instead of producing a broken result, and explains in plain language which rule or teacher is the problem, so it takes minutes to fix rather than hours of trial and error.',
+    title: 'Getting started',
+    items: [
+      {
+        q: 'How do I set up my school?',
+        a: 'Follow the five steps along the top of the app: Setup (your days, periods and breaks), Subjects, Teachers, Constraints, then Timetable. Each section gets its own weekly plan of subjects and periods, and "Copy to other sections" fills in the rest of a grade in one go.',
+      },
+      {
+        q: 'Can I import my existing spreadsheet instead of typing everything in?',
+        a: "Yes. Bulk import accepts a CSV or Excel file for subjects, teachers and rooms. There's also an AI-assisted option that reads an existing staff list or old timetable and proposes the records for you to review before anything is created.",
+      },
+      {
+        q: 'Can more than one person work on the same school?',
+        a: 'Yes, on the Pro plan (up to 5 people). Invite colleagues by email as an admin, who can edit everything, or a viewer, who can only look. You can see who has access from Settings at any time.',
+      },
+    ],
   },
   {
-    q: 'Can I import my existing spreadsheet instead of typing everything in?',
-    a: "Yes. Bulk import accepts a CSV or Excel file for subjects, teachers, and rooms. There's also an AI-assisted option that reads an existing staff list or old timetable file and proposes the records for you to review before they're created.",
+    title: 'Timetables',
+    items: [
+      {
+        q: 'How long does generating a timetable take?',
+        a: 'Usually a few seconds, and under a minute even for large schools. It runs in the background, so you can keep working in another tab while it does.',
+      },
+      {
+        q: "What happens if a timetable can't be generated?",
+        a: "Some combinations of rules can't all be met at once - for example, a subject needing 8 periods a week when your rules only leave room for 5. Instead of producing a broken timetable, Timetablz shows a popup listing each reason in plain language, so you know exactly which rule or teacher to change.",
+      },
+      {
+        q: 'Can I adjust a generated timetable by hand?',
+        a: 'Yes. Drag a slot to another cell (refused automatically if it would double-book a teacher or room), or click it to lock it in place so it stays put the next time you regenerate. You can also type an edit in plain English, like "move Math to period 2 on Wednesday".',
+      },
+      {
+        q: 'Does it handle electives and lab batches?',
+        a: 'Yes. Elective blocks run several subjects in the same period, with each student taking one, and you can export the timetable each combination of choices actually gets. Lab subjects can be split into batches, each with its own teacher and room.',
+      },
+      {
+        q: 'What if a teacher is unexpectedly absent?',
+        a: "The Substitutions view, inside the Timetable tab, suggests a qualified, free teacher for each of the absent teacher's periods, instead of you scanning the whole staff list.",
+      },
+      {
+        q: 'Can I export the finished timetable?',
+        a: 'Yes, as Excel or PDF: one page per section in grade order, followed by one per teacher, ready to print or send. On Pro you can leave off the Timetablz watermark.',
+      },
+    ],
   },
   {
-    q: 'Does the AI ever see individual student data?',
-    a: 'No. The product is deliberately built to avoid needing individual student records. A section only stores an aggregate count (e.g. "32 students in Grade 8 - A"), not names or IDs, so there\'s nothing student-identifying for the AI features to process.',
+    title: 'Plans and billing',
+    items: [
+      {
+        q: 'Is there a free plan?',
+        a: 'Every new school gets a 14-day free period on the Free plan: up to 5 sections, one admin and 10 AI actions a month. After 14 days the school is locked until you upgrade - your data is kept and comes back the moment you do.',
+      },
+      {
+        q: "What's included in Pro?",
+        a: 'Pro is ₹4,999 a year: up to 60 sections, 5 people, unlimited AI actions and exports without the watermark. Larger schools and groups can ask us for a Business plan priced to their size.',
+      },
+      {
+        q: 'How do I pay, and do I get an invoice?',
+        a: 'Go to Settings > Plan & billing and click Pay now. Payment is through Cashfree Payments (UPI, cards or net banking). An invoice is issued for every payment and can be downloaded from the same page.',
+      },
+      {
+        q: 'Does Pro renew automatically?',
+        a: "No, nothing is charged automatically. When your year is up you get a 15-day grace period with everything still working, so there's time to renew.",
+      },
+      {
+        q: 'Can I cancel or get a refund?',
+        a: `Yes. Email ${SUPPORT_EMAIL} from a school admin's address and we refund the unused full months of your year. Duplicate or failed payments are refunded in full. See the Refund and Cancellation Policy for the details.`,
+      },
+    ],
   },
   {
-    q: 'How long does generating a timetable take?',
-    a: 'Typically well under a minute. Generation runs as a background job, so the button shows "Generating…" while it works rather than holding your browser on a long request.',
-  },
-  {
-    q: 'Can I adjust a generated timetable by hand?',
-    a: 'Yes. Drag any slot to a different cell (rejected automatically if it would double-book a class, teacher, or room), or lock a slot in place so it stays exactly where it is the next time you regenerate.',
-  },
-  {
-    q: 'What if a teacher is unexpectedly unavailable?',
-    a: "The Substitutions view suggests a qualified, available replacement for that teacher's affected periods, instead of you scanning the whole staff list by hand.",
-  },
-  {
-    q: 'Can more than one person work on the same school?',
-    a: 'Yes. Invite colleagues by email as an admin (can edit everything) or a viewer (read-only). You can see exactly who has access from the Team tab at any time.',
-  },
-  {
-    q: 'Can I export the finished timetable?',
-    a: 'Yes. Export the whole school as Excel or PDF, one sheet or page per section followed by one per teacher, ready to print or email out.',
+    title: 'Data and privacy',
+    items: [
+      {
+        q: 'Does the AI ever see student data?',
+        a: 'No. Timetablz never needs individual student records: a section is just a name and a grade, so there is nothing about students for the AI features to read.',
+      },
+      {
+        q: 'What happens to my data if I stop using Timetablz?',
+        a: 'It stays in your account - moving to the Free plan or letting the free period end never deletes anything. If you want it deleted, email us and we will remove it.',
+      },
+    ],
   },
 ]
 
@@ -64,7 +108,7 @@ const fadeUp = {
 function FaqItem({ item, isOpen, onToggle }) {
   return (
     <div className="border-b border-white/10">
-      <button onClick={onToggle} className="flex w-full items-center justify-between gap-4 py-5 text-left">
+      <button onClick={onToggle} aria-expanded={isOpen} className="flex w-full items-center justify-between gap-4 py-5 text-left">
         <span className="text-[15px] font-medium text-white">{item.q}</span>
         <svg
           width="18"
@@ -76,6 +120,7 @@ function FaqItem({ item, isOpen, onToggle }) {
           strokeLinecap="round"
           strokeLinejoin="round"
           className={`shrink-0 text-neutral-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          aria-hidden="true"
         >
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -97,8 +142,48 @@ function FaqItem({ item, isOpen, onToggle }) {
   )
 }
 
+function ContactCard({ title, children, action }) {
+  return (
+    <div className="flex flex-col justify-between gap-5 rounded-xl border border-white/10 bg-white/[0.03] p-6">
+      <div>
+        <h3 className="text-[15px] font-semibold text-white">{title}</h3>
+        <div className="mt-2 text-sm leading-relaxed text-neutral-400">{children}</div>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function Row({ heading, children, amount = 0.2 }) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount }}
+      variants={fadeUp}
+      transition={{ duration: 0.5 }}
+      className="grid gap-6 py-14 md:grid-cols-[280px_1fr] md:gap-12"
+    >
+      <h2 className="font-serif text-3xl font-medium text-white">{heading}</h2>
+      <div className="min-w-0">{children}</div>
+    </motion.div>
+  )
+}
+
 export default function SupportPage({ onBack, onGetStarted }) {
-  const [openIndex, setOpenIndex] = useState(0)
+  // Keyed "group:index" so one answer is open across the whole page.
+  const [open, setOpen] = useState('0:0')
+  const [copied, setCopied] = useState(false)
+
+  async function copyEmail() {
+    try {
+      await navigator.clipboard.writeText(SUPPORT_EMAIL)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // Clipboard blocked: the address is on screen to copy by hand.
+    }
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -127,59 +212,91 @@ export default function SupportPage({ onBack, onGetStarted }) {
             Support
           </h1>
           <p className="mt-5 max-w-2xl text-lg text-neutral-400">
-            Reach us directly, or check the answers below first. Most questions are covered.
+            We&rsquo;re a small team and read every message. Most get a reply within one working day.
           </p>
         </motion.div>
 
-        {/* Same wide two-column row pattern as AboutPage.jsx: a short
-            heading on the left, content on the right, rather than one
-            narrow centered column. */}
         <div className="mt-20 divide-y divide-white/10 border-t border-white/10">
-          <motion.div
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.3 }}
-            variants={fadeUp}
-            transition={{ duration: 0.5 }}
-            className="grid gap-4 py-14 md:grid-cols-[280px_1fr] md:gap-12"
-          >
-            <h2 className="font-serif text-3xl font-medium text-white">Contact us</h2>
-            <div className="max-w-2xl">
-              {/* See this file's top docstring. The address/domain isn't
-                  decided yet. This notice stays until it is; don't
-                  quietly replace it with a made-up address. */}
-              <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
-                A direct support email is coming soon. The business email/domain hasn't been finalized yet.
-                In the meantime, use <span className="font-medium">Get started</span> below to create an
-                account, or reach out through whatever channel got you to this page.
-              </div>
+          <Row heading="Contact us" amount={0.3}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ContactCard
+                title="Email"
+                action={
+                  <div className="flex flex-wrap items-center gap-3">
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                      className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-200"
+                    >
+                      {SUPPORT_EMAIL}
+                    </a>
+                    <button onClick={copyEmail} className="text-sm font-medium text-neutral-400 hover:text-white">
+                      {copied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                }
+              >
+                Questions, problems with a timetable, billing and refunds, or a demo for your school.
+              </ContactCard>
+              <ContactCard
+                title="From inside the app"
+                action={<span className="text-sm font-medium text-neutral-300">Help button, bottom right</span>}
+              >
+                Signed in? Use the Help button on any screen to send us a ticket. It includes your school, so
+                we can look into it straight away.
+              </ContactCard>
+              <ContactCard
+                title="Payments and refunds"
+                action={
+                  <a href="?page=refunds" className="text-sm font-medium text-white underline underline-offset-4 hover:text-neutral-300">
+                    Refund and Cancellation Policy
+                  </a>
+                }
+              >
+                Charged twice, or paid but still on Free? Email us the order reference from the payment page and
+                we&rsquo;ll fix it within 3 working days.
+              </ContactCard>
+              <ContactCard
+                title="Larger schools"
+                action={
+                  <a href="?page=pricing" className="text-sm font-medium text-white underline underline-offset-4 hover:text-neutral-300">
+                    See plans
+                  </a>
+                }
+              >
+                More than 60 sections, or several schools in a group? Write to us for a Business plan priced to
+                your size.
+              </ContactCard>
             </div>
-          </motion.div>
+          </Row>
 
-          <motion.div
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.2 }}
-            variants={fadeUp}
-            transition={{ duration: 0.5 }}
-            className="grid gap-4 py-14 md:grid-cols-[280px_1fr] md:gap-12"
+          <Row
+            heading={
+              <>
+                Frequently asked
+                <br />
+                questions
+              </>
+            }
           >
-            <h2 className="font-serif text-3xl font-medium text-white">
-              Frequently asked
-              <br />
-              questions
-            </h2>
-            <div className="max-w-2xl">
-              {FAQS.map((item, i) => (
-                <FaqItem
-                  key={item.q}
-                  item={item}
-                  isOpen={openIndex === i}
-                  onToggle={() => setOpenIndex(openIndex === i ? -1 : i)}
-                />
+            <div className="flex flex-col gap-12">
+              {FAQ_GROUPS.map((group, g) => (
+                <div key={group.title}>
+                  <h3 className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">{group.title}</h3>
+                  {group.items.map((item, i) => {
+                    const id = `${g}:${i}`
+                    return (
+                      <FaqItem
+                        key={item.q}
+                        item={item}
+                        isOpen={open === id}
+                        onToggle={() => setOpen(open === id ? null : id)}
+                      />
+                    )
+                  })}
+                </div>
               ))}
             </div>
-          </motion.div>
+          </Row>
         </div>
 
         <motion.div
@@ -190,13 +307,16 @@ export default function SupportPage({ onBack, onGetStarted }) {
           transition={{ duration: 0.5 }}
           className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-white/10 px-8 py-8 md:flex-row md:items-center"
         >
-          <p className="text-lg font-medium text-white">Still stuck, or found something we missed?</p>
-          <button
-            onClick={onGetStarted}
+          <div>
+            <p className="text-lg font-medium text-white">Didn&rsquo;t find your answer?</p>
+            <p className="mt-1 text-sm text-neutral-400">Write to us and a real person will reply.</p>
+          </div>
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="rounded-md bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-neutral-200"
           >
-            Get started free
-          </button>
+            Email support
+          </a>
         </motion.div>
       </div>
     </div>
