@@ -7,8 +7,11 @@ const api = vi.hoisted(() => ({
   moveSlot: vi.fn(),
   lockSlot: vi.fn(),
   downloadStudentTimetables: vi.fn(),
+  downloadTimetableExport: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
+const ent = vi.hoisted(() => ({ current: { limits: { clean_exports: true } } }))
+vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: ent.current }) }))
 
 const hooks = vi.hoisted(() => ({
   timetable: null,
@@ -295,7 +298,17 @@ describe("each student's own timetable", () => {
     renderTab()
     fireEvent.click(within(section('Grade 11 · A')).getByRole('button', { name: 'PDF' }))
     await waitFor(() =>
-      expect(api.downloadStudentTimetables).toHaveBeenCalledWith(1, 'pdf', 100, 'Grade 11 A'),
+      expect(api.downloadStudentTimetables).toHaveBeenCalledWith(1, 'pdf', 100, 'Grade 11 A', { watermark: true }),
+    )
+  })
+
+  it('leaves the watermark off student timetables when it is unticked', async () => {
+    ent.current = { limits: { clean_exports: true } }
+    renderTab()
+    fireEvent.click(screen.getByRole('checkbox', { name: /timetablz watermark/i }))
+    fireEvent.click(within(section('Grade 11 · A')).getByRole('button', { name: 'PDF' }))
+    await waitFor(() =>
+      expect(api.downloadStudentTimetables).toHaveBeenCalledWith(1, 'pdf', 100, 'Grade 11 A', { watermark: false }),
     )
   })
 
@@ -325,5 +338,36 @@ describe('counting broken slots', () => {
     })
     expect(section('Grade 11 · A')).toHaveTextContent('1 slot breaking a rule')
     expect(screen.getByText('1 slot now breaks a rule you set')).toBeInTheDocument()
+  })
+})
+
+describe('Exporting without the watermark', () => {
+  beforeEach(() => {
+    api.downloadTimetableExport.mockReset()
+    api.downloadTimetableExport.mockResolvedValue(undefined)
+  })
+
+  it('is on by default and can be turned off on a paid plan', async () => {
+    ent.current = { limits: { clean_exports: true } }
+    renderTab()
+    const box = screen.getByRole('checkbox', { name: /timetablz watermark/i })
+    expect(box).toBeChecked()
+    fireEvent.click(box)
+    expect(box).not.toBeChecked()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Excel' })[0])
+    await waitFor(() => expect(api.downloadTimetableExport).toHaveBeenCalledWith(1, 'xlsx', { watermark: false }))
+  })
+
+  it('opens the upgrade prompt on Free instead of removing it', () => {
+    ent.current = { limits: { clean_exports: false } }
+    const seen = vi.fn()
+    window.addEventListener('timetablz:plan-limit', seen)
+    renderTab()
+    const box = screen.getByRole('checkbox', { name: /timetablz watermark/i })
+    fireEvent.click(box)
+    expect(box).toBeChecked()
+    expect(seen).toHaveBeenCalled()
+    expect(screen.getByText(/pro to remove/i)).toBeInTheDocument()
+    window.removeEventListener('timetablz:plan-limit', seen)
   })
 })

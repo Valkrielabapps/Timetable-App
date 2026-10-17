@@ -5,6 +5,7 @@ import TimetableTab from './TimetableTab'
 
 const api = vi.hoisted(() => ({ moveSlot: vi.fn(), lockSlot: vi.fn() }))
 vi.mock('../api', () => ({ api }))
+vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: undefined }) }))
 
 const hooks = vi.hoisted(() => ({ timetable: null }))
 vi.mock('../hooks/useSchoolData', () => ({

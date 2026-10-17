@@ -246,7 +246,7 @@ def _student_grids(data: dict, class_group: ClassGroup, combinations) -> list[tu
     return grids
 
 
-def _excel(grids, school_name: str = "", free_plan: bool = False) -> bytes:
+def _excel(grids, school_name: str = "", free_plan: bool = False, branded: bool = True) -> bytes:
     """Same design as the PDF (see _pdf below): heading block, black header
     row, shaded period column, striped rows of equal height, each lesson as
     a bold subject over a muted teacher/section and room, breaks as one
@@ -287,9 +287,10 @@ def _excel(grids, school_name: str = "", free_plan: bool = False) -> bytes:
         # Heading block
         ws.cell(row=1, column=1, value=meta["heading"]).font = Font(name="Calibri", bold=True, size=18, color="171717")
         ws.cell(row=2, column=1, value=meta["kind"]).font = Font(name="Calibri", size=10, color="737373")
-        brand = ws.cell(row=1, column=last_col, value="Timetablz")
-        brand.font = Font(name="Calibri", bold=True, size=10, color="171717")
-        brand.alignment = Alignment(horizontal="right", vertical="center")
+        if branded:
+            brand = ws.cell(row=1, column=last_col, value="Timetablz")
+            brand.font = Font(name="Calibri", bold=True, size=10, color="171717")
+            brand.alignment = Alignment(horizontal="right", vertical="center")
         if school_name:
             sc = ws.cell(row=2, column=last_col, value=school_name)
             sc.font = Font(name="Calibri", size=10, color="737373")
@@ -383,7 +384,8 @@ def _excel(grids, school_name: str = "", free_plan: bool = False) -> bytes:
         ws.print_area = f"A1:{get_column_letter(last_col)}{r}"
         ws.oddFooter.left.text = (
             f"Made with Timetablz Free  ·  timetablz.com  ·  {generated}" if free_plan
-            else f"Generated {generated}  ·  timetablz.com"
+            else f"Generated {generated}  ·  timetablz.com" if branded
+            else f"Generated {generated}"
         )
         ws.oddFooter.left.size = 8
         ws.oddFooter.left.color = "A3A3A3"
@@ -472,7 +474,7 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
     return rows
 
 
-def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False) -> bytes:
+def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, branded: bool = True) -> bytes:
     from datetime import date
 
     buf = io.BytesIO()
@@ -481,16 +483,20 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False) -> 
     def decorate(canvas, doc):
         width, height = _PAGE
         canvas.saveState()
-        canvas.setFont("Helvetica-Bold", 10)
-        canvas.setFillColor(_INK)
-        canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Timetablz")
+        if branded:
+            canvas.setFont("Helvetica-Bold", 10)
+            canvas.setFillColor(_INK)
+            canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Timetablz")
         canvas.setFont("Helvetica", 9)
         canvas.setFillColor(_MUTED)
         if school_name:
             canvas.drawRightString(width - _MARGIN_X, height - 1.05 * cm, school_name)
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(_FAINT)
-        canvas.drawString(_MARGIN_X, 0.8 * cm, f"Generated {generated}  ·  timetablz.com")
+        canvas.drawString(
+            _MARGIN_X, 0.8 * cm,
+            f"Generated {generated}  ·  timetablz.com" if branded else f"Generated {generated}",
+        )
         if free_plan:
             # Free-plan exports carry the product name, centred in the footer.
             canvas.setFont("Helvetica-Bold", 8)
@@ -502,7 +508,7 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False) -> 
     doc = SimpleDocTemplate(
         buf, pagesize=_PAGE,
         leftMargin=_MARGIN_X, rightMargin=_MARGIN_X, topMargin=_MARGIN_TOP, bottomMargin=_MARGIN_BOTTOM,
-        title=school_name or "Timetable", author="Timetablz",
+        title=school_name or "Timetable", author="Timetablz" if branded else (school_name or ""),
     )
     heading = ParagraphStyle("H", fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=_INK)
     sub = ParagraphStyle("S", fontName="Helvetica", fontSize=9.5, leading=12, textColor=_MUTED, spaceBefore=2, spaceAfter=12)
@@ -650,23 +656,30 @@ def _student_grids_with_meta(data: dict, class_group: ClassGroup, combinations) 
     return _with_pdf_meta(data, _student_grids(data, class_group, combinations), kinds)
 
 
-def build_excel(db: Session, timetable: Timetable) -> bytes:
+def _branding(db: Session, timetable: Timetable, branded: bool) -> dict:
+    """Free-plan exports always carry the Timetablz name (the router refuses
+    an unbranded one before it gets here). A paid school may leave it off."""
+    free = _free_plan(db, timetable)
+    return {"free_plan": free, "branded": branded or free}
+
+
+def build_excel(db: Session, timetable: Timetable, branded: bool = True) -> bytes:
     data = _load_grid_data(db, timetable)
-    return _excel(_school_grids_with_meta(data), _school_name(db, timetable), _free_plan(db, timetable))
+    return _excel(_school_grids_with_meta(data), _school_name(db, timetable), **_branding(db, timetable, branded))
 
 
-def build_pdf(db: Session, timetable: Timetable) -> bytes:
+def build_pdf(db: Session, timetable: Timetable, branded: bool = True) -> bytes:
     data = _load_grid_data(db, timetable)
-    return _pdf(_school_grids_with_meta(data), len(data["days"]), _school_name(db, timetable), _free_plan(db, timetable))
+    return _pdf(_school_grids_with_meta(data), len(data["days"]), _school_name(db, timetable), **_branding(db, timetable, branded))
 
 
-def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+def build_student_excel(db: Session, timetable: Timetable, class_group: ClassGroup, combinations, branded: bool = True) -> bytes:
     """One sheet per combination of elective choices in one section."""
     data = _load_grid_data(db, timetable)
-    return _excel(_student_grids_with_meta(data, class_group, combinations), _school_name(db, timetable), _free_plan(db, timetable))
+    return _excel(_student_grids_with_meta(data, class_group, combinations), _school_name(db, timetable), **_branding(db, timetable, branded))
 
 
-def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations) -> bytes:
+def build_student_pdf(db: Session, timetable: Timetable, class_group: ClassGroup, combinations, branded: bool = True) -> bytes:
     """One page per combination of elective choices in one section."""
     data = _load_grid_data(db, timetable)
-    return _pdf(_student_grids_with_meta(data, class_group, combinations), len(data["days"]), _school_name(db, timetable), _free_plan(db, timetable))
+    return _pdf(_student_grids_with_meta(data, class_group, combinations), len(data["days"]), _school_name(db, timetable), **_branding(db, timetable, branded))

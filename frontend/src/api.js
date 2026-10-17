@@ -325,13 +325,18 @@ export const api = {
   editTimetableByCommand: (timetableId, text) => post(`/timetables/${timetableId}/edit-command`, { text }),
   // Triggers a browser download of the exported file — see downloadFile
   // above for why this can't just be a plain <a href> anymore.
-  downloadTimetableExport: (id, format) =>
-    downloadFile(`/timetables/${id}/export?format=${format}`, `timetable_${id}.${format}`),
+  // `{ watermark: false }` leaves the Timetablz name off (paid plans only;
+  // a Free school gets a 402, which opens the upgrade prompt).
+  downloadTimetableExport: (id, format, { watermark = true } = {}) =>
+    downloadFile(
+      `/timetables/${id}/export?format=${format}${watermark ? "" : "&branding=false"}`,
+      `timetable_${id}.${format}`,
+    ),
   // One timetable per combination of elective choices, for one section - what
   // each student actually attends.
-  downloadStudentTimetables: (id, format, classGroupId, sectionLabel) =>
+  downloadStudentTimetables: (id, format, classGroupId, sectionLabel, { watermark = true } = {}) =>
     downloadFile(
-      `/timetables/${id}/export?format=${format}&class_group_id=${classGroupId}&student_combinations=true`,
+      `/timetables/${id}/export?format=${format}&class_group_id=${classGroupId}&student_combinations=true${watermark ? "" : "&branding=false"}`,
       `student_timetables_${sectionLabel.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "section"}.${format}`,
     ),
 

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import TimetableTab from './TimetableTab'
 
 vi.mock('../api', () => ({ api: {} }))
+vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: undefined }) }))
 
 // The timetable comes from React Query inside the component, not from props,
 // so the hooks are what have to be stubbed.

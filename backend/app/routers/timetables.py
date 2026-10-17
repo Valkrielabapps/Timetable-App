@@ -976,6 +976,8 @@ def export_timetable(
     format: str = "xlsx",
     class_group_id: int | None = None,
     student_combinations: bool = False,
+    # False leaves the Timetablz name off the page - a paid-plan option.
+    branding: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -999,6 +1001,13 @@ def export_timetable(
             status_code=400,
             detail=f"This timetable isn't ready to export yet (status: {timetable.status}).",
         )
+    if not branding:
+        school = db.get(School, timetable.school_id)
+        if school is not None and not plans.clean_exports(school):
+            raise plans.plan_limit(
+                "Exporting without the Timetablz watermark is part of the Pro plan. "
+                "Upgrade in Settings > Plan & billing."
+            )
 
     if student_combinations:
         # One timetable per combination of elective choices, for one section -
@@ -1020,12 +1029,13 @@ def export_timetable(
                 detail="This section has no elective blocks, so its timetable is the same for every student.",
             )
         build = build_student_excel if format == "xlsx" else build_student_pdf
-        content = build(db, timetable, class_group, combinations)
+        content = build(db, timetable, class_group, combinations, branded=branding)
         label = (f"{class_group.grade}_{class_group.name}" if class_group.grade else class_group.name)
         safe = "".join(c if c.isalnum() else "_" for c in label).strip("_") or "section"
         filename = f"student_timetables_{safe}.{format}"
     else:
-        content = build_excel(db, timetable) if format == "xlsx" else build_pdf(db, timetable)
+        build = build_excel if format == "xlsx" else build_pdf
+        content = build(db, timetable, branded=branding)
         filename = f"timetable_{timetable_id}.{format}"
     return Response(
         content=content,

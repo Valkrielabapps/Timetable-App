@@ -280,3 +280,73 @@ def test_pages_follow_grade_then_section_order(client):
     r = client.get(f"/api/timetables/{tt_id}/export?format=xlsx", headers=h)
     names = _xl.load_workbook(_io.BytesIO(r.content)).sheetnames
     assert names[:5] == ["Grade 9 - A", "Grade 9 - B", "Grade 9 - C", "Grade 10 - A", "Grade 10 - B"]
+
+
+# ---------------------------------------------------------------------------
+# Exporting without the Timetablz watermark
+# ---------------------------------------------------------------------------
+
+
+def _set_plan(school_id, plan):
+    from datetime import datetime, timedelta
+    from app.models.school import School
+    db = SessionLocal()
+    try:
+        s = db.get(School, school_id)
+        s.plan = plan
+        s.plan_valid_until = datetime.utcnow() + timedelta(days=30) if plan else None
+        s.free_trial_ends_at = datetime.utcnow() + timedelta(days=10)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _branding_text(content: bytes) -> str:
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    ws = wb.worksheets[0]
+    cells = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value)
+    return cells + " " + (ws.oddFooter.left.text or "")
+
+
+def test_a_paid_school_can_export_without_the_watermark(client, world, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "plan_limits_enabled", True)
+    w, h = world
+    _set_plan(w["school"], "pro")
+
+    branded = _export(client, w, h, format="xlsx")
+    assert "Timetablz" in _branding_text(branded.content)
+
+    clean = _export(client, w, h, format="xlsx", branding="false")
+    assert clean.status_code == 200
+    text = _branding_text(clean.content)
+    assert "Timetablz" not in text and "timetablz.com" not in text
+    assert "Generated" in text
+
+    pdf = _export(client, w, h, format="pdf", branding="false")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    assert b"(Timetablz)" not in pdf.content and b"timetablz.com" not in pdf.content
+    assert b"(Timetablz)" in _export(client, w, h, format="pdf").content
+
+
+def test_student_timetables_can_leave_the_watermark_off_too(client, world, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "plan_limits_enabled", True)
+    w, h = world
+    _set_plan(w["school"], "pro")
+    r = _export(client, w, h, format="xlsx", class_group_id=w["a"], student_combinations="true", branding="false")
+    assert r.status_code == 200
+    assert "Timetablz" not in _branding_text(r.content)
+
+
+def test_a_free_school_cannot_remove_the_watermark(client, world, monkeypatch):
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "plan_limits_enabled", True)
+    w, h = world
+    _set_plan(w["school"], None)
+    r = _export(client, w, h, format="pdf", branding="false")
+    assert r.status_code == 402
+    assert "Pro" in r.json()["detail"]
+    # The ordinary export still works, watermark and all.
+    ok = _export(client, w, h, format="xlsx")
+    assert ok.status_code == 200 and "Made with Timetablz Free" in _branding_text(ok.content)

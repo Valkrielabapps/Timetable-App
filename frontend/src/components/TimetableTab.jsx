@@ -12,6 +12,7 @@ import {
 } from '../hooks/useSchoolData'
 import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
 import SubstitutionsTab from './SubstitutionsTab'
+import { useEntitlements } from '../hooks/useEntitlements'
 
 // Where the sidebar scrolls to. Derived from the id rather than passed around,
 // so selecting a section needs no extra wiring between the two components.
@@ -120,6 +121,25 @@ export default function TimetableTab({
   // Which export format is currently downloading, if any — guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
+  // Whether exports carry the Timetablz name. Leaving it off is a paid-plan
+  // option; on Free, unticking opens the upgrade prompt instead.
+  const [watermark, setWatermark] = useState(true)
+  const { data: entitlements } = useEntitlements(schoolId)
+  const cleanExportsAllowed = entitlements?.limits?.clean_exports !== false
+  function toggleWatermark(next) {
+    if (!next && !cleanExportsAllowed) {
+      window.dispatchEvent(
+        new CustomEvent('timetablz:plan-limit', {
+          detail: {
+            message:
+              'Exporting without the Timetablz watermark is part of the Pro plan. Upgrade in Settings > Plan & billing.',
+          },
+        }),
+      )
+      return
+    }
+    setWatermark(next)
+  }
   // Conversational editing (POST /api/timetables/{id}/edit-command) — a
   // plain-English alternative to drag-and-drop, e.g. "move Grade 8's Math
   // to period 2 on Wednesdays". Section-view-only, same reasoning as
@@ -134,7 +154,7 @@ export default function TimetableTab({
     if (exporting) return
     setExporting(format)
     try {
-      await api.downloadTimetableExport(timetable.id, format)
+      await api.downloadTimetableExport(timetable.id, format, { watermark })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -640,6 +660,23 @@ export default function TimetableTab({
             </div>
 
             <div className="flex items-center gap-2 text-xs">
+              <label
+                className="mr-1 flex cursor-pointer select-none items-center gap-1.5 text-slate-600"
+                title="Adds the Timetablz name to the header and footer of every page"
+              >
+                <input
+                  type="checkbox"
+                  checked={watermark}
+                  onChange={(e) => toggleWatermark(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-neutral-900"
+                />
+                Timetablz watermark
+                {!cleanExportsAllowed && (
+                  <span className="rounded bg-neutral-900 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-white">
+                    Pro to remove
+                  </span>
+                )}
+              </label>
               <span className="text-slate-400">Export:</span>
               <button
                 onClick={() => handleExport('xlsx')}
@@ -695,6 +732,7 @@ export default function TimetableTab({
                   key={cg.id}
                   classGroup={cg}
                   timetableId={timetable.id}
+                  watermark={watermark}
                   combinations={combinationsFor(electiveBlocks, cg.id, subjectName)}
                   violationCount={sectionViolationCount(cg.id)}
                   onError={setError}
@@ -771,6 +809,7 @@ function SectionTimetable({
   combinations,
   violationCount,
   onError,
+  watermark = true,
   entriesAt,
   editable,
   ...gridProps
@@ -790,6 +829,7 @@ function SectionTimetable({
         format,
         classGroup.id,
         classGroup.grade ? `${classGroup.grade} ${classGroup.name}` : classGroup.name,
+        { watermark },
       )
     } catch (err) {
       onError(err.message)

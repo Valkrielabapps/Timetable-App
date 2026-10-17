@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import TimetableTab from './TimetableTab'
 
 vi.mock('../api', () => ({ api: {} }))
+vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: undefined }) }))
 
 const mockTimetable = vi.fn()
 vi.mock('../hooks/useSchoolData', () => ({
