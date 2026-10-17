@@ -12,11 +12,17 @@ import {
 } from '../hooks/useSchoolData'
 import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
 import SubstitutionsTab from './SubstitutionsTab'
+import GenerationFailedDialog from './GenerationFailedDialog'
 import { useEntitlements } from '../hooks/useEntitlements'
 
 // Where the sidebar scrolls to. Derived from the id rather than passed around,
 // so selecting a section needs no extra wiring between the two components.
 const sectionAnchorId = (classGroupId) => `timetable-section-${classGroupId}`
+
+// Failed generations whose reasons have already been shown and closed. Kept
+// outside the component so switching tabs and back doesn't pop the same
+// dialog up again; a new failed generation has a new id and does open it.
+const seenFailures = new Set()
 
 /**
  * Generates a timetable for the whole school (every section + every
@@ -98,6 +104,7 @@ export default function TimetableTab({
   periods,
   constraints = [],
   readOnly = false,
+  onOpenConstraints,
 }) {
   // Constraints saved on the Constraints tab that the solver doesn't
   // actually apply — most commonly the "scheduling_rule" catch-all for
@@ -417,6 +424,11 @@ export default function TimetableTab({
 
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
   const failed = !isGenerating && timetable?.status === 'failed'
+  // The reasons open by themselves when a generation fails, once per failure.
+  const [failureOpen, setFailureOpen] = useState(false)
+  useEffect(() => {
+    if (failed && timetable && !seenFailures.has(timetable.id)) setFailureOpen(true)
+  }, [failed, timetable])
   const solved = !isGenerating && timetable?.status === 'draft'
   // Rules this timetable currently breaks, computed server-side on every read
   // (see _violations_for in backend/app/routers/timetables.py). Normally
@@ -567,59 +579,30 @@ export default function TimetableTab({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {failed && (
-        <div className="max-w-xl rounded-lg border border-amber-300 bg-amber-50 p-5">
-          <div className="font-medium text-amber-900">
-            We couldn't build a conflict-free timetable
-          </div>
-          {/* error_explanation is a plain-language rewrite of error_message
-              generated once at failure time (see
-              backend/app/services/infeasibility_explainer.py) — shown as
-              the lead sentence when available, with the raw technical
-              causes still underneath (behind a toggle) for anyone who
-              wants the precise detail. Null whenever that service didn't
-              run (no ANTHROPIC_API_KEY) or wasn't applicable, in which
-              case this falls back to showing just the raw list, same as
-              before this existed. */}
-          {timetable.error_explanation && (
-            <p className="mt-2 text-sm text-amber-900">{timetable.error_explanation}</p>
-          )}
-          {/* error_message is newline-joined when the solver diagnosed one
-              or more specific causes (see _diagnose_infeasibility in
-              backend/app/services/solver.py) — rendered as a list so each
-              cause reads as its own point instead of a run-on sentence. */}
-          {(() => {
-            const lines = (timetable.error_message || 'Generation failed for an unknown reason.')
-              .split('\n')
-              .filter(Boolean)
-            const details = lines.length > 1 ? (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-amber-800">
-                {lines.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-amber-800">{lines[0]}</p>
-            )
-
-            if (!timetable.error_explanation) {
-              return <div className="mt-2">{details}</div>
-            }
-            // The friendly explanation is already shown above, so the raw
-            // detail is secondary here — tucked behind <details> instead
-            // of always-visible, so the common case (read the friendly
-            // sentence, fix it, move on) isn't cluttered by jargon most
-            // admins won't need.
-            return (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-medium text-amber-700 hover:text-amber-900">
-                  Show technical detail
-                </summary>
-                <div className="mt-1.5">{details}</div>
-              </details>
-            )
-          })()}
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+          <span className="inline-flex items-center gap-1.5 font-medium text-red-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-600" aria-hidden="true" />
+            The last generation couldn&rsquo;t build a timetable.
+          </span>
+          <button
+            onClick={() => setFailureOpen(true)}
+            className="font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
+          >
+            See why
+          </button>
         </div>
       )}
+
+      <GenerationFailedDialog
+        open={failed && failureOpen}
+        explanation={timetable?.error_explanation}
+        message={timetable?.error_message}
+        onClose={() => {
+          if (timetable) seenFailures.add(timetable.id)
+          setFailureOpen(false)
+        }}
+        onOpenConstraints={onOpenConstraints}
+      />
 
       {solved && (
         <motion.div

@@ -994,6 +994,7 @@ function App() {
                       periods={periods}
                       constraints={constraints}
                       readOnly={isViewer}
+                      onOpenConstraints={() => setTab('constraints')}
                     />
                   ) : (
                     <p className="text-sm text-slate-500">
