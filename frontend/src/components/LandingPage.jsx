@@ -135,8 +135,9 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, sig
           component functions/data (STEPS, PRICING_TIERS) are left intact
           further down this file so they're a one-line add back rather
           than a rebuild once pricing is settled and this section is
-          wanted again. */}
-      <Testimonials />
+          wanted again. The "What schools are saying" photo section
+          (Testimonials) is hidden the same way - the function is still
+          below, so putting <Testimonials /> back here restores it. */}
       <Footer />
     </div>
   )
