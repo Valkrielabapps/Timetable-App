@@ -1,0 +1,26 @@
+name,required_room_type
+English,
+Hindi,
+Malayalam,
+French,
+Sanskrit,
+Mathematics,
+Science,
+Social Studies,
+Physics,
+Chemistry,
+Biology,
+Computer,computer
+Computer Science,computer
+Informatics Practices,computer
+Science Lab,lab
+Physics Lab,lab
+Chemistry Lab,lab
+Accountancy,
+Business Studies,
+Economics,
+Physical Education,sports
+Art,art
+Music,music
+Library,
+Value Education,

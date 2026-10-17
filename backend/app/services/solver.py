@@ -117,7 +117,8 @@ def _run(solver: cp_model.CpSolver, model: cp_model.CpModel, has_objective: bool
     """Solve, stopping early in two cases:
 
     - no timetable at all within `first_answer_within` seconds (an unlucky
-      quick pass - the caller restarts it from a new random start), and
+      quick pass - the caller restarts it from a new random start),
+    - without preference rules, as soon as the first timetable is found, and
     - with preference rules, SETTLE_SECONDS after the last improvement.
       While better timetables keep turning up it keeps going, up to the
       solver's own time limit, so a school with many preferences loses none
@@ -135,7 +136,11 @@ def _run(solver: cp_model.CpSolver, model: cp_model.CpModel, has_objective: bool
                 if first_answer_within is not None and now - started >= first_answer_within:
                     solver.StopSearch()
                     return
-            elif has_objective and now - last >= SETTLE_SECONDS:
+            elif not has_objective or now - last >= SETTLE_SECONDS:
+                # Nothing to optimise: the first timetable is the answer.
+                # CP-SAT should stop there by itself, but measured on a
+                # 14-section school one worker found it at 1.5s while another
+                # ran on to the 60s limit.
                 solver.StopSearch()
                 return
 
@@ -1114,6 +1119,61 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             locked_keys.add(result_key)
             locked_rooms[result_key] = le.room_id
 
+    # ------------------------------------------------------------------
+    # One teacher per subject per section, all week
+    # ------------------------------------------------------------------
+    # Without this the teacher is chosen lesson by lesson, so a section's
+    # English could be Mrs. Rao on Monday and Mr. Iyer on Tuesday - valid by
+    # every other rule, and not how any school works. Each strand that needs
+    # a teacher (a requirement; each batch of a split lab; each option of an
+    # elective block) gets one "this is the teacher" choice, and every lesson
+    # of that strand may only use the chosen teacher.
+    #
+    # A strand whose locked lessons already name two different teachers (a
+    # timetable from before this rule, then locked) can't satisfy it, and a
+    # lock is a deliberate override - so that strand is left free and the
+    # admin is told, rather than the whole generation failing.
+    locked_teachers_by_req: dict[int, set[int]] = {}
+    if previous_timetable:
+        req_by_cg_subject = {(r.class_group_id, r.subject_id): r for r in requirements}
+        for le in previous_timetable.entries:
+            if le.locked and le.elective_block_id is None and le.lab_batch is None:
+                r = req_by_cg_subject.get((le.class_group_id, le.subject_id))
+                if r is not None:
+                    locked_teachers_by_req.setdefault(r.id, set()).add(le.teacher_id)
+
+    def _one_teacher(name: str, by_teacher: dict[int, list]) -> None:
+        if len(by_teacher) <= 1:
+            return  # one possible teacher: already consistent
+        chosen = {t: model.NewBoolVar(f"{name}_t{t}") for t in by_teacher}
+        model.AddExactlyOne(chosen.values())
+        for t, lesson_vars in by_teacher.items():
+            for v in lesson_vars:
+                model.AddImplication(v, chosen[t])
+
+    strands: dict[tuple, dict[int, list]] = {}
+    for (req_id, teacher_id, _period_id), var in x.items():
+        strands.setdefault(("r", req_id), {}).setdefault(teacher_id, []).append(var)
+    for (req_id, _period_id, batch), choice in batch_x.items():
+        for teacher_id, var in choice:
+            strands.setdefault(("b", req_id, batch), {}).setdefault(teacher_id, []).append(var)
+    for (block_id, _period_id, option_id), choice in option_x.items():
+        for teacher_id, var in choice:
+            strands.setdefault(("o", block_id, option_id), {}).setdefault(teacher_id, []).append(var)
+
+    for key, by_teacher in strands.items():
+        if key[0] == "r" and len(locked_teachers_by_req.get(key[1], ())) > 1:
+            req = requirements_by_id.get(key[1])
+            subject = subjects_by_id.get(req.subject_id) if req else None
+            cg = class_groups_by_id.get(req.class_group_id) if req else None
+            warnings.append(
+                f"{subject.name if subject else 'A subject'} in {_class_group_label(cg) if cg else 'a section'} "
+                f"has locked lessons with different teachers, so it may still be split between them. "
+                f"Unlock them and generate again to give it a single teacher."
+            )
+            continue
+        _one_teacher("one_" + "_".join(str(k) for k in key), by_teacher)
+
     # Weighted cost of every soft constraint this timetable violates,
     # minimised at the end. Empty when a school has only hard rules, in
     # which case no objective is added at all and the solver behaves exactly
@@ -1952,13 +2012,17 @@ def _assign_rooms(
     subjects_by_id = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
     class_groups_by_id = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
 
-    room_model = cp_model.CpModel()
-    room_vars: dict[tuple[int, int], cp_model.IntVar] = {}  # (assignment_index, room_id) -> var
-
+    # Rooms in one period never affect another, so this is one small
+    # matching per period - entries on one side, rooms they may use on the
+    # other - and a maximum matching is exactly "as many entries as possible
+    # get a room". Solved directly (augmenting paths) rather than as one
+    # school-wide CP-SAT model, which took its full 15-second limit on a
+    # school with labs and gave nothing a matching doesn't.
+    eligible_by_period: dict[int, list[tuple[int, list[int]]]] = {}
     for idx, a in enumerate(assignments):
         key = (a["class_group_id"], a["subject_id"], a["teacher_id"], a["period_id"])
         if key in locked_rooms:
-            continue  # already fixed above; not part of this solve
+            continue  # already fixed above; not part of this pass
 
         subject = subjects_by_id.get(a["subject_id"])
         class_group = class_groups_by_id.get(a["class_group_id"])
@@ -1966,43 +2030,35 @@ def _assign_rooms(
         student_count = class_group.student_count if class_group else None
 
         eligible = [
-            r for r in rooms
+            r.id for r in rooms
             if (not required_type or r.room_type == required_type)
             and (not student_count or not r.capacity or r.capacity >= student_count)
             and (a["period_id"], r.id) not in locked_period_rooms
         ]
-        vars_for_assignment = []
-        for room in eligible:
-            var = room_model.NewBoolVar(f"room_{idx}_{room.id}")
-            room_vars[(idx, room.id)] = var
-            vars_for_assignment.append(var)
-        if vars_for_assignment:
-            room_model.Add(sum(vars_for_assignment) <= 1)  # at most one room; 0 = unassigned
+        if eligible:
+            eligible_by_period.setdefault(a["period_id"], []).append((idx, eligible))
 
-    if not room_vars:
-        return  # no (entry, room) combination is even eligible
+    for entries in eligible_by_period.values():
+        # Most constrained first: fewer augmenting detours, same optimum.
+        entries.sort(key=lambda e: len(e[1]))
+        room_holder: dict[int, int] = {}  # room_id -> assignment index
 
-    # No room double-booked in the same period.
-    period_room_vars: dict[tuple[int, int], list] = {}
-    for (idx, room_id), var in room_vars.items():
-        period_room_vars.setdefault((assignments[idx]["period_id"], room_id), []).append(var)
-    for group in period_room_vars.values():
-        room_model.AddAtMostOne(group)
+        def place(idx: int, options: list[int], seen: set[int]) -> bool:
+            for room_id in options:
+                if room_id in seen:
+                    continue
+                seen.add(room_id)
+                holder = room_holder.get(room_id)
+                if holder is None or place(holder, options_of[holder], seen):
+                    room_holder[room_id] = idx
+                    return True
+            return False
 
-    room_model.Maximize(sum(room_vars.values()))
-
-    room_solver = cp_model.CpSolver()
-    room_solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
-    # This is a much simpler problem than the main solve (fixed periods,
-    # just matching rooms against them), so it doesn't need anywhere near
-    # the same time budget.
-    room_solver.parameters.max_time_in_seconds = min(15, settings.solver_time_limit_seconds)
-    room_status = room_solver.Solve(room_model)
-
-    if room_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        for (idx, room_id), var in room_vars.items():
-            if room_solver.Value(var):
-                assignments[idx]["room_id"] = room_id
+        options_of = {idx: options for idx, options in entries}
+        for idx, options in entries:
+            place(idx, options, set())
+        for room_id, idx in room_holder.items():
+            assignments[idx]["room_id"] = room_id
 
 
 def solve_example() -> SolveResult:

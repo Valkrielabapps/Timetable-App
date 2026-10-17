@@ -1,0 +1,34 @@
+name,email,max_periods_per_week,qualified_subjects,qualified_grades
+Anita Menon,,26,English,Grade 6;Grade 7;Grade 8
+Joseph Thomas,,28,English,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Priya Nair,,32,English,Grade 9;Grade 10;Grade 11;Grade 12
+Sunita Sharma,,26,Hindi,
+Rakesh Verma,,26,Hindi,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Ganesh Iyer,,20,Sanskrit,
+Lakshmi Pillai,,24,Malayalam,
+Claire D'Souza,,20,French,
+Ramesh Kumar,,28,Mathematics,Grade 6;Grade 7;Grade 8
+Deepa Pillai,,28,Mathematics,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Arjun Rao,,28,Mathematics,Grade 9;Grade 10;Grade 11;Grade 12
+Meera Krishnan,,24,Mathematics,Grade 11;Grade 12
+Kavitha Suresh,,28,Science;Science Lab,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Thomas George,,28,Science;Biology;Science Lab,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Vivek Menon,,28,Physics;Physics Lab,Grade 9;Grade 10;Grade 11;Grade 12
+Anil Joseph,,26,Physics;Physics Lab;Science Lab,Grade 9;Grade 10;Grade 11;Grade 12
+Nisha Varghese,,28,Chemistry;Chemistry Lab,Grade 9;Grade 10;Grade 11;Grade 12
+Farhan Ali,,24,Chemistry;Chemistry Lab;Science Lab,Grade 9;Grade 10;Grade 11;Grade 12
+Divya Raj,,26,Biology,Grade 9;Grade 10;Grade 11;Grade 12
+Sreeja Lab,,30,Science Lab;Physics Lab;Chemistry Lab,Grade 9;Grade 10;Grade 11;Grade 12
+Mohan Das,,28,Social Studies,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Leela Mathew,,28,Social Studies,Grade 6;Grade 7;Grade 8;Grade 9;Grade 10
+Anu Thomas,,12,Social Studies,Grade 6;Grade 7;Grade 8
+Rahul Mehta,,28,Computer;Computer Science,
+Sneha Kurian,,28,Computer;Computer Science;Informatics Practices,
+Suresh Pai,,26,Accountancy;Business Studies,Grade 11;Grade 12
+Rekha Shenoy,,28,Business Studies;Economics,Grade 11;Grade 12
+Biju Coach,,28,Physical Education,
+Asha Coach,,20,Physical Education,
+Fathima Beevi,,16,Art,
+Vinod Kumar,,10,Music,
+Mary Joseph,,20,Library,
+Fr. Paul,,10,Value Education,

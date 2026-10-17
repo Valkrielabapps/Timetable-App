@@ -1,0 +1,25 @@
+name,capacity,room_type
+Room 101,40,
+Room 102,40,
+Room 103,40,
+Room 104,40,
+Room 105,40,
+Room 106,40,
+Room 201,40,
+Room 202,40,
+Room 203,40,
+Room 204,40,
+Room 205,40,
+Room 206,40,
+Room 207,40,
+Room 208,40,
+Physics Lab,30,lab
+Chemistry Lab,30,lab
+Junior Science Lab,30,lab
+Biology Lab,30,lab
+Computer Lab 1,40,computer
+Computer Lab 2,40,computer
+Art Room,40,art
+Music Room,40,music
+Playground,80,sports
+Indoor Court,40,sports
