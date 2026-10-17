@@ -139,8 +139,9 @@ _RULE_TOOL = {
                     "count: how many matching periods there may be (also how you "
                     "say 'never' - relation '==' with value 0 - and 'at least "
                     "once' - relation '>=' with value 1). Most rules are counts.\n"
-                    "run: how many matching periods may sit back to back, or that "
-                    "they must come as a block.\n"
+                    "run: how many matching periods may sit back to back, that "
+                    "they must come as a block, or how many blocks a week ('once a "
+                    "week a double, single periods otherwise').\n"
                     "adjacency: how close two DIFFERENT sets of lessons may be, or "
                     "which order they come in.\n"
                     "bucket: whether two sets share a day, or must happen at the "
@@ -256,9 +257,25 @@ _RULE_TOOL = {
             "block_size": {
                 "type": ["integer", "null"],
                 "description": (
-                    "For run: the subject must be scheduled in blocks of this "
-                    "many consecutive periods, e.g. a practical needing a double."
+                    "For run: how many consecutive periods make a block - 2 for a "
+                    "double. On its own it means EVERY such lesson comes as a "
+                    "block; with `blocks` it is the length of the counted ones."
                 ),
+            },
+            "blocks": {
+                "type": ["integer", "null"],
+                "description": (
+                    "For run, with block_size: how many blocks per week, per "
+                    "scope group. 'Once a week Physics gets a double, other days "
+                    "single periods' is block_size=2, blocks=1. Every other day "
+                    "then has at most one such lesson - do not also send "
+                    "max_consecutive. Scope must not include day."
+                ),
+            },
+            "blocks_relation": {
+                "type": ["string", "null"],
+                "enum": ["at_most", "at_least", "exactly", None],
+                "description": "For run with blocks: 'exactly' (the default), 'at_least' or 'at_most' that many blocks.",
             },
             "first": {**_SELECTOR_SCHEMA, "description":
                       "For adjacency and bucket: the first-named set of lessons."},
@@ -533,13 +550,20 @@ bucket:
   (the timetable structure says where lunch falls, so "morning" is the periods
   before it - said as "none in the afternoon ones")
 
-block_size means EVERY one of those lessons must come as a block. It cannot say
-how MANY blocks there are:
+block_size alone means EVERY one of those lessons must come as a block. To say
+how MANY blocks there are, add `blocks` - the rest are then single periods, one
+a day at most:
+
+"Once in a week, physics must be given 2 lectures consecutively whereas on the other days it'll be single periods only"
+  form=run scope=["class_group"] selector={subjects:["Physics"]} block_size=2 blocks=1 blocks_relation="exactly"
+  (never block_size together with max_consecutive=1 for this - that says
+  "always doubles" and "never doubles" at once)
 
 "Only one double Maths period per week"
-  report_unclear, reason="not_supported" - block_size would force every Maths
-  period into a double, which is the opposite of a limit of one. Counting
-  blocks is not something this can express.
+  form=run scope=["class_group"] selector={subjects:["Maths"]} block_size=2 blocks=1 blocks_relation="at_most"
+
+"Grade 11 chemistry lab is a double twice a week"
+  form=run scope=["class_group"] selector={subjects:["Chemistry"],class_groups:["Grade 11"]} block_size=2 blocks=2 blocks_relation="exactly"
 
 "PE shouldn't be on two days in a row"
   report_unclear, reason="not_supported" - this is about which DAYS are next to
@@ -922,11 +946,22 @@ def _rule_payload(data: dict, seen: list[str] | None = None) -> dict:
         if block_size == 1:
             _note(seen, "block_size 1 -> max_consecutive 1 (a block of one is not a block)")
             block_size, max_consecutive = None, max_consecutive or 1
+        blocks = data.get("blocks")
+        if blocks is not None and max_consecutive is not None and block_size is not None:
+            # Counted blocks already mean "single periods otherwise"; a model
+            # that adds max_consecutive=1 is restating that, and the IR would
+            # refuse the pair as a contradiction.
+            _note(seen, "max_consecutive dropped (counted blocks already allow only singles otherwise)")
+            max_consecutive = None
         payload.update({
             "selector": _normalise_selector(data.get("selector"), seen),
             "max_consecutive": max_consecutive,
             "block_size": block_size,
         })
+        if blocks is not None:
+            payload["blocks"] = blocks
+            payload["blocks_relation"] = _normalise_relation(
+                data.get("blocks_relation") or "exactly", seen, _RELATION_ALIASES, "blocks_relation")
     elif form == "adjacency":
         min_gap = data.get("min_gap")
         must_precede = bool(data.get("must_precede"))
@@ -1018,6 +1053,8 @@ def parse_rule_llm(
         # limit - the retries feeding the thing they are retrying against. Five
         # was set to be safe and burned through a prepaid balance instead.
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
+        system = _system_prompt(teacher_names, subject_names, class_group_labels, periods)
+        messages = [{"role": "user", "content": text}]
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,
@@ -1034,26 +1071,77 @@ def parse_rule_llm(
             # the wrong conclusion that caching could not apply.
             system=[{
                 "type": "text",
-                "text": _system_prompt(teacher_names, subject_names, class_group_labels, periods),
+                "text": system,
                 "cache_control": {"type": "ephemeral"},
             }],
             tools=[_RULE_TOOL, _UNCLEAR_TOOL],
             # "any" rather than a named tool: the model must be able to choose
             # report_unclear, which is the whole point of offering it.
             tool_choice={"type": "any"},
-            messages=[{"role": "user", "content": text}],
+            messages=messages,
         )
         block = next(b for b in response.content if b.type == "tool_use")
-        usage = (
-            response.usage.input_tokens,
-            response.usage.output_tokens,
-            getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-            getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
-        )
+        usage = _usage(response)
     except Exception:
         logger.exception("IR constraint parsing failed")
         return None
 
+    result = _read_block(block, text, usage)
+    if result.invalid is None:
+        return result
+
+    # The rule was refused. Most often the model read the sentence right and
+    # built it wrong - "a double once a week" sent as "always doubles" plus
+    # "never doubles" - so it gets one chance to see why and either fix it or
+    # say plainly what it can't express. One retry, not a loop: the second
+    # call reuses the cached prompt, and a model that fails twice is not
+    # going to converge on a third.
+    try:
+        retry = client.messages.create(
+            model=settings.llm_model,
+            max_tokens=1500,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            tools=[_RULE_TOOL, _UNCLEAR_TOOL],
+            tool_choice={"type": "any"},
+            messages=[
+                *messages,
+                {"role": "assistant", "content": response.content},
+                {"role": "user", "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "is_error": True,
+                    "content": (
+                        f"That rule was refused: {result.invalid}. Send a corrected "
+                        "rule that says what the sentence means, or call "
+                        "report_unclear with reason not_supported and explain, in "
+                        "words the school would use, which part can't be expressed."
+                    ),
+                }]},
+            ],
+        )
+        retry_block = next(b for b in retry.content if b.type == "tool_use")
+    except Exception:
+        logger.exception("IR constraint parsing retry failed")
+        return result
+    retry_usage = _usage(retry)
+    combined = tuple(a + b for a, b in zip(usage, retry_usage))
+    second = _read_block(retry_block, text, combined)
+    if second.invalid is not None:
+        logger.warning("model produced an invalid IR rule twice for %r: %s", text, second.invalid)
+    return second
+
+
+def _usage(response) -> tuple[int, int, int, int]:
+    return (
+        response.usage.input_tokens,
+        response.usage.output_tokens,
+        getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+        getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+    )
+
+
+def _read_block(block, text: str, usage) -> "IRParse":
+    """Turn one tool call into an IRParse - a rule, an unclear, or invalid."""
     if block.name == "report_unclear":
         data = block.input
         return IRParse(usage=usage, unclear=Unclear(

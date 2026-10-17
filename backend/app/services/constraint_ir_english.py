@@ -297,6 +297,21 @@ def _sides(first: Selector, second: Selector, used: frozenset[str]) -> tuple[str
 def _render_run(form: Run) -> str:
     subject, used = _scope_subject(form.scope, form.selector)
     lessons = _describe_lessons(form.selector, used)
+    if form.blocks is not None:
+        # Counted blocks: a number of doubles across the week, single periods
+        # otherwise. Said in full, because "blocks of 2" alone reads as every
+        # lesson being a double - the exact misreading this form exists to avoid.
+        k, n = form.block_size, form.blocks
+        how = {"<=": "at most", ">=": "at least"}.get(form.blocks_relation, "exactly")
+        count = {1: "one", 2: "two", 3: "three", 4: "four"}.get(n, str(n))
+        if k in (2, 3):
+            block = {2: "double", 3: "triple"}[k] + ("" if n == 1 else "s")
+        else:
+            block = f"block of {k}" if n == 1 else f"blocks of {k}"
+        return (
+            f"for {subject}, {lessons} come as {how} {count} {block} a week "
+            f"({k} back to back), with no more than one on any other day"
+        )
     clauses = []
     if form.block_size is not None:
         clauses.append(

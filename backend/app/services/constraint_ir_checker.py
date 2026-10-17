@@ -208,6 +208,43 @@ def _runs(group: list[Placement]) -> list[list[list[Placement]]]:
     return runs
 
 
+_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def _check_counted_blocks(group: list[Placement], form: Run) -> list[tuple[list[int], str]]:
+    """Mirror of the compiler's _counted_blocks: each day is one block of
+    block_size back to back, or at most one lesson; and the block days across
+    the week are counted against `blocks`."""
+    k = form.block_size
+    found = []
+    block_days = []
+    by_day: dict[int, list[Placement]] = {}
+    for p in group:
+        by_day.setdefault(p.day_of_week, []).append(p)
+    for day, day_group in sorted(by_day.items()):
+        runs = _runs(day_group)
+        slots = sum(len(run) for run in runs)
+        name = _DAY_NAMES[day] if 0 <= day < len(_DAY_NAMES) else f"day {day}"
+        ids = [p.entry_id for p in day_group]
+        if slots <= 1:
+            continue
+        if slots == k and len(runs) == 1:
+            block_days.append(ids)
+            continue
+        if slots == k:
+            found.append((ids, f"{slots} on {name}, but not back to back"))
+        else:
+            found.append((ids, f"{slots} on {name}, but the rule allows a block of {k} or a single period"))
+    if not _holds(len(block_days), form.blocks_relation, form.blocks):
+        wanted = {"<=": "at most", ">=": "at least"}.get(form.blocks_relation, "exactly")
+        found.append((
+            [i for ids in block_days for i in ids],
+            f"{len(block_days)} block{'' if len(block_days) == 1 else 's'} of {k} this week, "
+            f"but the rule says {wanted} {form.blocks}",
+        ))
+    return found
+
+
 def _check_run(placements, form: Run, index) -> list[tuple[list[int], str]]:
     resolved = _resolve(form.selector, index)
     members = [p for p in placements if _matches(p, resolved)]
@@ -215,6 +252,9 @@ def _check_run(placements, form: Run, index) -> list[tuple[list[int], str]]:
         return []
     found = []
     for _key, group in _group(members, form.scope).items():
+        if form.blocks is not None:
+            found.extend(_check_counted_blocks(group, form))
+            continue
         for run in _runs(group):
             flat = [p for slot in run for p in slot]
             if form.max_consecutive is not None and len(run) > form.max_consecutive:

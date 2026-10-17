@@ -548,6 +548,74 @@ def _runs_within(group: list[Atom]) -> list[list[Atom]]:
     return runs
 
 
+def _counted_blocks(model, penalties, matching: list[Atom], form: Run, weight, name: str) -> None:
+    """"Once a week a double, single periods the other days", for one group.
+
+    Each day is either a block day - exactly `block_size` of these lessons, all
+    back to back - or holds at most one. The number of block days across the
+    week is then held to `blocks`.
+
+    Per day: total = block_size * block + single, with block and single not
+    both on, so a day has 0, 1 or exactly block_size lessons and never two
+    loose ones. A block day picks one window of block_size consecutive slots
+    (within a stretch, so never across lunch) and every slot in it must be
+    used; with the total fixed at block_size that is exactly the window.
+
+    A preference relaxes the whole rule for the group at once - one indicator
+    that, when off, lifts every part of it and costs `weight` - rather than
+    softening each day separately, which would let it be "mostly" honoured in
+    ways nobody asked for.
+    """
+    k = form.block_size
+    ok = None
+    if weight is not None:
+        ok = model.NewBoolVar(f"{name}_ok")
+        penalties.append(weight * (1 - ok))
+
+    def add(constraint) -> None:
+        if ok is not None:
+            constraint.OnlyEnforceIf(ok)
+
+    by_day: dict[int, list[Atom]] = {}
+    for atom in matching:
+        by_day.setdefault(atom.day_of_week, []).append(atom)
+
+    block_days = []
+    for day, day_atoms in sorted(by_day.items()):
+        runs = _runs_within(day_atoms)
+        # A slot's lessons are alternatives (one per possible teacher), and a
+        # section has at most one lesson a period, so their sum is 0 or 1.
+        occupied = [[sum(_distinct_vars(a.var for a in slot)) for slot in run] for run in runs]
+        total = sum(e for run in occupied for e in run)
+        windows = [(r, i) for r, run in enumerate(occupied) for i in range(len(run) - k + 1)]
+        if not windows:
+            # No stretch long enough for a block today: a single at most.
+            add(model.Add(total <= 1))
+            continue
+        block = model.NewBoolVar(f"{name}_d{day}_block")
+        single = model.NewBoolVar(f"{name}_d{day}_single")
+        add(model.Add(total == k * block + single))
+        add(model.Add(block + single <= 1))
+        chosen = []
+        for w, (r, i) in enumerate(windows):
+            window = model.NewBoolVar(f"{name}_d{day}_w{w}")
+            chosen.append(window)
+            for j in range(k):
+                add(model.Add(occupied[r][i + j] >= window))
+        add(model.Add(sum(chosen) == block))
+        block_days.append(block)
+
+    count = sum(block_days) if block_days else 0
+    if ok is None:
+        _relate(model, penalties, count, form.blocks_relation, form.blocks, None, f"{name}_blocks")
+    elif form.blocks_relation == "<=":
+        add(model.Add(count <= form.blocks))
+    elif form.blocks_relation == ">=":
+        add(model.Add(count >= form.blocks))
+    else:
+        add(model.Add(count == form.blocks))
+
+
 def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
     resolved = _resolve(form.selector, index)
     pool = _pool(atoms, _side(form.scope, form.selector))
@@ -557,6 +625,12 @@ def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
 
     for key, group in _group(members, form.scope).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
+        if form.blocks is not None:
+            # Counting blocks replaces "every lesson in a block" - see
+            # _counted_blocks. block_size alone below would force them all.
+            _counted_blocks(model, penalties, [a for a in group if _matches(a, resolved)],
+                            form, weight, name)
+            continue
         runs = _runs_within([a for a in group if _matches(a, resolved)])
 
         if form.max_consecutive is not None:

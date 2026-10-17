@@ -1009,15 +1009,17 @@ def interpret_constraint(
         )
 
     if result.invalid is not None:
-        # The model answered and the schema would not take it. The admin can't
-        # act on the validator's wording, so they get something they can act on
-        # - but it is logged as the defect it is, rather than being filed as
-        # the admin having written an unclear sentence.
+        # The model answered, was told why its rule was refused, and still sent
+        # one the schema would not take (see parse_rule_llm's retry). The admin
+        # can't act on the validator's wording, so they get something they can
+        # act on - but it is logged as the defect it is, rather than being
+        # filed as the admin having written an unclear sentence.
         return ConstraintInterpretResponse(
-            understood=False, reason="ambiguous",
+            understood=False, reason="not_supported",
             explanation=(
-                "I couldn't turn that into a rule I can apply. Could you say it "
-                "another way - naming the teacher or subject, and when it applies?"
+                "I understood what you meant but couldn't turn it into a rule the "
+                "timetable can apply - this kind of rule may not be supported yet. "
+                "If it has several parts, try adding them as separate rules."
             ),
         )
 
