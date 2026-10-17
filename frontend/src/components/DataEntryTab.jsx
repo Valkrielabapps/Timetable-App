@@ -393,7 +393,9 @@ export default function DataEntryTab({
     const rowsToCopy = selectedSubjectIds.length > 0
       ? rows.filter((row) => selectedSubjectIds.includes(row.subject.id))
       : rows.filter((row) => row.periodsPerWeek > 0)
-    if (rowsToCopy.length === 0) {
+    // The section's elective blocks go along with its subjects.
+    const blocksToCopy = electiveBlocks
+    if (rowsToCopy.length === 0 && blocksToCopy.length === 0) {
       setError('Nothing to copy: set some periods/week in this section first.')
       return
     }
@@ -404,11 +406,18 @@ export default function DataEntryTab({
       return
     }
 
+    const parts = []
+    if (rowsToCopy.length) parts.push(`${rowsToCopy.length} subject${rowsToCopy.length === 1 ? '' : 's'}`)
+    if (blocksToCopy.length) parts.push(`${blocksToCopy.length} elective block${blocksToCopy.length === 1 ? '' : 's'}`)
     const ok = await confirmDialog({
-      title: `Copy ${rowsToCopy.length} subject assignment${rowsToCopy.length === 1 ? '' : 's'}?`,
+      title: `Copy ${parts.join(' and ')}?`,
       message: `They'll be copied to ${targets.length} section${targets.length === 1 ? '' : 's'}: ${targets
         .map((cg) => (cg.grade ? `${cg.grade} - ${cg.name}` : cg.name))
-        .join(', ')}.`,
+        .join(', ')}.${
+        blocksToCopy.length
+          ? ` Elective blocks: ${blocksToCopy.map((b) => b.name).join(', ')} - a section that already has a block with the same name gets it updated.`
+          : ''
+      }`,
       confirmLabel: 'Copy',
     })
     if (!ok) return
@@ -422,8 +431,9 @@ export default function DataEntryTab({
       const result = await api.copyRequirements(activeSectionId, {
         target_ids: targets.map((t) => t.id),
         subject_ids: rowsToCopy.map((row) => row.subject.id),
+        include_blocks: blocksToCopy.length > 0,
       })
-      await load()
+      await Promise.all([load(), blockMutations.invalidate()])
       if (result?.skipped?.length) {
         setError(`Copied, except: ${result.skipped.join('; ')}.`)
       }
@@ -854,9 +864,10 @@ function PlanSection({
                 disabled={copyingPeriods || otherSections.length === 0}
                 className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
               >
-                {copyingPeriods
-                  ? 'Copying…'
-                  : `Copy ${selectedCount > 0 ? selectedCount : rows.filter((row) => row.periodsPerWeek > 0).length} subject${(selectedCount > 0 ? selectedCount : rows.filter((row) => row.periodsPerWeek > 0).length) === 1 ? '' : 's'} to…`}
+                {copyingPeriods ? 'Copying…' : copyButtonLabel(
+                  selectedCount > 0 ? selectedCount : rows.filter((row) => row.periodsPerWeek > 0).length,
+                  electiveBlocks.length,
+                )}
               </button>
               {copyPickerOpen && (
                 <CopyTargetPicker
@@ -987,6 +998,14 @@ function PlanSection({
       {electiveBlocksPanel}
     </div>
   )
+}
+
+// "Copy 9 subjects + 1 block to…" - the blocks go along with the subjects.
+function copyButtonLabel(subjectCount, blockCount) {
+  const parts = []
+  if (subjectCount > 0 || blockCount === 0) parts.push(`${subjectCount} subject${subjectCount === 1 ? '' : 's'}`)
+  if (blockCount > 0) parts.push(`${blockCount} block${blockCount === 1 ? '' : 's'}`)
+  return `Copy ${parts.join(' + ')} to…`
 }
 
 /**

@@ -203,6 +203,8 @@ class CopyRequirementsIn(BaseModel):
     # Which of the source section's subjects to copy; omitted = every subject
     # with periods set.
     subject_ids: list[int] | None = None
+    # Also copy the section's elective blocks (on by default).
+    include_blocks: bool = True
 
 
 @router.post("/{class_group_id}/requirements/copy")
@@ -220,7 +222,14 @@ def copy_requirements(
     out of connections and come back as a 500 part-way through. A target that
     already has the subject keeps its own teacher choices; only the periods
     change. A subject that is an elective option in a target section is
-    skipped and reported, since it can't also be a common subject there."""
+    skipped and reported, since it can't also be a common subject there.
+
+    Elective blocks come along too. A target block with the same name is
+    brought into line (same periods and options; teachers it had already
+    chosen for a subject it keeps are kept), otherwise the block is created
+    with no teachers fixed. A block whose options would clash with the
+    target - one of them is a common subject there, or is in another of its
+    blocks - is skipped and reported rather than half-applied."""
     source = db.get(ClassGroup, class_group_id)
     if not source:
         raise HTTPException(status_code=404, detail="Class group not found")
@@ -238,7 +247,11 @@ def copy_requirements(
     if payload.subject_ids:
         query = query.filter(SubjectRequirement.subject_id.in_(payload.subject_ids))
     source_rows = [r for r in query.all() if r.periods_per_week and r.periods_per_week > 0]
-    if not source_rows:
+    source_blocks = (
+        db.query(ElectiveBlock).filter(ElectiveBlock.class_group_id == class_group_id).order_by(ElectiveBlock.id).all()
+        if payload.include_blocks else []
+    )
+    if not source_rows and not source_blocks:
         raise HTTPException(status_code=400, detail="Nothing to copy: set some periods/week in this section first.")
 
     target_ids = [t.id for t in targets]
@@ -254,7 +267,8 @@ def copy_requirements(
         .all()
     }
     labels = {t.id: (f"{t.grade} - {t.name}" if t.grade else t.name) for t in targets}
-    subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_([r.subject_id for r in source_rows])).all()}
+    wanted_subjects = {r.subject_id for r in source_rows} | {o.subject_id for b in source_blocks for o in b.options}
+    subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_(wanted_subjects)).all()}
 
     created = updated = 0
     skipped: list[str] = []
@@ -270,8 +284,64 @@ def copy_requirements(
             else:
                 db.add(SubjectRequirement(class_group_id=target.id, subject_id=row.subject_id, periods_per_week=row.periods_per_week))
                 created += 1
+    db.flush()
+
+    blocks_created = blocks_updated = 0
+    if source_blocks:
+        common = {
+            (r.class_group_id, r.subject_id)
+            for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(target_ids)).all()
+        }
+        target_blocks: dict[int, list[ElectiveBlock]] = {}
+        for b in db.query(ElectiveBlock).filter(ElectiveBlock.class_group_id.in_(target_ids)).all():
+            target_blocks.setdefault(b.class_group_id, []).append(b)
+
+        for target in targets:
+            mine = target_blocks.setdefault(target.id, [])
+            for src in source_blocks:
+                option_ids = [o.subject_id for o in src.options]
+                same = next((b for b in mine if b.name.strip().lower() == src.name.strip().lower()), None)
+                clash = next((sid for sid in option_ids if (target.id, sid) in common), None)
+                if clash is not None:
+                    skipped.append(
+                        f"{src.name} in {labels[target.id]} ({subject_names.get(clash, 'a subject')} is a common subject there)"
+                    )
+                    continue
+                elsewhere = next(
+                    ((b, sid) for b in mine if b is not same for o in b.options for sid in [o.subject_id] if sid in option_ids),
+                    None,
+                )
+                if elsewhere is not None:
+                    other, sid = elsewhere
+                    skipped.append(
+                        f"{src.name} in {labels[target.id]} ({subject_names.get(sid, 'a subject')} is already in {other.name} there)"
+                    )
+                    continue
+                if same is not None:
+                    kept = {o.subject_id: o.preferred_teacher_id for o in same.options}
+                    same.periods_per_week = src.periods_per_week
+                    # Cleared and flushed before re-adding, for the same
+                    # unique-constraint reason as update_block.
+                    same.options.clear()
+                    db.flush()
+                    same.options = [ElectiveOption(subject_id=sid, preferred_teacher_id=kept.get(sid)) for sid in option_ids]
+                    blocks_updated += 1
+                else:
+                    block = ElectiveBlock(
+                        school_id=source.school_id, class_group_id=target.id, name=src.name,
+                        periods_per_week=src.periods_per_week,
+                        options=[ElectiveOption(subject_id=sid) for sid in option_ids],
+                    )
+                    db.add(block)
+                    mine.append(block)
+                    blocks_created += 1
+                db.flush()
+
     db.commit()
-    return {"created": created, "updated": updated, "skipped": skipped, "sections": len(targets)}
+    return {
+        "created": created, "updated": updated, "skipped": skipped, "sections": len(targets),
+        "blocks_created": blocks_created, "blocks_updated": blocks_updated,
+    }
 
 
 @router.get("/{class_group_id}/requirements", response_model=list[SubjectRequirementOut])
