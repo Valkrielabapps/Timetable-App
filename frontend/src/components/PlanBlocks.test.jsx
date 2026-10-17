@@ -76,8 +76,19 @@ describe("a section's plan with elective blocks", () => {
   it('shows the section’s blocks under its subjects', () => {
     renderPlan()
     expect(screen.getByText('Elective blocks')).toBeInTheDocument()
-    expect(screen.getByText('Block 1')).toBeInTheDocument()
+    // Once as a row in the subjects table (to tick and copy), once in the
+    // block editor below it.
+    expect(screen.getAllByText('Block 1')).toHaveLength(2)
     expect(screen.queryByText('Block 9')).toBeNull()
+  })
+
+  it('lists each block as a row with its own tick box, for copying', () => {
+    renderPlan()
+    const box = screen.getByRole('checkbox', { name: 'Select Block 1' })
+    expect(box).not.toBeChecked()
+    fireEvent.click(box)
+    expect(box).toBeChecked()
+    expect(screen.getAllByText('Elective block').length).toBeGreaterThan(0)
   })
 
   it('will not make a block option a subject everyone takes', () => {

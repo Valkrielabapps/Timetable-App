@@ -100,6 +100,8 @@ export default function DataEntryTab({
   const [activeSectionId, setActiveSectionId] = useState(classGroupId)
   const [error, setError] = useState(null)
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([])
+  // Elective blocks ticked in the same table, for copying with the subjects.
+  const [selectedBlockIds, setSelectedBlockIds] = useState([])
   const [copyTargetIds, setCopyTargetIds] = useState([])
   const [copyPickerOpen, setCopyPickerOpen] = useState(false)
   const [copyingPeriods, setCopyingPeriods] = useState(false)
@@ -390,11 +392,14 @@ export default function DataEntryTab({
 
   async function handleCopyPeriodsToOtherSections(targetIds) {
     if (copyingPeriods) return
-    const rowsToCopy = selectedSubjectIds.length > 0
+    // Nothing ticked = copy everything; otherwise exactly what's ticked,
+    // subjects and elective blocks alike.
+    const pickedBlocks = electiveBlocks.filter((b) => selectedBlockIds.includes(b.id))
+    const anyTicked = selectedSubjectIds.length > 0 || pickedBlocks.length > 0
+    const rowsToCopy = anyTicked
       ? rows.filter((row) => selectedSubjectIds.includes(row.subject.id))
       : rows.filter((row) => row.periodsPerWeek > 0)
-    // The section's elective blocks go along with its subjects.
-    const blocksToCopy = electiveBlocks
+    const blocksToCopy = anyTicked ? pickedBlocks : electiveBlocks
     if (rowsToCopy.length === 0 && blocksToCopy.length === 0) {
       setError('Nothing to copy: set some periods/week in this section first.')
       return
@@ -432,6 +437,7 @@ export default function DataEntryTab({
         target_ids: targets.map((t) => t.id),
         subject_ids: rowsToCopy.map((row) => row.subject.id),
         include_blocks: blocksToCopy.length > 0,
+        block_ids: blocksToCopy.map((b) => b.id),
       })
       await Promise.all([load(), blockMutations.invalidate()])
       if (result?.skipped?.length) {
@@ -542,6 +548,8 @@ export default function DataEntryTab({
           onSetAssistantTeacher={handleSetAssistantTeacher}
           selectedSubjectIds={selectedSubjectIds}
           onSelectedSubjectIdsChange={setSelectedSubjectIds}
+          selectedBlockIds={selectedBlockIds}
+          onSelectedBlockIdsChange={setSelectedBlockIds}
           copyTargetIds={copyTargetIds}
           onCopyTargetIdsChange={setCopyTargetIds}
           copyPickerOpen={copyPickerOpen}
@@ -665,6 +673,8 @@ function PlanSection({
   onSetAssistantTeacher,
   selectedSubjectIds,
   onSelectedSubjectIdsChange,
+  selectedBlockIds = [],
+  onSelectedBlockIdsChange = () => {},
   copyTargetIds,
   onCopyTargetIdsChange,
   copyPickerOpen,
@@ -735,8 +745,21 @@ function PlanSection({
   const blockOfSubject = new Map(
     electiveBlocks.flatMap((b) => b.options.map((o) => [o.subject_id, b.name])),
   )
-  const selectedAll = selectedSubjectIds.length === rows.length && rows.length > 0
+  // Ticked blocks still in this section (a stale id from another section
+  // doesn't count).
+  const tickedBlockIds = selectedBlockIds.filter((id) => electiveBlocks.some((b) => b.id === id))
+  const itemCount = rows.length + electiveBlocks.length
+  const selectedAll =
+    itemCount > 0 && selectedSubjectIds.length === rows.length && tickedBlockIds.length === electiveBlocks.length
   const selectedCount = selectedSubjectIds.length
+  const anyTicked = selectedCount > 0 || tickedBlockIds.length > 0
+  const subjectName = (id) => subjects.find((x) => x.id === id)?.name ?? 'Unknown subject'
+
+  function toggleSelectedBlock(blockId) {
+    onSelectedBlockIdsChange(
+      tickedBlockIds.includes(blockId) ? tickedBlockIds.filter((id) => id !== blockId) : [...tickedBlockIds, blockId],
+    )
+  }
 
   function toggleSelectedSubject(subjectId) {
     onSelectedSubjectIdsChange(
@@ -748,6 +771,7 @@ function PlanSection({
 
   function toggleSelectAll() {
     onSelectedSubjectIdsChange(selectedAll ? [] : rows.map((row) => row.subject.id))
+    onSelectedBlockIdsChange(selectedAll ? [] : electiveBlocks.map((b) => b.id))
   }
 
   if (classGroups.length === 0) {
@@ -856,7 +880,7 @@ function PlanSection({
                 onClick={toggleSelectAll}
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-slate-100"
               >
-                {selectedAll ? 'Clear selection' : `Select ${rows.length} subject${rows.length === 1 ? '' : 's'}`}
+                {selectedAll ? 'Clear selection' : `Select all ${itemCount}`}
               </button>
               <button
                 type="button"
@@ -865,8 +889,8 @@ function PlanSection({
                 className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
               >
                 {copyingPeriods ? 'Copying…' : copyButtonLabel(
-                  selectedCount > 0 ? selectedCount : rows.filter((row) => row.periodsPerWeek > 0).length,
-                  electiveBlocks.length,
+                  anyTicked ? selectedCount : rows.filter((row) => row.periodsPerWeek > 0).length,
+                  anyTicked ? tickedBlockIds.length : electiveBlocks.length,
                 )}
               </button>
               {copyPickerOpen && (
@@ -981,6 +1005,37 @@ function PlanSection({
                   <span className="text-xs text-slate-500">Needs a teacher</span>
                 )}
               </td>
+            </tr>
+          ))}
+          {/* Elective blocks: one row each, ticked and copied like a subject.
+              Their options and teachers are edited in the panel below. */}
+          {electiveBlocks.map((block) => (
+            <tr key={`block-${block.id}`} className="border-b border-slate-100 bg-violet-50/40">
+              <td className="py-2 pr-2 align-top">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${block.name}`}
+                  checked={tickedBlockIds.includes(block.id)}
+                  onChange={() => toggleSelectedBlock(block.id)}
+                  className="h-4 w-4 rounded border-slate-300 text-slate-900"
+                />
+              </td>
+              <td className="py-2 pr-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-slate-800">{block.name}</span>
+                  <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800">
+                    Elective block
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">
+                  {block.options.map((o) => subjectName(o.subject_id)).join(' / ')}
+                </div>
+              </td>
+              <td className="py-2 pr-2 pl-3 text-slate-700">{block.periods_per_week}</td>
+              <td className="py-2 pr-2 text-xs text-slate-500" colSpan={2}>
+                {block.options.length} options at the same time, each with its own teacher
+              </td>
+              <td className="py-2 pr-2 text-xs text-slate-500">Edit below</td>
             </tr>
           ))}
           <tr className="bg-slate-50 text-slate-600">

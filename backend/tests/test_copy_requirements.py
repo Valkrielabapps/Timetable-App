@@ -147,3 +147,16 @@ def test_blocks_can_be_left_out(client):
     _block(client, h, sid, a, "Third language", [x, y])
     client.post(f"/api/class-groups/{a['id']}/requirements/copy", headers=h, json={"target_ids": [b["id"]], "include_blocks": False})
     assert _blocks(client, h, sid, b) == []
+
+
+def test_only_the_ticked_block_and_no_subjects(client):
+    h, sid, (a, b, *_), (maths, *_rest) = _setup(client)
+    x, y, z, w = (_subject(client, h, sid, n) for n in ("French", "Sanskrit", "Biology", "Computer Science"))
+    _req(client, h, a, maths, 8)
+    _block(client, h, sid, a, "Third language", [x, y])
+    second = _block(client, h, sid, a, "Science elective", [z, w])
+    r = client.post(f"/api/class-groups/{a['id']}/requirements/copy", headers=h,
+                    json={"target_ids": [b["id"]], "subject_ids": [], "block_ids": [second["id"]]})
+    assert r.status_code == 200, r.text
+    assert [blk["name"] for blk in _blocks(client, h, sid, b)] == ["Science elective"]
+    assert _plan(client, h, b) == {}

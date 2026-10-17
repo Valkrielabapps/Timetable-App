@@ -205,6 +205,8 @@ class CopyRequirementsIn(BaseModel):
     subject_ids: list[int] | None = None
     # Also copy the section's elective blocks (on by default).
     include_blocks: bool = True
+    # Which of its blocks; omitted = all of them.
+    block_ids: list[int] | None = None
 
 
 @router.post("/{class_group_id}/requirements/copy")
@@ -244,13 +246,15 @@ def copy_requirements(
         raise HTTPException(status_code=400, detail="Pick at least one other section to copy to.")
 
     query = db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id == class_group_id)
-    if payload.subject_ids:
+    if payload.subject_ids is not None:
         query = query.filter(SubjectRequirement.subject_id.in_(payload.subject_ids))
     source_rows = [r for r in query.all() if r.periods_per_week and r.periods_per_week > 0]
     source_blocks = (
         db.query(ElectiveBlock).filter(ElectiveBlock.class_group_id == class_group_id).order_by(ElectiveBlock.id).all()
         if payload.include_blocks else []
     )
+    if payload.block_ids is not None:
+        source_blocks = [b for b in source_blocks if b.id in set(payload.block_ids)]
     if not source_rows and not source_blocks:
         raise HTTPException(status_code=400, detail="Nothing to copy: set some periods/week in this section first.")
 
