@@ -78,46 +78,72 @@ def test_batch_with_unparseable_text_returns_400(client):
     assert r.status_code == 400
 
 
-def test_batch_uses_llm_when_configured(client):
-    """Mocks parse_constraints_batch_llm directly (never a real Anthropic
-    call) to prove the batch endpoint actually wires that function's
-    output into created Constraint rows, rather than always silently
-    falling back to per-line parsing."""
+def _ir_parse(rule_dict):
+    from app.services.constraint_ir import rule_from_dict
+    from app.services.llm_ir_parser import IRParse
+    return IRParse(rule=rule_from_dict(rule_dict), sentence="")
+
+
+def _unclear():
+    from app.services.llm_ir_parser import IRParse, Unclear
+    return IRParse(unclear=Unclear(reason="ambiguous", explanation="?"))
+
+
+def test_batch_reads_each_line_with_the_rule_parser(client):
+    """Each line goes through the same parser as a single rule, so a pasted
+    list can say things the older nine types can't - here a teacher-per-day
+    cap and "right after lunch" - and they are saved as applied rules."""
+    _, headers = signup(client)
+    school = create_school(client, headers)
+    _create_subject(client, headers, school["id"], "Physical Education")
+    rules = {
+        "No teacher should teach more than 6 periods in a day.":
+            {"form": "count", "scope": ["teacher", "day"], "selector": {}, "relation": "<=", "value": 6},
+        "No Physical Education right after lunch.":
+            {"form": "count", "scope": [], "selector": {"subjects": ["Physical Education"], "period_orders": [6]},
+             "relation": "==", "value": 0},
+    }
+    with patch.object(settings, "anthropic_api_key", "fake-key"):
+        with patch("app.routers.constraints.parse_rule_llm", side_effect=lambda text, *a, **k: _ir_parse(rules[text])):
+            r = client.post("/api/constraints/batch", headers=headers,
+                            json={"school_id": school["id"], "text": "\n".join(rules)})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert [item["constraint"]["type"] for item in body] == ["ir", "ir"]
+    assert all(item["enforced"] for item in body)
+    assert [item["constraint"]["source_text"] for item in body] == list(rules)
+
+
+def test_a_line_the_rule_parser_cannot_read_falls_back(client):
     _, headers = signup(client)
     school = create_school(client, headers)
     teacher = _create_teacher(client, headers, school["id"], "Mrs. Sharma")
-
-    fake_parsed = [
-        ParsedConstraint(
-            type="workload_limit",
-            description="Mrs. Sharma: 12 periods/week",
-            teacher_name="Mrs. Sharma",
-            max_periods_per_week=12,
-        ),
-        ParsedConstraint(
-            type="scheduling_rule",
-            description="Something unusual the LLM couldn't map to a specific type",
-        ),
-    ]
+    fake = ParsedConstraint(type="workload_limit", description="Mrs. Sharma: 12 periods/week",
+                            teacher_name="Mrs. Sharma", max_periods_per_week=12)
     with patch.object(settings, "anthropic_api_key", "fake-key"):
-        with patch(
-            "app.routers.constraints.parse_constraints_batch_llm", return_value=fake_parsed
-        ) as mock_batch:
-            r = client.post(
-                "/api/constraints/batch",
-                json={"school_id": school["id"], "text": "irrelevant — the mock ignores this"},
-                headers=headers,
-            )
+        with patch("app.routers.constraints.parse_rule_llm", return_value=_unclear()), \
+             patch("app.routers.constraints.parse_constraint_llm", return_value=fake):
+            r = client.post("/api/constraints/batch", headers=headers,
+                            json={"school_id": school["id"], "text": "Mrs. Sharma teaches at most 12 periods a week"})
     assert r.status_code == 201, r.text
-    mock_batch.assert_called_once()
-    body = r.json()
-    assert len(body) == 2
-    workload = next(item for item in body if item["constraint"]["type"] == "workload_limit")
-    assert workload["constraint"]["parameters"]["teacher_id"] == teacher["id"]
-    assert workload["enforced"] is True
-    catchall = next(item for item in body if item["constraint"]["type"] == "scheduling_rule")
-    assert catchall["enforced"] is False
+    (item,) = r.json()
+    assert item["constraint"]["type"] == "workload_limit"
+    assert item["constraint"]["parameters"]["teacher_id"] == teacher["id"]
 
+
+def test_pasting_the_same_rules_again_adds_nothing(client):
+    _, headers = signup(client)
+    school = create_school(client, headers)
+    rule = {"form": "count", "scope": ["teacher", "day"], "selector": {}, "relation": "<=", "value": 6}
+    text = "No teacher should teach more than 6 periods in a day.\nNo teacher should teach more than 6 periods in a day."
+    with patch.object(settings, "anthropic_api_key", "fake-key"):
+        with patch("app.routers.constraints.parse_rule_llm", return_value=_ir_parse(rule)):
+            first = client.post("/api/constraints/batch", headers=headers, json={"school_id": school["id"], "text": text})
+            second = client.post("/api/constraints/batch", headers=headers, json={"school_id": school["id"], "text": text})
+    assert first.status_code == 201 and len(first.json()) == 1  # the same line twice is one rule
+    assert second.status_code == 400 and "already" in second.json()["detail"]
+    listed = client.get(f"/api/constraints?school_id={school['id']}", headers=headers).json()
+    assert len(listed) == 1
 
 def test_batch_falls_back_to_per_line_when_llm_batch_call_fails(client):
     """parse_constraints_batch_llm returning None (its documented
@@ -159,11 +185,13 @@ def test_batch_flags_conflicts_between_two_rules_in_the_same_paste(client):
             subject_name="Math", description="Math must be last period",
         ),
     ]
+    by_line = {"Math must be first period.": fake_parsed[0], "Math must be last period.": fake_parsed[1]}
     with patch.object(settings, "anthropic_api_key", "fake-key"):
-        with patch("app.routers.constraints.parse_constraints_batch_llm", return_value=fake_parsed):
+        with patch("app.routers.constraints.parse_rule_llm", return_value=_unclear()), \
+             patch("app.routers.constraints.parse_constraint_llm", side_effect=lambda text, *a, **k: by_line[text]):
             r = client.post(
                 "/api/constraints/batch",
-                json={"school_id": school["id"], "text": "Math must be first period. Math must be last period."},
+                json={"school_id": school["id"], "text": "Math must be first period.\nMath must be last period."},
                 headers=headers,
             )
     assert r.status_code == 201, r.text

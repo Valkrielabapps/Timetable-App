@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -463,6 +464,37 @@ def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current
     db.commit()
 
 
+class _DeleteManyIn(BaseModel):
+    school_id: int
+    ids: list[int] = Field(min_length=1, max_length=1000)
+
+
+@router.post("/delete-many")
+def delete_many_constraints(
+    payload: _DeleteManyIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Delete several rules in one request and one transaction - the Select
+    mode on the Constraints tab. One request per rule fired at once is what
+    ran the database out of connections on copy-to-sections.
+
+    Each rule is undone exactly as a single delete would be: a workload or
+    availability rule gives back what it wrote onto its teacher. Flushed one
+    at a time so that, with two copies of the same availability rule, the
+    second one's release sees the first already gone and frees the periods."""
+    require_school_access(db, current_user, payload.school_id, min_role="admin")
+    rows = (
+        db.query(Constraint)
+        .filter(Constraint.id.in_(set(payload.ids)), Constraint.school_id == payload.school_id)
+        .all()
+    )
+    for constraint in rows:
+        _revert_teacher_side_effects(db, constraint)
+        db.delete(constraint)
+        db.flush()
+    db.commit()
+    return {"deleted": len(rows)}
+
+
 # How firm a parsed rule is, as (is_hard, weight). Weights are only
 # compared against each other, so the absolute numbers matter less than the
 # gap between them: a strong preference should outrank several mild ones.
@@ -855,6 +887,76 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
     return ConstraintParseResponse(constraint=out, enforced=out.enforced)
 
 
+# A batch longer than this goes through the single-call path instead of one
+# call per line - a pasted document is not a list of rules.
+_MAX_BATCH_LINES = 40
+
+
+def _norm(text: str | None) -> str:
+    return " ".join((text or "").lower().replace("\u2019", "'").split()).rstrip(".")
+
+
+def _rule_key(kind: str, parameters: dict | None) -> tuple:
+    import json
+    return (kind, json.dumps(parameters or {}, sort_keys=True))
+
+
+def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule) -> list[Constraint]:
+    """One rule per line, read by the IR parser - the same one that reads a
+    rule typed on its own - so a pasted list can express everything a single
+    rule can ("right after lunch", "more than 6 in a day", several days).
+
+    The batch path used to go through the older nine-type parser, which has
+    nowhere to put those: they were saved as "not applied when generating".
+    A line the IR parser can't read (unclear, unsupported, or naming someone
+    the school doesn't have) still falls back to the older parser, so nothing
+    a batch used to manage is lost.
+
+    Lines are read three at a time: in parallel so a 14-line paste isn't 14
+    calls end to end, but not all at once, since every call carries the full
+    prompt and a burst of them is what trips the API's rate limit.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    todo = [line for line in lines if _norm(line) not in seen_text]
+    # The same line twice in one paste is one rule.
+    todo = list(dict.fromkeys(todo))
+
+    def read(line):
+        try:
+            return parse_rule_llm(line, data.teacher_names, data.subject_names, data.class_group_labels, data.periods)
+        except Exception:  # one bad call must not sink the whole paste
+            return None
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(read, todo))
+
+    rows: list[Constraint] = []
+    for line, result in zip(todo, results):
+        row = None
+        if result is not None and result.rule is not None and not _unknown_names(result.rule, data):
+            is_hard, weight = _STRENGTH.get(result.rule.strength, (True, 1))
+            row = Constraint(
+                school_id=school_id, type="ir", parameters=rule_to_dict(result.rule),
+                is_hard=is_hard, weight=weight, description=render_rule(result.rule),
+                source_text=line, parsed_by="llm-ir",
+            )
+        else:
+            item = _apply_parsed_constraint(db, school_id, _parse_text_to_constraint(line, data, True), data, source_text=line)
+            row = Constraint(
+                school_id=school_id, type=item.db_type, parameters=item.parameters,
+                is_hard=item.is_hard, weight=item.weight, description=item.description,
+                source_text=item.source_text, parsed_by=item.parsed_by,
+            )
+        key = _rule_key(row.type, row.parameters)
+        if key in seen_rule:
+            continue
+        seen_rule.add(key)
+        seen_text.add(_norm(line))
+        rows.append(row)
+    return rows
+
+
 @router.post("/batch", response_model=list[ConstraintParseResponse], status_code=201)
 def parse_and_create_constraints_batch(
     payload: ConstraintBatchParseRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
@@ -881,27 +983,47 @@ def parse_and_create_constraints_batch(
     # so each call costs several times what a single-sentence parse does.
     check_quota(f"llm-batch:{current_user.id}", limit=20, window_seconds=3600)
     allow_llm = plans.use_ai(db, db.get(School, payload.school_id))
-    resolved = _resolve_constraints_batch_text(db, payload.school_id, payload.text, allow_llm)
-    if not resolved:
-        raise HTTPException(
-            status_code=400,
-            detail="Couldn't find any constraints in that text. Try one clear rule per line.",
-        )
+    data = _load_resolution_data(db, payload.school_id)
 
-    created = []
-    for item in resolved:
-        constraint = Constraint(
-            school_id=payload.school_id,
-            type=item.db_type,
-            parameters=item.parameters,
-            is_hard=item.is_hard,
-            weight=item.weight,
-            description=item.description,
-            source_text=item.source_text,
-            parsed_by=item.parsed_by,
-        )
+    # Rules already on the school, so pasting the same list twice (or again
+    # after an error part-way through) doesn't add every rule a second time.
+    existing = db.query(Constraint).filter(Constraint.school_id == payload.school_id).all()
+    seen_text = {_norm(c.source_text) for c in existing if c.source_text} | {
+        _norm(c.description) for c in existing if c.description
+    }
+    seen_rule = {_rule_key(c.type, c.parameters) for c in existing}
+
+    lines = [line.strip() for line in payload.text.splitlines() if line.strip()]
+    rows: list[Constraint] = []
+    if allow_llm and lines and len(lines) <= _MAX_BATCH_LINES:
+        rows = _batch_rows_via_ir(db, payload.school_id, lines, data, seen_text, seen_rule)
+    else:
+        # No AI on this plan, or an unusually long paste: the older path,
+        # which splits and reads the block in one call (or by regex).
+        for item in _resolve_constraints_batch_text(db, payload.school_id, payload.text, allow_llm):
+            key = _rule_key(item.db_type, item.parameters)
+            if key in seen_rule or _norm(item.description) in seen_text:
+                continue
+            seen_rule.add(key)
+            rows.append(Constraint(
+                school_id=payload.school_id, type=item.db_type, parameters=item.parameters,
+                is_hard=item.is_hard, weight=item.weight, description=item.description,
+                source_text=item.source_text, parsed_by=item.parsed_by,
+            ))
+
+    if not rows:
+        if lines and all(_norm(line) in seen_text for line in lines):
+            raise HTTPException(status_code=400, detail="Those rules have already been added.")
+        if not lines:
+            raise HTTPException(
+                status_code=400,
+                detail="Couldn't find any constraints in that text. Try one clear rule per line.",
+            )
+        raise HTTPException(status_code=400, detail="Those rules are already in place - nothing new to add.")
+
+    created = rows
+    for constraint in created:
         db.add(constraint)
-        created.append(constraint)
     db.commit()
     for constraint in created:
         db.refresh(constraint)

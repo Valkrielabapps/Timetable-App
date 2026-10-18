@@ -93,6 +93,11 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   const [filters, setFilters] = useState(NO_FILTERS)
   // Groups the admin opened or closed by hand, over the default below.
   const [openOverrides, setOpenOverrides] = useState({})
+  // Select mode: tick rules, then delete them together. Keyed by rule id, so a
+  // rule listed in two places (under both its teachers) is ticked in both.
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [deleting, setDeleting] = useState(false)
 
   // Rules the current timetable breaks - normally none, but a hand move can
   // pass every physical check and still break one. Read from the same cached
@@ -135,8 +140,57 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
         onCancelScopeEdit={() => setScopeEditingId(null)}
         onSaveScope={(ids) => handleSaveScope(c, ids)}
         onRemove={() => handleRemove(c.id, c.description)}
+        selecting={selecting}
+        selected={selectedIds.has(c.id)}
+        onToggleSelected={() => toggleSelected(c.id)}
       />
     )
+  }
+
+  function toggleSelected(id) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Every rule currently shown (after search and filters), each once.
+  const shownIds = [
+    ...new Set([
+      ...organised.attention.map(({ constraint }) => constraint.id),
+      ...organised.categories.flatMap((cat) => cat.groups.flatMap((g) => g.items.map((c) => c.id))),
+    ]),
+  ]
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selectedIds.has(id))
+
+  function stopSelecting() {
+    setSelecting(false)
+    setSelectedIds(new Set())
+  }
+
+  async function handleDeleteSelected() {
+    const ids = [...selectedIds].filter((id) => constraints.some((c) => c.id === id))
+    if (ids.length === 0) return
+    const ok = await confirmDialog({
+      title: `Delete ${ids.length} constraint${ids.length === 1 ? '' : 's'}?`,
+      message: 'The solver stops applying them from the next timetable you generate.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await api.deleteConstraints(schoolId, ids)
+      stopSelecting()
+      await onReload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   function classGroupLabel(cg) {
@@ -361,6 +415,50 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
             total={constraints.length}
           />
 
+          {!readOnly && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {selecting ? (
+                <div className="flex w-full flex-wrap items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2">
+                  <span className="font-medium text-slate-700">
+                    {selectedIds.size} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(allShownSelected ? new Set() : new Set(shownIds))}
+                    className="text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    {allShownSelected ? 'Clear' : `Select all${shownIds.length < constraints.length ? ' shown' : ''} (${shownIds.length})`}
+                  </button>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={stopSelecting}
+                      className="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelected}
+                      disabled={selectedIds.size === 0 || deleting}
+                      className="rounded-md bg-red-600 px-3 py-1.5 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {deleting ? 'Deleting…' : `Delete${selectedIds.size ? ` ${selectedIds.size}` : ''}`}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelecting(true)}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50"
+                >
+                  Select
+                </button>
+              )}
+            </div>
+          )}
+
           {organised.shown === 0 && (
             <p className="text-sm text-slate-500">No rules match.</p>
           )}
@@ -517,6 +615,9 @@ function ConstraintRow({
   onCancelScopeEdit,
   onSaveScope,
   onRemove,
+  selecting = false,
+  selected = false,
+  onToggleSelected = () => {},
 }) {
   const [editText, setEditText] = useState(c.description || '')
   const [selectedIds, setSelectedIds] = useState(c.parameters?.class_group_ids || [])
@@ -547,8 +648,17 @@ function ConstraintRow({
   }
 
   return (
-    <li className="px-3 py-2.5">
+    <li className={`px-3 py-2.5 ${selecting && selected ? 'bg-red-50/60' : ''}`}>
       <div className="flex items-start justify-between gap-3">
+        {selecting && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label={`Select: ${c.description}`}
+            className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300"
+          />
+        )}
         <div className="min-w-0 flex-1">
           {isEditing ? (
             <div className="flex flex-col gap-1.5">
@@ -648,7 +758,7 @@ function ConstraintRow({
           )}
         </div>
 
-        {!readOnly && (
+        {!readOnly && !selecting && (
           <div className="flex flex-none items-center gap-2 pt-0.5">
             <button onClick={onStartEdit} className="text-xs text-slate-400 hover:text-slate-700" title="Edit" aria-label="Edit constraint">
               ✎

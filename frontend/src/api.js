@@ -276,6 +276,8 @@ export const api = {
   // without re-typing/re-parsing the whole rule.
   updateConstraint: (id, data) => put(`/constraints/${id}`, data),
   deleteConstraint: (id) => del(`/constraints/${id}`),
+  // Several at once, in one request - Select mode on the Constraints tab.
+  deleteConstraints: (schoolId, ids) => post(`/constraints/delete-many`, { school_id: schoolId, ids }),
 
   // Timetables — generation runs as a background job (see
   // backend/app/routers/timetables.py). generateTimetable() kicks the job
