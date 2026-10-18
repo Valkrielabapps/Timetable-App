@@ -85,7 +85,7 @@ def test_batch_records_each_line_separately_on_the_fallback_path(client):
     )
     assert r.status_code == 201, r.text
 
-    sources = [c["constraint"]["source_text"] for c in r.json()]
+    sources = [c["constraint"]["source_text"] for c in r.json()["created"]]
     assert "No PE in the last period" in sources
     assert all("\n" not in (s or "") for s in sources), "a row recorded the whole block"
 

@@ -45,7 +45,7 @@ def test_batch_without_llm_falls_back_to_one_rule_per_line(client):
         headers=headers,
     )
     assert r.status_code == 201, r.text
-    body = r.json()
+    body = r.json()["created"]
     assert len(body) == 2
     types = {item["constraint"]["type"] for item in body}
     assert types == {"workload_limit", "no_subject_day"}
@@ -63,7 +63,7 @@ def test_batch_ignores_blank_lines(client):
         headers=headers,
     )
     assert r.status_code == 201, r.text
-    assert len(r.json()) == 1
+    assert len(r.json()["created"]) == 1
 
 
 def test_batch_with_unparseable_text_returns_400(client):
@@ -108,7 +108,7 @@ def test_batch_reads_each_line_with_the_rule_parser(client):
             r = client.post("/api/constraints/batch", headers=headers,
                             json={"school_id": school["id"], "text": "\n".join(rules)})
     assert r.status_code == 201, r.text
-    body = r.json()
+    body = r.json()["created"]
     assert [item["constraint"]["type"] for item in body] == ["ir", "ir"]
     assert all(item["enforced"] for item in body)
     assert [item["constraint"]["source_text"] for item in body] == list(rules)
@@ -126,7 +126,7 @@ def test_a_line_the_rule_parser_cannot_read_falls_back(client):
             r = client.post("/api/constraints/batch", headers=headers,
                             json={"school_id": school["id"], "text": "Mrs. Sharma teaches at most 12 periods a week"})
     assert r.status_code == 201, r.text
-    (item,) = r.json()
+    (item,) = r.json()["created"]
     assert item["constraint"]["type"] == "workload_limit"
     assert item["constraint"]["parameters"]["teacher_id"] == teacher["id"]
 
@@ -140,7 +140,7 @@ def test_pasting_the_same_rules_again_adds_nothing(client):
         with patch("app.routers.constraints.parse_rule_llm", return_value=_ir_parse(rule)):
             first = client.post("/api/constraints/batch", headers=headers, json={"school_id": school["id"], "text": text})
             second = client.post("/api/constraints/batch", headers=headers, json={"school_id": school["id"], "text": text})
-    assert first.status_code == 201 and len(first.json()) == 1  # the same line twice is one rule
+    assert first.status_code == 201 and len(first.json()["created"]) == 1  # the same line twice is one rule
     assert second.status_code == 400 and "already" in second.json()["detail"]
     listed = client.get(f"/api/constraints?school_id={school['id']}", headers=headers).json()
     assert len(listed) == 1
@@ -161,8 +161,8 @@ def test_batch_falls_back_to_per_line_when_llm_batch_call_fails(client):
                 headers=headers,
             )
     assert r.status_code == 201, r.text
-    assert len(r.json()) == 1
-    assert r.json()[0]["constraint"]["type"] == "workload_limit"
+    assert len(r.json()["created"]) == 1
+    assert r.json()["created"][0]["constraint"]["type"] == "workload_limit"
 
 
 def test_batch_flags_conflicts_between_two_rules_in_the_same_paste(client):
@@ -195,7 +195,7 @@ def test_batch_flags_conflicts_between_two_rules_in_the_same_paste(client):
                 headers=headers,
             )
     assert r.status_code == 201, r.text
-    body = r.json()
+    body = r.json()["created"]
     assert len(body) == 2
     assert body[0]["constraint"]["conflicts"] and body[1]["constraint"]["conflicts"]
 
@@ -216,3 +216,40 @@ def test_viewer_cannot_batch_create_constraints(client):
         headers=viewer_headers,
     )
     assert r.status_code == 403
+
+
+
+def test_a_line_with_a_question_is_handed_back_not_saved(client):
+    """The rule parser asked a question and the older parser only managed a
+    rule the solver ignores: the line comes back to be added on its own,
+    rather than becoming a card marked "not applied"."""
+    from app.services.llm_ir_parser import IRParse, Unclear
+    _, headers = signup(client)
+    school = create_school(client, headers)
+    asked = IRParse(unclear=Unclear(reason="ambiguous", explanation="?", question="Saturday has no lunch - weekdays only?"))
+    junk = ParsedConstraint(type="scheduling_rule", description="No PE right after lunch")
+    with patch.object(settings, "anthropic_api_key", "fake-key"):
+        with patch("app.routers.constraints.parse_rule_llm", return_value=asked), \
+             patch("app.routers.constraints.parse_constraint_llm", return_value=junk):
+            r = client.post("/api/constraints/batch", headers=headers,
+                            json={"school_id": school["id"], "text": "No Physical Education right after lunch."})
+    assert r.status_code == 201, r.text
+    assert r.json()["created"] == []
+    (line,) = r.json()["unread"]
+    assert line["text"] == "No Physical Education right after lunch."
+    assert "Saturday" in line["reason"]
+    assert client.get(f"/api/constraints?school_id={school['id']}", headers=headers).json() == []
+
+
+def test_a_failed_call_is_retried(client):
+    from app.services.constraint_ir import rule_from_dict
+    from app.services.llm_ir_parser import IRParse
+    _, headers = signup(client)
+    school = create_school(client, headers)
+    ok = IRParse(rule=rule_from_dict({"form": "count", "scope": ["teacher", "day"], "selector": {}, "relation": "<=", "value": 6}))
+    with patch.object(settings, "anthropic_api_key", "fake-key"), patch("app.routers.constraints.time.sleep"):
+        with patch("app.routers.constraints.parse_rule_llm", side_effect=[None, ok]) as parse:
+            r = client.post("/api/constraints/batch", headers=headers,
+                            json={"school_id": school["id"], "text": "No teacher more than 6 periods a day"})
+    assert parse.call_count == 2
+    assert [c["constraint"]["type"] for c in r.json()["created"]] == ["ir"]

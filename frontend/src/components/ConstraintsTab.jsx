@@ -90,6 +90,9 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   // actually did something, not a second source of truth for what was
   // created.
   const [batchResultCount, setBatchResultCount] = useState(null)
+  // Lines a batch couldn't turn into a rule, each with why - handed back to be
+  // added one at a time, where a question can be asked and answered.
+  const [batchUnread, setBatchUnread] = useState([])
   const [filters, setFilters] = useState(NO_FILTERS)
   // Groups the admin opened or closed by hand, over the default below.
   const [openOverrides, setOpenOverrides] = useState({})
@@ -110,6 +113,10 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
     (timetable?.status === 'draft' ? timetable.violations ?? [] : []).map((v) => v.constraint_id),
   )
 
+  // Rules saved after the current timetable was generated. Not broken by it -
+  // it simply predates them - so they get "generate again", not a warning.
+  const pendingIds = new Set(timetable?.status === 'draft' ? timetable.pending_constraint_ids ?? [] : [])
+  const pendingCount = constraints.filter((c) => pendingIds.has(c.id)).length
   const organised = organise(constraints, { violatedIds, filters })
   const options = filterOptions(constraints)
   // A short list reads fine opened up; a long one is a wall again unless its
@@ -143,6 +150,7 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
         selecting={selecting}
         selected={selectedIds.has(c.id)}
         onToggleSelected={() => toggleSelected(c.id)}
+        pending={pendingIds.has(c.id)}
       />
     )
   }
@@ -249,10 +257,15 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
     setBatchSubmitting(true)
     setError(null)
     setBatchResultCount(null)
+    setBatchUnread([])
     try {
-      const created = await api.parseConstraintsBatch(schoolId, text)
+      const result = await api.parseConstraintsBatch(schoolId, text)
+      // Older servers answered with a bare list.
+      const created = Array.isArray(result) ? result : result.created ?? []
+      const unread = Array.isArray(result) ? [] : result.unread ?? []
       setBatchInput('')
       setBatchResultCount(created.length)
+      setBatchUnread(unread)
       await onReload()
     } catch (err) {
       setError(err.message)
@@ -392,11 +405,41 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
               </button>
             </>
           )}
-          {batchResultCount !== null && (
+          {batchResultCount !== null && batchResultCount > 0 && (
             <p className="text-xs text-emerald-700">
               Added {batchResultCount} constraint{batchResultCount === 1 ? '' : 's'} — check below for any marked
               as not yet enforced or conflicting.
             </p>
+          )}
+          {batchUnread.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+              <p className="font-medium">
+                {batchUnread.length === 1 ? "1 rule wasn't added" : `${batchUnread.length} rules weren't added`} — add{' '}
+                {batchUnread.length === 1 ? 'it' : 'them'} on {batchUnread.length === 1 ? 'its' : 'their'} own so we can check what you meant:
+              </p>
+              <ul className="mt-2 flex flex-col gap-2">
+                {batchUnread.map((u) => (
+                  <li key={u.text} className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-slate-800">{u.text}</p>
+                      <p className="text-xs text-amber-800">{u.reason}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBatchMode(false)
+                        setBatchResultCount(null)
+                        setBatchUnread((prev) => prev.filter((x) => x.text !== u.text))
+                        setInput(u.text)
+                      }}
+                      className="flex-none rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                    >
+                      Add on its own
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
@@ -407,6 +450,13 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
         <p className="text-sm text-slate-500">No constraints added yet.</p>
       ) : (
         <div className="flex flex-col gap-5">
+          {pendingCount > 0 && (
+            <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+              {pendingCount === 1 ? '1 rule was' : `${pendingCount} rules were`} added after the current timetable was
+              generated. Generate the timetable again to apply {pendingCount === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+
           <FilterBar
             filters={filters}
             onChange={setFilters}
@@ -618,6 +668,7 @@ function ConstraintRow({
   selecting = false,
   selected = false,
   onToggleSelected = () => {},
+  pending = false,
 }) {
   const [editText, setEditText] = useState(c.description || '')
   const [selectedIds, setSelectedIds] = useState(c.parameters?.class_group_ids || [])
@@ -685,7 +736,7 @@ function ConstraintRow({
             <p className="text-sm leading-snug">{c.description}</p>
           )}
 
-          {(c.is_hard === false || reasons.length > 0 || (scopable && !isEditing)) && (
+          {(c.is_hard === false || pending || reasons.length > 0 || (scopable && !isEditing)) && (
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               {reasons.map((reason) => (
                 <span
@@ -695,6 +746,14 @@ function ConstraintRow({
                   {reason}
                 </span>
               ))}
+              {pending && c.enforced && (
+                <span
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                  title="Saved after the current timetable was generated. It will apply the next time you generate."
+                >
+                  New - generate again to apply
+                </span>
+              )}
               {c.is_hard === false && (
                 <span
                   className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800"

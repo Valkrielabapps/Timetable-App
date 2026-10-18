@@ -394,6 +394,11 @@ class Timetable(Base):
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     status = Column(String, default="generating")  # generating, draft, failed, published, archived
     solver_status = Column(String, nullable=True)  # optimal, feasible, infeasible, unknown, no_periods, ...
+    # When generation started - the moment the solver read the school's rules.
+    # A rule saved after this wasn't part of the solve, so it isn't "broken" by
+    # this timetable, just not applied yet. Null on timetables from before the
+    # column existed, for which every rule is checked as before.
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
     error_message = Column(Text, nullable=True)
     # Plain-language rewrite of error_message, generated once at failure
     # time by app/services/infeasibility_explainer.py (see its docstring).

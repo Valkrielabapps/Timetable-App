@@ -1,3 +1,5 @@
+import logging
+import time
 from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
@@ -36,6 +38,7 @@ from app.services.llm_ir_parser import parse_rule_llm
 from app.services.timetable_structure import lesson_numbers
 
 router = APIRouter(prefix="/api/constraints", tags=["constraints"])
+logger = logging.getLogger(__name__)
 
 
 def _is_enforced(constraint: Constraint) -> bool:
@@ -462,6 +465,13 @@ def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current
     _revert_teacher_side_effects(db, constraint)
     db.delete(constraint)
     db.commit()
+
+
+class ConstraintBatchResponse(BaseModel):
+    created: list[ConstraintParseResponse]
+    # Lines that weren't added, each with why - usually a question the rule
+    # parser wants answered, which only the one-at-a-time flow can ask.
+    unread: list[dict] = []
 
 
 class _DeleteManyIn(BaseModel):
@@ -901,7 +911,7 @@ def _rule_key(kind: str, parameters: dict | None) -> tuple:
     return (kind, json.dumps(parameters or {}, sort_keys=True))
 
 
-def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule) -> list[Constraint]:
+def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule, unread: list | None = None) -> list[Constraint]:
     """One rule per line, read by the IR parser - the same one that reads a
     rule typed on its own - so a pasted list can express everything a single
     rule can ("right after lunch", "more than 6 in a day", several days).
@@ -923,10 +933,19 @@ def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule) -> list
     todo = list(dict.fromkeys(todo))
 
     def read(line):
-        try:
-            return parse_rule_llm(line, data.teacher_names, data.subject_names, data.class_group_labels, data.periods)
-        except Exception:  # one bad call must not sink the whole paste
-            return None
+        # One retry: with a dozen lines going out at once, a single call
+        # hitting the rate limit or timing out is the likeliest failure, and
+        # it used to send that line silently to the older parser.
+        for attempt in range(2):
+            try:
+                result = parse_rule_llm(line, data.teacher_names, data.subject_names, data.class_group_labels, data.periods)
+            except Exception:  # one bad call must not sink the whole paste
+                result = None
+            if result is not None:
+                return result
+            if attempt == 0:
+                time.sleep(1.5)
+        return None
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(read, todo))
@@ -948,6 +967,20 @@ def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule) -> list
                 is_hard=item.is_hard, weight=item.weight, description=item.description,
                 source_text=item.source_text, parsed_by=item.parsed_by,
             )
+            # The rule parser answered but couldn't settle on a rule (it had a
+            # question, or the line names someone the school doesn't have), and
+            # the older parser only managed a rule the solver won't apply.
+            # Saving that would add a card that does nothing; handing the line
+            # back lets the admin add it on its own, where the question is asked.
+            if unread is not None and result is not None and not _is_enforced(row):
+                why = None
+                if result.unclear is not None:
+                    why = result.unclear.question or result.unclear.explanation
+                elif result.rule is not None:
+                    why = f"It mentions {', '.join(_unknown_names(result.rule, data))}, which this school doesn't have."
+                unread.append({"text": line, "reason": why or "This one needs to be added on its own."})
+                logger.info("batch line not read as a rule: %r (%s)", line, why)
+                continue
         key = _rule_key(row.type, row.parameters)
         if key in seen_rule:
             continue
@@ -957,7 +990,7 @@ def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule) -> list
     return rows
 
 
-@router.post("/batch", response_model=list[ConstraintParseResponse], status_code=201)
+@router.post("/batch", response_model=ConstraintBatchResponse, status_code=201)
 def parse_and_create_constraints_batch(
     payload: ConstraintBatchParseRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -995,8 +1028,9 @@ def parse_and_create_constraints_batch(
 
     lines = [line.strip() for line in payload.text.splitlines() if line.strip()]
     rows: list[Constraint] = []
+    unread: list[dict] = []
     if allow_llm and lines and len(lines) <= _MAX_BATCH_LINES:
-        rows = _batch_rows_via_ir(db, payload.school_id, lines, data, seen_text, seen_rule)
+        rows = _batch_rows_via_ir(db, payload.school_id, lines, data, seen_text, seen_rule, unread)
     else:
         # No AI on this plan, or an unusually long paste: the older path,
         # which splits and reads the block in one call (or by regex).
@@ -1011,6 +1045,8 @@ def parse_and_create_constraints_batch(
                 source_text=item.source_text, parsed_by=item.parsed_by,
             ))
 
+    if not rows and unread:
+        return ConstraintBatchResponse(created=[], unread=unread)
     if not rows:
         if lines and all(_norm(line) in seen_text for line in lines):
             raise HTTPException(status_code=400, detail="Those rules have already been added.")
@@ -1032,7 +1068,7 @@ def parse_and_create_constraints_batch(
     for constraint in created:
         out = _to_out(db, constraint)
         responses.append(ConstraintParseResponse(constraint=out, enforced=out.enforced))
-    return responses
+    return ConstraintBatchResponse(created=responses, unread=unread)
 
 
 @router.put("/{constraint_id}/reparse", response_model=ConstraintParseResponse)

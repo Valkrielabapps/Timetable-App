@@ -133,6 +133,9 @@ class TimetableOut(BaseModel):
     # frontend just shows error_message's bulleted list on its own.
     error_explanation: str | None = None
     entries: list[TimetableEntryOut]
+    # Rules saved after this timetable was generated: not applied to it yet,
+    # and so left out of `violations` - "generate again" rather than "broken".
+    pending_constraint_ids: list[int] = []
     # Rules this timetable currently breaks. Normally empty: the solver was
     # given the same rules, so a freshly generated timetable should honour them
     # all. It fills up when someone moves a slot by hand - a manual move that

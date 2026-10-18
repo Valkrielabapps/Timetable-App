@@ -66,3 +66,21 @@ describe('Select mode on the Constraints tab', () => {
     expect(api.deleteConstraints).not.toHaveBeenCalled()
   })
 })
+
+describe('batch lines that need adding on their own', () => {
+  it('lists them with the reason and moves one into the single-rule box', async () => {
+    api.parseConstraintsBatch = vi.fn().mockResolvedValue({
+      created: [],
+      unread: [{ text: 'No PE right after lunch', reason: 'Saturday has no lunch - weekdays only?' }],
+    })
+    const onReload = vi.fn().mockResolvedValue(undefined)
+    render(<ConstraintsTab schoolId={1} classGroups={[]} constraints={[]} onReload={onReload} />)
+    fireEvent.click(screen.getByText(/add them all together/i))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'No PE right after lunch' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add all' }))
+    expect(await screen.findByText(/1 rule wasn't added/i)).toBeInTheDocument()
+    expect(screen.getByText('Saturday has no lunch - weekdays only?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add on its own' }))
+    expect(screen.getByDisplayValue('No PE right after lunch')).toBeInTheDocument()
+  })
+})

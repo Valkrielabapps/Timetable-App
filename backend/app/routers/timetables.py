@@ -134,7 +134,26 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         error_explanation=timetable.error_explanation,
         entries=entries,
         violations=_violations_for(db, timetable, class_groups, subjects, teachers, periods),
+        pending_constraint_ids=sorted(
+            c.id for c in db.query(Constraint).filter(Constraint.school_id == timetable.school_id).all()
+            if _added_after(c, timetable)
+        ) if timetable.status == "draft" else [],
     )
+
+
+def _utc(moment):
+    from datetime import timezone
+    if moment is None:
+        return None
+    return moment.replace(tzinfo=timezone.utc) if moment.tzinfo is None else moment.astimezone(timezone.utc)
+
+
+def _added_after(constraint: Constraint, timetable: Timetable) -> bool:
+    """Whether this rule was saved after the timetable was generated, and so
+    played no part in it. Unknown either way (rows from before these times
+    were recorded) counts as not after, which keeps the old behaviour."""
+    made, saved = _utc(timetable.created_at), _utc(constraint.created_at)
+    return made is not None and saved is not None and saved > made
 
 
 def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
@@ -164,6 +183,8 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
 
     rules = []
     for row in rows:
+        if _added_after(row, timetable):
+            continue  # not part of this solve - shown as "generate again", not broken
         try:
             rule = rule_from_dict(row.parameters or {})
             # The warning quotes Constraint.description - the sentence the
