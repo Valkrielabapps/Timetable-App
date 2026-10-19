@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import SiteNav from './SiteNav'
 
@@ -125,7 +126,13 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
     <div className="min-h-screen bg-black text-white">
       <SiteNav current="why" />
 
-      <div className="mx-auto max-w-6xl px-6 pb-10 pt-20">
+      {/* Same fade-up on arrival as Pricing, Customers, About and Support. */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mx-auto max-w-6xl px-6 pb-10 pt-20"
+      >
         <h1 className="max-w-2xl font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">
           Built to <em className="text-neutral-400">adapt</em> to how your school actually schedules
         </h1>
@@ -133,7 +140,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
           One connected workflow, from a blank slate to a clash-free timetable. Here's what actually
           happens at each step.
         </p>
-      </div>
+      </motion.div>
 
       <div className="relative mx-auto max-w-6xl px-6 pb-32">
         <div className="grid gap-12 lg:grid-cols-2">
