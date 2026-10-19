@@ -1312,7 +1312,7 @@ const FOOTER_COLUMNS = [
  */
 function ClosingCta({ onGetStarted, signedIn }) {
   return (
-    <section className="border-t border-white/10 bg-[#0d1512]">
+    <section className="border-t border-neutral-200 bg-white">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
@@ -1320,19 +1320,19 @@ function ClosingCta({ onGetStarted, signedIn }) {
         transition={{ duration: 0.5 }}
         className="mx-auto max-w-6xl px-6 py-24 md:py-28"
       >
-        <h2 className="max-w-4xl font-serif text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl">
-          Make the hardest timetable feel effortless, with Timetablz<span className="text-emerald-400">.</span>
+        <h2 className="max-w-4xl font-serif text-4xl font-medium leading-[1.1] tracking-tight text-neutral-900 md:text-6xl">
+          Make the hardest timetable feel effortless, with Timetablz<span className="text-emerald-600">.</span>
         </h2>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <a
             href="?page=contact"
-            className="rounded-lg bg-white px-7 py-3.5 text-[15px] font-semibold text-black hover:bg-neutral-200"
+            className="rounded-lg bg-neutral-900 px-7 py-3.5 text-[15px] font-semibold text-white hover:bg-neutral-700"
           >
             Book a demo
           </a>
           <button
             onClick={onGetStarted}
-            className="rounded-lg border border-white/80 px-7 py-3.5 text-[15px] font-semibold text-white hover:bg-white/10"
+            className="rounded-lg border border-neutral-900 px-7 py-3.5 text-[15px] font-semibold text-neutral-900 hover:bg-neutral-100"
           >
             {signedIn ? 'Open app' : 'Get started free'}
           </button>
