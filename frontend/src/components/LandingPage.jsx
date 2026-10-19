@@ -4,6 +4,7 @@ import { Marquee } from './Marquee'
 import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
 import shishyaPublicSchoolEntrancePhoto from '../assets/shishya-public-school-entrance.png'
+import SiteNav from './SiteNav'
 
 /**
  * Marketing landing page — what an unauthenticated visitor sees before
@@ -144,50 +145,8 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, sig
 }
 
 function LandingNav({ onGetStarted, onSignIn, signedIn }) {
-  return (
-    <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
-      {/* No max-w-6xl/mx-auto here unlike the rest of the page's sections —
-          that centers a fixed-width column and leaves equal, growing
-          margins on both sides as the viewport widens, which is exactly
-          why the logo never actually reached the true left edge like
-          Papermark's header does. This bar instead spans the full width
-          with fixed edge padding, so the logo and nav sit close to the
-          real left edge on any screen size. */}
-      <div className="flex items-center px-8 py-4 md:px-16 lg:px-28">
-        {/* Wordmark + nav links grouped together on the left (Papermark-style
-            layout) instead of the logo/nav/CTA being spread evenly across
-            the bar with justify-between — the nav reads as belonging to
-            the brand mark, not as a separate centered block. Plain
-            wordmark now, no icon/box mark — Papermark's own header is just
-            bold text too, no logomark next to it. */}
-        <div className="flex items-center gap-10">
-          <span className="text-[19px] font-bold tracking-tight text-white">Timetablz</span>
-          <nav className="hidden items-center gap-8 text-[15px] text-neutral-300 md:flex">
-            <a href="?page=why" className="hover:text-white">Why Timetablz</a>
-            <a href="?page=pricing" className="hover:text-white">Plans and Pricing</a>
-            <a href="?page=customers" className="hover:text-white">Customers</a>
-            <a href="?page=about" className="hover:text-white">About</a>
-            <a href="?page=support" className="hover:text-white">Support</a>
-          </nav>
-        </div>
-        <div className="ml-auto flex items-center gap-6">
-          {/* Signed in already: one button into the app instead of the
-              sign-in / sign-up pair. */}
-          {!signedIn && (
-            <button onClick={onSignIn} className="text-[15px] font-medium text-neutral-300 hover:text-white">
-              Sign in
-            </button>
-          )}
-          <button
-            onClick={onGetStarted}
-            className="rounded-md bg-white px-4 py-2 text-[15px] font-medium text-black hover:bg-neutral-200"
-          >
-            {signedIn ? 'Open app' : 'Get started free'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
+  // The shared site bar (SiteNav) - the same one every public page shows.
+  return <SiteNav signedIn={signedIn} onGetStarted={onGetStarted} onSignIn={onSignIn} />
 }
 
 /**

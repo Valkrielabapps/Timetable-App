@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import SiteNav from './SiteNav'
 
 /**
  * Standalone "Why Timetablz" page — reached via `?page=why` (same
@@ -122,24 +123,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <button onClick={onBack} className="text-[17px] font-bold tracking-tight text-white">
-            Timetablz
-          </button>
-          <div className="flex items-center gap-5">
-            <button onClick={onBack} className="text-sm font-medium text-neutral-400 hover:text-white">
-              ← Back to home
-            </button>
-            <button
-              onClick={onGetStarted}
-              className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-200"
-            >
-              Get started free
-            </button>
-          </div>
-        </div>
-      </div>
+      <SiteNav current="why" />
 
       <div className="mx-auto max-w-6xl px-6 pb-10 pt-20">
         <h1 className="max-w-2xl font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">

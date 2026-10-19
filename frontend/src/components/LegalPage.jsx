@@ -1,3 +1,4 @@
+import SiteNav from './SiteNav'
 /**
  * Renders one of the plain-Markdown legal docs (src/legal/*.md, imported
  * as raw text via Vite's `?raw` suffix — see PrivacyPolicyPage.jsx /
@@ -140,14 +141,7 @@ function renderMarkdown(source) {
 export default function LegalPage({ title, markdown, onBack }) {
   return (
     <div className="min-h-screen bg-white">
-      <div className="border-b border-neutral-100">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-5">
-          <span className="text-[17px] font-bold tracking-tight text-neutral-900">Timetablz</span>
-          <button onClick={onBack} className="text-sm font-medium text-neutral-500 hover:text-neutral-900">
-            ← Back to home
-          </button>
-        </div>
-      </div>
+      <SiteNav />
 
       <div className="mx-auto max-w-3xl px-6 py-14">
         {renderMarkdown(markdown)}
