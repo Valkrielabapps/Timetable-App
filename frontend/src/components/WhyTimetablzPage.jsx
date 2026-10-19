@@ -19,9 +19,9 @@ import SiteNav from './SiteNav'
  * The four steps are the same STEPS content LandingPage.jsx's HowItWorks
  * section used before it was removed from the homepage (see that file) —
  * reused verbatim rather than inventing new copy, since it already
- * accurately describes the real four-stage workflow (Data Entry →
- * Constraints → Solver → Timetable, the same stage names WorkflowDemo's
- * sidebar uses on the homepage).
+ * accurately describes the real four-stage workflow. The diagram's labels
+ * (Your school → Your rules → We solve it → Your timetable) are worded for a
+ * school reading the page rather than as system stage names.
  */
 
 const STEPS = [
@@ -29,25 +29,25 @@ const STEPS = [
     n: '01',
     title: 'Set up your school',
     body: 'Periods, subjects, teachers, and sections: type them in or bulk-import a spreadsheet.',
-    layer: 'Data Entry',
+    layer: 'Your school',
   },
   {
     n: '02',
     title: 'Describe your rules',
-    body: 'Plain-English constraints, scoped to a subject, teacher, day, or specific section.',
-    layer: 'Constraints',
+    body: 'Write your rules in plain English, for a subject, a teacher, a day, or a single section.',
+    layer: 'Your rules',
   },
   {
     n: '03',
     title: 'Generate',
-    body: "The solver builds every section's schedule at once, with zero teacher or room clashes.",
-    layer: 'Solver',
+    body: "We build every section's timetable at once, with no teacher or room ever double-booked.",
+    layer: 'We solve it',
   },
   {
     n: '04',
     title: 'Fine-tune and export',
     body: 'Lock slots, drag to adjust, then export to Excel or PDF for the staff room wall.',
-    layer: 'Timetable',
+    layer: 'Your timetable',
   },
 ]
 
