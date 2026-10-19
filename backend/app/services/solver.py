@@ -78,6 +78,10 @@ FAST_PASS_SECONDS = 12
 # when it stopped finding one long ago. This long without an improvement
 # counts as settled.
 SETTLE_SECONDS = 4.0
+# Once a valid timetable exists, how long to spend improving it against the
+# preference rules. Preferences are worth some seconds, not the whole minute
+# someone is watching a spinner for.
+IMPROVE_SECONDS = 20
 
 
 class _SettleWatch(cp_model.CpSolverSolutionCallback):
@@ -91,7 +95,7 @@ class _SettleWatch(cp_model.CpSolverSolutionCallback):
         self.last_improvement = time.monotonic()
 
 
-def _new_solver(time_limit: float, fast: bool, seed: int) -> cp_model.CpSolver:
+def _new_solver(time_limit: float, fast: bool, seed: int, light_presolve: bool = False) -> cp_model.CpSolver:
     solver = cp_model.CpSolver()
     # Every core up to a cap - CP-SAT's parallel search scales well.
     solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
@@ -108,6 +112,11 @@ def _new_solver(time_limit: float, fast: bool, seed: int) -> cp_model.CpSolver:
         # took 15 of 16 seconds and 30 of 34, and the search itself under a
         # second. Skipping it finds the same timetable in 2-5 seconds.
         solver.parameters.cp_model_presolve = False
+        solver.parameters.symmetry_level = 0
+    elif light_presolve:
+        # Presolve on, symmetry detection off: keeps what presolve is good at
+        # (simplifying away the slack a preference rule adds) without the
+        # symmetry step that took most of the time on the stress schools.
         solver.parameters.symmetry_level = 0
     return solver
 
@@ -156,12 +165,15 @@ def _run(solver: cp_model.CpSolver, model: cp_model.CpModel, has_objective: bool
 def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
     """Solve quickly where possible, thoroughly where needed.
 
-    Quick passes skip presolve and almost always settle a school in seconds -
-    with a timetable, or with proof there isn't one. How long one takes
-    depends heavily on its random starting point (3s or 25s for the same
-    school), so an unlucky pass is cut short and restarted from a new one
-    rather than waited out. Only if FAST_PASSES quick passes all end undecided
-    does the full pass run, with whatever time is left.
+    Without preference rules this is _find_timetable: quick passes, then the
+    full pass.
+
+    With them, a valid timetable is found FIRST, ignoring the preferences, and
+    only then improved. Searching for the best timetable from the start made a
+    school whose hard rules solve in two seconds fail outright once two "try
+    to" rules were added - the optimiser never reached a first answer inside
+    the time limit. Preferences can now only make the answer better, never
+    turn a solvable school into "couldn't build a timetable".
     """
     limit = float(settings.solver_time_limit_seconds)
     pinned = settings.solver_random_seed
@@ -171,19 +183,59 @@ def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
     def remaining():
         return limit - (time.monotonic() - started)
 
+    if not has_objective:
+        return _find_timetable(model, rng, remaining)
+
+    objective = cp_model.cp_model_pb2.CpObjectiveProto()
+    objective.CopyFrom(model.Proto().objective)
+    model.ClearObjective()
+    try:
+        # Preference rules add slack variables that only presolve simplifies
+        # away, so the no-presolve quick passes stall on them (12s each with
+        # nothing found, where a presolved pass finished in 10).
+        first = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1), light_presolve=True)
+        status = _run(first, model, False, first_answer_within=None)
+    finally:
+        model.Proto().objective.CopyFrom(objective)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE) or remaining() < 2:
+        return first, status
+
+    # Improve from the timetable just found rather than from nothing.
+    model.ClearHints()
+    values = first.ResponseProto().solution
+    proto = model.Proto()
+    proto.solution_hint.vars.extend(range(len(values)))
+    proto.solution_hint.values.extend(values)
+    better = _new_solver(min(IMPROVE_SECONDS, remaining()), fast=False, seed=rng.randrange(2**31 - 1))
+    better_status = _run(better, model, True, first_answer_within=None)
+    model.ClearHints()
+    if better_status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return better, better_status
+    # Ran out of time before re-finding even the hinted answer: keep the
+    # valid one. FEASIBLE, not OPTIMAL - the preferences weren't weighed.
+    return first, cp_model.FEASIBLE
+
+
+def _find_timetable(model, rng, remaining):
+    """Quick passes skip presolve and almost always settle a school in seconds -
+    with a timetable, or with proof there isn't one. How long one takes depends
+    heavily on its random starting point (3s or 25s for the same school), so an
+    unlucky pass is cut short and restarted from a new one rather than waited
+    out. Only if FAST_PASSES quick passes all end undecided does the full pass
+    run, with whatever time is left. The model must have no objective."""
     solver, status = None, cp_model.UNKNOWN
     for _ in range(FAST_PASSES):
         if solver is not None and remaining() < 2:
             return solver, status
         solver = _new_solver(remaining(), fast=True, seed=rng.randrange(2**31 - 1))
-        status = _run(solver, model, has_objective, first_answer_within=FAST_PASS_SECONDS)
+        status = _run(solver, model, False, first_answer_within=FAST_PASS_SECONDS)
         if status != cp_model.UNKNOWN:
             return solver, status
 
     if remaining() < 2:
         return solver, status
     solver = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1))
-    return solver, _run(solver, model, has_objective, first_answer_within=None)
+    return solver, _run(solver, model, False, first_answer_within=None)
 
 
 def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
