@@ -25,6 +25,7 @@ behind multiple worker processes or survive restarts, swap this for a
 real task queue; the job-row-plus-polling API shape wouldn't need to
 change.
 """
+from datetime import datetime, timedelta, timezone
 import threading
 from dataclasses import replace
 
@@ -444,12 +445,45 @@ def generate_timetable(school_id: int, db: Session = Depends(get_db), current_us
     return _to_timetable_out(db, timetable)
 
 
+# When this server process started. A generation runs on a thread inside the
+# process that started it, so one created before this moment belonged to a
+# process that has since gone - a deploy or a restart - and will never finish.
+_PROCESS_STARTED = datetime.now(timezone.utc)
+# Longer than any real generation takes (the solve plus, when it fails, the
+# search for which rule is to blame), with room to spare.
+_GENERATION_GIVE_UP = timedelta(minutes=10)
+
+
+def _reap_if_dead(db: Session, timetable: Timetable) -> None:
+    """Mark a generation failed if its job can no longer be running.
+
+    Without this the timetable stays "generating" forever and the tab polls
+    a spinner that never stops - the job's thread died with the old process,
+    so nothing is left to update the row."""
+    if timetable.status != "generating":
+        return
+    made = _utc(timetable.created_at)
+    now = datetime.now(timezone.utc)
+    if made is not None and made >= _PROCESS_STARTED and now - made < _GENERATION_GIVE_UP:
+        return
+    timetable.status = "failed"
+    timetable.error_message = (
+        "This generation was interrupted - the server restarted while it was running, usually "
+        "because an update was being deployed. Nothing was changed. Click Generate again."
+        if made is None or made < _PROCESS_STARTED else
+        "This generation took far longer than it should and was stopped. Click Generate again; "
+        "if it happens again, contact support."
+    )
+    db.commit()
+
+
 @router.get("/{timetable_id}", response_model=TimetableOut)
 def get_timetable(timetable_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     timetable = db.get(Timetable, timetable_id)
     if not timetable:
         raise HTTPException(status_code=404, detail="Timetable not found")
     require_school_access(db, current_user, timetable.school_id)
+    _reap_if_dead(db, timetable)
     return _to_timetable_out(db, timetable)
 
 
