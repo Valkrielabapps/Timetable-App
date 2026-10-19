@@ -70,7 +70,7 @@ from app.services import plans
 from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
-from app.services.solver import _class_group_labels, generate_school_timetable
+from app.services.solver import _class_group_labels, generate_school_timetable, find_blocking_rules
 from app.services.timetable_structure import lesson_numbers, zero_period_ids_for
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
@@ -367,6 +367,10 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
             # app/services/solver.py), and the frontend renders each line
             # as its own bullet rather than running them together into one
             # sentence.
+            if not result.errors and result.status in ("infeasible", "unknown"):
+                # No direct cause found: switch rules off one at a time to find
+                # which ones are to blame, so the message can name them.
+                result.errors = find_blocking_rules(db, school_id)
             if result.errors:
                 timetable.error_message = "\n".join(result.errors)
                 # Best-effort — see explain_infeasibility's docstring for

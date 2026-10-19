@@ -11,6 +11,7 @@ sanity check that the OR-Tools install works (see /api/solver/test).
 teachers, class groups, subject requirements, and periods from the
 database and builds/solves a CP-SAT model from that real data.
 """
+import contextvars
 import os
 import random
 import threading
@@ -66,6 +67,21 @@ class TimetableSolveResult:
     # this is not a failure, but a rule silently doing nothing while the UI
     # reports it as enforced is the failure mode the IR exists to end.
     warnings: list[str] = field(default_factory=list)
+
+
+# Rules to leave out of a solve, and a time limit to use instead of the
+# configured one - set only by find_blocking_rules, which re-solves a failed
+# school with rules switched off to find which ones are to blame. Context
+# variables rather than parameters so generate_school_timetable's signature
+# (and every caller of it) stays as it is.
+_SKIP_RULES: contextvars.ContextVar = contextvars.ContextVar("skip_rules", default=frozenset())
+_TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", default=None)
+
+
+def _constraint_query(db: Session):
+    query = db.query(Constraint)
+    skip = _SKIP_RULES.get()
+    return query.filter(Constraint.id.notin_(skip)) if skip else query
 
 
 # Quick passes (no presolve) tried, each from a new random start, before
@@ -175,7 +191,8 @@ def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
     the time limit. Preferences can now only make the answer better, never
     turn a solvable school into "couldn't build a timetable".
     """
-    limit = float(settings.solver_time_limit_seconds)
+    override = _TIME_LIMIT.get()
+    limit = float(override if override is not None else settings.solver_time_limit_seconds)
     pinned = settings.solver_random_seed
     rng = random.Random(pinned) if pinned is not None else random.SystemRandom()
     started = time.monotonic()
@@ -719,7 +736,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # "require_subject_day" (whole-day) Constraint rows, resolved once up
     # front rather than re-querying per requirement.
     placement_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(
             Constraint.school_id == school_id,
             Constraint.type.in_(
@@ -1272,7 +1289,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # a period is just the sum of its candidate vars there (0 or 1,
     # guaranteed by the AddAtMostOne on class_group_period_vars above).
     consecutive_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "max_consecutive_periods",
@@ -1328,7 +1345,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # rule, which none of the other types express: max_consecutive caps
     # back-to-back runs, and min_gap is about two *different* subjects.
     per_day_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "max_subject_periods_per_day",
@@ -1362,7 +1379,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # group — no aggregation needed beyond the per-period var lists already
     # built above.
     sequence_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "subject_sequence",
@@ -1413,7 +1430,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # same-period case, distance 0, though that's already impossible via
     # the class-group double-booking constraint above).
     gap_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(
             Constraint.school_id == school_id,
             Constraint.type == "min_gap_between_subjects",
@@ -1471,7 +1488,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # currently works at risk of the new path's bugs, for no gain the day it
     # ships; they can be retired once the IR has run against real schools.
     ir_constraints = (
-        db.query(Constraint)
+        _constraint_query(db)
         .filter(Constraint.school_id == school_id, Constraint.type == "ir")
         .all()
     )
@@ -2307,3 +2324,109 @@ def solve_example() -> SolveResult:
                         )
 
     return SolveResult(status=status_name, assignments=assignments)
+
+
+# Rule types the solver reads from Constraint rows. Workload and availability
+# rules are applied by editing the Teacher, so switching their row off would
+# not switch the rule off - they are left out of the search.
+_SEARCHABLE_TYPES = (
+    "ir", "no_subject_period", "require_subject_period", "no_subject_day", "require_subject_day",
+    "max_consecutive_periods", "max_subject_periods_per_day", "min_gap_between_subjects", "subject_sequence",
+)
+
+
+def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120, per_try_seconds: float = 15) -> list[str]:
+    """Which of the school's rules stop a timetable from existing.
+
+    The step the failure message used to ask the admin to do by hand - switch
+    rules off one at a time and regenerate - done here instead, in the
+    background job, so the message can name the rule.
+
+      1. Every rule off. Still no timetable: the rules aren't the cause, and
+         the message says so (it is then teachers, periods or the plan).
+      2. Each rule off on its own. Any rule whose removal is enough is named.
+      3. If no single rule is enough, a deletion filter finds a smallest set
+         that can't all hold together: drop each rule in turn, keep it dropped
+         if the school is still impossible without it. What is left are rules
+         that, between them, are the conflict.
+
+    Only a solve that FINDS a timetable counts as "possible". A try that runs
+    out of time counts as impossible, which can make step 3 keep a rule it
+    didn't need, but never names a rule as the fix when it isn't. Preferences
+    are left out: a soft rule can't make a school impossible. Returns [] if
+    the search runs out of time before it can say anything.
+    """
+    rows = [
+        c for c in db.query(Constraint)
+        .filter(Constraint.school_id == school_id, Constraint.type.in_(_SEARCHABLE_TYPES))
+        .order_by(Constraint.id)
+        .all()
+        if c.is_hard is not False
+    ]
+    if not rows:
+        return []
+    started = time.monotonic()
+    all_ids = {c.id for c in rows}
+    # Preferences stay off throughout: they can't make a school impossible,
+    # and with them on every try optimises instead of just finding a
+    # timetable - which ran a try that should take seconds past its limit.
+    soft_ids = {
+        c.id for c in db.query(Constraint).filter(Constraint.school_id == school_id).all()
+        if c.is_hard is False
+    }
+
+    def possible(skip: set[int]) -> bool | None:
+        left = budget_seconds - (time.monotonic() - started)
+        if left < 3:
+            return None
+        t1 = _SKIP_RULES.set(frozenset(skip | soft_ids))
+        t2 = _TIME_LIMIT.set(min(per_try_seconds, left))
+        try:
+            result = generate_school_timetable(db, school_id)
+        finally:
+            _SKIP_RULES.reset(t1)
+            _TIME_LIMIT.reset(t2)
+        return result.status in ("optimal", "feasible")
+
+    def quote(c: Constraint) -> str:
+        return f"“{(c.description or c.source_text or 'a rule').strip().rstrip('.')}”"
+
+    everything_off = possible(all_ids)
+    if everything_off is None:
+        return []
+    if not everything_off:
+        return [
+            "This isn't caused by your rules: even with all of them switched off there is still "
+            "no timetable. Check the setup instead - teachers' max periods/week and which subjects "
+            "and grades they can teach, each section's periods/week, and the number of periods in the week."
+        ]
+
+    singles = []
+    for c in rows:
+        ok = possible({c.id})
+        if ok is None:
+            break
+        if ok:
+            singles.append(c)
+    if singles:
+        if len(singles) == 1:
+            return [f"The rule {quote(singles[0])} makes the timetable impossible. Remove or loosen it and generate again."]
+        return [
+            f"Removing any one of these rules makes a timetable possible: {', '.join(quote(c) for c in singles)}. "
+            "They can't all be met together - loosen one of them."
+        ]
+
+    needed = list(rows)
+    for c in rows:
+        trial = [r for r in needed if r.id != c.id]
+        ok = possible(all_ids - {r.id for r in trial})
+        if ok is None:
+            return []
+        if not ok:
+            needed = trial  # still impossible without it: not part of the conflict
+    if not needed or len(needed) == len(rows) > 6:
+        return []
+    return [
+        f"These rules can't all be met at the same time: {', '.join(quote(c) for c in needed)}. "
+        "Loosen any one of them and generate again."
+    ]
