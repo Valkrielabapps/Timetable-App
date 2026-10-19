@@ -76,6 +76,10 @@ class TimetableSolveResult:
 # (and every caller of it) stays as it is.
 _SKIP_RULES: contextvars.ContextVar = contextvars.ContextVar("skip_rules", default=frozenset())
 _TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", default=None)
+# Parts of the school's setup to relax for a diagnostic re-solve:
+#   "one_teacher"  - let a section's subject be split between teachers
+#   "max_periods"  - ignore teachers' max periods/week
+_RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozenset())
 
 
 def _constraint_query(db: Session):
@@ -1230,7 +1234,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         for teacher_id, var in choice:
             strands.setdefault(("o", block_id, option_id), {}).setdefault(teacher_id, []).append(var)
 
-    for key, by_teacher in strands.items():
+    for key, by_teacher in ({} if "one_teacher" in _RELAX.get() else strands).items():
         if key[0] == "r" and len(locked_teachers_by_req.get(key[1], ())) > 1:
             req = requirements_by_id.get(key[1])
             subject = subjects_by_id.get(req.subject_id) if req else None
@@ -1279,7 +1283,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
 
     # Respect each teacher's max periods/week, if set.
     for teacher in teachers:
-        if teacher.max_periods_per_week is not None and teacher_total_vars[teacher.id]:
+        if teacher.max_periods_per_week is not None and teacher_total_vars[teacher.id] and "max_periods" not in _RELAX.get():
             model.Add(sum(teacher_total_vars[teacher.id]) <= teacher.max_periods_per_week)
 
     # "max_consecutive_periods" Constraint rows: cap how many periods in a
@@ -1544,7 +1548,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # Cheap and decisive: if whole sections can't be shared out between the
     # teachers at all, no timetable exists - say so in a second rather than
     # after the full search budget.
-    staffing = _diagnose_teacher_assignment(
+    staffing = [] if _RELAX.get() else _diagnose_teacher_assignment(
         requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
         subjects_by_id, class_groups_by_id, _batch_count,
     )
@@ -2363,8 +2367,6 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
         .all()
         if c.is_hard is not False
     ]
-    if not rows:
-        return []
     started = time.monotonic()
     all_ids = {c.id for c in rows}
     # Preferences stay off throughout: they can't make a school impossible,
@@ -2375,31 +2377,32 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
         if c.is_hard is False
     }
 
-    def possible(skip: set[int]) -> bool | None:
+    def attempt(skip: set[int], relax: frozenset = frozenset()):
         left = budget_seconds - (time.monotonic() - started)
         if left < 3:
             return None
         t1 = _SKIP_RULES.set(frozenset(skip | soft_ids))
         t2 = _TIME_LIMIT.set(min(per_try_seconds, left))
+        t3 = _RELAX.set(relax)
         try:
-            result = generate_school_timetable(db, school_id)
+            return generate_school_timetable(db, school_id)
         finally:
             _SKIP_RULES.reset(t1)
             _TIME_LIMIT.reset(t2)
-        return result.status in ("optimal", "feasible")
+            _RELAX.reset(t3)
+
+    def possible(skip: set[int]) -> bool | None:
+        result = attempt(skip)
+        return None if result is None else result.status in ("optimal", "feasible")
 
     def quote(c: Constraint) -> str:
         return f"“{(c.description or c.source_text or 'a rule').strip().rstrip('.')}”"
 
-    everything_off = possible(all_ids)
+    everything_off = possible(all_ids) if rows else False
     if everything_off is None:
         return []
     if not everything_off:
-        return [
-            "This isn't caused by your rules: even with all of them switched off there is still "
-            "no timetable. Check the setup instead - teachers' max periods/week and which subjects "
-            "and grades they can teach, each section's periods/week, and the number of periods in the week."
-        ]
+        return _diagnose_setup(db, school_id, attempt, all_ids, bool(rows))
 
     singles = []
     for c in rows:
@@ -2430,3 +2433,67 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
         f"These rules can't all be met at the same time: {', '.join(quote(c) for c in needed)}. "
         "Loosen any one of them and generate again."
     ]
+
+
+def _diagnose_setup(db, school_id, attempt, all_ids, had_rules) -> list[str]:
+    """No timetable even without any rules: find which part of the setup is
+    the problem by relaxing one part at a time and seeing what it took."""
+    lead = (
+        "This isn't caused by your rules: even with all of them switched off there is still no timetable. "
+        if had_rules else "This isn't caused by any rule - the school's setup can't be timetabled as it is. "
+    )
+    teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
+    subjects = {x.id: x.name for x in db.query(Subject).filter(Subject.school_id == school_id).all()}
+    groups = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
+
+    def label(cg_id):
+        cg = groups.get(cg_id)
+        return _class_group_label(cg) if cg else "a section"
+
+    split = attempt(all_ids, frozenset({"one_teacher"}))
+    if split is not None and split.status in ("optimal", "feasible"):
+        by_strand: dict = {}
+        for a in split.assignments:
+            key = (a["class_group_id"], a["subject_id"], a.get("batch"))
+            by_strand.setdefault(key, {}).setdefault(a["teacher_id"], 0)
+            by_strand[key][a["teacher_id"]] += 1
+        lines = []
+        for (cg_id, sub_id, _batch), teachers_used in sorted(by_strand.items(), key=lambda kv: (label(kv[0][0]), subjects.get(kv[0][1], ""))):
+            if len(teachers_used) < 2:
+                continue
+            who = " and ".join(f"{teachers[t].name} ({n})" for t, n in teachers_used.items() if t in teachers)
+            lines.append(f"{subjects.get(sub_id, 'A subject')} in {label(cg_id)} - split between {who}")
+        if lines:
+            shown = lines[:8]
+            more = f" (and {len(lines) - 8} more)" if len(lines) > 8 else ""
+            return [
+                lead + "It only works if some sections share a subject between two teachers, and each "
+                "section has to keep one teacher per subject. Give the teachers below more room "
+                "(a higher max periods/week, or fewer other sections), or qualify another teacher, "
+                "so each of these can have a single teacher" + more + ":",
+                *shown,
+            ]
+
+    uncapped = attempt(all_ids, frozenset({"max_periods"}))
+    if uncapped is not None and uncapped.status in ("optimal", "feasible"):
+        load: dict = {}
+        for a in uncapped.assignments:
+            load[a["teacher_id"]] = load.get(a["teacher_id"], 0) + 1
+        over = [
+            f"{t.name}: needs {load[t.id]}, limit {t.max_periods_per_week}"
+            for t in sorted(teachers.values(), key=lambda t: t.name)
+            if t.max_periods_per_week and load.get(t.id, 0) > t.max_periods_per_week
+        ]
+        return [
+            lead + "It works only if some teachers go over their max periods/week. "
+            "Raise these limits, or move some of their sections to another qualified teacher:",
+            *(over or ["(the limits are tight across several teachers rather than one)"]),
+        ]
+
+    return [
+        lead + "Even with sections allowed to share a teacher and no weekly limits, it can't be done - so "
+        "it's down to when teachers are available, or the plan itself. Check each teacher's unavailable "
+        "periods, elective blocks (every option needs its own teacher at the same time), lab batches "
+        "(one teacher per batch at once), and that no section has more periods/week than the week has."
+    ]
+
