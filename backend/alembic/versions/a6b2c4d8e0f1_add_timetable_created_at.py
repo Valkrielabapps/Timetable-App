@@ -21,8 +21,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('timetables', sa.Column('created_at', sa.DateTime(timezone=True), nullable=True))
-    op.alter_column('timetables', 'created_at', server_default=sa.func.now())
+    # Added with its default, then emptied for the rows that already exist -
+    # one way that works on Postgres and SQLite alike (SQLite can't ALTER a
+    # column's default afterwards).
+    op.add_column(
+        'timetables',
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=True, server_default=sa.func.now()),
+    )
+    op.execute("UPDATE timetables SET created_at = NULL")
 
 
 def downgrade() -> None:

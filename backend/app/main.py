@@ -97,3 +97,12 @@ app.include_router(admin.router)
 def health_check():
     """Basic liveness check used by hosting platforms (Railway/Render)."""
     return {"status": "ok"}
+
+
+@app.get("/api/version")
+def version():
+    """Which commit is live. Railway sets RAILWAY_GIT_COMMIT_SHA on every
+    deploy, so this answers "is my push actually running yet?" at a glance."""
+    import os
+    sha = os.environ.get("RAILWAY_GIT_COMMIT_SHA") or "unknown"
+    return {"commit": sha[:7]}
