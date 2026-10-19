@@ -12,6 +12,7 @@ teachers, class groups, subject requirements, and periods from the
 database and builds/solves a CP-SAT model from that real data.
 """
 import contextvars
+import logging
 import os
 import random
 import threading
@@ -69,6 +70,42 @@ class TimetableSolveResult:
     warnings: list[str] = field(default_factory=list)
 
 
+logger = logging.getLogger(__name__)
+
+
+def _usable_cpus() -> int:
+    """CPUs this process may actually use.
+
+    os.cpu_count() reports the host machine. Inside a container (Railway) that
+    can be 32+ cores while the service is allowed one or two, and the solver
+    then starts 8 parallel searches that fight over those - each slower than
+    one search alone would be. The cgroup's CPU quota is the real number.
+    """
+    try:
+        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()[:2]  # cgroup v2
+        if quota != "max":
+            return max(1, int(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    try:
+        quota = int(open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read())  # cgroup v1
+        period = int(open("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read())
+        if quota > 0:
+            return max(1, quota // period)
+    except (OSError, ValueError):
+        pass
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        return max(1, os.cpu_count() or 1)
+
+
+def _search_workers() -> int:
+    # At least 2 even on one CPU: CP-SAT's portfolio pairs a feasibility
+    # search with a complete one, and one alone loses that.
+    return min(8, max(2, _usable_cpus()))
+
+
 # Rules to leave out of a solve, and a time limit to use instead of the
 # configured one - set only by find_blocking_rules, which re-solves a failed
 # school with rules switched off to find which ones are to blame. Context
@@ -118,7 +155,7 @@ class _SettleWatch(cp_model.CpSolverSolutionCallback):
 def _new_solver(time_limit: float, fast: bool, seed: int, light_presolve: bool = False) -> cp_model.CpSolver:
     solver = cp_model.CpSolver()
     # Every core up to a cap - CP-SAT's parallel search scales well.
-    solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
+    solver.parameters.num_search_workers = _search_workers()
     solver.parameters.max_time_in_seconds = max(1.0, time_limit)
     # A fresh seed per generation plus randomized branching, so every
     # placement the rules allow is reachable rather than the same first
@@ -1710,7 +1747,7 @@ def _diagnose_teacher_assignment(
             m.Add(sum(terms) <= capacity(teachers_by_id[t]))
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = 5
-        solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
+        solver.parameters.num_search_workers = _search_workers()
         return solver.Solve(m) != cp_model.INFEASIBLE
 
     if fits(strands):
@@ -2134,7 +2171,7 @@ def _diagnose_constraint_conflicts(
 
     model.AddAssumptions(assumptions)
     solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = min(8, max(1, os.cpu_count() or 1))
+    solver.parameters.num_search_workers = _search_workers()
     # A diagnostic pass on an already-failed generation — doesn't need
     # anywhere near the main solve's time budget.
     solver.parameters.max_time_in_seconds = min(15, settings.solver_time_limit_seconds)
@@ -2339,7 +2376,7 @@ _SEARCHABLE_TYPES = (
 )
 
 
-def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120, per_try_seconds: float = 15) -> list[str]:
+def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180, per_try_seconds: float = 15) -> list[str]:
     """Which of the school's rules stop a timetable from existing.
 
     The step the failure message used to ask the admin to do by hand - switch
@@ -2392,8 +2429,14 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
             _RELAX.reset(t3)
 
     def possible(skip: set[int]) -> bool | None:
+        t = time.monotonic()
         result = attempt(skip)
-        return None if result is None else result.status in ("optimal", "feasible")
+        ok = None if result is None else result.status in ("optimal", "feasible")
+        logger.info(
+            "find_blocking_rules school=%s off=%d/%d -> %s in %.1fs",
+            school_id, len(skip & all_ids), len(all_ids), "out of time" if ok is None else ok, time.monotonic() - t,
+        )
+        return ok
 
     def quote(c: Constraint) -> str:
         return f"“{(c.description or c.source_text or 'a rule').strip().rstrip('.')}”"
@@ -2405,10 +2448,12 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
         return _diagnose_setup(db, school_id, attempt, all_ids, bool(rows))
 
     singles = []
+    checked = 0
     for c in rows:
         ok = possible({c.id})
         if ok is None:
             break
+        checked += 1
         if ok:
             singles.append(c)
     if singles:
@@ -2419,19 +2464,37 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 120
             "They can't all be met together - loosen one of them."
         ]
 
+    if checked < len(rows):
+        # Ran out of time partway through the single-rule checks.
+        return [
+            "The timetable works with all your rules switched off, so one or more of them is the cause. "
+            f"There wasn't time to test every rule (checked {checked} of {len(rows)}), and none of those "
+            "was the cause on its own. Remove a few of the rules below, generate, and add them back one at a time:",
+            *[quote(c) for c in rows[checked:]],
+        ]
+
     needed = list(rows)
+    finished = True
     for c in rows:
         trial = [r for r in needed if r.id != c.id]
         ok = possible(all_ids - {r.id for r in trial})
         if ok is None:
-            return []
+            finished = False
+            break
         if not ok:
             needed = trial  # still impossible without it: not part of the conflict
-    if not needed or len(needed) == len(rows) > 6:
-        return []
+    if finished and needed:
+        return [
+            f"These rules can't all be met at the same time: {', '.join(quote(c) for c in needed)}. "
+            "Loosen any one of them and generate again."
+        ]
+    # Out of time while narrowing down: say what is known so far rather than
+    # nothing - `needed` still contains the conflict, it just may not be the
+    # smallest set.
     return [
-        f"These rules can't all be met at the same time: {', '.join(quote(c) for c in needed)}. "
-        "Loosen any one of them and generate again."
+        "The timetable works with all your rules switched off, and no single rule is the cause - it's a "
+        f"combination. It is among these {len(needed)} rules; loosening one of them should fix it:",
+        *[quote(c) for c in needed],
     ]
 
 

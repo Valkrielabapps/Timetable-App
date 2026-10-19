@@ -115,3 +115,50 @@ def test_a_school_with_no_rules_still_gets_a_reason(db):  # noqa: F811
     _require(db, _class_group(db, school), pe, 3)  # 3 lessons, 2 periods
     messages = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
     assert messages and messages[0].startswith("This isn't caused by any rule")
+
+
+# ---------------------------------------------------------------------------
+# Combinations, and running out of time
+# ---------------------------------------------------------------------------
+
+import time as _time  # noqa: E402
+
+from app.services import solver as _solver  # noqa: E402
+
+
+def _four_rules(db):  # noqa: F811
+    school = _pe_school(db)
+    for name in "ABCD":
+        _rule(db, school, f"Rule {name}", _no_pe_in(1))
+    ids = {c.description[-1]: c.id for c in db.query(Constraint).filter(Constraint.school_id == school.id)}
+    return school, ids
+
+
+def _stub(ids, impossible, delay=0.0):
+    def fake(db, school_id):
+        if delay:
+            _time.sleep(delay)
+        on = {name for name, i in ids.items() if i not in _solver._SKIP_RULES.get()}
+        return SimpleNamespace(status="infeasible" if impossible(on) else "optimal", assignments=[], errors=[])
+    return fake
+
+
+def test_a_combination_is_narrowed_down(db, monkeypatch):  # noqa: F811
+    school, ids = _four_rules(db)
+    # Impossible while A and B are both on, or C and D are: no single rule
+    # removed fixes it, so the deletion filter has to find a pair.
+    monkeypatch.setattr(_solver, "generate_school_timetable",
+                        _stub(ids, lambda on: {"A", "B"} <= on or {"C", "D"} <= on))
+    (message,) = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
+    assert message.startswith("These rules can't all be met at the same time")
+    named = {n for n in "ABCD" if f"Rule {n}" in message}
+    assert named in ({"A", "B"}, {"C", "D"})
+
+
+def test_running_out_of_time_still_says_something(db, monkeypatch):  # noqa: F811
+    school, ids = _four_rules(db)
+    monkeypatch.setattr(_solver, "generate_school_timetable",
+                        _stub(ids, lambda on: bool(on), delay=1.0))
+    lead, *rest = find_blocking_rules(db, school.id, budget_seconds=6, per_try_seconds=5)
+    assert "There wasn't time to test every rule" in lead
+    assert rest  # the rules it didn't get to are listed
