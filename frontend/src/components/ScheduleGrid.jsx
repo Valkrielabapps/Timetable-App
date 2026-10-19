@@ -123,7 +123,7 @@ export default function ScheduleGrid({
                     ? 'Locked in place'
                     : undefined
                   : locked
-                  ? 'Locked — click to unlock (movable, may change on regenerate)'
+                  ? 'Locked. Click to unlock (movable, may change on regenerate)'
                   : isBatched
                   ? 'Drag to move every batch together. Split labs can’t be locked yet.'
                   : `Drag to move ${what}, or click to lock ${what} in place before regenerating`
@@ -138,7 +138,7 @@ export default function ScheduleGrid({
                     onDrop={editable && period ? () => onDrop(d, order) : undefined}
                   >
                     {!period ? (
-                      <span className="text-slate-300">—</span>
+                      <span className="text-slate-300">-</span>
                     ) : entries.length === 0 ? (
                       <span className="text-xs text-slate-300">Free</span>
                     ) : (

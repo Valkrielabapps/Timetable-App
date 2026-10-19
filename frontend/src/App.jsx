@@ -998,7 +998,7 @@ function App() {
                     />
                   ) : (
                     <p className="text-sm text-slate-500">
-                      No grades/sections yet — the timetable is generated per section, so add one
+                      No grades/sections yet. The timetable is generated per section, so add one
                       from the sidebar first.
                     </p>
                   )
@@ -1079,7 +1079,7 @@ function App() {
               ))}
             </div>
             <p className="mt-1.5 text-xs text-slate-400">
-              Just sets sensible defaults (terminology, which optional fields show up) — you can
+              Just sets sensible defaults (terminology, which optional fields show up). You can
               still use anything either way.
             </p>
 

@@ -40,7 +40,7 @@ export default function OverviewTab({ classGroup, onNavigate, progress }) {
 
       {loadError && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Couldn't load this section's status ({loadError}) — what's shown below may not reflect
+          Couldn't load this section's status ({loadError}), so what's shown below may not reflect
           what's actually set up. Try switching sections and back, or check your connection.
         </p>
       )}
@@ -66,7 +66,7 @@ export default function OverviewTab({ classGroup, onNavigate, progress }) {
       {allRequiredDone && !showAll && (
         <div className="flex flex-col items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-5">
           <p className="text-sm font-medium text-emerald-800">
-            This section is ready — the timetable can be generated.
+            This section is ready, and the timetable can be generated.
           </p>
           <button
             onClick={() => onNavigate('timetable')}

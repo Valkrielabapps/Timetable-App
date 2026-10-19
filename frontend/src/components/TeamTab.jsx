@@ -195,7 +195,7 @@ export default function TeamTab({ schoolId, members, invites, onReload }) {
               {justCreatedLink.emailSent === true &&
                 `An invite email was sent to ${justCreatedLink.email}. You can also share this link directly:`}
               {justCreatedLink.emailSent === false &&
-                `Couldn't send an email to ${justCreatedLink.email} — share this link with them instead:`}
+                `Couldn't send an email to ${justCreatedLink.email}. Share this link with them instead:`}
               {justCreatedLink.emailSent === null && 'Share this link with them:'}
             </p>
             <code className="break-all text-slate-700">{justCreatedLink.link}</code>

@@ -55,7 +55,7 @@ describe('substitutions with elective blocks', () => {
     renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
     fireEvent.click(await screen.findByLabelText('Mrs. Rao'))
     expect(await screen.findByText(/Period 1 • Physics • Absent: Mrs\. Rao/)).toBeInTheDocument()
-    expect(screen.getByText('Block 1 — only the Physics group')).toBeInTheDocument()
+    expect(screen.getByText('Block 1: only the Physics group')).toBeInTheDocument()
   })
 
   it('works from the newest timetable, the one the Timetable tab shows', async () => {

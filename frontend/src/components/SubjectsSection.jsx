@@ -131,7 +131,7 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-base font-medium">Subjects</h4>
-          <p className="mt-1 text-sm text-slate-500">What your school teaches — applies to every section.</p>
+          <p className="mt-1 text-sm text-slate-500">What your school teaches. Applies to every section.</p>
         </div>
         {!readOnly && (
           <button
@@ -273,7 +273,7 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
                             handleUpdateCredits(subject.id, e.target.value)
                           }
                           placeholder="Credits"
-                          title="Optional — for colleges that track credits per course. Not used by the solver."
+                          title="Optional, for colleges that track credits per course. Not used by the solver."
                           className="w-16 rounded px-1.5 py-0.5 text-xs text-slate-500 placeholder:text-slate-400 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                         />
                       </div>
@@ -315,7 +315,7 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
           {subjects.length === 0 && (
             <tr>
               <td colSpan={2} className="py-4 text-sm text-slate-500">
-                No subjects yet — add one above, or import a spreadsheet.
+                No subjects yet. Add one above, or import a spreadsheet.
               </td>
             </tr>
           )}

@@ -84,7 +84,7 @@ const BILLING_FAQS = [
   },
   {
     q: 'Can I switch plans later?',
-    a: "Yes. You can move from Free to Pro (or request a Business plan) at any point as your school's needs grow — you're not locked into whatever you pick today.",
+    a: "Yes. You can move from Free to Pro (or request a Business plan) at any point as your school's needs grow. You're not locked into whatever you pick today.",
   },
   {
     q: 'How does billing actually work?',
@@ -100,7 +100,7 @@ const BILLING_FAQS = [
   },
   {
     q: 'What happens if I cancel?',
-    a: "Your school's data isn't deleted immediately — you keep access through the end of the period you've already paid for, and can export your timetables at any point before or after.",
+    a: "Your school's data isn't deleted immediately. You keep access through the end of the period you've already paid for, and can export your timetables at any point before or after.",
   },
 ]
 

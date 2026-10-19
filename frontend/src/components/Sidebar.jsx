@@ -571,7 +571,7 @@ export default function Sidebar({
         ))}
         {grades.length === 0 && (
           <p className="px-1 py-2 text-xs text-slate-400">
-            No grades yet — add one above to get started.
+            No grades yet. Add one above to get started.
           </p>
         )}
       </div>

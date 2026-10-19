@@ -186,8 +186,8 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
             <div>
               <h5 className="text-sm font-semibold text-neutral-900">Import teachers</h5>
               <p className="mt-0.5 text-xs text-neutral-700/80">
-                Upload a spreadsheet instead of adding teachers one at a time. Add subjects first
-                — teacher rows are matched against subject names that already exist.
+                Upload a spreadsheet instead of adding teachers one at a time. Add subjects first,
+                 since teacher rows are matched against subject names that already exist.
               </p>
             </div>
             <button
@@ -475,7 +475,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
           )
         })}
         {teachers.length === 0 && (
-          <p className="p-4 text-sm text-slate-500">No teachers yet — add one above, or import a spreadsheet.</p>
+          <p className="p-4 text-sm text-slate-500">No teachers yet. Add one above, or import a spreadsheet.</p>
         )}
       </div>
     </div>
@@ -672,11 +672,11 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
 
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-500">
-              Subjects they teach (optional — a teacher can teach more than one)
+              Subjects they teach (optional; a teacher can teach more than one)
             </span>
             {subjects.filter((s) => !s._pending).length === 0 ? (
               <p className="text-xs text-slate-400">
-                No subjects yet — add subjects first, or add this teacher now and assign
+                No subjects yet. Add subjects first, or add this teacher now and assign
                 subjects afterward from this list.
               </p>
             ) : (
@@ -701,7 +701,7 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
           {allGrades.length > 0 && (
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-500">
-                Grades they teach (optional — leave all unchecked to teach every grade)
+                Grades they teach (optional; leave all unchecked to teach every grade)
               </span>
               <div className="max-h-32 overflow-y-auto rounded-md border border-slate-200 p-2">
                 {allGrades.map((g) => (

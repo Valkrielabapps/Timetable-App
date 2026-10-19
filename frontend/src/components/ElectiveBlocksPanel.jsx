@@ -89,7 +89,7 @@ export default function ElectiveBlocksPanel({
         <div>
           <h4 className="text-base font-medium">Elective blocks</h4>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Subjects this section studies at the same time, each student taking one — for
+            Subjects this section studies at the same time, each student taking one, for
             example Physics / Accounts / Biology. Every option in a block runs in the same
             periods with its own teacher, so a block counts once towards the week.
           </p>
@@ -178,7 +178,7 @@ export default function ElectiveBlocksPanel({
                   <li key={o.id} className="flex flex-wrap gap-x-2">
                     <span>{subjectName(o.subject_id)}</span>
                     <span className="text-slate-500">
-                      —{' '}
+                      ·{' '}
                       {o.preferred_teacher_id
                         ? teacherName(o.preferred_teacher_id) ?? 'Any qualified teacher'
                         : qualified.length === 1
@@ -228,7 +228,7 @@ function BlockForm({ initial, subjects, unavailable, qualifiedFor, onSave, onCan
     if (!Number.isInteger(ppw) || ppw < 1) return setError('A block needs at least 1 period a week.')
     if (options.length < 2) {
       return setError(
-        'A block needs at least two subjects — a single subject is just an ordinary subject of the section.',
+        'A block needs at least two subjects. A single subject is just an ordinary subject of the section.',
       )
     }
     setError(null)
@@ -310,7 +310,7 @@ function BlockForm({ initial, subjects, unavailable, qualifiedFor, onSave, onCan
                 <span className="w-40 truncate">{subject?.name ?? 'Deleted subject'}</span>
                 {qualified.length === 0 ? (
                   <span className="text-xs text-amber-700">
-                    No qualified teacher yet — mark one on the Teachers page
+                    No qualified teacher yet. Mark one on the Teachers page
                   </span>
                 ) : (
                   <select

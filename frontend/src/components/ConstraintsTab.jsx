@@ -326,7 +326,7 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
       <div>
         <h3 className="text-lg font-medium">Constraints</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Describe scheduling rules in plain English — we'll turn them into
+          Describe scheduling rules in plain English and we'll turn them into
           structured constraints.
         </p>
       </div>
@@ -407,14 +407,14 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
           )}
           {batchResultCount !== null && batchResultCount > 0 && (
             <p className="text-xs text-emerald-700">
-              Added {batchResultCount} constraint{batchResultCount === 1 ? '' : 's'} — check below for any marked
+              Added {batchResultCount} constraint{batchResultCount === 1 ? '' : 's'}. Check below for any marked
               as not yet enforced or conflicting.
             </p>
           )}
           {batchUnread.length > 0 && (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
               <p className="font-medium">
-                {batchUnread.length === 1 ? "1 rule wasn't added" : `${batchUnread.length} rules weren't added`} — add{' '}
+                {batchUnread.length === 1 ? "1 rule wasn't added" : `${batchUnread.length} rules weren't added`}. Add{' '}
                 {batchUnread.length === 1 ? 'it' : 'them'} on {batchUnread.length === 1 ? 'its' : 'their'} own so we can check what you meant:
               </p>
               <ul className="mt-2 flex flex-col gap-2">
@@ -805,7 +805,7 @@ function ConstraintRow({
 
           {!c.enforced && (
             <p className="mt-1.5 text-xs text-amber-800">
-              Saved, but not applied when generating — this won't affect the timetable.
+              Saved, but not applied when generating, so this won't affect the timetable.
             </p>
           )}
           {c.conflicts && c.conflicts.length > 0 && (

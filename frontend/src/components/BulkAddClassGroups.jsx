@@ -308,7 +308,7 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
         {pairs.length === 0
           ? 'Choose a range and at least one section to see a preview.'
           : newPairs.length === 0
-          ? 'All of these already exist — nothing new to add.'
+          ? "All of these already exist, so there's nothing new to add."
           : `This creates ${newPairs.length} section${newPairs.length === 1 ? '' : 's'}` +
             (skippedCount > 0 ? ` (${skippedCount} already exist and will be skipped).` : '.')}
       </p>

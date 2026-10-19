@@ -324,7 +324,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                               options' lessons; the cover is for this group only. */}
                           {entry.elective_block_id != null && (
                             <div className="text-xs text-gray-500">
-                              {entry.elective_block_name ?? 'Elective block'} — only the {entry.subject_name} group
+                              {entry.elective_block_name ?? 'Elective block'}: only the {entry.subject_name} group
                             </div>
                           )}
                         </div>
@@ -353,8 +353,8 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                           {currentPick && (
                             <p className={`mt-1 text-xs ${pickIsSuggested ? 'text-emerald-600' : 'text-amber-600'}`}>
                               {pickIsSuggested
-                                ? 'Suggested — qualified for this subject and free at this period'
-                                : 'Not qualified for this subject — pick a suggested teacher above if one is free'}
+                                ? 'Suggested: qualified for this subject and free at this period'
+                                : 'Not qualified for this subject. Pick a suggested teacher above if one is free'}
                             </p>
                           )}
                           {suggested.length === 0 && others.length === 0 && (

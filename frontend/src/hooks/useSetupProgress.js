@@ -55,7 +55,7 @@ export function useSetupProgress({
     {
       key: 'periods',
       title: "Your school's daily schedule",
-      body: periods.length > 0 ? `${periods.length} periods set up` : 'Add your period timings — every class is built around this',
+      body: periods.length > 0 ? `${periods.length} periods set up` : 'Add your period timings. Every class is built around this',
       done: periods.length > 0,
       optional: false,
       tab: 'entry',
@@ -91,7 +91,7 @@ export function useSetupProgress({
     {
       key: 'constraints',
       title: 'Any special rules?',
-      body: constraints.length > 0 ? `${constraints.length} rules added` : "Optional — skip if there's nothing special, you can add rules anytime",
+      body: constraints.length > 0 ? `${constraints.length} rules added` : "Optional. Skip if there's nothing special; you can add rules anytime",
       done: constraints.length > 0,
       optional: true,
       tab: 'constraints',

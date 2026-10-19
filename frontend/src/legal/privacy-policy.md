@@ -14,7 +14,7 @@ This policy applies to:
 - **School administrators and other staff** who create an account, enter their school's data, and use the Service ("**Account Holders**").
 - **Visitors** to our website who have not created an account.
 
-It does **not** directly cover students. We are not designed to collect or store personal information about individual students — see Section 3.
+It does **not** directly cover students. We are not designed to collect or store personal information about individual students (see Section 3).
 
 ## 2. Information we collect
 
@@ -48,7 +48,7 @@ We do **not** sell your personal information, and we do not use your school's da
 
 ## 4. AI features and third-party processing
 
-Certain features — plain-language rule parsing, infeasibility explanations, conversational timetable editing, and "extract setup from a document" — send relevant data (e.g. the rule text you type, the relevant portion of your timetable, or an uploaded spreadsheet's contents) to **Anthropic** (the maker of the Claude AI models) via their API, solely to generate the requested output. Anthropic processes this data under its own API terms and does not use API data to train its models by default. These features can be avoided entirely by using the equivalent manual entry methods (typed rules use a non-AI fallback parser automatically when the AI service is unavailable).
+Certain features (plain-language rule parsing, infeasibility explanations, conversational timetable editing, and "extract setup from a document") send relevant data (e.g. the rule text you type, the relevant portion of your timetable, or an uploaded spreadsheet's contents) to **Anthropic** (the maker of the Claude AI models) via their API, solely to generate the requested output. Anthropic processes this data under its own API terms and does not use API data to train its models by default. These features can be avoided entirely by using the equivalent manual entry methods (typed rules use a non-AI fallback parser automatically when the AI service is unavailable).
 
 ## 5. Who we share information with
 

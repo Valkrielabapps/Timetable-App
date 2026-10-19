@@ -52,7 +52,7 @@ export default function RoomsPanel({ schoolId, rooms, onCreate, onDelete, readOn
       <h2 className="mb-4 text-lg font-medium">Rooms</h2>
       <p className="mb-4 text-sm text-slate-500">
         Optional. Add rooms if you want the generated timetable to assign
-        one per period — e.g. matching "Chemistry" (room type "lab" set on
+        one per period,  e.g. matching "Chemistry" (room type "lab" set on
         the subject) to a room typed "lab" here. Leave this empty and room
         assignment is simply skipped.
       </p>

@@ -271,7 +271,7 @@ export default function TimetableTab({
       return
     }
     if (entriesFor(day, order, classGroupId).some((e) => e.locked)) {
-      setError("That slot is locked — unlock it before swapping something into it.")
+      setError("That slot is locked. Unlock it before swapping something into it.")
       return
     }
     setError(null)
@@ -488,11 +488,11 @@ export default function TimetableTab({
           <h3 className="text-lg font-medium">Generate timetable</h3>
           <p className="mt-1 text-sm text-slate-500">
             Solves for the whole school at once, so teachers shared across
-            sections never overlap. Large schools can take up to a minute —
-            feel free to switch tabs while it runs. In the By Section view
+            sections never overlap. Large schools can take up to a minute, 
+            so feel free to switch tabs while it runs. In the By Section view
             you can drag a slot onto a free cell to move it, drag it onto
             another slot to swap the two, or click a slot to lock it in
-            place before regenerating — locked slots are shown in red,
+            place before regenerating.  Locked slots are shown in red,
             unlocked ones in green. An elective block moves and locks as
             one slot, since its subjects always run together.
           </p>
@@ -533,7 +533,7 @@ export default function TimetableTab({
               {violations.map((v, i) => (
                 <li key={`${v.constraint_id}-${i}`}>
                   {v.description}{' '}
-                  <span className="text-amber-700">— {v.detail}</span>
+                  <span className="text-amber-700">({v.detail})</span>
                 </li>
               ))}
             </ul>
@@ -556,7 +556,7 @@ export default function TimetableTab({
             {unenforcedConstraints.length === 1
               ? "1 saved constraint isn't applied when generating"
               : `${unenforcedConstraints.length} saved constraints aren't applied when generating`}
-            {' '}— the timetable below won't reflect{' '}
+            , so the timetable below won't reflect{' '}
             {unenforcedConstraints.length === 1 ? 'it' : 'them'}. Check the Constraints tab for
             which ones and why.
           </span>
@@ -571,7 +571,7 @@ export default function TimetableTab({
           className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-slate-500"
         >
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-          Solving the schedule — this runs in the background, so it's safe
+          Solving the schedule. This runs in the background, so it's safe
           to keep working elsewhere and come back.
         </motion.div>
       )}
@@ -838,7 +838,7 @@ function SectionTimetable({
         </h4>
         {combinations === null && (
           <span className="text-xs text-slate-400">
-            This section's blocks allow more than {MAX_COMBINATIONS} subject combinations — check
+            This section's blocks allow more than {MAX_COMBINATIONS} subject combinations. Check
             them for a mistake.
           </span>
         )}

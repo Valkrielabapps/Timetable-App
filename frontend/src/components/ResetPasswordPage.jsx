@@ -59,7 +59,7 @@ export default function ResetPasswordPage({ token, onReset }) {
 
           {error && (
             <p className="text-sm text-red-600">
-              {error} — request a new reset link from the sign-in page and try again.
+              {error}. Request a new reset link from the sign-in page and try again.
             </p>
           )}
 

@@ -228,7 +228,7 @@ export default function AuthPage({ onAuthenticated, onBack, initialMode = 'login
               <>
                 {googleUnavailable ? (
                   <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    Couldn't load Google sign-in (check your connection) — email and password still
+                    Couldn't load Google sign-in (check your connection).  Email and password still
                     work below.
                   </p>
                 ) : (

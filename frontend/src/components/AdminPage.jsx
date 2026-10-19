@@ -245,12 +245,12 @@ function Accounts() {
             {rows?.map((a) => (
               <tr key={a.id} className="border-t border-slate-100">
                 <td className="px-4 py-3">
-                  <p className="font-medium">{a.name || '—'}</p>
+                  <p className="font-medium">{a.name || '-'}</p>
                   <p className="text-xs text-slate-500">{a.email}</p>
                 </td>
                 <td className="px-4 py-3 text-slate-600">{a.google ? 'Google' : 'Email'}</td>
-                <td className="px-4 py-3 text-slate-600">{a.owns.length ? a.owns.join(', ') : '—'}</td>
-                <td className="px-4 py-3 text-slate-600">{a.member_of.length ? a.member_of.join(', ') : '—'}</td>
+                <td className="px-4 py-3 text-slate-600">{a.owns.length ? a.owns.join(', ') : '-'}</td>
+                <td className="px-4 py-3 text-slate-600">{a.member_of.length ? a.member_of.join(', ') : '-'}</td>
               </tr>
             ))}
           </tbody>

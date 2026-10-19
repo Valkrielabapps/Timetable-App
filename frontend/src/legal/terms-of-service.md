@@ -18,7 +18,7 @@ Each school's account has an **owner** (the person who created it) and may have 
 
 The Service allows you to enter your school's subjects, teachers, rooms, periods, and scheduling rules, and to generate a proposed weekly timetable using an automated constraint-solving engine. The Service also offers optional AI-assisted features (plain-language rule entry, infeasibility explanations, conversational editing, and document-based setup extraction) described further in our Privacy Policy.
 
-**The Service is a planning tool, not a guarantee.** A generated timetable is only as good as the rules and data you provide. You are responsible for reviewing any generated timetable before relying on it or publishing it to your staff and students. We do not guarantee that a timetable will be generated for every set of rules — some combinations of rules are mathematically impossible to satisfy simultaneously, and the Service will tell you when this happens rather than producing an incorrect result.
+**The Service is a planning tool, not a guarantee.** A generated timetable is only as good as the rules and data you provide. You are responsible for reviewing any generated timetable before relying on it or publishing it to your staff and students. We do not guarantee that a timetable will be generated for every set of rules. Some combinations of rules are mathematically impossible to satisfy simultaneously, and the Service will tell you when this happens rather than producing an incorrect result.
 
 ## 4. Your content and data
 

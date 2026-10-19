@@ -459,7 +459,7 @@ export default function DataEntryTab({
       {periods.length === 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
           <p className="mb-2">
-            No periods set up yet — the solver needs these before it can generate a
+            No periods set up yet. The solver needs these before it can generate a
             timetable.
           </p>
           {!readOnly && (
@@ -606,7 +606,7 @@ function SetupSection({ schoolId, periods, grades, onPeriodsSaved, rooms, onRoom
       <div>
         <h4 className="text-base font-medium">Setup</h4>
         <p className="mt-1 text-sm text-slate-500">
-          Your school's daily schedule (periods) and physical rooms — configure these once, then
+          Your school's daily schedule (periods) and physical rooms. Configure these once, then
           add subjects and teachers.
         </p>
       </div>
@@ -778,7 +778,7 @@ function PlanSection({
     return (
       <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
         <p>
-          No grades/sections yet — use "+ Add" in the sidebar to create one, then come back here
+          No grades/sections yet. Use "+ Add" in the sidebar to create one, then come back here
           to plan periods/week per subject.
         </p>
       </div>
@@ -790,7 +790,7 @@ function PlanSection({
   if (availableSubjects.length === 0) {
     return (
       <div className="rounded-md border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-        <p className="mb-2">No subjects yet — add some on the Subjects page first.</p>
+        <p className="mb-2">No subjects yet. Add some on the Subjects page first.</p>
         <button
           onClick={onGoToSubjects}
           className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
@@ -811,7 +811,7 @@ function PlanSection({
           <h4 className="text-base font-medium">This section's plan</h4>
           <p className="mt-1 text-sm text-slate-500">
             {pickerSelectedSubjectIds.length === 0
-              ? "First, pick which subjects this section needs — only these show up below, not every subject in the school."
+              ? "First, pick which subjects this section needs. Only these show up below, not every subject in the school."
               : 'Add or remove subjects for this section.'}
           </p>
         </div>
@@ -962,7 +962,7 @@ function PlanSection({
                     onChange={(e) =>
                       onSetPreferredTeacher(subject.id, e.target.value ? Number(e.target.value) : null)
                     }
-                    title="Which teacher covers this section — pinning one speeds up generation for large schools"
+                    title="Which teacher covers this section. Pinning one speeds up generation for large schools"
                     className="rounded border border-neutral-200 bg-neutral-100/40 px-1.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
                   >
                     <option value="">Any (let solver choose)</option>
@@ -984,7 +984,7 @@ function PlanSection({
                     onChange={(e) =>
                       onSetAssistantTeacher(subject.id, e.target.value ? Number(e.target.value) : null)
                     }
-                    title="An optional second teacher for this subject in this section — mark a teacher 'eligible as an assistant teacher' on the Teachers page to add them here"
+                    title="An optional second teacher for this subject in this section. Mark a teacher 'eligible as an assistant teacher' on the Teachers page to add them here"
                     className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-100"
                   >
                     <option value="">None</option>
@@ -1133,7 +1133,7 @@ function SectionSubjectPicker({
           return (
             <label
               key={s.id}
-              title={inBlock ? `An option in ${inBlock} — edit the block to change it` : undefined}
+              title={inBlock ? `An option in ${inBlock}. Edit the block to change it` : undefined}
               className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
                 inBlock ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer hover:bg-slate-50'
               }`}

@@ -84,8 +84,8 @@ export default function SetupExtractionPanel({ schoolId, onImported }) {
     <div className="rounded-lg border border-slate-200 p-4">
       <h3 className="text-sm font-medium">Extract setup from a document</h3>
       <p className="mt-1 text-xs text-slate-500">
-        Already have a staff list or an old timetable in a spreadsheet? Upload it as-is —
-        no need to reformat it to match Bulk Import's columns — and Claude will suggest
+        Already have a staff list or an old timetable in a spreadsheet? Upload it as-is (
+        no need to reformat it to match Bulk Import's columns)  and Claude will suggest
         teachers, subjects, and class groups to create. You review and confirm before
         anything is added. CSV or Excel only for now.
       </p>
@@ -142,7 +142,7 @@ export default function SetupExtractionPanel({ schoolId, onImported }) {
               items={preview.teachers}
               selected={selected.teachers}
               onToggle={(i) => toggle('teachers', i)}
-              renderLabel={(t) => t.name + (t.subject_names?.length ? ` — ${t.subject_names.join(', ')}` : '')}
+              renderLabel={(t) => t.name + (t.subject_names?.length ? `: ${t.subject_names.join(', ')}` : '')}
             />
             <ReviewList
               label="Class groups"

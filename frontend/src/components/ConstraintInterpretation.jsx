@@ -84,7 +84,7 @@ export default function ConstraintInterpretation({
           onClick={onReword}
           className="rounded-md border border-slate-300 px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
         >
-          No — let me reword it
+          No, let me reword it
         </button>
         <button
           type="button"
