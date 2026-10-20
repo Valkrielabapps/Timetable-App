@@ -11,7 +11,7 @@ describe('PlanPicker', () => {
     render(<PlanPicker onChoose={onChoose} onBack={() => {}} onSignIn={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: 'Start free' }))
     fireEvent.click(screen.getByRole('button', { name: 'Choose Pro' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Contact us' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Get in touch' }))
     expect(onChoose.mock.calls.map((c) => c[0])).toEqual(['free', 'pro', 'business'])
     expect(screen.getByText('for 14 days')).toBeInTheDocument()
   })
