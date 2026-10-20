@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 
 /**
  * Standalone pricing page — reached via `?page=pricing` (see App.jsx,
  * same no-router pattern as AboutPage/SupportPage).
  *
- * Dark theme (bg-black, white text) matching About/Support/Customers/Why
+ * Dark theme (bg-white, white text) matching About/Support/Customers/Why
  * Timetablz, by explicit request. Back to a three-card grid (Free / Pro /
  * Business side by side, Pro highlighted) rather than the single-column
  * row layout this page used before — also by explicit request, reverting
@@ -106,9 +107,9 @@ const BILLING_FAQS = [
 
 function BillingFaqItem({ item, isOpen, onToggle }) {
   return (
-    <div className="border-b border-white/10">
+    <div className="border-b border-neutral-200">
       <button onClick={onToggle} className="flex w-full items-center justify-between gap-4 py-5 text-left">
-        <span className="text-[15px] font-medium text-white">{item.q}</span>
+        <span className="text-[15px] font-medium text-neutral-900">{item.q}</span>
         <svg
           width="18"
           height="18"
@@ -132,7 +133,7 @@ function BillingFaqItem({ item, isOpen, onToggle }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <p className="pb-5 pr-8 text-sm leading-relaxed text-neutral-400">{item.a}</p>
+            <p className="pb-5 pr-8 text-sm leading-relaxed text-neutral-600">{item.a}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -157,34 +158,34 @@ function PricingCard({ tier, currency, onGetStarted, delay }) {
       variants={fadeUp}
       transition={{ duration: 0.4, delay }}
       className={`flex flex-col rounded-2xl p-8 ${
-        tier.highlighted ? 'border-2 border-white bg-white/5' : 'border border-white/10'
+        tier.highlighted ? 'border-2 border-neutral-900 bg-neutral-50' : 'border border-neutral-200'
       }`}
     >
       <div className="flex items-center gap-2.5">
-        <p className="text-lg font-semibold text-white">{tier.name}</p>
+        <p className="text-lg font-semibold text-neutral-900">{tier.name}</p>
         {tier.highlighted && (
-          <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-medium text-black">Most chosen</span>
+          <span className="rounded-full bg-neutral-900 px-2.5 py-0.5 text-[11px] font-medium text-white">Most chosen</span>
         )}
       </div>
-      <p className="mt-1 text-sm text-neutral-400">{tier.tagline}</p>
+      <p className="mt-1 text-sm text-neutral-600">{tier.tagline}</p>
 
       <p className="mt-6">
-        <span className="text-3xl font-semibold tracking-tight text-white">{formatPrice(tier.priceInr, currency)}</span>
+        <span className="text-3xl font-semibold tracking-tight text-neutral-900">{formatPrice(tier.priceInr, currency)}</span>
         {tier.period && tier.priceInr !== null && <span className="ml-1 text-sm text-neutral-500">{tier.period}</span>}
       </p>
 
       <button
         onClick={onGetStarted}
         className={`mt-6 rounded-md px-5 py-2.5 text-sm font-medium ${
-          tier.highlighted ? 'bg-white text-black hover:bg-neutral-200' : 'border border-white/20 text-white hover:bg-white/5'
+          tier.highlighted ? 'bg-neutral-900 text-white hover:bg-neutral-700' : 'border border-neutral-300 text-neutral-900 hover:bg-neutral-50'
         }`}
       >
         {tier.ctaLabel}
       </button>
 
-      <ul className="mt-8 space-y-3 border-t border-white/10 pt-6">
+      <ul className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
         {tier.highlights.map((h) => (
-          <li key={h} className="flex items-start gap-2.5 text-sm text-neutral-300">
+          <li key={h} className="flex items-start gap-2.5 text-sm text-neutral-700">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-neutral-500">
               <path d="M20 6 9 17l-5-5" />
             </svg>
@@ -201,29 +202,29 @@ export default function PricingPage({ onBack, onGetStarted }) {
   const [openFaq, setOpenFaq] = useState(0)
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-neutral-900">
       <SiteNav current="pricing" />
 
       <div className="mx-auto max-w-6xl px-6 py-16">
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
-          <h1 className="font-serif text-4xl font-medium tracking-tight text-white md:text-5xl">
+          <h1 className="font-serif text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
             Find the plan that works for your school
           </h1>
-          <p className="mt-4 max-w-xl text-neutral-400">
-            Every plan includes <strong className="text-neutral-200">unlimited timetables</strong>,{' '}
-            <strong className="text-neutral-200">conflict-free generation</strong>, and{' '}
-            <strong className="text-neutral-200">role-based access</strong>. Cancel anytime.
+          <p className="mt-4 max-w-xl text-neutral-600">
+            Every plan includes <strong className="text-neutral-800">unlimited timetables</strong>,{' '}
+            <strong className="text-neutral-800">conflict-free generation</strong>, and{' '}
+            <strong className="text-neutral-800">role-based access</strong>. Cancel anytime.
           </p>
 
           {/* See USD_PER_INR above — this converts the display, it isn't
               a second, separately-decided USD price point. */}
-          <div className="mt-8 inline-flex items-center rounded-full border border-white/15 bg-white/5 p-1 text-sm">
+          <div className="mt-8 inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 p-1 text-sm">
             {['INR', 'USD'].map((c) => (
               <button
                 key={c}
                 onClick={() => setCurrency(c)}
                 className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
-                  currency === c ? 'bg-white text-black' : 'text-neutral-400 hover:text-white'
+                  currency === c ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:text-neutral-900'
                 }`}
               >
                 {c}
@@ -246,7 +247,7 @@ export default function PricingPage({ onBack, onGetStarted }) {
           transition={{ duration: 0.5 }}
           className="mx-auto mt-20 max-w-xl"
         >
-          <h2 className="text-xl font-semibold tracking-tight text-white">Billing questions</h2>
+          <h2 className="text-xl font-semibold tracking-tight text-neutral-900">Billing questions</h2>
           <div className="mt-4">
             {BILLING_FAQS.map((item, i) => (
               <BillingFaqItem
@@ -265,17 +266,18 @@ export default function PricingPage({ onBack, onGetStarted }) {
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-white/10 px-8 py-8 md:flex-row md:items-center"
+          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-neutral-200 px-8 py-8 md:flex-row md:items-center"
         >
-          <p className="text-lg font-medium text-white">Running several schools, or need something custom?</p>
+          <p className="text-lg font-medium text-neutral-900">Running several schools, or need something custom?</p>
           <button
             onClick={onGetStarted}
-            className="rounded-md bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-neutral-200"
+            className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             Get in touch
           </button>
         </motion.div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

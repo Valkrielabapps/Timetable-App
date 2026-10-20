@@ -109,9 +109,11 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   const latestTimetableId =
     timetableList.length > 0 ? timetableList.reduce((a, b) => (b.id > a.id ? b : a)).id : null
   const { data: timetable = null } = useTimetable(latestTimetableId)
-  const violatedIds = new Set(
-    (timetable?.status === 'draft' ? timetable.violations ?? [] : []).map((v) => v.constraint_id),
-  )
+  // Only rules count as broken; a preference not met everywhere is allowed
+  // and gets a calmer "Not always met" tag instead of Needs attention.
+  const draftViolations = timetable?.status === 'draft' ? timetable.violations ?? [] : []
+  const violatedIds = new Set(draftViolations.filter((v) => (v.strength ?? 'required') === 'required').map((v) => v.constraint_id))
+  const partlyMetIds = new Set(draftViolations.filter((v) => (v.strength ?? 'required') !== 'required').map((v) => v.constraint_id))
 
   // Rules saved after the current timetable was generated. Not broken by it -
   // it simply predates them - so they get "generate again", not a warning.
@@ -151,6 +153,7 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
         selected={selectedIds.has(c.id)}
         onToggleSelected={() => toggleSelected(c.id)}
         pending={pendingIds.has(c.id)}
+        partlyMet={partlyMetIds.has(c.id)}
       />
     )
   }
@@ -669,6 +672,7 @@ function ConstraintRow({
   selected = false,
   onToggleSelected = () => {},
   pending = false,
+  partlyMet = false,
 }) {
   const [editText, setEditText] = useState(c.description || '')
   const [selectedIds, setSelectedIds] = useState(c.parameters?.class_group_ids || [])
@@ -736,7 +740,7 @@ function ConstraintRow({
             <p className="text-sm leading-snug">{c.description}</p>
           )}
 
-          {(c.is_hard === false || pending || reasons.length > 0 || (scopable && !isEditing)) && (
+          {(c.is_hard === false || pending || partlyMet || reasons.length > 0 || (scopable && !isEditing)) && (
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               {reasons.map((reason) => (
                 <span
@@ -752,6 +756,14 @@ function ConstraintRow({
                   title="Saved after the current timetable was generated. It will apply the next time you generate."
                 >
                   New - generate again to apply
+                </span>
+              )}
+              {partlyMet && !pending && (
+                <span
+                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                  title="A preference the current timetable follows as far as it can, but not everywhere. That's allowed for a preference."
+                >
+                  Not always met
                 </span>
               )}
               {c.is_hard === false && (

@@ -1,10 +1,10 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Fragment, useEffect, useState } from 'react'
-import { Marquee } from './Marquee'
 import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
 import shishyaPublicSchoolEntrancePhoto from '../assets/shishya-public-school-entrance.png'
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 
 /**
  * Marketing landing page — what an unauthenticated visitor sees before
@@ -84,41 +84,36 @@ const fadeUp = {
 }
 
 /**
- * A typewriter-style word cycler: types out each word in `words`
- * character by character, pauses, deletes it, then moves to the next
- * word and loops. Used in the Hero headline so it cycles through
- * "schools" / "colleges" / "institutions" instead of picking just one.
+ * The hero's changing last word - "schools", "colleges", "institutions" -
+ * swapped whole, with a short fade, rather than typed out letter by letter.
+ * Typing showed half-words ("for inst") most of the time and pulled the eye
+ * away from the rest of the page. Held still for anyone whose device asks
+ * for reduced motion; the heading's accessible name carries the full
+ * sentence either way.
  */
-function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs = 1400, colorClassName = 'text-indigo-600' }) {
-  const [wordIndex, setWordIndex] = useState(0)
-  const [charCount, setCharCount] = useState(0)
-  const [deleting, setDeleting] = useState(false)
-
+function RotatingWord({ words, intervalMs = 2600 }) {
+  const reduceMotion = useReducedMotion()
+  const [index, setIndex] = useState(0)
   useEffect(() => {
-    const currentWord = words[wordIndex]
-
-    if (!deleting && charCount === currentWord.length) {
-      const pause = setTimeout(() => setDeleting(true), pauseMs)
-      return () => clearTimeout(pause)
-    }
-
-    if (deleting && charCount === 0) {
-      setDeleting(false)
-      setWordIndex((prev) => (prev + 1) % words.length)
-      return
-    }
-
-    const timeout = setTimeout(
-      () => setCharCount((prev) => prev + (deleting ? -1 : 1)),
-      deleting ? deletingSpeedMs : typingSpeedMs
-    )
-    return () => clearTimeout(timeout)
-  }, [charCount, deleting, wordIndex, words, typingSpeedMs, deletingSpeedMs, pauseMs])
+    if (reduceMotion) return undefined
+    const id = setInterval(() => setIndex((i) => (i + 1) % words.length), intervalMs)
+    return () => clearInterval(id)
+  }, [reduceMotion, words.length, intervalMs])
 
   return (
-    <span className={colorClassName}>
-      {words[wordIndex].slice(0, charCount)}
-      <span className="ml-0.5 inline-block w-0.5 animate-pulse bg-current align-middle" style={{ height: '0.85em' }} />
+    <span className="relative inline-block" aria-hidden="true">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={words[index]}
+          className="inline-block"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -14 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+        >
+          {words[index]}
+        </motion.span>
+      </AnimatePresence>
     </span>
   )
 }
@@ -140,7 +135,7 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, sig
           (Testimonials) is hidden the same way - the function is still
           below, so putting <Testimonials /> back here restores it. */}
       <ClosingCta onGetStarted={onGetStarted} signedIn={signedIn} />
-      <Footer />
+      <SiteFooter />
     </div>
   )
 }
@@ -290,10 +285,14 @@ function Hero({ onGetStarted, signedIn }) {
               changing width can never push "Instant timetables" onto an
               extra line — see the earlier version of this component for
               the layout-shift bug this avoids. */}
-          <h1 className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl">
-            Instant timetables
+          <h1
+            aria-label="Instant timetables for schools and colleges"
+            className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl"
+          >
+            <span aria-hidden="true">Instant timetables</span>
             <br />
-            for <TypingWords words={['schools', 'colleges', 'institutions']} colorClassName="text-white" />
+            <span aria-hidden="true">for </span>
+            <RotatingWord words={['schools', 'colleges', 'institutions']} />
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-neutral-400">
             Describe your scheduling rules in plain English and get a complete, ready-to-use
@@ -313,50 +312,26 @@ function Hero({ onGetStarted, signedIn }) {
               See how it works
             </a>
           </div>
-          <p className="mt-4 text-xs text-neutral-500">No credit card required to try it.</p>
+          <p className="mt-4 text-sm text-neutral-400">No credit card required to try it.</p>
         </motion.div>
       </div>
 
-      {/* Matches Papermark's actual bottom bar exactly now, per explicit
-          correction: no label text at all, a revolving/scrolling row of
-          customer names (their logos, our text), and an "Our Customers"
-          button pinned to the right — not centered, static text. With
-          one real school instead of six logos, the single name is
-          repeated several times in the scrolling track (separated by a
-          small dot) rather than looping one lonely item across the full
-          width, which is what produced the empty-looking gaps before;
-          this way the marquee track is actually full, same trick real
-          sites use when they don't have enough distinct logos yet to
-          fill a scroll. "Our Customers" links to the dedicated
-          CustomersPage.jsx (`?page=customers`), same as Papermark's own
-          button does for them. Content spans the full page width now
-          (no `max-w-6xl`/`mx-auto` cap) rather than sitting in a
-          narrower centered column with black margins either side, and
-          the bar itself is `neutral-900` (a visibly grey shade) instead
-          of the near-black `neutral-950` it was, both per explicit
-          feedback that the narrower/blacker version looked congested. */}
+      {/* One customer, said once and plainly. Scrolling the same name across
+          the bar a dozen times made it obvious there was only one; a single
+          honest line reads as confident instead. Add names here as schools
+          sign on, and bring back a scrolling strip at four or five. */}
       <div className="relative border-t border-white/10 bg-neutral-900 py-5">
-        <div className="flex items-center gap-6 px-6 sm:px-10 lg:px-16">
-          <div className="min-w-0 flex-1 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
-            <Marquee
-              items={
-                <span className="flex items-center gap-6 px-3 text-sm font-bold uppercase tracking-wide text-neutral-300">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Fragment key={i}>
-                      <span>Shishya Public School, Dehradun</span>
-                      <span className="text-neutral-600">•</span>
-                    </Fragment>
-                  ))}
-                </span>
-              }
-              speed={26}
-            />
-          </div>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-3 px-6 text-sm">
+          <span className="text-neutral-400">Already building timetables at</span>
+          <span className="font-semibold uppercase tracking-wide text-white">Shishya Public School, Dehradun</span>
           <a
             href="?page=customers"
-            className="shrink-0 rounded-md border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/5"
+            className="inline-flex items-center gap-1.5 font-medium text-neutral-300 underline-offset-4 hover:text-white hover:underline"
           >
-            Our Customers
+            Read their story
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
           </a>
         </div>
       </div>
@@ -417,7 +392,8 @@ function TimetableMockup() {
 // and workflow, not an invented example.
 const DEMO_CONSTRAINT = 'Priya Sharma can only teach 10 periods a week'
 
-const DEMO_NAV_ITEMS = ['Data Entry', 'Constraints', 'Timetable']
+// The same step names as the Why Timetablz page.
+const DEMO_NAV_ITEMS = ['Your school', 'Your rules', 'Your timetable']
 
 // Shown during the new 'setup' phase — a Data Entry tab was in
 // DEMO_NAV_ITEMS but never actually got a turn in the demo (it only ever
@@ -440,14 +416,16 @@ const DEMO_SETUP_ITEMS = ['Grade 8 · Section A (32 students)', 'Mathematics (6 
  * on the page after the black/white pass elsewhere.
  *
  * Built as a small state machine (`phase`) driven by chained setTimeouts,
- * the same pattern as TypingWords above — each phase schedules the next
+ * the same self-scheduling pattern as a typewriter effect — each phase schedules the next
  * one, and the final phase resets back to 'setup' so it loops forever.
  * AnimatePresence handles the cross-fade between phases; ResultGrid's own
  * staggered cell animation replays every loop because its key changes on
  * every remount.
  */
 function WorkflowDemo() {
-  const [phase, setPhase] = useState('setup') // 'setup' | 'typing' | 'added' | 'generating' | 'result'
+  // Opens on the finished timetable, so whoever scrolls here first sees the
+  // result - not a spinner in an empty box, which read as a broken page.
+  const [phase, setPhase] = useState('result') // 'setup' | 'typing' | 'added' | 'generating' | 'result'
   const [charCount, setCharCount] = useState(0)
   const [setupCount, setSetupCount] = useState(0)
 
@@ -477,7 +455,7 @@ function WorkflowDemo() {
       return () => clearTimeout(t)
     }
     if (phase === 'generating') {
-      const t = setTimeout(() => setPhase('result'), 1500)
+      const t = setTimeout(() => setPhase('result'), 900)
       return () => clearTimeout(t)
     }
     if (phase === 'result') {
@@ -491,10 +469,10 @@ function WorkflowDemo() {
   }, [phase])
 
   const activeNav =
-    phase === 'setup' ? 'Data Entry' : phase === 'generating' || phase === 'result' ? 'Timetable' : 'Constraints'
+    phase === 'setup' ? 'Your school' : phase === 'generating' || phase === 'result' ? 'Your timetable' : 'Your rules'
 
   return (
-    <section id="features" className="mx-auto max-w-6xl px-6 py-24">
+    <section id="features" className="mx-auto max-w-6xl px-6 pb-14 pt-20">
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         {/* Fake browser chrome — grounds this as "the actual app", the
             same trick both reference videos use (a real address bar
@@ -524,7 +502,7 @@ function WorkflowDemo() {
             ))}
           </div>
 
-          <div className="relative min-h-[420px] flex-1 p-10">
+          <div className="relative min-h-[380px] flex-1 p-6 sm:p-10">
             <AnimatePresence mode="wait">
               {phase === 'setup' && (
                 <motion.div
@@ -602,7 +580,7 @@ function WorkflowDemo() {
                     animate={{ rotate: 360 }}
                     transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
                   />
-                  <p className="text-sm font-medium text-neutral-500">Generating timetable…</p>
+                  <p className="text-sm font-medium text-neutral-500">Building every section at once…</p>
                 </motion.div>
               )}
 
@@ -694,31 +672,16 @@ function ResultGrid() {
   )
 }
 
-// ⚠️ PLACEHOLDER METRICS — NOT REAL. Timetablz has exactly one real
-// customer (Shishya Public School, Dehradun; see Hero's trust strip) as
-// of when this was written. These numbers were requested explicitly as
-// stand-in/mockup content while the site isn't live yet, with an explicit
-// plan to replace them with real figures once there's an actual school
-// roster to report on (see the founder conversation this was built
-// alongside). DO NOT ship this section to production without swapping
-// these for real, verifiable numbers first — publishing fabricated
-// customer/usage counts on a live site is a false-advertising risk, not
-// just a copy nitpick.
+// Product facts only - each one is true of every school on day one. The
+// earlier "100+ schools / 10,000+ students" figures were placeholders, and a
+// usage claim goes back here only once there are real numbers to report.
 const CAPABILITY_STATS = [
-  { n: '01', label: 'Schools serviced', value: '100+', unit: 'across India' },
-  { n: '02', label: 'Teachers scheduled', value: '1,000+', unit: 'and counting' },
-  { n: '03', label: 'Students scheduled', value: '10,000+', unit: 'every term' },
-  { n: '04', label: 'Hours saved', value: '200+', unit: 'per school, per term' },
+  { n: '01', label: 'Generation time', value: 'Seconds', unit: 'for a whole school' },
+  { n: '02', label: 'Teacher and room clashes', value: '0', unit: 'in every timetable' },
+  { n: '03', label: 'Rules', value: 'Plain English', unit: 'no formulas or settings' },
+  { n: '04', label: 'Exports', value: 'Excel & PDF', unit: 'every class and teacher' },
 ]
 
-/**
- * A big-number stats section modeled on Papermark's "Total deal value
- * running through Papermark. $55,000,000,000" pattern. See the loud
- * comment on CAPABILITY_STATS above — these are placeholder numbers, not
- * real usage data, by explicit instruction while the site is still
- * pre-launch. Swap the headline number and the four columns for real
- * figures before this section ever reaches production.
- */
 function MetricsSection() {
   return (
     <section className="border-t border-neutral-100 bg-white px-6 py-24">
@@ -731,22 +694,17 @@ function MetricsSection() {
           transition={{ duration: 0.5 }}
         >
           <p className="text-2xl text-neutral-900 md:text-3xl">
-            Students already being scheduled with Timetablz.
+            Clashes in a timetable built by Timetablz.
           </p>
           <p className="mt-4 text-7xl font-semibold tracking-tight text-neutral-900 tabular-nums md:text-8xl">
-            10,000+
+            Zero<span className="text-emerald-600">.</span>
           </p>
         </motion.div>
 
         <div className="mt-10 text-[13px] uppercase tracking-wide text-neutral-500">
-          100+ schools across India trust Timetablz
+          Every section and every teacher, solved together
         </div>
 
-        {/* Stacks with horizontal divider rules below `lg` (a vertical-line
-            grid only reads cleanly with all four in a single row — see
-            Papermark's reference, which is a desktop-width screenshot),
-            switches to Papermark's vertical-line-between-columns layout
-            at `lg` via divide-x instead of a gap. */}
         <div className="mt-8 divide-y divide-neutral-200 border-t border-neutral-200 pt-8 lg:grid lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
           {CAPABILITY_STATS.map((stat, i) => (
             <motion.div
@@ -758,12 +716,10 @@ function MetricsSection() {
               transition={{ duration: 0.4, delay: i * 0.08 }}
               className="py-6 first:pt-0 lg:py-0 lg:px-8 lg:first:pl-0"
             >
-              <p className="text-[13px] text-neutral-400">{stat.n}</p>
+              <p className="text-[13px] text-neutral-500">{stat.n}</p>
               <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-neutral-900">{stat.label}</p>
-              <p className="mt-4 text-4xl font-semibold tracking-tight text-neutral-900 tabular-nums">
-                {stat.value}
-                <span className="ml-1 text-sm font-normal normal-case text-neutral-400">{stat.unit}</span>
-              </p>
+              <p className="mt-4 text-3xl font-semibold tracking-tight text-neutral-900">{stat.value}</p>
+              <p className="mt-1 text-sm text-neutral-500">{stat.unit}</p>
             </motion.div>
           ))}
         </div>
@@ -1210,48 +1166,6 @@ function Testimonials() {
   )
 }
 
-// Every link here goes somewhere real — an in-page anchor already used
-// elsewhere on this page, a mailto, or one of the two legal pages built
-// in LegalPage.jsx/PrivacyPolicyPage.jsx/TermsOfServicePage.jsx.
-// Deliberately NOT padded out with Papermark's full column count (Use
-// Cases, Alternatives, a blog, a help center, comparison pages, ...) —
-// this site doesn't have any of that content, and a footer full of links
-// to pages that don't exist would look broken rather than substantial.
-const FOOTER_COLUMNS = [
-  {
-    // "How it works" link removed along with that section (see the render
-    // comment above HowItWorks) — add back once it's wanted again. Pricing
-    // now points at the standalone PricingPage.jsx (`?page=pricing`)
-    // instead of the removed in-page `#pricing` anchor.
-    heading: 'Product',
-    links: [
-      { label: 'Why Timetablz', href: '?page=why' },
-      { label: 'Pricing', href: '?page=pricing' },
-    ],
-  },
-  {
-    // No "Contact us" mailto here yet — the business email/domain hasn't
-    // been decided (see the founder conversation on domain naming), and a
-    // mailto to a made-up address would silently bounce. Add it back once
-    // that's settled.
-    heading: 'Company',
-    links: [
-      { label: 'About', href: '?page=about' },
-      { label: 'Customers', href: '?page=customers' },
-      { label: 'Support', href: '?page=support' },
-      { label: 'Admin', href: '/admin' },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy Policy', href: '?page=privacy' },
-      { label: 'Terms of Service', href: '?page=terms' },
-      { label: 'Refunds & Cancellations', href: '?page=refunds' },
-      { label: 'Contact Us', href: '?page=contact' },
-    ],
-  },
-]
 
 /**
  * The last thing before the footer: one big line and two ways in, in its own
@@ -1290,38 +1204,3 @@ function ClosingCta({ onGetStarted, signedIn }) {
   )
 }
 
-function Footer() {
-  return (
-    <footer className="border-t border-white/10 bg-black py-16 text-neutral-400">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
-          <div>
-            <span className="text-[17px] font-bold tracking-tight text-white">Timetablz</span>
-            <p className="mt-3 max-w-[220px] text-sm leading-relaxed">
-              Instant, clash-free timetables for schools and colleges.
-            </p>
-          </div>
-
-          {FOOTER_COLUMNS.map((col) => (
-            <div key={col.heading}>
-              <p className="text-sm font-semibold text-white">{col.heading}</p>
-              <ul className="mt-4 space-y-3 text-sm">
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <a href={link.href} className="hover:text-white">
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-14 border-t border-white/10 pt-6 text-xs">
-          © {new Date().getFullYear()} Timetablz. All rights reserved.
-        </div>
-      </div>
-    </footer>
-  )
-}

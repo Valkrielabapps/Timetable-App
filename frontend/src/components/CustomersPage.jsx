@@ -3,6 +3,7 @@ import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
 import shishyaPublicSchoolEntrancePhoto from '../assets/shishya-public-school-entrance.png'
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 
 /**
  * Standalone Customers page — reached via `?page=customers` (same
@@ -38,16 +39,16 @@ const PHOTOS = [
 
 export default function CustomersPage({ onBack, onGetStarted }) {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-neutral-900">
       <SiteNav current="customers" />
 
       <div className="mx-auto max-w-6xl px-6 py-20">
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
           <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">Customers</p>
-          <h1 className="mt-3 font-serif text-5xl font-medium leading-tight tracking-tight text-white md:text-6xl">
+          <h1 className="mt-3 font-serif text-5xl font-medium leading-tight tracking-tight text-neutral-900 md:text-6xl">
             Who's using Timetablz
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-neutral-400">
+          <p className="mt-5 max-w-2xl text-lg text-neutral-600">
             We're early, and we'd rather show you the one real school we work with today than pad this page
             out with names that aren't real yet.
           </p>
@@ -62,14 +63,14 @@ export default function CustomersPage({ onBack, onGetStarted }) {
           className="mt-20 grid gap-4 sm:grid-cols-3"
         >
           {PHOTOS.map((p) => (
-            <div key={p.caption} className="overflow-hidden rounded-xl border border-white/10">
+            <div key={p.caption} className="overflow-hidden rounded-xl border border-neutral-200">
               <img src={p.image} alt={`${p.caption}, Shishya Public School, Dehradun`} className="h-56 w-full object-cover" />
-              <p className="px-4 py-3 text-sm text-neutral-400">{p.caption}</p>
+              <p className="px-4 py-3 text-sm text-neutral-600">{p.caption}</p>
             </div>
           ))}
         </motion.div>
 
-        <div className="mt-20 divide-y divide-white/10 border-t border-white/10">
+        <div className="mt-20 divide-y divide-neutral-200 border-t border-neutral-200">
           <motion.div
             initial="hidden"
             whileInView="show"
@@ -78,12 +79,12 @@ export default function CustomersPage({ onBack, onGetStarted }) {
             transition={{ duration: 0.5 }}
             className="grid gap-4 py-14 md:grid-cols-[280px_1fr] md:gap-12"
           >
-            <h2 className="font-serif text-3xl font-medium text-white">
+            <h2 className="font-serif text-3xl font-medium text-neutral-900">
               Shishya Public
               <br />
               School, Dehradun
             </h2>
-            <div className="max-w-2xl space-y-4 text-[15px] leading-relaxed text-neutral-400">
+            <div className="max-w-2xl space-y-4 text-[15px] leading-relaxed text-neutral-600">
               <p>
                 Our first real school partner. We're building Timetablz alongside them rather than for them,
                 which means their timetabling needs are shaping what gets prioritized rather than a guess at
@@ -105,8 +106,8 @@ export default function CustomersPage({ onBack, onGetStarted }) {
             transition={{ duration: 0.5 }}
             className="grid gap-4 py-14 md:grid-cols-[280px_1fr] md:gap-12"
           >
-            <h2 className="font-serif text-3xl font-medium text-white">Want to be next</h2>
-            <div className="max-w-2xl text-[15px] leading-relaxed text-neutral-400">
+            <h2 className="font-serif text-3xl font-medium text-neutral-900">Want to be next</h2>
+            <div className="max-w-2xl text-[15px] leading-relaxed text-neutral-600">
               <p>
                 If you run a school or college and manual timetabling is eating a week of someone's term
                 every term, we'd like to work with you directly while the product is still early: your
@@ -123,17 +124,18 @@ export default function CustomersPage({ onBack, onGetStarted }) {
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-white/10 px-8 py-8 md:flex-row md:items-center"
+          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-neutral-200 px-8 py-8 md:flex-row md:items-center"
         >
-          <p className="text-lg font-medium text-white">Ready to try it on your own school?</p>
+          <p className="text-lg font-medium text-neutral-900">Ready to try it on your own school?</p>
           <button
             onClick={onGetStarted}
-            className="rounded-md bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-neutral-200"
+            className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             Get started free
           </button>
         </motion.div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

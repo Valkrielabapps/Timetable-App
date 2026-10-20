@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 
 /**
  * Standalone "Why Timetablz" page — reached via `?page=why` (same
@@ -67,7 +68,7 @@ function StepVisual({ activeStep }) {
   return (
     <svg viewBox="0 0 320 420" className="h-[420px] w-[320px]">
       {/* Faint vertical spine connecting the layers, Griffin-diagram-style. */}
-      <line x1="160" y1="40" x2="160" y2="380" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+      <line x1="160" y1="40" x2="160" y2="380" stroke="rgba(23,23,23,0.12)" strokeWidth="1" />
 
       {LAYER_LABELS.map((label, i) => {
         const cy = 70 + i * gap
@@ -76,8 +77,8 @@ function StepVisual({ activeStep }) {
           <g key={label} transform={`translate(160, ${cy})`}>
             <polygon
               points="-110,0 0,-30 110,0 0,30"
-              fill={active ? 'rgba(255,255,255,0.08)' : 'transparent'}
-              stroke={active ? '#ffffff' : 'rgba(255,255,255,0.22)'}
+              fill={active ? 'rgba(23,23,23,0.08)' : 'transparent'}
+              stroke={active ? '#171717' : 'rgba(23,23,23,0.22)'}
               strokeWidth={active ? 1.5 : 1}
               style={{ transition: 'fill 0.4s ease, stroke 0.4s ease, stroke-width 0.4s ease' }}
             />
@@ -87,7 +88,7 @@ function StepVisual({ activeStep }) {
               textAnchor="middle"
               fontSize="11"
               letterSpacing="1"
-              fill={active ? '#ffffff' : 'rgba(255,255,255,0.35)'}
+              fill={active ? '#171717' : 'rgba(23,23,23,0.35)'}
               style={{ transition: 'fill 0.4s ease' }}
             >
               {label.toUpperCase()}
@@ -123,7 +124,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
   }, [])
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-neutral-900">
       <SiteNav current="why" />
 
       {/* Same fade-up on arrival as Pricing, Customers, About and Support. */}
@@ -134,9 +135,9 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
         className="mx-auto max-w-6xl px-6 pb-10 pt-20"
       >
         <h1 className="max-w-2xl font-serif text-4xl font-medium leading-tight tracking-tight md:text-5xl">
-          Built to <em className="text-neutral-400">adapt</em> to how your school actually schedules
+          Built to <em className="text-emerald-700">adapt</em> to how your school actually schedules
         </h1>
-        <p className="mt-4 max-w-xl text-neutral-400">
+        <p className="mt-4 max-w-xl text-neutral-600">
           One connected workflow, from a blank slate to a clash-free timetable. Here's what actually
           happens at each step.
         </p>
@@ -145,7 +146,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
       <div className="relative mx-auto max-w-6xl px-6 pb-32">
         <div className="grid gap-12 lg:grid-cols-2">
           <div className="relative">
-            <div className="absolute bottom-0 left-[15px] top-2 w-px bg-white/10" />
+            <div className="absolute bottom-0 left-[15px] top-2 w-px bg-neutral-100" />
             {STEPS.map((s, i) => (
               <div
                 key={s.n}
@@ -155,28 +156,28 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
               >
                 <span
                   className={`absolute left-0 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border text-[11px] font-semibold transition-colors duration-300 ${
-                    activeStep === i ? 'border-white bg-white text-black' : 'border-white/20 text-neutral-500'
+                    activeStep === i ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 text-neutral-500'
                   }`}
                 >
                   {s.n}
                 </span>
                 <p
                   className={`text-xs font-medium uppercase tracking-widest transition-colors duration-300 ${
-                    activeStep === i ? 'text-white' : 'text-neutral-600'
+                    activeStep === i ? 'text-neutral-900' : 'text-neutral-400'
                   }`}
                 >
                   Step {s.n} · {s.layer}
                 </p>
                 <h3
                   className={`mt-3 font-serif text-3xl font-medium transition-colors duration-300 md:text-4xl ${
-                    activeStep === i ? 'text-white' : 'text-neutral-700'
+                    activeStep === i ? 'text-neutral-900' : 'text-neutral-300'
                   }`}
                 >
                   {s.title}
                 </h3>
                 <p
                   className={`mt-4 max-w-sm text-[15px] leading-relaxed transition-colors duration-300 ${
-                    activeStep === i ? 'text-neutral-400' : 'text-neutral-700'
+                    activeStep === i ? 'text-neutral-600' : 'text-neutral-300'
                   }`}
                 >
                   {s.body}
@@ -186,12 +187,13 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
           </div>
 
           <div className="hidden lg:block">
-            <div className="sticky top-24 flex h-[70vh] items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-neutral-950/60">
+            <div className="sticky top-24 flex h-[70vh] items-center justify-center overflow-hidden rounded-xl border border-neutral-200 bg-neutral-50">
               <StepVisual activeStep={activeStep} />
             </div>
           </div>
         </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

@@ -436,7 +436,28 @@ export default function TimetableTab({
   // moved by hand - a manual move that double-books nobody passes every
   // physical check while still breaking a rule, and without this the
   // Constraints tab goes on calling that rule enforced.
-  const violations = timetable?.violations ?? []
+  //
+  // Only RULES count as broken. A preference ("try to...") is allowed to give
+  // way when it can't be fully met - that is what makes it a preference - so
+  // it gets a calm note below rather than the warning, the cell markings and
+  // the per-section counts.
+  const allViolations = timetable?.violations ?? []
+  const violations = allViolations.filter((v) => (v.strength ?? 'required') === 'required')
+  const softViolations = allViolations.filter((v) => (v.strength ?? 'required') !== 'required')
+  // One line per rule, however many places it's broken: a "spread evenly"
+  // rule is checked per teacher, and listing each one buried the message.
+  const groupByRule = (list) => {
+    const byRule = new Map()
+    for (const v of list) {
+      const key = v.constraint_id ?? v.description
+      const g = byRule.get(key) ?? { description: v.description, details: [] }
+      g.details.push(v.detail)
+      byRule.set(key, g)
+    }
+    return [...byRule.values()]
+  }
+  const brokenRules = groupByRule(violations)
+  const unmetPreferences = groupByRule(softViolations)
   // Which cells to mark. A slot can break more than one rule, so the entry id
   // maps to all of them rather than the first found.
   const violatingEntries = new Map()
@@ -521,19 +542,21 @@ export default function TimetableTab({
           </svg>
           <div className="flex flex-col gap-1">
             <span className="font-medium">
-              {brokenSlots.size === 1
-                ? '1 slot now breaks a rule you set'
-                : `${brokenSlots.size} slots now break rules you set`}
+              {brokenRules.length === 1 ? '1 rule you set is' : `${brokenRules.length} rules you set are`} broken
+              {' '}in {brokenSlots.size === 1 ? '1 slot' : `${brokenSlots.size} slots`}
             </span>
             {/* The rule's own confirmed sentence, not a paraphrase - it is what
                 the Constraints tab shows, and a warning that named it
                 differently would send someone looking for a rule they don't
                 have. The numbers say which slot to move. */}
             <ul className="flex flex-col gap-0.5">
-              {violations.map((v, i) => (
-                <li key={`${v.constraint_id}-${i}`}>
-                  {v.description}{' '}
-                  <span className="text-amber-700">({v.detail})</span>
+              {brokenRules.map((r) => (
+                <li key={r.description}>
+                  {r.description}{' '}
+                  <span className="text-amber-700">
+                    ({r.details[0]}
+                    {r.details.length > 1 ? `, and ${r.details.length - 1} more` : ''})
+                  </span>
                 </li>
               ))}
             </ul>
@@ -542,6 +565,29 @@ export default function TimetableTab({
               Constraints tab.
             </span>
           </div>
+        </div>
+      )}
+
+      {unmetPreferences.length > 0 && (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
+          <p className="font-medium">
+            {unmetPreferences.length === 1 ? '1 preference' : `${unmetPreferences.length} preferences`} couldn&rsquo;t be
+            fully met everywhere
+          </p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-sky-800">
+            {unmetPreferences.map((p) => (
+              <li key={p.description}>
+                {p.description}{' '}
+                <span className="text-sky-700">
+                  (not met in {p.details.length} {p.details.length === 1 ? 'case' : 'cases'}, e.g. {p.details[0]})
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs text-sky-700">
+            That&rsquo;s allowed for a preference: the timetable follows it as far as it can. If one must always hold,
+            reword it on the Constraints tab without &ldquo;try to&rdquo; to make it a rule.
+          </p>
         </div>
       )}
 

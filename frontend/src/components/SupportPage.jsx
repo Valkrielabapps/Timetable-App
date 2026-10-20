@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 
 /**
  * Standalone Support page - contact details and FAQ - reached via
@@ -108,9 +109,9 @@ const fadeUp = {
 
 function FaqItem({ item, isOpen, onToggle }) {
   return (
-    <div className="border-b border-white/10">
+    <div className="border-b border-neutral-200">
       <button onClick={onToggle} aria-expanded={isOpen} className="flex w-full items-center justify-between gap-4 py-5 text-left">
-        <span className="text-[15px] font-medium text-white">{item.q}</span>
+        <span className="text-[15px] font-medium text-neutral-900">{item.q}</span>
         <svg
           width="18"
           height="18"
@@ -135,7 +136,7 @@ function FaqItem({ item, isOpen, onToggle }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <p className="pb-5 pr-8 text-sm leading-relaxed text-neutral-400">{item.a}</p>
+            <p className="pb-5 pr-8 text-sm leading-relaxed text-neutral-600">{item.a}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -145,10 +146,10 @@ function FaqItem({ item, isOpen, onToggle }) {
 
 function ContactCard({ title, children, action }) {
   return (
-    <div className="flex flex-col justify-between gap-5 rounded-xl border border-white/10 bg-white/[0.03] p-6">
+    <div className="flex flex-col justify-between gap-5 rounded-xl border border-neutral-200 bg-neutral-50 p-6">
       <div>
-        <h3 className="text-[15px] font-semibold text-white">{title}</h3>
-        <div className="mt-2 text-sm leading-relaxed text-neutral-400">{children}</div>
+        <h3 className="text-[15px] font-semibold text-neutral-900">{title}</h3>
+        <div className="mt-2 text-sm leading-relaxed text-neutral-600">{children}</div>
       </div>
       {action}
     </div>
@@ -165,7 +166,7 @@ function Row({ heading, children, amount = 0.2 }) {
       transition={{ duration: 0.5 }}
       className="grid gap-6 py-14 md:grid-cols-[280px_1fr] md:gap-12"
     >
-      <h2 className="font-serif text-3xl font-medium text-white">{heading}</h2>
+      <h2 className="font-serif text-3xl font-medium text-neutral-900">{heading}</h2>
       <div className="min-w-0">{children}</div>
     </motion.div>
   )
@@ -187,20 +188,20 @@ export default function SupportPage({ onBack, onGetStarted }) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-neutral-900">
       <SiteNav current="support" />
 
       <div className="mx-auto max-w-6xl px-6 py-20">
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
-          <h1 className="font-serif text-5xl font-medium leading-tight tracking-tight text-white md:text-6xl">
+          <h1 className="font-serif text-5xl font-medium leading-tight tracking-tight text-neutral-900 md:text-6xl">
             Support
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-neutral-400">
+          <p className="mt-5 max-w-2xl text-lg text-neutral-600">
             We&rsquo;re a small team and read every message. Most get a reply within one working day.
           </p>
         </motion.div>
 
-        <div className="mt-20 divide-y divide-white/10 border-t border-white/10">
+        <div className="mt-20 divide-y divide-neutral-200 border-t border-neutral-200">
           <Row heading="Contact us" amount={0.3}>
             <div className="grid gap-4 sm:grid-cols-2">
               <ContactCard
@@ -209,11 +210,11 @@ export default function SupportPage({ onBack, onGetStarted }) {
                   <div className="flex flex-wrap items-center gap-3">
                     <a
                       href={`mailto:${SUPPORT_EMAIL}`}
-                      className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-200"
+                      className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
                     >
                       {SUPPORT_EMAIL}
                     </a>
-                    <button onClick={copyEmail} className="text-sm font-medium text-neutral-400 hover:text-white">
+                    <button onClick={copyEmail} className="text-sm font-medium text-neutral-600 hover:text-neutral-900">
                       {copied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
@@ -223,7 +224,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
               </ContactCard>
               <ContactCard
                 title="From inside the app"
-                action={<span className="text-sm font-medium text-neutral-300">Help button, bottom right</span>}
+                action={<span className="text-sm font-medium text-neutral-700">Help button, bottom right</span>}
               >
                 Signed in? Use the Help button on any screen to send us a ticket. It includes your school, so
                 we can look into it straight away.
@@ -231,7 +232,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
               <ContactCard
                 title="Payments and refunds"
                 action={
-                  <a href="?page=refunds" className="text-sm font-medium text-white underline underline-offset-4 hover:text-neutral-300">
+                  <a href="?page=refunds" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
                     Refund and Cancellation Policy
                   </a>
                 }
@@ -242,7 +243,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
               <ContactCard
                 title="Larger schools"
                 action={
-                  <a href="?page=pricing" className="text-sm font-medium text-white underline underline-offset-4 hover:text-neutral-300">
+                  <a href="?page=pricing" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
                     See plans
                   </a>
                 }
@@ -289,20 +290,21 @@ export default function SupportPage({ onBack, onGetStarted }) {
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-white/10 px-8 py-8 md:flex-row md:items-center"
+          className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-neutral-200 px-8 py-8 md:flex-row md:items-center"
         >
           <div>
-            <p className="text-lg font-medium text-white">Didn&rsquo;t find your answer?</p>
-            <p className="mt-1 text-sm text-neutral-400">Write to us and a real person will reply.</p>
+            <p className="text-lg font-medium text-neutral-900">Didn&rsquo;t find your answer?</p>
+            <p className="mt-1 text-sm text-neutral-600">Write to us and a real person will reply.</p>
           </div>
           <a
             href={`mailto:${SUPPORT_EMAIL}`}
-            className="rounded-md bg-white px-5 py-2.5 text-sm font-medium text-black hover:bg-neutral-200"
+            className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             Email support
           </a>
         </motion.div>
       </div>
+      <SiteFooter />
     </div>
   )
 }

@@ -11,10 +11,10 @@ import PricingPage from './PricingPage'
 describe('SiteNav', () => {
   it('links every public page and marks the current one', () => {
     render(<SiteNav current="pricing" />)
-    for (const label of ['Why Timetablz', 'Plans and Pricing', 'Customers', 'About', 'Support']) {
+    for (const label of ['Why Timetablz', 'Pricing', 'Customers', 'About', 'Support']) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
     }
-    expect(screen.getByRole('link', { name: 'Plans and Pricing' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Pricing' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Timetablz' })).toBeInTheDocument()
   })
 

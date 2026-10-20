@@ -1,4 +1,5 @@
 import SiteNav from './SiteNav'
+import SiteFooter from './SiteFooter'
 /**
  * Renders one of the plain-Markdown legal docs (src/legal/*.md, imported
  * as raw text via Vite's `?raw` suffix — see PrivacyPolicyPage.jsx /
@@ -146,6 +147,7 @@ export default function LegalPage({ title, markdown, onBack }) {
       <div className="mx-auto max-w-3xl px-6 py-14">
         {renderMarkdown(markdown)}
       </div>
+      <SiteFooter />
     </div>
   )
 }

@@ -85,7 +85,7 @@ describe('timetable rule violations', () => {
 
   it('counts the slots rather than the rules', () => {
     renderTab({ ...CLEAN, violations: [VIOLATION] })
-    expect(screen.getByText('1 slot now breaks a rule you set')).toBeInTheDocument()
+    expect(screen.getByText(/1 rule you set is broken in 1 slot/)).toBeInTheDocument()
   })
 
   it('says what went wrong in numbers', () => {
@@ -111,7 +111,7 @@ describe('timetable rule violations', () => {
         { ...VIOLATION, constraint_id: 8, description: 'Hindi is never in the last period.' },
       ],
     })
-    expect(screen.getByText('1 slot now breaks a rule you set')).toBeInTheDocument()
+    expect(screen.getByText(/2 rules you set are broken in 1 slot/)).toBeInTheDocument()
     expect(screen.getByText(/Hindi is never in the last period/)).toBeInTheDocument()
   })
 
@@ -121,7 +121,7 @@ describe('timetable rule violations', () => {
       entries: [ENTRY, { ...ENTRY, id: 12, period_id: 1, order: 0 }],
       violations: [{ ...VIOLATION, entry_ids: [11, 12] }],
     })
-    expect(screen.getByText('2 slots now break rules you set')).toBeInTheDocument()
+    expect(screen.getByText(/1 rule you set is broken in 2 slots/)).toBeInTheDocument()
   })
 
   it('survives a timetable from before violations existed', () => {
@@ -129,5 +129,23 @@ describe('timetable rule violations', () => {
     const { violations, ...withoutField } = CLEAN  // eslint-disable-line no-unused-vars
     renderTab(withoutField)
     expect(screen.queryByText(/breaks? a rule/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('preferences that are not met everywhere', () => {
+  it('are a calm note, not a broken rule, and one line per rule', () => {
+    const pref = { ...VIOLATION, strength: 'preference', description: 'Try to spread each teacher evenly' }
+    renderTab({
+      ...CLEAN,
+      entries: [ENTRY, { ...ENTRY, id: 12, period_id: 1, order: 0 }],
+      violations: [
+        { ...pref, entry_ids: [11], detail: 'differ by 3' },
+        { ...pref, entry_ids: [12], detail: 'differ by 2' },
+      ],
+    })
+    expect(screen.queryByText(/rules? you set (is|are) broken/)).toBeNull()
+    expect(screen.getByText(/1 preference couldn.t be fully met/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Try to spread each teacher evenly/)).toHaveLength(1)
+    expect(screen.getByText(/not met in 2 cases/)).toBeInTheDocument()
   })
 })

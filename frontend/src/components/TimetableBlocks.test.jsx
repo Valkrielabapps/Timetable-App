@@ -337,7 +337,7 @@ describe('counting broken slots', () => {
       },
     })
     expect(section('Grade 11 · A')).toHaveTextContent('1 slot breaking a rule')
-    expect(screen.getByText('1 slot now breaks a rule you set')).toBeInTheDocument()
+    expect(screen.getByText(/broken in 1 slot/)).toBeInTheDocument()
   })
 })
 
