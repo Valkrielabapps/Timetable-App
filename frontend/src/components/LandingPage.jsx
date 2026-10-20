@@ -787,241 +787,189 @@ function MetricsSection() {
  * testimonials.
  */
 /**
- * "Why schools choose Timetablz" — modeled on nyx.today's "The NYX
- * advantage" section (reference video sent by the user): a dark section
- * with a horizontal stack of five cards on the left and a matching line
- * of copy on the right, auto-advancing like a carousel.
+ * "Why schools choose Timetablz", laid out like Sequoia's "one integrated
+ * platform" section: a centred headline and paragraph, a product mock-up in
+ * the middle, and two benefits either side of it. On a phone the mock-up
+ * comes first and the benefits stack beneath it.
  *
- * How the stack works: every card is the same width and sits at a fixed
- * x = index * SPINE, so they overlap like folders in a drawer. Cards left
- * of the active one sit above it in z-order only as far as their
- * SPINE-wide strip (showing their colored icon), cards right of it sit
- * behind it and peek out on the right. A single white panel springs to
- * the active card's position and its content crossfades, which is what
- * produces the "sliding" feel from the reference. When it wraps from the
- * last card back to the first, the panel sweeps all the way back left,
- * same as the original.
- *
- * Stats are deliberately product facts, not invented usage numbers
- * (see this file's top docstring on that principle): the solver's
- * 60-second search cap, the clash-free guarantee of hard constraints,
- * the seven rule types llm_constraint_parser.py actually enforces, etc.
+ * Every benefit is a real property of the product - no invented numbers.
+ * The mock-up is drawn in HTML rather than a screenshot so it stays crisp
+ * and matches the app's real palette.
  */
-const WHY_SLIDES = [
-  {
-    icon: <path d="M13 3 4 14h7l-1 7 9-11h-7l1-7Z" />,
-    color: '#f87171',
-    label: 'Time to timetable',
-    stat: '< 1 min',
-    caption: 'Solver time for a full school timetable.',
-    text: ['No more weeks of spreadsheet redrafts. ', 'The solver builds every section at once,', ' usually in under a minute.'],
-  },
-  {
-    icon: <><path d="M5 12l4 4L19 6" /></>,
-    color: '#fb923c',
-    label: 'Scheduling conflicts',
-    stat: '0 clashes',
-    caption: 'Across every teacher and every room.',
-    text: ['Double-booked teachers and rooms are ', 'ruled out by the solver itself,', ' not caught later on the staff room wall.'],
-  },
-  {
-    icon: <><path d="M4 6h16M4 12h10M4 18h7" /></>,
-    color: '#facc15',
-    label: 'Plain-English rules',
-    stat: '7 rule types',
-    caption: 'Understood from ordinary sentences.',
-    text: ['Type rules the way you would say them. ', '"No PE on Fridays" just works,', ' with no formulas or settings screens.'],
-  },
-  {
-    icon: <><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></>,
-    color: '#bef264',
-    label: 'One workflow',
-    stat: '1 workspace',
-    caption: 'From data entry to the final export.',
-    text: ['Teachers, rules, generation and fine-tuning ', 'live in one connected place,', ' not a spreadsheet, a chat thread and a printout.'],
-  },
-  {
-    icon: <><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></>,
-    color: '#818cf8',
-    label: 'Ready to share',
-    stat: 'Excel & PDF',
-    caption: 'Export in one click for the staff room.',
-    text: ['Lock the slots that already work, ', 'regenerate the rest,', ' then export straight to Excel or PDF.'],
-  },
-]
-
-const WHY_INTERVAL_MS = 3000
-
-// Card geometry scales down on small screens so the whole stack
-// (4 spines + one full card) still fits a phone-width column.
-function useWhyGeometry() {
-  const query = '(min-width: 768px)'
-  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
-  useEffect(() => {
-    const mq = window.matchMedia(query)
-    const onChange = () => setWide(mq.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return wide ? { spine: 52, width: 300, height: 260 } : { spine: 30, width: 220, height: 220 }
+const WHY_BENEFITS = {
+  left: [
+    {
+      title: 'Timetables in minutes, not weeks',
+      body: 'The whole school is solved at once, every section and every teacher together, usually in under a minute.',
+    },
+    {
+      title: 'Zero clashes, guaranteed',
+      body: 'No teacher or room is ever double-booked. Clashes are ruled out while the timetable is built, not found later on the staff room wall.',
+    },
+  ],
+  right: [
+    {
+      title: 'Rules in plain English',
+      body: "Type rules the way you'd say them, like \"no PE right after lunch\". You see exactly how each one was read before it's applied.",
+    },
+    {
+      title: 'Ready to share',
+      body: 'Lock the slots that already work, regenerate the rest, and export every class and teacher timetable to Excel or PDF.',
+    },
+  ],
 }
 
-function WhyIcon({ slide, size = 30 }) {
+function WhyBenefit({ title, body, delay }) {
   return (
-    <span
-      className="flex items-center justify-center rounded-full"
-      style={{ width: size, height: size, backgroundColor: slide.color, boxShadow: `0 0 18px ${slide.color}55` }}
+    <motion.div
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.4 }}
+      variants={fadeUp}
+      transition={{ duration: 0.5, delay }}
+      className="max-w-[240px]"
     >
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="#1c1917" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        {slide.icon}
-      </svg>
-    </span>
+      <h3 className="text-[17px] font-semibold leading-snug text-neutral-900">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-neutral-500">{body}</p>
+    </motion.div>
   )
 }
 
-function WhyStack({ active, onSelect }) {
-  const { spine, width, height } = useWhyGeometry()
-  const n = WHY_SLIDES.length
-  const slide = WHY_SLIDES[active]
-  const iconSize = spine >= 50 ? 30 : 22
-  const iconInset = (spine - iconSize) / 2
+const MOCK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+// [subject, tint] per period, one row per period - a believable Grade 9 week.
+const MOCK_SUBJECTS = {
+  Maths: 'bg-emerald-100 text-emerald-900',
+  English: 'bg-sky-100 text-sky-900',
+  Physics: 'bg-violet-100 text-violet-900',
+  Hindi: 'bg-amber-100 text-amber-900',
+  Biology: 'bg-rose-100 text-rose-900',
+  PE: 'bg-lime-100 text-lime-900',
+  Chemistry: 'bg-indigo-100 text-indigo-900',
+}
+const MOCK_WEEK = [
+  ['Maths', 'English', 'Physics', 'Maths', 'Hindi'],
+  ['English', 'Maths', 'Chemistry', 'Biology', 'Maths'],
+  ['Physics', 'Hindi', 'Maths', 'English', 'Chemistry'],
+  ['Biology', 'PE', 'English', 'Physics', 'English'],
+  ['Hindi', 'Chemistry', 'Biology', 'PE', 'Physics'],
+]
 
+function WhyMockup() {
   return (
-    <div className="relative shrink-0" style={{ width: (n - 1) * spine + width, height }}>
-      {/* The dark "folder" cards. */}
-      {WHY_SLIDES.map((s, i) => (
-        <button
-          key={s.label}
-          type="button"
-          aria-label={s.label}
-          onClick={() => onSelect(i)}
-          className="absolute top-0 rounded-2xl border border-white/[0.08] transition-[background] duration-500 hover:brightness-125"
-          style={{
-            left: i * spine,
-            width,
-            height,
-            zIndex: i < active ? 10 + i : 20 - i,
-            // Nyx's collapsed cards are translucent grey panes that get
-            // fainter the further they sit from the active card.
-            background: `linear-gradient(90deg, rgba(255,255,255,${Math.max(0.03, 0.13 - Math.abs(i - active) * 0.025)}), rgba(255,255,255,0.02))`,
-            boxShadow: '-10px 0 30px rgba(0,0,0,0.45)',
-          }}
-        />
-      ))}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.6 }}
+      className="relative mx-auto w-full max-w-[460px]"
+    >
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_30px_80px_-30px_rgba(16,24,40,0.35)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-neutral-900">Grade 9 · Section A</p>
+            <p className="text-[11px] text-neutral-400">Week timetable</p>
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            No clashes
+          </span>
+        </div>
 
-      {/* The white active panel, springing to the active card's slot. */}
-      <motion.div
-        className="absolute top-0 overflow-hidden rounded-2xl bg-neutral-50 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]"
-        style={{ width, height, zIndex: 30 }}
-        initial={false}
-        animate={{ x: active * spine }}
-        transition={{ type: 'spring', stiffness: 170, damping: 24 }}
-      >
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={active}
-            className="absolute inset-0 flex flex-col justify-end p-6"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0, transition: { delay: 0.18, duration: 0.35 } }}
-            exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-neutral-400">{slide.label}</p>
-            <p className="mt-2 pr-1 font-serif text-4xl font-light italic tracking-tight text-neutral-800 md:text-5xl">{slide.stat}</p>
-            <p className="mt-3 text-xs leading-relaxed text-neutral-400">{slide.caption}</p>
-          </motion.div>
-        </AnimatePresence>
-      </motion.div>
+        <div className="mt-3 flex gap-1.5 text-[10px]">
+          <span className="rounded-full bg-neutral-900 px-2.5 py-1 font-medium text-white">By section</span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-500">By teacher</span>
+          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-500">Substitutions</span>
+        </div>
 
-      {/* Icons on top of everything: visible for the active card and every
-          card to its left (whose spines show), hidden for cards behind. */}
-      {WHY_SLIDES.map((s, i) => (
-        <motion.div
-          key={s.label}
-          className="pointer-events-none absolute"
-          style={{ left: i * spine + iconInset, top: spine >= 50 ? 20 : 14, zIndex: 40 }}
-          initial={false}
-          animate={{ opacity: i <= active ? 1 : 0, scale: i <= active ? 1 : 0.6 }}
-          transition={{ duration: 0.3, delay: i === active ? 0.12 : 0 }}
-        >
-          <WhyIcon slide={s} size={iconSize} />
-        </motion.div>
-      ))}
-    </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            ['Sections', '14'],
+            ['Teachers', '33'],
+            ['Generated in', '4 sec'],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-neutral-100 bg-neutral-50 px-2.5 py-2">
+              <p className="text-[9px] uppercase tracking-wide text-neutral-400">{label}</p>
+              <p className="mt-0.5 text-lg font-semibold tracking-tight text-neutral-900">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-xl border border-neutral-100">
+          <div className="grid grid-cols-[40px_repeat(5,1fr)] bg-neutral-50 text-[9px] font-medium uppercase tracking-wide text-neutral-400">
+            <span />
+            {MOCK_DAYS.map((d) => (
+              <span key={d} className="py-1.5 text-center">{d}</span>
+            ))}
+          </div>
+          {MOCK_WEEK.map((row, p) => (
+            <div key={p} className="grid grid-cols-[40px_repeat(5,1fr)] gap-1 border-t border-neutral-100 px-1 py-1">
+              <span className="self-center text-center text-[9px] text-neutral-400">P{p + 1}</span>
+              {row.map((subject, d) => (
+                <span
+                  key={d}
+                  className={`truncate rounded-md px-1 py-1.5 text-center text-[9.5px] font-medium ${MOCK_SUBJECTS[subject]}`}
+                >
+                  {subject}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Fades the bottom of the card into the section, as in the reference. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-2xl bg-gradient-to-t from-[#f3faf6] to-transparent" />
+    </motion.div>
   )
 }
 
 function WhyChoose() {
-  const [active, setActive] = useState(0)
-  const [paused, setPaused] = useState(false)
-
-  useEffect(() => {
-    if (paused) return undefined
-    const id = setTimeout(() => setActive((v) => (v + 1) % WHY_SLIDES.length), WHY_INTERVAL_MS)
-    return () => clearTimeout(id)
-  }, [active, paused])
-
-  const slide = WHY_SLIDES[active]
-
   return (
-    <section className="bg-black px-6 py-24">
+    <section className="bg-gradient-to-b from-white to-[#f3faf6] px-6 py-24">
       <div className="mx-auto max-w-6xl">
-        <motion.h2
+        <motion.div
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="font-serif text-4xl font-medium tracking-tight text-white md:text-5xl"
+          className="mx-auto max-w-2xl text-center"
         >
-          Why schools choose <em className="pr-1 font-light italic text-neutral-300">Timetablz.</em>
-        </motion.h2>
-
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={fadeUp}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="mt-16 flex flex-col items-start gap-12 md:flex-row md:items-center md:gap-20"
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-        >
-          <WhyStack active={active} onSelect={setActive} />
-
-          <div className="max-w-sm">
-            <div className="min-h-[96px]">
-              <AnimatePresence mode="wait">
-                <motion.p
-                  key={active}
-                  className="text-lg leading-relaxed text-neutral-300"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {slide.text[0]}
-                  <em className="font-serif text-[1.06em] font-light italic" style={{ color: slide.color }}>{slide.text[1]}</em>
-                  {slide.text[2]}
-                </motion.p>
-              </AnimatePresence>
-            </div>
-
-            <div className="mt-6 flex items-center gap-1.5">
-              {WHY_SLIDES.map((s, i) => (
-                <button
-                  key={s.label}
-                  type="button"
-                  aria-label={`Show: ${s.label}`}
-                  onClick={() => setActive(i)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === active ? 'w-6' : 'w-1.5 bg-white/25 hover:bg-white/50'
-                  }`}
-                  style={i === active ? { backgroundColor: s.color } : undefined}
-                />
-              ))}
-            </div>
-          </div>
+          <h2 className="font-serif text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
+            Why schools choose <em className="pr-1 font-light italic text-neutral-500">Timetablz.</em>
+          </h2>
+          <p className="mt-5 text-[15px] leading-relaxed text-neutral-500">
+            One connected workflow replaces weeks of spreadsheet redrafts. Set up your school, describe your
+            rules in plain English, and get a clash-free timetable for every section and every teacher.
+          </p>
+          <a
+            href="?page=why"
+            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-900 hover:text-neutral-600"
+          >
+            Why Timetablz
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </a>
         </motion.div>
+
+        <div className="mt-16 grid items-center gap-12 lg:grid-cols-[1fr_minmax(0,460px)_1fr] lg:gap-10">
+          <div className="order-1 lg:hidden">
+            <WhyMockup />
+          </div>
+          <div className="order-2 grid gap-10 sm:grid-cols-2 lg:order-none lg:grid-cols-1 lg:justify-items-end lg:gap-14">
+            {WHY_BENEFITS.left.map((b, i) => (
+              <WhyBenefit key={b.title} {...b} delay={0.1 * i} />
+            ))}
+          </div>
+          <div className="hidden lg:block">
+            <WhyMockup />
+          </div>
+          <div className="order-3 grid gap-10 sm:grid-cols-2 lg:order-none lg:grid-cols-1 lg:gap-14">
+            {WHY_BENEFITS.right.map((b, i) => (
+              <WhyBenefit key={b.title} {...b} delay={0.1 * i + 0.1} />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
