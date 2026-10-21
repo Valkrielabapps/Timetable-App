@@ -317,6 +317,11 @@ export default function DataEntryTab({
         allowed_teacher_ids: ids.length >= 2 ? ids : null,
       })
       setAllRequirements((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+      // A server from before teacher lists existed ignores the field and
+      // answers "any teacher" - say so instead of silently reverting.
+      if (ids.length >= 2 && !(updated.allowed_teacher_ids?.length >= 2)) {
+        setError("The teacher list wasn't saved - the server may still be updating. Try again in a minute.")
+      }
     } catch (err) {
       setError(err.message)
     }

@@ -85,3 +85,16 @@ describe('choosing teachers for a subject', () => {
     expect(api.updateRequirement).not.toHaveBeenCalled()
   })
 })
+
+describe('an older server that ignores teacher lists', () => {
+  it('says the list was not saved instead of silently showing Any', async () => {
+    api.updateRequirement.mockReset()
+    api.updateRequirement.mockImplementation(async (id) => ({ id, class_group_id: 100, subject_id: 4, periods_per_week: 6, preferred_teacher_id: null }))
+    renderPlan()
+    fireEvent.click(pickerButton())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Priya' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Joseph' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(await screen.findByText(/teacher list wasn't saved/i)).toBeInTheDocument()
+  })
+})
