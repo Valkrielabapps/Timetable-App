@@ -88,6 +88,29 @@ def lesson_numbers(periods) -> dict[int, int]:
     return out
 
 
+def grade_off_period_ids(periods, limits) -> dict[str, set[int]]:
+    """grade -> lesson slots after that grade's last period of the day.
+
+    `limits` is School.grade_day_limits. A section of the grade is never
+    timetabled in these slots: its school day is over (or, with 0 periods for
+    a day, it has no school that day).
+    """
+    numbers = lesson_numbers(periods)
+    out: dict[str, set[int]] = defaultdict(set)
+    for rule in limits or []:
+        default = rule.get("periods_per_day")
+        by_day = {int(d): n for d, n in (rule.get("by_day") or {}).items()}
+        for p in periods:
+            number = numbers.get(p.id)
+            if number is None:
+                continue
+            cap = by_day.get(p.day_of_week, default)
+            if cap is not None and number > cap:
+                for grade in rule.get("grades") or []:
+                    out[grade].add(p.id)
+    return out
+
+
 def describe_periods(db: Session, school_id: int, periods=None) -> list[dict]:
     """Every period of a school as the API shows it: with its number and the
     zero periods reserved on it, which no single row can work out alone."""
@@ -99,6 +122,12 @@ def describe_periods(db: Session, school_id: int, periods=None) -> list[dict]:
             .all()
         )
     numbers = lesson_numbers(periods)
+    from app.models.school import School
+    school = db.get(School, school_id)
+    off_by_period: dict[int, list[str]] = defaultdict(list)
+    for grade, ids in grade_off_period_ids(periods, school.grade_day_limits if school else None).items():
+        for pid in ids:
+            off_by_period[pid].append(grade)
     zero: dict[int, list[str | None]] = defaultdict(list)
     ids = [p.id for p in periods]
     if ids:
@@ -111,6 +140,8 @@ def describe_periods(db: Session, school_id: int, periods=None) -> list[dict]:
             "number": numbers.get(p.id),
             "zero_all": None in zero.get(p.id, []),
             "zero_grades": sorted(g for g in zero.get(p.id, []) if g is not None),
+            # Grades whose school day is already over by this slot.
+            "off_grades": sorted(off_by_period.get(p.id, [])),
         }
         for p in periods
     ]

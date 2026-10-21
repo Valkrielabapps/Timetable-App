@@ -72,7 +72,7 @@ from app.services.export import build_excel, build_pdf, build_student_excel, bui
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import _class_group_labels, generate_school_timetable, find_blocking_rules
-from app.services.timetable_structure import lesson_numbers, zero_period_ids_for
+from app.services.timetable_structure import grade_off_period_ids, lesson_numbers, zero_period_ids_for
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
 
@@ -625,6 +625,14 @@ def _check_lesson_slot(db: Session, period_id: int, class_group_id: int) -> None
             status_code=400,
             detail=f"That's {whose}'s zero period - no lessons are scheduled in it.",
         )
+    if grade:
+        school = db.get(School, period.school_id)
+        all_periods = db.query(Period).filter(Period.school_id == period.school_id).all()
+        if period_id in grade_off_period_ids(all_periods, school.grade_day_limits if school else None).get(grade, set()):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{grade}'s school day is over by then - no lessons are scheduled in it.",
+            )
 
 
 def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:

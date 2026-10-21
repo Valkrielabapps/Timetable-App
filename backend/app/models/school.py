@@ -37,6 +37,14 @@ class School(Base):
     # Grades not present in this list (e.g. a brand-new one added after
     # the last reorder) are shown after every listed grade.
     grade_order = Column(JSON, default=list)
+    # Grades whose school day is shorter than everyone else's - Grades 1 and 2
+    # going home after period 6, say. A list of
+    #   {"grades": ["Grade 1", "Grade 2"], "periods_per_day": 6,
+    #    "by_day": {"5": 3}}
+    # where by_day overrides the count for a weekday (0 = Monday; 0 periods =
+    # no school that day). Lesson periods after a grade's last one are kept
+    # empty for its sections, exactly like a zero period. Null = none.
+    grade_day_limits = Column(JSON, nullable=True)
     # Descriptive details shown and edited in Settings > School profile:
     # board, affiliation/UDISE code, principal, contact details, address,
     # academic year start, etc. One JSON column rather than a dozen

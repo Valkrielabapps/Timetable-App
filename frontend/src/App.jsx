@@ -958,6 +958,11 @@ function App() {
                     schoolId={selectedSchoolId}
                     classGroupId={selectedClassGroupId}
                     institutionType={selectedSchool?.institution_type}
+                    gradeDayLimits={selectedSchool?.grade_day_limits ?? null}
+                    onSaveGradeDayLimits={async (limits) => {
+                      const updated = await api.updateGradeDayLimits(selectedSchoolId, limits)
+                      setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
+                    }}
                     subjects={subjects}
                     setSubjects={setSubjects}
                     teachers={teachers}

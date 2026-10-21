@@ -266,6 +266,10 @@ export default function TimetableTab({
       return
     }
     const section = classGroups.find((cg) => cg.id === classGroupId)
+    if (section && isOffFor(targetPeriod, section)) {
+      setError(`${section.grade}'s school day is over by then, so no lessons go there.`)
+      return
+    }
     if (section && isZeroFor(targetPeriod, section)) {
       setError(`That's ${section.grade ?? 'this section'}'s zero period - no lessons are scheduled in it.`)
       return
@@ -350,6 +354,8 @@ export default function TimetableTab({
   // otherwise ordinary lesson slot.
   const isZeroFor = (period, cg) =>
     !!period && (period.zero_all || (cg.grade != null && (period.zero_grades ?? []).includes(cg.grade)))
+  // This section's grade has a shorter day and has gone home by this slot.
+  const isOffFor = (period, cg) => !!period && cg.grade != null && (period.off_grades ?? []).includes(cg.grade)
 
   // What a section's grid shows in a slot that isn't a lesson for it.
   function sectionSpecial(day, order, cg) {
@@ -363,6 +369,9 @@ export default function TimetableTab({
     }
     if (kind === 'zero') return { text: 'Zero period', tone: 'zero' }
     if (kind === 'break') return { text: period.label || 'Break', tone: 'muted' }
+    if (isOffFor(period, cg) && entriesFor(day, order, cg.id).length === 0) {
+      return { text: 'No class', tone: 'muted' }
+    }
     // A lesson left there from before the zero period existed still shows.
     if (isZeroFor(period, cg) && entriesFor(day, order, cg.id).length === 0) {
       return { text: 'Zero period', tone: 'zero' }

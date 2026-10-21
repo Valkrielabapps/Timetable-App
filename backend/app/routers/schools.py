@@ -22,11 +22,12 @@ from sqlalchemy.orm import Session
 from app.core.access import get_membership_role, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import School, SchoolInvite, SchoolMembership
+from app.models.school import ClassGroup, Period, School, SchoolInvite, SchoolMembership
 from app.models.user import User
 from app.schemas.membership import InviteCreate, InviteOut, MemberOut, MemberRoleUpdate
 from app.schemas.school import (
     SchoolCreate,
+    SchoolGradeDayLimitsUpdate,
     SchoolGradeOrderUpdate,
     SchoolInstitutionTypeUpdate,
     SchoolNameUpdate,
@@ -43,6 +44,7 @@ def _school_out(school: School, role: str) -> SchoolOut:
     return SchoolOut(
         id=school.id, name=school.name, institution_type=school.institution_type,
         grade_order=school.grade_order, profile=school.profile, role=role,
+        grade_day_limits=school.grade_day_limits,
         plan=school.plan, plan_valid_until=school.plan_valid_until,
     )
 
@@ -110,6 +112,57 @@ def update_grade_order(
     role = require_school_access(db, current_user, school_id, min_role="admin")
     school = db.get(School, school_id)
     school.grade_order = payload.grade_order
+    db.commit()
+    db.refresh(school)
+    return _school_out(school, role)
+
+
+@router.put("/{school_id}/grade-day-limits", response_model=SchoolOut)
+def update_grade_day_limits(
+    school_id: int, payload: SchoolGradeDayLimitsUpdate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Shorter school days for some grades - see School.grade_day_limits.
+    Full replace: the Setup editor always sends every rule."""
+    role = require_school_access(db, current_user, school_id, min_role="admin")
+    school = db.get(School, school_id)
+    known = {g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id).distinct() if g}
+    lessons_per_day: dict[int, int] = {}
+    for p in db.query(Period).filter(Period.school_id == school_id).all():
+        if not p.is_break:
+            lessons_per_day[p.day_of_week] = lessons_per_day.get(p.day_of_week, 0) + 1
+    longest = max(lessons_per_day.values(), default=0)
+
+    seen: set[str] = set()
+    out = []
+    for rule in payload.limits:
+        grades = list(dict.fromkeys(g for g in rule.grades if g))
+        if not grades:
+            raise HTTPException(status_code=400, detail="Choose at least one grade for each shorter day.")
+        unknown = [g for g in grades if g not in known]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"This school has no {', '.join(unknown)}.")
+        twice = [g for g in grades if g in seen]
+        if twice:
+            raise HTTPException(status_code=400, detail=f"{', '.join(twice)} is in two shorter-day rules. Keep each grade in one.")
+        seen.update(grades)
+        counts = [rule.periods_per_day, *rule.by_day.values()]
+        if any(n < 0 for n in counts) or rule.periods_per_day < 1:
+            raise HTTPException(status_code=400, detail="A grade needs at least 1 period a day.")
+        if longest and rule.periods_per_day >= longest and not rule.by_day:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The school day already has {longest} periods, so {rule.periods_per_day} isn't shorter.",
+            )
+        bad_days = [d for d in rule.by_day if d not in lessons_per_day]
+        if bad_days:
+            raise HTTPException(status_code=400, detail="A day was chosen that isn't a school day.")
+        out.append({
+            "grades": grades,
+            "periods_per_day": rule.periods_per_day,
+            "by_day": {str(d): n for d, n in sorted(rule.by_day.items())},
+        })
+    school.grade_day_limits = out or None
     db.commit()
     db.refresh(school)
     return _school_out(school, role)

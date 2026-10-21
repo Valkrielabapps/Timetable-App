@@ -79,6 +79,13 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
     # first lesson even when a class teacher period comes before it.
     numbers = lesson_numbers(periods)
     zero_grades: dict[int, set] = defaultdict(set)
+    from app.models.school import School as _School
+    from app.services.timetable_structure import grade_off_period_ids
+    _school = db.get(_School, school_id)
+    off_grades: dict[int, set] = defaultdict(set)
+    for grade, ids in grade_off_period_ids(periods, _school.grade_day_limits if _school else None).items():
+        for pid in ids:
+            off_grades[pid].add(grade)
     for z in db.query(ZeroPeriod).filter(ZeroPeriod.school_id == school_id).all():
         zero_grades[z.period_id].add(z.grade)
 
@@ -100,6 +107,7 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
         "rooms_by_id": rooms_by_id,
         "block_names": block_names,
         "numbers": numbers,
+        "off_grades": off_grades,
         "zero_grades": zero_grades,
         "entries_by_class_period": entries_by_class_period,
         "entries_by_teacher_period": entries_by_teacher_period,
@@ -147,6 +155,9 @@ def _special(data: dict, period, key, mode: str) -> list[tuple[str, str]] | None
         return []
     if mode == "section":
         cg = data["class_groups_by_id"].get(key)
+        if cg and cg.grade in data.get("off_grades", {}).get(period.id, set()):
+            # Its grade's school day is over by this slot.
+            return [("No class", "")]
         grades = data["zero_grades"].get(period.id, set())
         if cg and (None in grades or cg.grade in grades):
             return [("Zero period", "")]

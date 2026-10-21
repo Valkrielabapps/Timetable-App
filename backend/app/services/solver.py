@@ -32,6 +32,7 @@ from app.models.school import (
     ElectiveBlock,
     Period,
     Room,
+    School,
     Subject,
     SubjectRequirement,
     Teacher,
@@ -797,8 +798,13 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     zero_by_grade: dict[str | None, set[int]] = {}
     for z in db.query(ZeroPeriod).filter(ZeroPeriod.school_id == school_id).all():
         zero_by_grade.setdefault(z.grade, set()).add(z.period_id)
+    # Grades with a shorter day (Grades 1 and 2 home after period 6) are kept
+    # out of the slots after their last period the same way.
+    from app.services.timetable_structure import grade_off_period_ids
+    school_row = db.get(School, school_id)
+    off_by_grade = grade_off_period_ids(periods, school_row.grade_day_limits if school_row else None)
     zero_period_ids_by_class_group: dict[int, set[int]] = {
-        cg.id: zero_by_grade.get(None, set()) | zero_by_grade.get(cg.grade, set())
+        cg.id: zero_by_grade.get(None, set()) | zero_by_grade.get(cg.grade, set()) | off_by_grade.get(cg.grade, set())
         for cg in class_groups
     }
 
@@ -1666,6 +1672,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             req_restricted_periods, req_required_periods, candidate_ids_by_req,
             subjects_by_id, class_groups_by_id,
             blocks=blocks, option_reqs=option_reqs,
+            unavailable_by_cg=zero_period_ids_by_class_group,
         )
         # Whole sections have to be shared out between teachers now that a
         # section keeps one teacher per subject - the commonest new cause,
@@ -1811,6 +1818,7 @@ def _diagnose_infeasibility(
     class_groups_by_id: dict[int, ClassGroup],
     blocks: list | None = None,
     option_reqs: list | None = None,
+    unavailable_by_cg: dict[int, set[int]] | None = None,
 ) -> list[str]:
     """
     Best-effort explanation for why the solve came back infeasible (or
@@ -1851,15 +1859,28 @@ def _diagnose_infeasibility(
     # A block occupies its section once, however many options it has.
     for block in blocks or []:
         demand_by_cg[block.class_group_id] = demand_by_cg.get(block.class_group_id, 0) + block.periods_per_week
+    lesson_ids = {p.id for p in periods}
     for cg_id, demand in demand_by_cg.items():
-        if demand > total_periods:
+        # A grade with a shorter day, or a zero period of its own, has fewer
+        # periods to fill than the school's whole week.
+        kept_free = (unavailable_by_cg or {}).get(cg_id, set()) & lesson_ids
+        available = total_periods - len(kept_free)
+        if demand > available:
             cg = class_groups_by_id.get(cg_id)
             label = _class_group_label(cg) if cg else f"class_group_id={cg_id}"
-            messages.append(
-                f"{label} needs {demand} periods/week in total across all its subjects, but "
-                f"the school only has {total_periods} periods defined — add more periods, or "
-                f"reduce periods/week for one or more subjects in this section."
-            )
+            if kept_free:
+                messages.append(
+                    f"{label} needs {demand} periods/week in total across all its subjects, but it "
+                    f"only has {available} periods in its week (its grade's shorter day or zero "
+                    f"periods take up the rest). Reduce periods/week for one or more of its subjects, "
+                    f"or give its grade a longer day in Setup."
+                )
+            else:
+                messages.append(
+                    f"{label} needs {demand} periods/week in total across all its subjects, but "
+                    f"the school only has {total_periods} periods defined. Add more periods, or "
+                    f"reduce periods/week for one or more subjects in this section."
+                )
 
     # 2. A placement restriction leaves too few eligible periods for a
     # requirement's periods/week, regardless of teacher availability.

@@ -168,6 +168,8 @@ export const api = {
   createSchool: (data) => post("/schools", data),
   updateSchoolGradeOrder: (schoolId, gradeOrder) =>
     put(`/schools/${schoolId}/grade-order`, { grade_order: gradeOrder }),
+  // Shorter school days for some grades (Grades 1 and 2 home after period 6).
+  updateGradeDayLimits: (schoolId, limits) => put(`/schools/${schoolId}/grade-day-limits`, { limits }),
   updateSchoolInstitutionType: (schoolId, institutionType) =>
     put(`/schools/${schoolId}/institution-type`, { institution_type: institutionType }),
   updateSchoolName: (schoolId, name) => put(`/schools/${schoolId}/name`, { name }),

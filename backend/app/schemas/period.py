@@ -41,3 +41,5 @@ class PeriodOut(BaseModel):
     # these grades. Sections in them have no lesson here.
     zero_all: bool = False
     zero_grades: list[str] = []
+    # Grades whose school day has ended by this slot (School.grade_day_limits).
+    off_grades: list[str] = []

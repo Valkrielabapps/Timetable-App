@@ -25,6 +25,7 @@ class SchoolOut(BaseModel):
     # same reasoning as Teacher.qualified_grades — the frontend already
     # treats a missing/None value the same as an empty list.
     grade_order: list[str] | None = None
+    grade_day_limits: list[dict] | None = None
     profile: dict | None = None
     # Paid plan ("pro") and when it lapses; both null on the Free plan.
     plan: str | None = None
@@ -35,6 +36,17 @@ class SchoolOut(BaseModel):
     # Lets the frontend gate write UI (hide "Add", "Generate", etc. for a
     # viewer) without a separate round-trip to find out.
     role: str = "admin"
+
+
+class GradeDayLimit(BaseModel):
+    grades: list[str]
+    periods_per_day: int
+    # Weekday (0 = Monday) -> periods that day, for a day that differs.
+    by_day: dict[int, int] = {}
+
+
+class SchoolGradeDayLimitsUpdate(BaseModel):
+    limits: list[GradeDayLimit]
 
 
 class SchoolGradeOrderUpdate(BaseModel):
