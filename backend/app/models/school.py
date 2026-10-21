@@ -274,6 +274,12 @@ class SubjectRequirement(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
     periods_per_week = Column(Integer, nullable=False)
     preferred_teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
+    # A shortlist the solver picks ONE teacher from for this section's
+    # subject, when the admin wants "Priya or Joseph, not anyone qualified".
+    # Only used with two or more teachers and no preferred_teacher_id: one
+    # teacher is a fixed choice and stays in preferred_teacher_id, so
+    # everything that reads that field keeps working. Null = any qualified.
+    allowed_teacher_ids = Column(JSON, nullable=True)
     # Optional second teacher for this section's subject — picked from
     # teachers flagged Teacher.is_assistant_eligible, independent of
     # qualified_subject_ids (an assistant doesn't need to be independently

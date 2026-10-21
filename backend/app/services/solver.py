@@ -574,6 +574,11 @@ def _candidate_teacher_ids(
     req_grade = req_class_group.grade if req_class_group else None
     if req.preferred_teacher_id:
         return [req.preferred_teacher_id] if req.preferred_teacher_id in teachers_by_id else []
+    # A shortlist ("Priya or Joseph") is an explicit choice like the pin
+    # above: the solver picks one of them, whatever else is qualified.
+    shortlist = getattr(req, "allowed_teacher_ids", None) or []
+    if len(shortlist) >= 2:
+        return [t for t in dict.fromkeys(shortlist) if t in teachers_by_id]
     return [
         t.id for t in teachers
         if req.subject_id in (t.qualified_subject_ids or [])

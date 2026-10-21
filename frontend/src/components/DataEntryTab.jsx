@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
@@ -304,6 +304,24 @@ export default function DataEntryTab({
     }
   }
 
+  // The teacher picker's answer: nobody = any qualified teacher, one = that
+  // teacher fixed (stored as preferred_teacher_id, as before), two or more =
+  // a shortlist the solver picks one from.
+  async function handleSetTeachers(subjectId, teacherIds) {
+    try {
+      const requirement = requirements.find((r) => r.subject_id === subjectId)
+      if (!requirement) return
+      const ids = [...new Set(teacherIds)]
+      const updated = await api.updateRequirement(requirement.id, {
+        preferred_teacher_id: ids.length === 1 ? ids[0] : null,
+        allowed_teacher_ids: ids.length >= 2 ? ids : null,
+      })
+      setAllRequirements((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function handleSetAssistantTeacher(subjectId, teacherId) {
     try {
       // Same reasoning as handleSetPreferredTeacher above.
@@ -383,6 +401,7 @@ export default function DataEntryTab({
       periodsPerWeek,
       qualifiedTeachers,
       preferredTeacherId: requirement?.preferred_teacher_id ?? null,
+      allowedTeacherIds: requirement?.allowed_teacher_ids ?? [],
       assistantTeacherId: requirement?.assistant_teacher_id ?? null,
       valid: periodsPerWeek > 0 && qualifiedTeachers.length > 0,
     }
@@ -544,6 +563,7 @@ export default function DataEntryTab({
           onActiveSectionChange={setActiveSectionId}
           onUpdatePeriods={handleUpdatePeriods}
           onSetPreferredTeacher={handleSetPreferredTeacher}
+          onSetTeachers={handleSetTeachers}
           assistantEligibleTeachers={assistantEligibleTeachers}
           onSetAssistantTeacher={handleSetAssistantTeacher}
           selectedSubjectIds={selectedSubjectIds}
@@ -669,6 +689,7 @@ function PlanSection({
   onActiveSectionChange,
   onUpdatePeriods,
   onSetPreferredTeacher,
+  onSetTeachers,
   assistantEligibleTeachers,
   onSetAssistantTeacher,
   selectedSubjectIds,
@@ -932,7 +953,7 @@ function PlanSection({
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ subject, periodsPerWeek, qualifiedTeachers, preferredTeacherId, assistantTeacherId, valid }) => (
+          {rows.map(({ subject, periodsPerWeek, qualifiedTeachers, preferredTeacherId, allowedTeacherIds, assistantTeacherId, valid }) => (
             <tr key={subject.id} className="border-b border-slate-100">
               <td className="py-2 pr-2 align-top">
                 <input
@@ -956,22 +977,13 @@ function PlanSection({
                 ) : qualifiedTeachers.length === 1 ? (
                   <span className="text-sm text-slate-600">{qualifiedTeachers[0].name}</span>
                 ) : (
-                  <select
-                    value={preferredTeacherId ?? ''}
+                  <TeacherPicker
+                    subjectName={subject.name}
+                    teachers={qualifiedTeachers}
+                    selectedIds={preferredTeacherId ? [preferredTeacherId] : allowedTeacherIds}
                     disabled={readOnly || periodsPerWeek <= 0}
-                    onChange={(e) =>
-                      onSetPreferredTeacher(subject.id, e.target.value ? Number(e.target.value) : null)
-                    }
-                    title="Which teacher covers this section. Pinning one speeds up generation for large schools"
-                    className="rounded border border-neutral-200 bg-neutral-100/40 px-1.5 py-1 text-xs text-neutral-700 hover:bg-neutral-100"
-                  >
-                    <option value="">Any (let solver choose)</option>
-                    {qualifiedTeachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(ids) => (onSetTeachers ?? ((sid, list) => onSetPreferredTeacher(sid, list[0] ?? null)))(subject.id, ids)}
+                  />
                 )}
               </td>
               <td className="py-2 pr-2">
@@ -1051,6 +1063,111 @@ function PlanSection({
       </table>
 
       {electiveBlocksPanel}
+    </div>
+  )
+}
+
+/**
+ * Who may teach this subject in this section: any qualified teacher, one
+ * fixed teacher, or a shortlist the solver picks one from ("Priya or
+ * Joseph"). Ticks are kept locally and saved once, on Done or a click
+ * outside, so ticking three names is one request rather than three racing.
+ */
+function TeacherPicker({ subjectName, teachers, selectedIds, disabled, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(selectedIds)
+  const ref = useRef(null)
+  const selectedKey = selectedIds.join(',')
+
+  useEffect(() => {
+    if (!open) setDraft(selectedIds)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey, open])
+
+  function close(save) {
+    setOpen(false)
+    const changed = draft.slice().sort().join(',') !== selectedIds.slice().sort().join(',')
+    if (save && changed) onChange(draft)
+  }
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => ref.current && !ref.current.contains(e.target) && close(true)
+    const onKey = (e) => e.key === 'Escape' && close(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  })
+
+  const nameOf = (id) => teachers.find((t) => t.id === id)?.name ?? 'Unknown teacher'
+  const label =
+    selectedIds.length === 0
+      ? 'Any (let solver choose)'
+      : selectedIds.length === 1
+        ? nameOf(selectedIds[0])
+        : `${selectedIds.length} teachers: ${selectedIds.map(nameOf).join(', ')}`
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => (open ? close(true) : setOpen(true))}
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-label={`Teachers for ${subjectName}: ${label}`}
+        title="Who may teach this here. Pick one to fix the teacher, or several and the solver picks one of them."
+        className="flex max-w-[220px] items-center gap-1.5 rounded border border-neutral-200 bg-neutral-100/40 px-1.5 py-1 text-left text-xs text-neutral-700 hover:bg-neutral-100 disabled:opacity-60"
+      >
+        <span className="truncate">{label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-none text-neutral-500" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div role="dialog" aria-label={`Choose teachers for ${subjectName}`} className="absolute left-0 top-full z-30 mt-1 w-64 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
+          <p className="px-2 pb-1.5 pt-1 text-[11px] leading-snug text-neutral-500">
+            Tick one to fix the teacher, or several and the solver picks one of them for the whole week.
+          </p>
+          <ul className="max-h-56 overflow-y-auto">
+            {teachers.map((t) => (
+              <li key={t.id}>
+                <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50">
+                  <input
+                    type="checkbox"
+                    checked={draft.includes(t.id)}
+                    onChange={() =>
+                      setDraft((d) => (d.includes(t.id) ? d.filter((x) => x !== t.id) : [...d, t.id]))
+                    }
+                    className="h-4 w-4 rounded border-neutral-300"
+                  />
+                  {t.name}
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1.5 flex items-center justify-between border-t border-neutral-100 px-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setDraft([])}
+              className="text-xs font-medium text-neutral-500 hover:text-neutral-800"
+            >
+              Clear (any teacher)
+            </button>
+            <button
+              type="button"
+              onClick={() => close(true)}
+              className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

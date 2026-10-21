@@ -371,7 +371,19 @@ def update_requirement(
         raise HTTPException(status_code=404, detail="Requirement not found")
     class_group = db.get(ClassGroup, requirement.class_group_id)
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if "allowed_teacher_ids" in changes:
+        # Only this school's teachers, once each; fewer than two is no
+        # shortlist at all (one is a fixed teacher, set as preferred).
+        ids = changes["allowed_teacher_ids"] or []
+        known = {
+            t.id for t in db.query(Teacher).filter(
+                Teacher.school_id == class_group.school_id, Teacher.id.in_(ids)
+            ).all()
+        } if ids else set()
+        kept = list(dict.fromkeys(i for i in ids if i in known))
+        changes["allowed_teacher_ids"] = kept if len(kept) >= 2 else None
+    for field, value in changes.items():
         setattr(requirement, field, value)
     db.commit()
     db.refresh(requirement)

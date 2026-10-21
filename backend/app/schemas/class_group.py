@@ -33,12 +33,14 @@ class SubjectRequirementCreate(BaseModel):
     periods_per_week: int
     preferred_teacher_id: int | None = None
     assistant_teacher_id: int | None = None
+    allowed_teacher_ids: list[int] | None = None
 
 
 class SubjectRequirementUpdate(BaseModel):
     periods_per_week: int | None = None
     preferred_teacher_id: int | None = None
     assistant_teacher_id: int | None = None
+    allowed_teacher_ids: list[int] | None = None
 
 
 class SubjectRequirementOut(BaseModel):
@@ -50,3 +52,4 @@ class SubjectRequirementOut(BaseModel):
     periods_per_week: int
     preferred_teacher_id: int | None
     assistant_teacher_id: int | None
+    allowed_teacher_ids: list[int] | None = None
