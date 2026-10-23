@@ -111,7 +111,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
             "subject_id": e.subject_id,
             "subject_name": subjects[e.subject_id].name,
             "teacher_id": e.teacher_id,
-            "teacher_name": teachers[e.teacher_id].name,
+            "teacher_name": teachers[e.teacher_id].name if e.teacher_id in teachers else None,
             "assistant_teacher_id": e.assistant_teacher_id,
             "assistant_teacher_name": teachers[e.assistant_teacher_id].name if e.assistant_teacher_id else None,
             "period_id": e.period_id,
@@ -218,6 +218,7 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
             teacher_id=e.teacher_id, period_id=e.period_id,
             day_of_week=periods[e.period_id].day_of_week,
             order=periods[e.period_id].order,
+            occupies_teacher=e.teacher_id is not None,
         )
         for e in timetable.entries
     ]
@@ -346,7 +347,11 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                     class_group_id=a["class_group_id"],
                     subject_id=a["subject_id"],
                     teacher_id=a["teacher_id"],
-                    assistant_teacher_id=assistant_by_requirement.get((a["class_group_id"], a["subject_id"])),
+                    # Not reserved for a lesson with no teacher yet, so not carried onto it.
+                    assistant_teacher_id=(
+                        assistant_by_requirement.get((a["class_group_id"], a["subject_id"]))
+                        if a["teacher_id"] is not None else None
+                    ),
                     period_id=a["period_id"],
                     room_id=a.get("room_id"),
                     lab_batch=a.get("batch"),
@@ -541,7 +546,7 @@ def _check_slot_conflict(
                 status_code=400,
                 detail="This class group already has something scheduled in that period.",
             )
-        if s.teacher_id == new_teacher_id:
+        if new_teacher_id is not None and s.teacher_id == new_teacher_id:
             raise HTTPException(
                 status_code=400,
                 detail="This teacher is already scheduled in that period.",
@@ -881,7 +886,7 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
     list just to return the one row that changed."""
     class_group = db.get(ClassGroup, entry.class_group_id)
     subject = db.get(Subject, entry.subject_id)
-    teacher = db.get(Teacher, entry.teacher_id)
+    teacher = db.get(Teacher, entry.teacher_id) if entry.teacher_id is not None else None
     period = db.get(Period, entry.period_id)
     room = db.get(Room, entry.room_id) if entry.room_id else None
     return TimetableEntryOut(
@@ -891,7 +896,7 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
         subject_id=entry.subject_id,
         subject_name=subject.name if subject else "?",
         teacher_id=entry.teacher_id,
-        teacher_name=teacher.name if teacher else "?",
+        teacher_name=teacher.name if teacher else None,
         period_id=entry.period_id,
         period_label=period.label if period else None,
         day_of_week=period.day_of_week if period else 0,
@@ -961,7 +966,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
             "id": e.id,
             "class_group_name": _class_group_label(class_groups[e.class_group_id]) if e.class_group_id in class_groups else "?",
             "subject_name": subjects[e.subject_id].name if e.subject_id in subjects else "?",
-            "teacher_name": teachers[e.teacher_id].name if e.teacher_id in teachers else "?",
+            "teacher_name": teachers[e.teacher_id].name if e.teacher_id in teachers else None,
             "day_of_week": periods[e.period_id].day_of_week if e.period_id in periods else None,
             # The number a person says - "period 5" is the fifth lesson, with
             # breaks and the class teacher period between numbers.

@@ -187,8 +187,12 @@ def test_teacher_qualified_grades_is_respected(db_session):
 
     result = generate_school_timetable(db, school.id)
 
-    assert result.status == "infeasible"
-    assert any("no qualified teacher" in e.lower() for e in result.errors), result.errors
+    # Not assigned to her - the lessons are placed with no teacher instead,
+    # and the admin is told.
+    assert result.status in ("optimal", "feasible"), result.errors
+    assert len(result.assignments) == 2
+    assert all(a["teacher_id"] is None for a in result.assignments)
+    assert any("no teacher yet" in w.lower() for w in result.warnings), result.warnings
 
     # Now add a second class group in Grade 9 — the same teacher should be
     # assignable there, proving the restriction is a match, not a blanket

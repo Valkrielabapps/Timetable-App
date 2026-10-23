@@ -371,12 +371,13 @@ function DayGrid({ weekday, date, view, entries, periods, teachers, classGroups,
     if (view === 'teachers') {
       const known = new Map(teachers.map((t) => [t.id, t.name]))
       for (const e of allEntries) {
-        if (!known.has(e.teacher_id)) known.set(e.teacher_id, e.teacher_name)
+        if (e.teacher_id != null && !known.has(e.teacher_id)) known.set(e.teacher_id, e.teacher_name)
         if (e.assistant_teacher_id && !known.has(e.assistant_teacher_id)) known.set(e.assistant_teacher_id, e.assistant_teacher_name)
       }
       cols = [...known].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
       place = (e) => {
-        const out = [[e.teacher_id, { primary: `${e.subject_name}`, secondary: [e.class_group_name, e.room_name].filter(Boolean).join(' · ') }]]
+        // A lesson with no teacher yet has no teacher column to sit in.
+        const out = e.teacher_id == null ? [] : [[e.teacher_id, { primary: `${e.subject_name}`, secondary: [e.class_group_name, e.room_name].filter(Boolean).join(' · ') }]]
         if (e.assistant_teacher_id) {
           out.push([e.assistant_teacher_id, { primary: e.subject_name, secondary: `${e.class_group_name} · assisting` }])
         }
@@ -388,7 +389,7 @@ function DayGrid({ weekday, date, view, entries, periods, teachers, classGroups,
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
       place = (e) => [[e.class_group_id, {
         primary: e.subject_name,
-        secondary: [e.teacher_name, e.room_name, e.lab_batch ? `Batch ${e.lab_batch}` : null].filter(Boolean).join(' · '),
+        secondary: [e.teacher_name ?? 'No teacher yet', e.room_name, e.lab_batch ? `Batch ${e.lab_batch}` : null].filter(Boolean).join(' · '),
       }]]
     } else {
       const rooms = new Map()

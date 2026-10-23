@@ -466,6 +466,22 @@ export default function TimetableTab({
     return [...byRule.values()]
   }
   const brokenRules = groupByRule(violations)
+  // Subjects nobody is qualified to teach yet are still placed, with no
+  // teacher. Listed once each (subject in section), not once per lesson.
+  const noTeacherYet = (() => {
+    if (!solved) return []
+    const label = (id) => {
+      const cg = classGroups.find((c) => c.id === id)
+      return cg ? [cg.grade, cg.name].filter(Boolean).join(' - ') : ''
+    }
+    const seen = new Map()
+    for (const e of timetable?.entries ?? []) {
+      if (e.teacher_id != null) continue
+      const key = `${e.class_group_id}:${e.subject_id}`
+      if (!seen.has(key)) seen.set(key, `${e.subject_name} in ${label(e.class_group_id)}`)
+    }
+    return [...seen.values()]
+  })()
   const unmetPreferences = groupByRule(softViolations)
   // Which cells to mark. A slot can break more than one rule, so the entry id
   // maps to all of them rather than the first found.
@@ -596,6 +612,22 @@ export default function TimetableTab({
           <p className="mt-1 text-xs text-sky-700">
             That&rsquo;s allowed for a preference: the timetable follows it as far as it can. If one must always hold,
             reword it on the Constraints tab without &ldquo;try to&rdquo; to make it a rule.
+          </p>
+        </div>
+      )}
+
+      {noTeacherYet.length > 0 && (
+        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
+          <p className="font-medium">
+            {noTeacherYet.length === 1 ? '1 subject has' : `${noTeacherYet.length} subjects have`} no teacher yet
+          </p>
+          <p className="mt-1 text-sky-800">
+            {noTeacherYet.slice(0, 8).join(', ')}
+            {noTeacherYet.length > 8 ? `, and ${noTeacherYet.length - 8} more` : ''}.
+          </p>
+          <p className="mt-1 text-xs text-sky-700">
+            Their lessons are in the timetable, marked &ldquo;No teacher yet&rdquo;. Add a teacher qualified for them
+            on the Data Entry tab and generate again to fill them in.
           </p>
         </div>
       )}
@@ -939,7 +971,7 @@ function SectionTimetable({
           combination ? (d, o) => entriesAt(d, o).filter((e) => keeps(combination, e)) : entriesAt
         }
         editable={editable && !combination}
-        secondaryLine={(e) => e.teacher_name}
+        secondaryLine={(e) => e.teacher_name ?? 'No teacher yet'}
         showAssistant
         showBlockName={!combination}
       />

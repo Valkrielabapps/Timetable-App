@@ -434,7 +434,8 @@ class TimetableEntry(Base):
     timetable_id = Column(Integer, ForeignKey("timetables.id"), nullable=False)
     class_group_id = Column(Integer, ForeignKey("class_groups.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
-    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=False)
+    # None = a subject with no qualified teacher yet, placed anyway.
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
     room_id = Column(Integer, ForeignKey("rooms.id"), nullable=True)
     period_id = Column(Integer, ForeignKey("periods.id"), nullable=False)
     locked = Column(Boolean, default=False)  # admin locked this slot before regenerating

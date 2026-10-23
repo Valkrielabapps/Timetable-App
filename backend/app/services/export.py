@@ -93,7 +93,8 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
     entries_by_teacher_period = defaultdict(list)
     for e in timetable.entries:
         entries_by_class_period[(e.class_group_id, e.period_id)].append(e)
-        entries_by_teacher_period[(e.teacher_id, e.period_id)].append(e)
+        if e.teacher_id is not None:
+            entries_by_teacher_period[(e.teacher_id, e.period_id)].append(e)
 
     return {
         "days": days,
@@ -175,7 +176,7 @@ def _cell_text(entry, data: dict, mode: str) -> str:
     room_suffix = f"\n[{room.name}]" if room else ""
     if mode == "section":
         teacher = data["teachers_by_id"].get(entry.teacher_id)
-        return f"{subject_name}\n({teacher.name if teacher else '?'}){room_suffix}"
+        return f"{subject_name}\n({teacher.name if teacher else 'No teacher yet'}){room_suffix}"
     cg = data["class_groups_by_id"].get(entry.class_group_id)
     return f"{subject_name}\n({_class_group_label(cg) if cg else '?'}){room_suffix}"
 
@@ -468,7 +469,7 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
                     subject = data["subjects_by_id"].get(e.subject_id)
                     if mode == "section":
                         who = data["teachers_by_id"].get(e.teacher_id)
-                        who = who.name if who else ""
+                        who = who.name if who else ("No teacher yet" if e.teacher_id is None else "")
                     else:
                         cg = data["class_groups_by_id"].get(e.class_group_id)
                         who = _class_group_label(cg) if cg else ""

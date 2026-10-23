@@ -467,7 +467,7 @@ def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
     return labels
 
 
-def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id) -> list[Atom]:
+def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id, no_teacher=None) -> list[Atom]:
     """Flatten the model's decision variables into what a selector can filter.
 
     The IR compiler needs one list of variables tagged with the class group,
@@ -521,6 +521,19 @@ def _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id) -> list[
                 # variable, which is counted below - not once per batch here.
                 occupies_class=False, occupies_teacher=True,
             ))
+
+    # Lessons with no teacher yet fill the class's slot and nobody's time.
+    for (req_id, period_id), var in (no_teacher or {}).items():
+        req = requirements_by_id.get(req_id)
+        period = periods_by_id.get(period_id)
+        if req is None or period is None:
+            continue
+        atoms.append(Atom(
+            var=var, requirement_id=req_id, class_group_id=req.class_group_id,
+            subject_id=req.subject_id, teacher_id=None, period_id=period_id,
+            day_of_week=period.day_of_week, order=period.order,
+            occupies_class=True, occupies_teacher=False,
+        ))
 
     return atoms
 
@@ -909,6 +922,11 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # separately from batch_x because for IR rules it is the class's lesson,
     # while batch_x's per-teacher vars are the teachers' assignments.
     batch_occ: dict[tuple[int, int], cp_model.IntVar] = {}
+    # no_teacher[(req_id, period_id)] = a lesson of a subject nobody can teach
+    # yet. The lesson still takes its place in the section's week - so adding
+    # the teacher later doesn't reshuffle everything - but books no teacher.
+    no_teacher: dict[tuple[int, int], cp_model.IntVar] = {}
+    unstaffed_labels: list[str] = []
 
     def _batch_count(req: SubjectRequirement) -> int:
         subject = subjects_by_id.get(req.subject_id)
@@ -927,11 +945,19 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             cg = class_groups_by_id.get(req.class_group_id)
             subject_name = subject.name if subject else f"subject_id={req.subject_id}"
             cg_label = _class_group_label(cg) if cg else f"class_group_id={req.class_group_id}"
-            errors.append(
-                f"No qualified teacher found for {subject_name} in {cg_label}. Assign a "
-                f"teacher qualified for this subject and grade, or set a preferred teacher on "
-                f"the requirement."
-            )
+            # No teacher yet: place the lessons without one rather than fail
+            # the whole school. The admin is told, and the grid says so.
+            unstaffed_labels.append(f"{subject_name} in {cg_label}")
+            restricted = req_restricted_periods.get(req.id, set())
+            required = req_required_periods.get(req.id)
+            for period in periods:
+                if period.id in restricted or (required is not None and period.id not in required):
+                    continue
+                var = model.NewBoolVar(f"nt_r{req.id}_p{period.id}")
+                no_teacher[(req.id, period.id)] = var
+                requirement_vars[req.id].append(var)
+                class_group_period_vars.setdefault((req.class_group_id, period.id), []).append(var)
+                req_period_vars[req.id].setdefault(period.id, []).append(var)
             continue
 
         restricted_periods_for_req = req_restricted_periods.get(req.id, set())
@@ -1066,6 +1092,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # option_x[(block_id, period_id, option_id)] = [(teacher_id, var), ...]
     option_x: dict[tuple[int, int, int], list[tuple[int, cp_model.IntVar]]] = {}
     block_occ: dict[tuple[int, int], cp_model.IntVar] = {}
+    teacherless_options_by_block: dict[int, list[_OptionReq]] = {}
     options_by_block: dict[int, list[_OptionReq]] = {b.id: [] for b in blocks}
     for o in option_reqs:
         options_by_block[o.block_id].append(o)
@@ -1107,13 +1134,13 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             candidate_ids_by_req[o.id] = candidates[o.id]
             if not candidates[o.id]:
                 subject = subjects_by_id.get(o.subject_id)
-                errors.append(
-                    f"No qualified teacher found for {subject.name if subject else 'a subject'} in "
-                    f"{block_label}. Assign a teacher qualified for this subject and grade, or set "
-                    f"a preferred teacher on that option."
-                )
-        if any(not candidates[o.id] for o in opts):
-            continue
+                unstaffed_labels.append(f"{subject.name if subject else 'a subject'} in {block_label}")
+        # Options nobody can teach yet run with the block, without a teacher;
+        # only the others need staffing at the same moment.
+        teacherless_opts = [o for o in opts if not candidates[o.id]]
+        staffed_opts = [o for o in opts if candidates[o.id]]
+        if teacherless_opts:
+            teacherless_options_by_block[block.id] = teacherless_opts
 
         # A period is usable only if EVERY option may be there - they all run
         # whenever the block does - and every option can be given its own
@@ -1131,7 +1158,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             ):
                 continue
             free: dict[int, list[int]] = {}
-            for o in opts:
+            for o in staffed_opts:
                 f = [
                     t for t in candidates[o.id]
                     if period.id not in set(teachers_by_id[t].unavailable_period_ids or [])
@@ -1146,7 +1173,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
 
         if len(staffable) < block.periods_per_week:
             errors.append(_explain_unstaffable_block(
-                block_label, block.periods_per_week, len(staffable), opts, candidates,
+                block_label, block.periods_per_week, len(staffable), staffed_opts, candidates,
                 teachers_by_id, subjects_by_id,
             ))
             continue
@@ -1161,6 +1188,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 # The option is present wherever the block is, which is what
                 # lets the legacy per-requirement rules read it.
                 req_period_vars[o.id].setdefault(period.id, []).append(occ)
+                if not candidates[o.id]:
+                    continue  # no teacher yet: present, but books nobody
                 choice = []
                 for teacher_id in free_by_period[period.id][o.id]:
                     var = model.NewBoolVar(f"x_b{block.id}_o{o.option_id}_t{teacher_id}_p{period.id}")
@@ -1197,6 +1226,14 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 locked_keys.add(key)
                 locked_rooms[key] = room_id
 
+    if unstaffed_labels:
+        shown = ", ".join(unstaffed_labels[:6])
+        more = f" and {len(unstaffed_labels) - 6} more" if len(unstaffed_labels) > 6 else ""
+        warnings.append(
+            f"No teacher yet for {shown}{more}. Their lessons are in the timetable marked "
+            f"\"No teacher yet\" - add a qualified teacher and generate again to fill them in."
+        )
+
     if errors:
         return TimetableSolveResult(status="infeasible", errors=errors)
 
@@ -1220,6 +1257,17 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 # express. Batched sessions just get freshly re-solved
                 # every regeneration instead of silently mis-locking.
                 continue
+            if le.teacher_id is None:
+                # A lesson locked before it had a teacher.
+                var = no_teacher.get((req.id, le.period_id))
+                if var is not None:
+                    model.Add(var == 1)
+                    result_key = (le.class_group_id, le.subject_id, None, le.period_id)
+                    locked_keys.add(result_key)
+                    locked_rooms[result_key] = le.room_id
+                continue
+            if le.teacher_id not in teachers_by_id:
+                continue  # the teacher was removed
             key = (req.id, le.teacher_id, le.period_id)
             if key not in x:
                 # Filtered out of the normal candidate list (e.g. the
@@ -1260,7 +1308,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         for le in previous_timetable.entries:
             if le.locked and le.elective_block_id is None and le.lab_batch is None:
                 r = req_by_cg_subject.get((le.class_group_id, le.subject_id))
-                if r is not None:
+                if r is not None and le.teacher_id is not None:
                     locked_teachers_by_req.setdefault(r.id, set()).add(le.teacher_id)
 
     def _one_teacher(name: str, by_teacher: dict[int, list]) -> None:
@@ -1545,7 +1593,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         .all()
     )
     if ir_constraints:
-        atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id)
+        atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id, no_teacher)
         atoms.extend(_block_atoms(block_occ, option_x, option_reqs, periods_by_id))
         index = SchoolIndex(
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
@@ -1664,6 +1712,20 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         }
                     )
                     break
+        for (req_id, period_id), var in no_teacher.items():
+            if solver.Value(var):
+                req = req_by_id[req_id]
+                assignments.append({
+                    "class_group_id": req.class_group_id, "subject_id": req.subject_id,
+                    "teacher_id": None, "period_id": period_id,
+                })
+        for (block_id, period_id), occ in block_occ.items():
+            if teacherless_options_by_block.get(block_id) and solver.Value(occ):
+                for o in teacherless_options_by_block[block_id]:
+                    assignments.append({
+                        "class_group_id": o.class_group_id, "subject_id": o.subject_id,
+                        "teacher_id": None, "period_id": period_id, "elective_block_id": block_id,
+                    })
         _assign_rooms(db, school_id, assignments, locked_rooms=locked_rooms)
 
     if status_name in ("infeasible", "unknown"):

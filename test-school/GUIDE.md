@@ -116,6 +116,48 @@ Leave the teacher as **any qualified teacher** unless you want to test fixed tea
 
 Type these in, one at a time or all together in batch entry. They also test how well the app reads plain English.
 
+**Set B** (current). Checked with the solver: it solves in a few seconds with all of these on.
+
+1. Fr. Paul only teaches on Monday and Tuesday.
+2. Meera Krishnan is not available in the first period on any day.
+3. Biju Coach does not work on Saturdays.
+4. Grades 9 and 10 should only have Mathematics in the first four periods.
+5. Art and Music should never be in the first four periods.
+6. Physics Lab must always be a double period (two periods back to back).
+7. Chemistry Lab must always be a double period.
+8. No section should have two Mathematics periods back to back.
+9. No Physical Education right after lunch.
+10. No section should have more than one Physical Education period in a day.
+11. Accountancy and Economics should never be back to back.
+12. No Library periods on Saturday.
+13. No teacher should teach more than 6 periods in a day.
+14. Try to keep Hindi out of the last period. (A preference, not a strict rule.)
+
+What each one tests:
+
+| Rules | Tests |
+|---|---|
+| 1–3 | Teacher availability |
+| 4, 5, 9 | Period placement |
+| 6–7 | Double periods with split lab batches |
+| 8, 11 | Back-to-back bans |
+| 10, 12, 13 | Daily and day-of-week caps |
+| 14 | A soft preference |
+
+After entering them, check that each one shows as **enforced** on the Constraints tab. Rule 14 should show as a preference.
+
+Things to check after generating:
+
+- [ ] Physics Lab and Chemistry Lab always sit in two adjacent periods, not split by a break.
+- [ ] Grade 9 and 10 Maths only appears in periods 1–4.
+- [ ] Art and Music only appear in periods 5–8.
+- [ ] Nothing for Fr. Paul after Tuesday.
+- [ ] Hindi rarely or never lands in the last period.
+
+**Make it fail on purpose:** change rule 13 to "more than **5** periods in a day". Teachers carrying 28 periods a week can't fit under that, so generation should fail.
+
+**Set A** (the original set, kept for reference):
+
 1. Anu Thomas is not available on Thursday, Friday and Saturday.
 2. Vinod Kumar only comes in on Thursday and Friday.
 3. Claire D'Souza is not available on Saturday.
@@ -125,8 +167,6 @@ Type these in, one at a time or all together in batch entry. They also test how 
 7. No teacher should teach more than 6 periods in a day.
 8. English at most once a day for every section.
 9. Grade 12 Science should never have Physics in the last period.
-
-After entering them, check that each one shows as **enforced** on the Constraints tab.
 
 ## Step 5: Generate
 

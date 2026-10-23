@@ -272,13 +272,17 @@ def test_two_options_sharing_their_only_teacher_are_named(db):
     assert "Block 1" in message
 
 
-def test_an_option_with_no_qualified_teacher_is_named(db):
+def test_an_option_with_no_qualified_teacher_runs_without_one(db):
     s = _standard(db)
     s.subject("Psychology")
     s.block("Block 1", 2, "Physics", "Accounts", "Psychology")
     result = s.solve()
-    assert result.status == "infeasible"
-    assert any("Psychology" in e and "Block 1" in e for e in result.errors)
+    assert result.status in ("optimal", "feasible"), result.errors
+    psych = [a for a in result.assignments if a["subject_id"] == s.subjects["Psychology"].id]
+    physics = [a for a in result.assignments if a["subject_id"] == s.subjects["Physics"].id]
+    assert len(psych) == 2 and all(a["teacher_id"] is None for a in psych)
+    assert {a["period_id"] for a in psych} == {a["period_id"] for a in physics}
+    assert any("Psychology" in w and "Block 1" in w for w in result.warnings), result.warnings
 
 
 def test_too_few_periods_where_everyone_is_free_is_explained(db):

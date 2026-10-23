@@ -26,8 +26,8 @@ class TimetableEntryOut(BaseModel):
     class_group_name: str
     subject_id: int
     subject_name: str
-    teacher_id: int
-    teacher_name: str
+    teacher_id: int | None = None  # None = no teacher yet
+    teacher_name: str | None = None
     assistant_teacher_id: int | None = None
     assistant_teacher_name: str | None = None
     period_id: int
