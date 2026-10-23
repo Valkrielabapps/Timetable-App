@@ -332,6 +332,10 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
           Describe scheduling rules in plain English and we'll turn them into
           structured constraints.
         </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Built in, so you don&rsquo;t need to type them: each subject is spread across the week, and teachers
+          aren&rsquo;t given three periods in a row where it can be avoided. Any rule you add here comes first.
+        </p>
       </div>
 
       {!readOnly && (

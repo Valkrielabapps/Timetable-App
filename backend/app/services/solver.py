@@ -24,7 +24,7 @@ from ortools.sat.python import cp_model
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.services.constraint_ir import IRError, rule_from_dict
+from app.services.constraint_ir import IRError, Run, Span, rule_from_dict
 from app.services.constraint_ir_compiler import Atom, SchoolIndex, compile_rules
 from app.models.school import (
     ClassGroup,
@@ -118,6 +118,10 @@ _TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", defau
 #   "one_teacher"  - let a section's subject be split between teachers
 #   "max_periods"  - ignore teachers' max periods/week
 _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozenset())
+# The built-in timetable habits (see _add_default_habits). Off while searching
+# for which rule blocks a school: habits are preferences, they can't make a
+# school impossible, and leaving them on would make every try optimise.
+_DEFAULT_HABITS: contextvars.ContextVar = contextvars.ContextVar("default_habits", default=True)
 
 
 def _constraint_query(db: Session):
@@ -220,7 +224,7 @@ def _run(solver: cp_model.CpSolver, model: cp_model.CpModel, has_objective: bool
         watcher.join()
 
 
-def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
+def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool, add_habits=None):
     """Solve quickly where possible, thoroughly where needed.
 
     Without preference rules this is _find_timetable: quick passes, then the
@@ -243,20 +247,26 @@ def _solve_timetable_model(model: cp_model.CpModel, has_objective: bool):
         return limit - (time.monotonic() - started)
 
     if not has_objective:
-        return _find_timetable(model, rng, remaining)
-
-    objective = cp_model.cp_model_pb2.CpObjectiveProto()
-    objective.CopyFrom(model.Proto().objective)
-    model.ClearObjective()
-    try:
-        # Preference rules add slack variables that only presolve simplifies
-        # away, so the no-presolve quick passes stall on them (12s each with
-        # nothing found, where a presolved pass finished in 10).
-        first = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1), light_presolve=True)
-        status = _run(first, model, False, first_answer_within=None)
-    finally:
-        model.Proto().objective.CopyFrom(objective)
+        first, status = _find_timetable(model, rng, remaining)
+    else:
+        objective = cp_model.cp_model_pb2.CpObjectiveProto()
+        objective.CopyFrom(model.Proto().objective)
+        model.ClearObjective()
+        try:
+            # Preference rules add slack variables that only presolve simplifies
+            # away, so the no-presolve quick passes stall on them (12s each with
+            # nothing found, where a presolved pass finished in 10).
+            first = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1), light_presolve=True)
+            status = _run(first, model, False, first_answer_within=None)
+        finally:
+            model.Proto().objective.CopyFrom(objective)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE) or remaining() < 2:
+        return first, status
+    # The built-in habits join now, with a valid timetable already in hand -
+    # they can only make it better, never cost the school its timetable.
+    if add_habits is not None and add_habits():
+        has_objective = True
+    if not has_objective:
         return first, status
 
     # Improve from the timetable just found rather than from nothing.
@@ -295,6 +305,99 @@ def _find_timetable(model, rng, remaining):
         return solver, status
     solver = _new_solver(remaining(), fast=False, seed=rng.randrange(2**31 - 1))
     return solver, _run(solver, model, False, first_answer_within=None)
+
+
+# A stated preference outweighs any number of built-in habits it competes with
+# in one place: one unit of "try to keep Hindi out of the last period" is worth
+# more than one lesson's worth of spreading or a teacher's third period in a row.
+_USER_WEIGHT = 10
+
+
+def _valid_ir(c) -> bool:
+    try:
+        rule_from_dict(c.parameters or {})
+        return True
+    except IRError:
+        return False
+
+
+def _add_default_habits(
+    model, requirements, option_reqs, blocks, block_occ, req_period_vars,
+    teacher_period_vars, teachers, sorted_periods_by_day, teaching_runs,
+    unavailable_by_cg, subjects_by_id, ir_rules, consecutive_constraints,
+) -> list:
+    """Soft defaults applied to every school, returned as penalty terms.
+
+    1. Spread each subject over the week. A section's Maths, 7 a week over 6
+       days, should be one a day with one day of two - not three on Monday.
+       Every lesson over a fair share for its day costs 1. Skipped for a
+       subject the school has given a double-period rule, where two on one
+       day is the point.
+    2. Teachers aren't taught solid. Three periods back to back (within a
+       stretch between breaks) cost 1 each time. Skipped when the school has
+       its own rule about teachers' consecutive periods - theirs governs.
+
+    Both are preferences: a school that needs two Maths on a day, or a teacher
+    in three periods running, still gets a timetable.
+    """
+    terms: list = []
+    names_by_id = {s.id: s.name for s in subjects_by_id.values()}
+
+    doubled: set[str] = set()
+    teacher_rule = False
+    for rule in ir_rules:
+        form = rule.form
+        if isinstance(form, Run):
+            if form.block_size:
+                doubled.update(form.selector.subjects or ())
+            if "teacher" in form.scope:
+                teacher_rule = True
+        if isinstance(form, Span) and "teacher" in form.scope:
+            teacher_rule = True
+    capped_teachers = {
+        (c.parameters or {}).get("teacher_id") for c in consecutive_constraints
+        if (c.parameters or {}).get("teacher_id") is not None
+    }
+
+    # 1. Spread across the week.
+    def spread(tag, cg_id, per_week, vars_by_period):
+        if per_week <= 1:
+            return
+        off = unavailable_by_cg.get(cg_id, set())
+        days = [d for d, ps in sorted_periods_by_day.items() if any(p.id not in off for p in ps)]
+        if len(days) < 2:
+            return
+        fair = -(-per_week // len(days))  # ceiling
+        for d in days:
+            day_vars = [v for p in sorted_periods_by_day[d] for v in vars_by_period.get(p.id, [])]
+            if len(day_vars) <= fair:
+                continue
+            over = model.NewIntVar(0, len(day_vars), f"habit_spread_{tag}_d{d}")
+            model.Add(sum(day_vars) - fair <= over)
+            terms.append(over)
+
+    for req in requirements:
+        if names_by_id.get(req.subject_id) in doubled:
+            continue
+        spread(f"r{req.id}", req.class_group_id, req.periods_per_week, req_period_vars.get(req.id, {}))
+    for block in blocks:
+        by_period = {pid: [occ] for (bid, pid), occ in block_occ.items() if bid == block.id}
+        spread(f"b{block.id}", block.class_group_id, block.periods_per_week, by_period)
+
+    # 2. No teacher three periods running.
+    if not teacher_rule:
+        for teacher in teachers:
+            if teacher.id in capped_teachers:
+                continue
+            for run in teaching_runs:
+                for i in range(len(run) - 2):
+                    window = [teacher_period_vars.get((teacher.id, p.id), []) for p in run[i:i + 3]]
+                    if not all(window):
+                        continue  # can't be busy in all three
+                    solid = model.NewBoolVar(f"habit_solid_t{teacher.id}_p{run[i].id}")
+                    model.Add(sum(v for vs in window for v in vs) - 2 <= solid)
+                    terms.append(solid)
+    return terms
 
 
 def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
@@ -1592,6 +1695,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         .filter(Constraint.school_id == school_id, Constraint.type == "ir")
         .all()
     )
+    deferred_rules: list = []
+    deferred_compile = None
     if ir_constraints:
         atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id, no_teacher)
         atoms.extend(_block_atoms(block_occ, option_x, option_reqs, periods_by_id))
@@ -1632,12 +1737,41 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                     f"{c.description or 'A rule'} was not applied because it is "
                     f"not a valid rule: {exc}."
                 )
-        warnings.extend(compile_rules(model, penalties, atoms, rules, index))
+        # Preferences ("try to...") wait until a valid timetable exists, with
+        # the built-in habits below: their slack variables slowed the first
+        # search badly enough that a school with one "try to spread" rule ran
+        # out of time when the same rules as requirements solved in 3 seconds.
+        hard_rules = [(t, r) for t, r in rules if r.strength == "required"]
+        deferred_rules = [(t, r) for t, r in rules if r.strength != "required"]
+        deferred_compile = (atoms, index)
+        warnings.extend(compile_rules(model, penalties, atoms, hard_rules, index))
 
     # Only added when something soft exists. A school with only hard rules
     # gets the previous behaviour exactly - the solver returns the first
     # feasible timetable rather than searching for the best one, which is
     # both faster and the reason "optimal" keeps meaning what it used to.
+    # Built-in habits every school wants without saying so: a subject's
+    # lessons spread across the week, and teachers not taught solid. Weaker
+    # than any preference the school typed, so a stated rule always wins.
+    #
+    # Added only AFTER a valid timetable is found (see _solve_timetable_model):
+    # in the model from the start they cost the first search its speed - a
+    # school that solved in 27 seconds ran out of time.
+    def add_later() -> bool:
+        if deferred_rules:
+            atoms_, index_ = deferred_compile
+            warnings.extend(compile_rules(model, penalties, atoms_, deferred_rules, index_))
+        habit_penalties = [] if not _DEFAULT_HABITS.get() else _add_default_habits(
+            model, requirements, option_reqs, blocks, block_occ, req_period_vars,
+            teacher_period_vars, teachers, sorted_periods_by_day, teaching_runs,
+            zero_period_ids_by_class_group, subjects_by_id,
+            ir_rules=[rule_from_dict(c.parameters or {}) for c in ir_constraints if _valid_ir(c)],
+            consecutive_constraints=consecutive_constraints,
+        )
+        if not penalties and not habit_penalties:
+            return False
+        model.Minimize(_USER_WEIGHT * sum(penalties) + sum(habit_penalties))
+        return True
     if penalties:
         model.Minimize(sum(penalties))
 
@@ -1654,7 +1788,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             errors=errors + staffing, warnings=warnings,
         )
 
-    solver, status = _solve_timetable_model(model, bool(penalties))
+    solver, status = _solve_timetable_model(
+        model, bool(penalties), add_later if (deferred_rules or _DEFAULT_HABITS.get()) else None,
+    )
 
     status_name = {
         cp_model.OPTIMAL: "optimal",
@@ -2509,12 +2645,14 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
         t1 = _SKIP_RULES.set(frozenset(skip | soft_ids))
         t2 = _TIME_LIMIT.set(min(per_try_seconds, left))
         t3 = _RELAX.set(relax)
+        t4 = _DEFAULT_HABITS.set(False)
         try:
             return generate_school_timetable(db, school_id)
         finally:
             _SKIP_RULES.reset(t1)
             _TIME_LIMIT.reset(t2)
             _RELAX.reset(t3)
+            _DEFAULT_HABITS.reset(t4)
 
     def possible(skip: set[int]) -> bool | None:
         t = time.monotonic()
