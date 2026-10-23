@@ -85,35 +85,43 @@ const fadeUp = {
 
 /**
  * The hero's changing last word - "schools", "colleges", "institutions" -
- * swapped whole, with a short fade, rather than typed out letter by letter.
- * Typing showed half-words ("for inst") most of the time and pulled the eye
- * away from the rest of the page. Held still for anyone whose device asks
- * for reduced motion; the heading's accessible name carries the full
- * sentence either way.
+ * typed out and deleted letter by letter, with a blinking cursor. Held still
+ * on the first word for anyone whose device asks for reduced motion; the
+ * heading's accessible name carries the full sentence either way.
  */
-function RotatingWord({ words, intervalMs = 2600 }) {
+function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs = 1400, colorClassName = 'text-white' }) {
   const reduceMotion = useReducedMotion()
-  const [index, setIndex] = useState(0)
+  const [wordIndex, setWordIndex] = useState(0)
+  const [charCount, setCharCount] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+
   useEffect(() => {
     if (reduceMotion) return undefined
-    const id = setInterval(() => setIndex((i) => (i + 1) % words.length), intervalMs)
-    return () => clearInterval(id)
-  }, [reduceMotion, words.length, intervalMs])
+    const currentWord = words[wordIndex]
 
+    if (!deleting && charCount === currentWord.length) {
+      const pause = setTimeout(() => setDeleting(true), pauseMs)
+      return () => clearTimeout(pause)
+    }
+
+    if (deleting && charCount === 0) {
+      setDeleting(false)
+      setWordIndex((prev) => (prev + 1) % words.length)
+      return undefined
+    }
+
+    const timeout = setTimeout(
+      () => setCharCount((prev) => prev + (deleting ? -1 : 1)),
+      deleting ? deletingSpeedMs : typingSpeedMs,
+    )
+    return () => clearTimeout(timeout)
+  }, [reduceMotion, charCount, deleting, wordIndex, words, typingSpeedMs, deletingSpeedMs, pauseMs])
+
+  const shown = reduceMotion ? words[0] : words[wordIndex].slice(0, charCount)
   return (
-    <span className="relative inline-block" aria-hidden="true">
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span
-          key={words[index]}
-          className="inline-block"
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -14 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-        >
-          {words[index]}
-        </motion.span>
-      </AnimatePresence>
+    <span className={colorClassName} aria-hidden="true">
+      {shown}
+      <span className="ml-0.5 inline-block w-0.5 animate-pulse bg-current align-middle" style={{ height: '0.85em' }} />
     </span>
   )
 }
@@ -292,7 +300,7 @@ function Hero({ onGetStarted, signedIn }) {
             <span aria-hidden="true">Instant timetables</span>
             <br />
             <span aria-hidden="true">for </span>
-            <RotatingWord words={['schools', 'colleges', 'institutions']} />
+            <TypingWords words={['schools', 'colleges', 'institutions']} />
           </h1>
           <p className="mx-auto mt-5 max-w-lg text-lg text-neutral-400">
             Describe your scheduling rules in plain English and get a complete, ready-to-use
