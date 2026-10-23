@@ -116,7 +116,51 @@ Leave the teacher as **any qualified teacher** unless you want to test fixed tea
 
 Type these in, one at a time or all together in batch entry. They also test how well the app reads plain English.
 
-**Set B** (current). Checked with the solver: it solves in a few seconds with all of these on.
+**Set D** (newest). Checked with the solver: all 15 on together solve in about 30 seconds.
+
+1. Ganesh Iyer is not available on Wednesdays.
+2. Sneha Kurian never teaches the last period of the day.
+3. Mary Joseph only works periods 1 to 5.
+4. Art and Music should never be on the same day for a section.
+5. Grade 12 Science has Physics in the first period on Monday.
+6. No section has the same subject more than 2 periods in a row.
+7. Physical Education must never come right before Mathematics.
+8. Grade 9 and 10 Science Lab only after lunch.
+9. No Economics on Saturday for Grade 11 Commerce.
+10. No section has Accountancy more than twice in a day.
+11. Physics Lab and Chemistry Lab should be on different days for each section.
+12. Every teacher gets at least one light day with 3 periods or fewer.
+13. No section has more than 7 different subjects in a day.
+14. On Saturdays no teacher teaches more than 3 periods.
+15. Try to spread each teacher's periods evenly from Monday to Friday. (A preference.)
+
+| Rules | Tests |
+|---|---|
+| 1–3 | A teacher's day, last period and period range |
+| 4, 11 | Two subjects on different days |
+| 5 | A "must happen" rule for one named section |
+| 6 | A cap on runs of any subject |
+| 7 | A one-way ban (PE then Maths is out, Maths then PE is fine) |
+| 8, 9 | A whole grade, and one section, kept out of times |
+| 10, 13, 14 | Daily caps, including counting different subjects |
+| 12 | "At least one day" rules |
+| 15 | A preference that can't be fully met (Saturday is short) |
+
+Things to check after generating:
+
+- [ ] Grade 12 Science, Monday period 1 is Physics.
+- [ ] Nothing for Ganesh Iyer on Wednesday, so the Third language block never sits on Wednesday.
+- [ ] No Library after period 5.
+- [ ] Physics Lab and Chemistry Lab never share a day in a section.
+- [ ] No PE directly followed by Maths, but Maths then PE can appear.
+- [ ] Grade 9 and 10 Science Lab only in periods 6 to 8.
+- [ ] Rule 15 shows as a note ("couldn't be fully met"), not as broken.
+
+**Make it fail on purpose:**
+- Change rule 3 to "Mary Joseph only works periods 1 and 2". Library needs 14 periods a week and she's the only librarian, with 12 such periods in the week. The popup should name that rule.
+- Add "Every section has Library on Saturday". 14 sections, one librarian, 4 Saturday periods.
+
+**Set B**. Checked with the solver: it solves in a few seconds with all of these on.
 
 1. Fr. Paul only teaches on Monday and Tuesday.
 2. Meera Krishnan is not available in the first period on any day.

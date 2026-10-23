@@ -440,6 +440,10 @@ _EXAMPLES = """Worked examples:
 "Not more than 2 Maths periods in a row"
   form=run scope=["class_group"] selector={subjects:["Maths"]} max_consecutive=2
 
+"No section has the same subject more than 2 periods in a row"
+  form=run scope=["class_group","subject"] selector={} max_consecutive=2
+  - "the same subject" for every subject is grouping by subject; no list needed.
+
 "Chemistry practicals need two periods together"
   form=run scope=["class_group"] selector={subjects:["Chemistry"]} block_size=2
 

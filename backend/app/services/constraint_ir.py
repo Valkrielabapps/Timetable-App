@@ -549,10 +549,11 @@ def _run_from_dict(data: dict) -> Run:
         raise IRError(
             f"a block of {run.block_size} cannot fit under a maximum run of {run.max_consecutive}"
         )
-    if run.selector.is_empty():
+    if run.selector.is_empty() and "subject" not in run.scope:
         # Without a selector this caps every lesson of every kind back to back,
         # which is never what a run rule means and is usually the model having
-        # dropped the subject.
+        # dropped the subject. Grouped by subject it is fine: "no subject more
+        # than 2 in a row" is each subject's own run, taken one at a time.
         raise IRError("a run rule needs a selector saying which lessons form the run")
     return run
 
