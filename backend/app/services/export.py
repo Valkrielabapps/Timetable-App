@@ -436,6 +436,48 @@ _GREEN = colors.HexColor("#047857")     # emerald-700, readable on white
 _GREEN_TINT = colors.HexColor("#ECFDF5")  # emerald-50
 
 _PAGE = landscape(A4)
+
+
+def _register_arial() -> tuple[str, str, str]:
+    """(regular, bold, italic) font names for the PDF: Arial.
+
+    Real Arial is embedded when the machine has it (Windows, or a server with
+    the Microsoft core fonts). Otherwise Liberation Sans, bundled in
+    app/assets/fonts - it was made to be metrically identical to Arial, so
+    every letter takes the same width and the page lays out exactly as it
+    would in Arial. Arial itself can't be shipped with the app; its licence
+    doesn't allow redistribution, and Liberation Sans's (SIL OFL) does.
+    """
+    import os
+    from reportlab.lib.fonts import addMapping
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    if "Arial" in pdfmetrics.getRegisteredFontNames():
+        return "Arial", "Arial-Bold", "Arial-Italic"
+    bundled = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts")
+    candidates = [
+        ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf", "C:/Windows/Fonts/ariali.ttf", "C:/Windows/Fonts/arialbi.ttf"),
+        ("/usr/share/fonts/truetype/msttcorefonts/Arial.ttf", "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold.ttf",
+         "/usr/share/fonts/truetype/msttcorefonts/Arial_Italic.ttf", "/usr/share/fonts/truetype/msttcorefonts/Arial_Bold_Italic.ttf"),
+        tuple(os.path.join(bundled, f"LiberationSans-{w}.ttf") for w in ("Regular", "Bold", "Italic", "BoldItalic")),
+    ]
+    for regular, bold, italic, bold_italic in candidates:
+        if all(os.path.exists(f) for f in (regular, bold, italic, bold_italic)):
+            try:
+                pdfmetrics.registerFont(TTFont("Arial", regular))
+                pdfmetrics.registerFont(TTFont("Arial-Bold", bold))
+                pdfmetrics.registerFont(TTFont("Arial-Italic", italic))
+                pdfmetrics.registerFont(TTFont("Arial-BoldItalic", bold_italic))
+                # So <b> and <i> inside a paragraph pick the right face.
+                addMapping("Arial", 0, 0, "Arial")
+                addMapping("Arial", 1, 0, "Arial-Bold")
+                addMapping("Arial", 0, 1, "Arial-Italic")
+                addMapping("Arial", 1, 1, "Arial-BoldItalic")
+                return "Arial", "Arial-Bold", "Arial-Italic"
+            except Exception:  # noqa: BLE001 - a broken font file: try the next
+                continue
+    return "Helvetica", "Helvetica-Bold", "Helvetica-Oblique"  # Arial's PDF stand-in
 _MARGIN_X = 1.4 * cm
 _MARGIN_TOP = 1.9 * cm
 _MARGIN_BOTTOM = 1.5 * cm
@@ -491,19 +533,20 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
 
     buf = io.BytesIO()
     generated = date.today().strftime("%d %b %Y").lstrip("0")
+    font, font_bold, font_italic = _register_arial()
 
     def decorate(canvas, doc):
         width, height = _PAGE
         canvas.saveState()
         if branded:
-            canvas.setFont("Helvetica-Bold", 10)
+            canvas.setFont(font_bold, 10)
             canvas.setFillColor(_INK)
             canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Timetablz")
-        canvas.setFont("Helvetica", 9)
+        canvas.setFont(font, 9)
         canvas.setFillColor(_MUTED)
         if school_name:
             canvas.drawRightString(width - _MARGIN_X, height - 1.05 * cm, school_name)
-        canvas.setFont("Helvetica", 8)
+        canvas.setFont(font, 8)
         canvas.setFillColor(_FAINT)
         canvas.drawString(
             _MARGIN_X, 0.8 * cm,
@@ -511,7 +554,7 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         )
         if free_plan:
             # Free-plan exports carry the product name, centred in the footer.
-            canvas.setFont("Helvetica-Bold", 8)
+            canvas.setFont(font_bold, 8)
             canvas.setFillColor(_MUTED)
             canvas.drawCentredString(width / 2, 0.8 * cm, "Made with Timetablz Free")
         canvas.drawRightString(width - _MARGIN_X, 0.8 * cm, f"Page {doc.page}")
@@ -522,13 +565,18 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         leftMargin=_MARGIN_X, rightMargin=_MARGIN_X, topMargin=_MARGIN_TOP, bottomMargin=_MARGIN_BOTTOM,
         title=school_name or "Timetable", author="Timetablz" if branded else (school_name or ""),
     )
-    heading = ParagraphStyle("H", fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=_INK)
-    sub = ParagraphStyle("S", fontName="Helvetica", fontSize=9.5, leading=12, textColor=_MUTED, spaceBefore=2, spaceAfter=12)
-    head_cell = ParagraphStyle("HC", fontName="Helvetica-Bold", fontSize=9.5, leading=11, textColor=colors.white, alignment=1)
-    period_cell = ParagraphStyle("PC", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=_INK)
-    lesson = ParagraphStyle("L", fontName="Helvetica", fontSize=8, leading=10.5, textColor=_BODY, alignment=1)
+    heading = ParagraphStyle("H", fontName=font_bold, fontSize=20, leading=24, textColor=_INK)
+    sub = ParagraphStyle("S", fontName=font, fontSize=10, leading=12, textColor=_MUTED, spaceBefore=2, spaceAfter=12)
+    head_cell = ParagraphStyle("HC", fontName=font_bold, fontSize=11, leading=13, textColor=colors.white, alignment=1)
+    period_cell = ParagraphStyle("PC", fontName=font_bold, fontSize=10.5, leading=13, textColor=_INK)
+    # Lesson text, in two sizes: a cell with one lesson gets the large one; a
+    # cell holding a block's options or a split lab's batches steps down, so
+    # several lessons still fit the row instead of pushing the week onto a
+    # second page.
+    lesson = ParagraphStyle("L", fontName=font, fontSize=10.5, leading=13, textColor=_BODY, alignment=1)
+    lesson_many = ParagraphStyle("LM", parent=lesson, fontSize=9, leading=11)
     free = ParagraphStyle("F", parent=lesson, textColor=_FAINT)
-    break_style = ParagraphStyle("B", fontName="Helvetica-Oblique", fontSize=8.5, leading=10, textColor=_GREEN, alignment=1)
+    break_style = ParagraphStyle("B", fontName=font_italic, fontSize=10, leading=12, textColor=_GREEN, alignment=1)
 
     usable_w = _PAGE[0] - 2 * _MARGIN_X - 12  # frame padding, so the table lines up with the heading
     period_w = 2.6 * cm
@@ -551,6 +599,7 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         days_header = rows[0][1:]
         table_rows = [[Paragraph("Period", head_cell)] + [Paragraph(_esc(d), head_cell) for d in days_header]]
         style = [
+            ("FONTNAME", (0, 0), (-1, -1), font),
             ("BACKGROUND", (0, 0), (-1, 0), _INK),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
@@ -567,7 +616,9 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         n_lessons = max(len(cells_rows) - n_breaks, 1)
         break_h = 0.6 * cm
         base_h = min(1.6 * cm, max(1.0 * cm, (usable_h - header_h - n_breaks * break_h) / n_lessons))
-        heights = [header_h]
+        # Each row's height is settled after the loop: None for a break (fixed
+        # height), else what its tallest cell needs.
+        needs: list[float | None] = []
         teaching_index = 0
 
         for r_i, row in enumerate(cells_rows, start=1):
@@ -577,26 +628,31 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
                     ("SPAN", (1, r_i), (-1, r_i)),
                     ("BACKGROUND", (0, r_i), (-1, r_i), _GREEN_TINT),
                 ]
-                heights.append(break_h)
+                needs.append(None)
                 continue
 
-            line_count = 2
+            need = 0.0
             out = [Paragraph(_esc(row["label"]), period_cell)]
             for cell in row["cells"]:
                 parts = []
+                many = len(cell["lessons"]) > 1
+                big, small, tiny = (10.5, 9, 8) if many else (12.5, 10.5, 9)
                 if cell["block"]:
-                    parts.append(f'<font color="#047857" size="7"><b>{_esc(cell["block"].upper())}</b></font>')
+                    parts.append(f'<font color="#047857" size="{tiny}"><b>{_esc(cell["block"].upper())}</b></font>')
                 for subject, who, room in cell["lessons"]:
-                    piece = f'<font color="#171717" size="9"><b>{_esc(subject)}</b></font>'
+                    piece = f'<font color="#171717" size="{big}"><b>{_esc(subject)}</b></font>'
                     if who:
-                        piece += f"<br/>{_esc(who)}"
+                        piece += f'<br/><font size="{small}">{_esc(who)}</font>'
                     if room:
-                        piece += f'<br/><font color="#737373" size="7.5">{_esc(room)}</font>'
+                        piece += f'<br/><font color="#737373" size="{tiny}">{_esc(room)}</font>'
                     parts.append(piece)
                 if parts:
-                    out.append(Paragraph("<br/>".join(parts), lesson))
-                    lines = (1 if cell["block"] else 0) + sum(1 + bool(w) + bool(r) for _s, w, r in cell["lessons"])
-                    line_count = max(line_count, lines)
+                    para = Paragraph("<br/>".join(parts), lesson_many if many else lesson)
+                    out.append(para)
+                    # Measured, not estimated: the height the text really takes
+                    # at this column's width, wrapping included, so the row grows
+                    # to fit and nothing spills over the cell edge.
+                    need = max(need, para.wrap(day_w - 12, 10_000)[1])
                 elif cell["exists"] and meta["mode"] == "teacher":
                     out.append(Paragraph("Free", free))
                 else:
@@ -608,8 +664,21 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
                 ("BACKGROUND", (0, r_i), (0, r_i), _PERIOD_COL),
             ]
             teaching_index += 1
-            heights.append(max(base_h, line_count * 10.5 + 12))
+            needs.append(need + 12)
 
+        # Rows share the page: a row with a lot in it (an elective block) takes
+        # what it needs, and the others give up space to make room, down to a
+        # floor - so the week stays on one page rather than its last period
+        # spilling onto the next.
+        avail = usable_h - header_h - n_breaks * break_h
+        floor = 0.85 * cm
+
+        def total(b):
+            return sum(max(b, n) for n in needs if n is not None)
+
+        while base_h > floor and total(base_h) > avail:
+            base_h -= 1
+        heights = [header_h] + [break_h if n is None else max(base_h, n) for n in needs]
         table = Table(table_rows, colWidths=[period_w] + [day_w] * n_days, rowHeights=heights, repeatRows=1)
         table.setStyle(TableStyle(style))
         story.append(table)

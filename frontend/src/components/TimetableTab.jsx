@@ -355,6 +355,12 @@ export default function TimetableTab({
   }
 
   const classGroupName = (id) => classGroups.find((c) => c.id === id)?.name
+  // "Class 6 - A", not "Sec A": a teacher takes sections in several grades,
+  // and the section letter alone doesn't say which.
+  const classGroupLabel = (id) => {
+    const cg = classGroups.find((c) => c.id === id)
+    return cg ? [cg.grade, cg.name].filter(Boolean).join(' - ') : ''
+  }
 
   // What a slot is for: a lesson, a break, the class teacher period or a
   // whole-school zero period. Older responses only said is_break.
@@ -872,7 +878,7 @@ export default function TimetableTab({
               onDrop={() => {}}
               onToggleLock={() => {}}
               secondaryLine={(e) =>
-                `Sec ${classGroupName(e.class_group_id)}${
+                `${classGroupLabel(e.class_group_id)}${
                   isSelectedTeacherAssisting(e) ? ' (Assisting)' : ''
                 }`
               }

@@ -58,7 +58,7 @@ export default function ScheduleGrid({
 }) {
   return (
     <div className="overflow-x-auto rounded-md border border-slate-200">
-      <table className="min-w-full border-collapse text-sm">
+      <table className="min-w-full border-collapse text-[15px] leading-snug">
         <thead>
           <tr className="bg-slate-50">
             <th className="border border-slate-200 px-3 py-2 text-left font-medium">Period</th>
@@ -83,7 +83,7 @@ export default function ScheduleGrid({
                   return (
                     <td
                       key={d}
-                      className={`border border-slate-200 px-3 py-2 text-xs ${SPECIAL_TONE[special.tone] ?? SPECIAL_TONE.muted}`}
+                      className={`border border-slate-200 px-3 py-2 text-sm ${SPECIAL_TONE[special.tone] ?? SPECIAL_TONE.muted}`}
                     >
                       {special.text}
                     </td>
@@ -140,7 +140,7 @@ export default function ScheduleGrid({
                     {!period ? (
                       <span className="text-slate-300">-</span>
                     ) : entries.length === 0 ? (
-                      <span className="text-xs text-slate-300">Free</span>
+                      <span className="text-sm text-slate-300">Free</span>
                     ) : (
                       <div
                         draggable={canDrag}
@@ -201,7 +201,7 @@ function sortedForCell(entries, isBlock) {
 function Lesson({ entry, secondaryLine, showAssistant, blockName = null }) {
   return (
     <>
-      <div className="font-medium">
+      <div className="break-words text-base font-medium">
         {entry.subject_name}
         {entry.lab_batch && (
           <span className="ml-1 text-xs font-normal text-slate-400">Batch {entry.lab_batch}</span>
@@ -211,11 +211,11 @@ function Lesson({ entry, secondaryLine, showAssistant, blockName = null }) {
             ordinary lesson that could be moved on its own. */}
         {blockName && <span className="ml-1 text-xs font-normal text-slate-400">{blockName}</span>}
       </div>
-      <div className="text-xs text-slate-500">{secondaryLine(entry)}</div>
+      <div className="break-words text-sm text-slate-600">{secondaryLine(entry)}</div>
       {showAssistant && entry.assistant_teacher_name && (
-        <div className="text-xs text-slate-400">Asst: {entry.assistant_teacher_name}</div>
+        <div className="text-[13px] text-slate-500">Asst: {entry.assistant_teacher_name}</div>
       )}
-      {entry.room_name && <div className="text-xs text-slate-400">{entry.room_name}</div>}
+      {entry.room_name && <div className="text-[13px] text-slate-500">{entry.room_name}</div>}
     </>
   )
 }
