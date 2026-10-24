@@ -2,7 +2,7 @@ ID	VERDICT	PASS	TYPED	READ_AS	NOTE
 B01	OK	yes	Mrs. Rao doesn't come on Saturdays	Mrs. Rao has no periods on Saturday.	
 B02	OK	yes	Mr. Khan only works Monday, Wednesday and Friday	Mr. Khan has no periods on Tuesday, Thursday or Saturday.	
 B03	OK	yes	No PE in the first period	No class has PE periods in the first period of the day.	
-B04	OK	yes	No PE right after lunch	No class has PE periods in period 5.	
+B04	OK	yes	No PE right after lunch	The school has no PE periods in period 5.	
 B05	OK	yes	Maths at most twice a day for every section	Every class has at most 2 Maths periods on any day.	
 B06	OK	yes	No section should have two Maths periods back to back	For every class, no two Maths periods are back to back on any day.	
 B07	OK	yes	Grade 9 gets one double period of Physics a week	For Grade 9, Physics periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
@@ -15,17 +15,17 @@ B13	OK	yes	Hindi should never be in the last period	No class has Hindi periods i
 B14	OK	yes	Ms. Das has no classes in periods 1 and 2	Ms. Das has no periods in periods 1 or 2.	
 B15	OK	yes	Grade 6 should not have more than 4 different subjects in a day	Grade 6 has at most 4 different subjects on any day.	
 B16	OK	yes	No section should have the same subject twice in a row	For every class and each subject, no two periods are back to back on any day.	
-B17	LOOSER	no	Every teacher gets at least one full day off	Every teacher has at least 1 period on at least one day.	allows something the sentence forbids
+B17	OK	yes	Every teacher gets at least one full day off	Every teacher has at most 0 periods on at least one day.	
 B18	OK	yes	Physics and Chemistry shouldn't be back to back	For every class, Physics periods and Chemistry periods are never back to back, in either order.	
 B19	OK	yes	Mr. Iyer shouldn't teach two periods in a row	For Mr. Iyer, no two periods are back to back on any day.	
 B20	OK	yes	Coach Biju only teaches after lunch	Coach Biju has no periods in periods 1, 2, 3 or 4.	
-B21	OK	yes	Maths should only be in the first 3 periods	No class has Maths periods in periods 4, 5 or 6.	
+B21	OK	yes	Maths should only be in the first 3 periods	The school has no Maths periods in periods 4, 5 or 6.	
 B22	OK	yes	rao maam is off on fridays	Mrs. Rao has no periods on Friday.	
-B23	OK	yes	Try to keep Hindi out of the last period	Where it can be arranged, every class has at most 0 Hindi periods in the last period of the day.	
+B23	OK	yes	Try to keep Hindi out of the last period	Where it can be arranged, no class has Hindi periods in the last period of the day.	
 B24	OK	yes	Grade 6 B should have Art on Friday	Grade 6 - B has at least 1 Art period on Friday.	
 B25	OK	yes	English at most once a day	Every class has at most 1 English period on any day.	
-B26	DIFFERENT	no	On Tuesdays Hindi has to be before lunch	Every class has at least 1 Hindi period in periods 1, 2, 3 or 4 on Tuesday.	allows what the sentence forbids, and forbids what it allows
-B27	LOOSER	no	No PE on Saturday or in the last period	No class has PE periods on Saturday.	allows something the sentence forbids
-A01	ASKED	yes	Make the timetable balanced	Which groups should have roughly the same amounts of what? For example: teachers' daily loads, subjects across days, classes' weekly periods, or something else?	
-A02	ASKED	yes	Mr. Khan is on leave from 10 to 14 November	This rule is tied to specific calendar dates (10 to 14 November), but the system can only handle rules based on weekdays (Monday, Tuesday, etc.) and periods within a day. A leave period that spans particular dates cannot be represented.	
-A03	ASKED	yes	Maths in the morning	Which class group(s) should have Maths in the morning, and should this apply every day or on specific days?	
+B26	OK	yes	On Tuesdays Hindi has to be before lunch	The school has no Hindi periods in periods 5 or 6 on Tuesday.	
+B27	ASKED	yes	No PE on Saturday or in the last period	Should this be split into two rules: (1) No PE on Saturday, and (2) No PE in the last period of any day?	
+A01	ASKED	yes	Make the timetable balanced	What should be balanced - teacher load across days, class periods per day, free periods, or something else?	
+A02	ASKED	yes	Mr. Khan is on leave from 10 to 14 November	This rule is tied to specific calendar dates (10 to 14 November), but the timetabling system only works with weekdays (Monday through Saturday) and cannot represent rules that apply to particular dates or date ranges.	
+A03	ASKED	yes	Maths in the morning	"Which class group(s) should have Maths in the morning? And does ""morning"" mean before lunch, or a specific set of periods?"	

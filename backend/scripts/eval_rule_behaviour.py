@@ -279,7 +279,7 @@ def main():
     passed = sum(r["PASS"] == "yes" for r in rows)
     print(f"\n{passed}/{len(rows)} pass  ({time.monotonic() - started:.0f}s)")
     if not args.dry_run:
-        out = ROOT / "docs" / "research" / f"behaviour-run-{datetime.date.today().isoformat()}.tsv"
+        out = ROOT / "docs" / "research" / f"behaviour-run-{datetime.date.today().isoformat()}{'-partial' if args.only else ''}.tsv"
         with out.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0]), delimiter="\t")
             w.writeheader()

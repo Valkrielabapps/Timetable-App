@@ -518,6 +518,15 @@ Rules that sound vague and are not. Say these, don't refuse them:
   form=count scope=["teacher","day"] exists_over=["day"] selector={} relation="at_most" value=0
   (a day off has NO periods - at most 0, never "at least 1")
 
+"Mr. Khan only works Monday, Wednesday and Friday"
+  form=count scope=[] selector={teachers:["Mr. Khan"],days:[1,3,5]} relation="exactly" value=0
+  (ban exactly the days NOT named - here Tue, Thu, Sat - never the named ones)
+
+"No PE right after lunch"
+  form=count scope=[] selector={subjects:["PE"],period_orders:[5]} relation="exactly" value=0
+  (lunch after P4: the first period after it, as a number. Not adjacency, which
+  never crosses a break)
+
 "On Tuesdays Hindi has to be before lunch"
   form=count scope=[] selector={subjects:["Hindi"],days:[1],period_orders:[5,6]} relation="exactly" value=0
   (lunch after P4. It bans the later periods; it does not require Hindi on Tuesday)
@@ -1074,6 +1083,10 @@ def parse_rule_llm(
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,
+            # The same sentence should give the same rule every time. At the
+            # default temperature two eval runs of unchanged code read
+            # "No PE right after lunch" correctly once and wrongly once.
+            temperature=0,
             # Cached, because every call in a sitting sends the same ~8,900
             # tokens of tool schemas and worked examples and only the one
             # sentence at the end differs. Reads cost a tenth of the write.
@@ -1116,6 +1129,10 @@ def parse_rule_llm(
         retry = client.messages.create(
             model=settings.llm_model,
             max_tokens=1500,
+            # The same sentence should give the same rule every time. At the
+            # default temperature two eval runs of unchanged code read
+            # "No PE right after lunch" correctly once and wrongly once.
+            temperature=0,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             tools=[_RULE_TOOL, _UNCLEAR_TOOL],
             tool_choice={"type": "any"},
