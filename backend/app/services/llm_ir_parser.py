@@ -613,11 +613,6 @@ a day at most:
 "Grade 11 chemistry lab is a double twice a week"
   form=run scope=["class_group"] selector={subjects:["Chemistry"],class_groups:["Grade 11"]} block_size=2 blocks=2 blocks_relation="exactly"
 
-"PE shouldn't be on two days in a row"
-  report_unclear, reason="not_supported" - this is about which DAYS are next to
-  each other, and only positions within a day can be compared. "Spread PE
-  across the week" is a balance rule; "two days in a row" is not.
-
 "maths not in last period - ok if 2 or 3 sections break it, not more"
   report_unclear, reason="not_supported" - a budget for how many sections may
   break a rule. The rule itself is sayable; the allowance is not, and recording
