@@ -242,4 +242,6 @@ def test_the_prompt_stays_affordable():
         [f"Grade {i}" for i in range(12)],
         [(d, o, None, False) for d in range(5) for o in range(1, 9)],
     )
-    assert len(prompt) < 18_000
+    # Raised from 18,000 for the three examples the first behaviour eval run
+    # showed were needed (a day off, "has to be before lunch", two bans in one).
+    assert len(prompt) < 19_000

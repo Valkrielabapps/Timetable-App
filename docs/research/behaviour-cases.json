@@ -527,7 +527,9 @@
     },
     "relation": "==",
     "value": 0
-   }
+   },
+   "expect": "ask",
+   "_note": "Two rules in one sentence: the right answer is to ask for them separately (one IR rule cannot OR a day with a position)."
   },
   {
    "id": "A01",

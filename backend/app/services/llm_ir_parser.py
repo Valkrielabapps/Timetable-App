@@ -514,6 +514,18 @@ Rules that sound vague and are not. Say these, don't refuse them:
   form=count scope=["teacher","day"] exists_over=["day"] selector={days:[0,1,2,3,4]} relation="<=" value=4 strength="preference"
   (exists_over is what makes this "some day" rather than "every day")
 
+"Every teacher gets at least one full day off"
+  form=count scope=["teacher","day"] exists_over=["day"] selector={} relation="at_most" value=0
+  (a day off has NO periods - at most 0, never "at least 1")
+
+"On Tuesdays Hindi has to be before lunch"
+  form=count scope=[] selector={subjects:["Hindi"],days:[1],period_orders:[5,6]} relation="exactly" value=0
+  (lunch after P4. It bans the later periods; it does not require Hindi on Tuesday)
+
+"No PE on Saturday or in the last period"
+  report_unclear, reason="not_supported" - two bans; fields are ANDed, so one
+  rule can't say this. Ask for two rules; never drop half.
+
 "Spread Mr. Khan's classes evenly through the week"
   form=balance scope=["teacher"] across=["day"] selector={teachers:["Mr. Khan"]} max_spread=1 strength="preference"
 
