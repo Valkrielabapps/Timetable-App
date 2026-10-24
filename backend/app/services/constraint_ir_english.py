@@ -335,6 +335,15 @@ def _render_adjacency(form: Adjacency) -> str:
     subject, used = _scope_subject(form.scope, _common(form.first, form.second))
     first, second = _sides(form.first, form.second, used)
 
+    if form.unit == "day":
+        days = "two days in a row" if form.min_gap == 1 else f"within {form.min_gap} school days of each other"
+        if form.first == form.second:
+            return f"for {subject}, {first} are never on {days}"
+        if form.directional:
+            return f"for {subject}, {second} never fall on the day after {first}" if form.min_gap == 1 \
+                else f"for {subject}, {second} never fall within {form.min_gap} school days after {first}"
+        return f"for {subject}, {first} and {second} are never on {days}, in either order"
+
     if form.must_follow:
         return f"for {subject}, {second} come in the period straight after {first}"
 

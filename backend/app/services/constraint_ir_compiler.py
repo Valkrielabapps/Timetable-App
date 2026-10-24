@@ -677,10 +677,51 @@ def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
                             penalties.append(weight * lonely)
 
 
+def _day_neighbours(index, gap: int) -> list[tuple[int, int]]:
+    """(earlier, later) school-day pairs at most `gap` school days apart.
+    Neighbours by the school's own week: Friday and Saturday are next to each
+    other in a six-day week, Saturday and Monday are not."""
+    days = sorted(index.orders_by_day)
+    return [(days[i], days[j]) for i in range(len(days)) for j in range(i + 1, min(len(days), i + 1 + gap))]
+
+
+def _adjacency_days(model, penalties, pool, form: Adjacency, first, second, index, weight, tag) -> None:
+    """Neighbouring days: one indicator per side per day, then the banned
+    pairs. Same selector on both sides is the common case - "PE shouldn't be on
+    two days in a row" - and comes out as used[Mon] + used[Tue] <= 1."""
+    pairs = _day_neighbours(index, form.min_gap)
+    for key, group in _group(pool, form.scope).items():
+        name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
+
+        def used(sel, side):
+            out = {}
+            for day in index.orders_by_day:
+                day_vars = list(dict.fromkeys(a.var for a in group if a.day_of_week == day and _matches(a, sel)))
+                if not day_vars:
+                    continue
+                flag = model.NewBoolVar(f"{name}_{side}{day}")
+                model.AddMaxEquality(flag, day_vars)
+                out[day] = flag
+            return out
+
+        f_used = used(first, "f")
+        s_used = f_used if form.first == form.second else used(second, "s")
+        for early, late in pairs:
+            orders = [(f_used.get(early), s_used.get(late))]
+            if not form.directional and s_used is not f_used:
+                orders.append((s_used.get(early), f_used.get(late)))
+            for i, (a, b) in enumerate(orders):
+                if a is not None and b is not None:
+                    _relate(model, penalties, a + b, "<=", 1, weight, f"{name}_d{early}_{late}_{i}")
+
+
 def _adjacency(model, penalties, atoms, form: Adjacency, index, weight, tag: str) -> None:
     first = _resolve(form.first, index)
     second = _resolve(form.second, index)
     pool = _pool(atoms, _side(form.scope, form.first))
+    if form.unit == "day":
+        _adjacency_days(model, penalties, pool, form, first, second, index, weight, tag)
+        return
 
     for key, group in _group(pool, form.scope).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"

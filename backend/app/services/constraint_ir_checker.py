@@ -279,9 +279,27 @@ def _check_adjacency(placements, form: Adjacency, index) -> list[tuple[list[int]
     first_sel = _resolve(form.first, index)
     second_sel = _resolve(form.second, index)
     found = []
+    days = sorted(index.orders_by_day)
+    position = {d: i for i, d in enumerate(days)}
     for _key, group in _group(placements, form.scope).items():
         firsts = [p for p in group if _matches(p, first_sel)]
         seconds = [p for p in group if _matches(p, second_sel)]
+
+        if form.unit == "day":
+            # Mirrors the compiler: by school day, neighbours in the school's week.
+            seen = set()
+            for a in firsts:
+                for b in seconds:
+                    if a.day_of_week not in position or b.day_of_week not in position:
+                        continue
+                    step = position[b.day_of_week] - position[a.day_of_week]
+                    close = (0 < step <= form.min_gap) if (form.directional or form.first == form.second) \
+                        else (0 < abs(step) <= form.min_gap)
+                    pair = tuple(sorted((a.day_of_week, b.day_of_week)))
+                    if close and pair not in seen:
+                        seen.add(pair)
+                        found.append(([a.entry_id, b.entry_id], "on days next to each other"))
+            continue
 
         if form.must_follow:
             for a in firsts:

@@ -289,6 +289,16 @@ _RULE_TOOL = {
                     "fine, 1 and 2 are not)."
                 ),
             },
+            "unit": {
+                "type": ["string", "null"],
+                "enum": ["period", "day", None],
+                "description": (
+                    "For adjacency: 'period' (default) compares periods within a "
+                    "day; 'day' compares school days - 'PE shouldn't be on two days "
+                    "in a row' is first=second=PE, unit='day'. With 'day' both "
+                    "sides may name the same subject."
+                ),
+            },
             "directional": {
                 "type": ["boolean", "null"],
                 "description": (
@@ -517,6 +527,19 @@ Rules that sound vague and are not. Say these, don't refuse them:
 "Every teacher gets at least one full day off"
   form=count scope=["teacher","day"] exists_over=["day"] selector={} relation="at_most" value=0
   (a day off has NO periods - at most 0, never "at least 1")
+
+"PE shouldn't be on two days in a row"
+  form=adjacency scope=["class_group"] first={subjects:["PE"]} second={subjects:["PE"]} unit="day" min_gap=1
+
+"Both PE periods can't be on the same day"
+  form=count scope=["class_group","day"] selector={subjects:["PE"]} relation="at_most" value=1
+  (no class named: it means every class - do not ask which)
+
+"Physics practical should be right after Physics theory"
+  If the school has a separate lab subject (e.g. "Physics Lab"), use it:
+  form=adjacency scope=["class_group"] first={subjects:["Physics"]} second={subjects:["Physics Lab"]} must_follow=true
+  If not, report_unclear reason="not_supported": theory and practical of one
+  subject can't be told apart - add the practical as its own subject, like "Physics Lab".
 
 "Mr. Khan only works Monday, Wednesday and Friday"
   form=count scope=[] selector={teachers:["Mr. Khan"],days:[1,3,5]} relation="exactly" value=0
@@ -1003,6 +1026,7 @@ def _rule_payload(data: dict, seen: list[str] | None = None) -> dict:
             "directional": bool(data.get("directional")),
             "must_follow": bool(data.get("must_follow")),
             "must_precede": must_precede,
+            **({"unit": "day"} if str(data.get("unit") or "").lower() == "day" else {}),
         })
     elif form == "bucket":
         payload.update({

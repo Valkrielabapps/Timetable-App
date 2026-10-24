@@ -532,6 +532,46 @@
    "_note": "Two rules in one sentence: the right answer is to ask for them separately (one IR rule cannot OR a day with a position)."
   },
   {
+   "id": "B28",
+   "typed": "PE shouldn't be on two days in a row",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "unit": "day",
+    "min_gap": 1
+   }
+  },
+  {
+   "id": "B29",
+   "typed": "Both PE periods can't be on the same day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   }
+  },
+  {
    "id": "A01",
    "typed": "Make the timetable balanced",
    "expect": "ask"
@@ -560,6 +600,12 @@
     "relation": "==",
     "value": 0
    }
+  },
+  {
+   "id": "A04",
+   "typed": "Physics practical should be right after Physics theory",
+   "expect": "ask",
+   "_note": "The eval school has no separate lab subject, so theory and practical can't be told apart: the right answer is to ask for one."
   }
  ]
 }

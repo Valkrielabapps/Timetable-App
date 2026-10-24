@@ -244,4 +244,4 @@ def test_the_prompt_stays_affordable():
     )
     # Raised from 18,000 for the three examples the first behaviour eval run
     # showed were needed (a day off, "has to be before lunch", two bans in one).
-    assert len(prompt) < 19_000
+    assert len(prompt) < 20_000

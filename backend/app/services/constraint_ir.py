@@ -328,6 +328,11 @@ class Adjacency:
     # before maths" is this and not must_follow, which would wrongly force them
     # into neighbouring periods. min_gap is ignored when this is set.
     must_precede: bool = False
+    # "period" (the default): closeness within a day. "day": closeness between
+    # school days - "PE shouldn't be on two days in a row" is first=second=PE,
+    # unit="day", min_gap=1. Here both sides may name the same lessons, since a
+    # subject against itself on neighbouring days is exactly what is meant.
+    unit: str = "period"
 
 
 @dataclass(frozen=True)
@@ -567,6 +572,13 @@ def _adjacency_from_dict(data: dict) -> Adjacency:
             "one - must_follow is the stricter of the two, so pick one"
         )
     positional = must_follow or must_precede
+    unit = str(data.get("unit") or "period").strip().lower()
+    if unit not in ("period", "day"):
+        raise IRError(f"unit must be 'period' or 'day', got {unit!r}")
+    if unit == "day" and positional:
+        raise IRError("must_follow and must_precede are about periods in a day, not whole days")
+    if unit == "day" and "day" in [str(d).strip().lower() for d in (data.get("scope") or [])]:
+        raise IRError("a rule about neighbouring days cannot also be grouped by day")
     adj = Adjacency(
         scope=_scope_from(data.get("scope")),
         first=selector_from_dict(data.get("first")),
@@ -575,10 +587,12 @@ def _adjacency_from_dict(data: dict) -> Adjacency:
         directional=bool(data.get("directional", False)),
         must_follow=must_follow,
         must_precede=must_precede,
+        unit=unit,
     )
     if adj.first.is_empty() or adj.second.is_empty():
         raise IRError("an adjacency rule needs both sides to say which lessons they mean")
-    _refuse_identical_sides(adj.first, adj.second, "adjacency")
+    if unit == "period":
+        _refuse_identical_sides(adj.first, adj.second, "adjacency")
     return adj
 
 
@@ -750,6 +764,7 @@ def _form_to_dict(form: Form) -> dict:
             "directional": form.directional,
             "must_follow": form.must_follow,
             "must_precede": form.must_precede,
+            **({"unit": form.unit} if form.unit != "period" else {}),
         }
     if isinstance(form, Bucket):
         return {
