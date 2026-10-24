@@ -1,0 +1,3 @@
+ID	VERDICT	PASS	TYPED	READ_AS	NOTE
+B16	OK	yes	No section should have the same subject twice in a row	For every class and each subject, no two periods are back to back on any day.	
+B28	OK	yes	PE shouldn't be on two days in a row	For every class, PE periods are never on two days in a row.	

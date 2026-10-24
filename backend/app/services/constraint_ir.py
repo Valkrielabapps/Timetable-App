@@ -561,7 +561,11 @@ def _run_from_dict(data: dict) -> Run:
         # than 2 in a row" is each subject's own run, taken one at a time, and
         # grouped by teacher it is a teacher's load ("no teacher more than 3 in
         # a row").
-        raise IRError("a run rule needs a selector saying which lessons form the run")
+        raise IRError(
+            "a run rule needs a selector saying which lessons form the run - or, for "
+            "'the same subject' / 'any subject', add 'subject' to scope "
+            "(scope=['class_group','subject'], selector={})"
+        )
     return run
 
 
