@@ -332,7 +332,10 @@ export default function Sidebar({
           transition={{ duration: 0.18, ease: 'easeOut' }}
           className="overflow-hidden"
         >
-        <div className="flex flex-col gap-1.5 rounded-md bg-slate-50 p-2">
+        {/* Scrolls on its own: the sidebar is one screen tall and doesn't
+            scroll, so a tall form (the range one) had its Create button cut
+            off below the fold. */}
+        <div className="flex max-h-[45vh] flex-col gap-1.5 overflow-y-auto rounded-md bg-slate-50 p-2">
           <div className="flex gap-1 text-[11px]">
             <button
               type="button"
@@ -383,6 +386,7 @@ export default function Sidebar({
               existing={classGroups}
               onDone={() => setAddingGrade(false)}
               institutionType={institutionType}
+              compact
             />
           )}
         </div>

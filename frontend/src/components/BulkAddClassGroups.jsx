@@ -23,7 +23,12 @@ const COLLEGE_GRADE_VALUES = NUMBERED_GRADES
  * rather than creating duplicates or erroring on a unique-constraint
  * conflict the admin didn't ask for.
  */
-export default function BulkAddClassGroups({ onAddClassGroups, existing = [], onDone, institutionType }) {
+export default function BulkAddClassGroups({ onAddClassGroups, existing = [], onDone, institutionType, compact = false }) {
+  // The sidebar is 272px wide: tighter padding and smaller selects there, so
+  // "Grade 10" fits instead of showing as "Grade".
+  const selectClass = compact
+    ? 'w-full min-w-0 rounded-md border border-slate-300 bg-white px-1.5 py-1.5 text-xs focus:border-neutral-900 focus:outline-none'
+    : 'rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none'
   const defaultPrefix = institutionType === 'college' ? 'Semester' : 'Grade'
   const gradeValues = institutionType === 'college' ? COLLEGE_GRADE_VALUES : SCHOOL_GRADE_VALUES
   const [advanced, setAdvanced] = useState(false)
@@ -128,16 +133,17 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
   const numberLabel = institutionType === 'college' ? 'semester' : 'grade'
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-lg border border-slate-200 p-4">
+    <form onSubmit={handleSubmit} className={`flex flex-col gap-3 rounded-lg border border-slate-200 ${compact ? 'bg-white p-2.5' : 'p-4'}`}>
       {!advanced ? (
         <>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
+          <div className={`grid grid-cols-2 ${compact ? 'gap-2' : 'gap-3'}`}>
+            <div className="flex min-w-0 flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">From {numberLabel}</label>
               <select
                 value={fromIndex}
                 onChange={(e) => setFromIndex(Number(e.target.value))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+                aria-label={`From ${numberLabel}`}
+                className={selectClass}
               >
                 {gradeValues.map((v, idx) => (
                   <option key={v} value={idx}>
@@ -146,12 +152,13 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label className="text-xs font-medium text-slate-500">To {numberLabel}</label>
               <select
                 value={toIndex}
                 onChange={(e) => setToIndex(Number(e.target.value))}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+                aria-label={`To ${numberLabel}`}
+                className={selectClass}
               >
                 {gradeValues.map((v, idx) => (
                   <option key={v} value={idx}>
@@ -187,7 +194,7 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
                   }
                 }}
                 placeholder="e.g. Bridge Course"
-                className="h-8 w-36 rounded-md border border-slate-300 px-2 text-sm focus:border-neutral-900 focus:outline-none"
+                className="h-8 w-32 min-w-0 rounded-md border border-slate-300 px-2 text-sm focus:border-neutral-900 focus:outline-none"
               />
               <button
                 type="button"
@@ -317,7 +324,7 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
 
       <button
         disabled={newPairs.length === 0 || submitting}
-        className="w-fit rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        className={`rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50 ${compact ? 'w-full' : 'w-fit'}`}
       >
         {submitting ? 'Creating…' : `Create ${newPairs.length || ''} section${newPairs.length === 1 ? '' : 's'}`.trim()}
       </button>
