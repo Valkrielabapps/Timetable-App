@@ -198,6 +198,11 @@ export const api = {
     invoices: () => get('/admin/invoices'),
     stats: () => get('/admin/stats'),
     accounts: (q) => get(`/admin/accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    ruleEvents: (params = {}) => {
+      const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+      return get(`/admin/rule-events${qs ? `?${qs}` : ''}`)
+    },
+    triageRuleEvent: (id, triage) => request(`/admin/rule-events/${id}`, { method: 'PATCH', body: JSON.stringify({ triage }) }),
   },
 
   // Subjects
@@ -271,6 +276,10 @@ export const api = {
   // agreed to would not be the rule in the database.
   confirmConstraint: (schoolId, rule, sourceText) =>
     post("/constraints/confirm", { school_id: schoolId, rule, source_text: sourceText }),
+  // Tells the Timetablz team a reading was turned down (Cancel / Reword it),
+  // so misreadings can be found and fixed. Changes nothing for the school.
+  reportRuleFeedback: (schoolId, text, action, shown) =>
+    post("/constraints/feedback", { school_id: schoolId, text, action, shown: shown || null }),
   // Re-parses new text into an EXISTING constraint (same id) instead of
   // creating a new one — used by the Edit affordance on a constraint card.
   reparseConstraint: (id, text) => put(`/constraints/${id}/reparse`, { text }),

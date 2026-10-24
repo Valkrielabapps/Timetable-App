@@ -247,7 +247,20 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   // Rewording puts the original text back in the box rather than clearing it:
   // the admin is usually changing a word or two, and retyping the whole rule
   // is enough friction to make accepting a wrong reading the easier option.
+  // Best effort and silent: a report that fails must never get in the way.
+  function report(action) {
+    const i = pending?.interpretation
+    if (!pending?.typed) return
+    try {
+      const shown = i?.sentence || i?.question || i?.explanation
+      api.reportRuleFeedback?.(schoolId, pending.typed, action, shown)?.catch?.(() => {})
+    } catch {
+      /* ignore */
+    }
+  }
+
   function handleReword() {
+    report('reworded')
     setInput(pending?.typed ?? '')
     setPending(null)
     setError(null)
@@ -382,6 +395,7 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
               onConfirm={handleConfirm}
               onReword={handleReword}
               onCancel={() => {
+                report('cancelled')
                 setPending(null)
                 setInput('')
               }}

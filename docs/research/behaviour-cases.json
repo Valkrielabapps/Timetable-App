@@ -1,0 +1,563 @@
+{
+ "_about": "Phrasings with the rule they should mean, for scripts/eval_rule_behaviour.py. 'reference' is the IR the sentence must be equivalent to on the eval school; 'expect': 'ask' means the right answer is a question back. Names must exist in the eval school (see the script). Add a case for every misreading fixed from the admin Rule reading page.",
+ "cases": [
+  {
+   "id": "B01",
+   "typed": "Mrs. Rao doesn't come on Saturdays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ],
+     "days": [
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B02",
+   "typed": "Mr. Khan only works Monday, Wednesday and Friday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "days": [
+      1,
+      3,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B03",
+   "typed": "No PE in the first period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B04",
+   "typed": "No PE right after lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B05",
+   "typed": "Maths at most twice a day for every section",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   }
+  },
+  {
+   "id": "B06",
+   "typed": "No section should have two Maths periods back to back",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "max_consecutive": 1
+   }
+  },
+  {
+   "id": "B07",
+   "typed": "Grade 9 gets one double period of Physics a week",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   }
+  },
+  {
+   "id": "B08",
+   "typed": "Art and PE should never be on the same day",
+   "reference": {
+    "form": "bucket",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Art"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "dimension": "day",
+    "relation": "different"
+   }
+  },
+  {
+   "id": "B09",
+   "typed": "Maths can't come right after PE",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   }
+  },
+  {
+   "id": "B10",
+   "typed": "No teacher teaches more than 5 periods a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 5
+   }
+  },
+  {
+   "id": "B11",
+   "typed": "Grade 9 A has English in the first period on Monday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "English"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "B12",
+   "typed": "Library only on Saturday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B13",
+   "typed": "Hindi should never be in the last period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B14",
+   "typed": "Ms. Das has no classes in periods 1 and 2",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Das"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B15",
+   "typed": "Grade 6 should not have more than 4 different subjects in a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "distinct": "subject",
+    "relation": "<=",
+    "value": 4
+   }
+  },
+  {
+   "id": "B16",
+   "typed": "No section should have the same subject twice in a row",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group",
+     "subject"
+    ],
+    "selector": {},
+    "max_consecutive": 1
+   }
+  },
+  {
+   "id": "B17",
+   "typed": "Every teacher gets at least one full day off",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "exists_over": [
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0
+   }
+  },
+  {
+   "id": "B18",
+   "typed": "Physics and Chemistry shouldn't be back to back",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Physics"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Chemistry"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   }
+  },
+  {
+   "id": "B19",
+   "typed": "Mr. Iyer shouldn't teach two periods in a row",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "teacher"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Iyer"
+     ]
+    },
+    "max_consecutive": 1
+   }
+  },
+  {
+   "id": "B20",
+   "typed": "Coach Biju only teaches after lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B21",
+   "typed": "Maths should only be in the first 3 periods",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "period_orders": [
+      4,
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B22",
+   "typed": "rao maam is off on fridays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ],
+     "days": [
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B23",
+   "typed": "Try to keep Hindi out of the last period",
+   "strength": "preference",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B24",
+   "typed": "Grade 6 B should have Art on Friday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Art"
+     ],
+     "class_groups": [
+      "Grade 6 - B"
+     ],
+     "days": [
+      4
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "B25",
+   "typed": "English at most once a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   }
+  },
+  {
+   "id": "B26",
+   "typed": "On Tuesdays Hindi has to be before lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "days": [
+      1
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "B27",
+   "typed": "No PE on Saturday or in the last period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "days": [
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "also": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "A01",
+   "typed": "Make the timetable balanced",
+   "expect": "ask"
+  },
+  {
+   "id": "A02",
+   "typed": "Mr. Khan is on leave from 10 to 14 November",
+   "expect": "ask"
+  },
+  {
+   "id": "A03",
+   "typed": "Maths in the morning",
+   "expect": "either",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  }
+ ]
+}

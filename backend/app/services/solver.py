@@ -122,6 +122,48 @@ _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozens
 # for which rule blocks a school: habits are preferences, they can't make a
 # school impossible, and leaving them on would make every try optimise.
 _DEFAULT_HABITS: contextvars.ContextVar = contextvars.ContextVar("default_habits", default=True)
+# Evaluation only (scripts/eval_rule_behaviour.py): (rule, seed). The solve
+# keeps every real rule but is steered, by a random objective over the lessons
+# that rule is about, towards timetables that might break it - a search for a
+# counterexample, which is how two readings of one sentence are compared.
+# None in the app, where it changes nothing.
+_ADVERSARY: contextvars.ContextVar = contextvars.ContextVar("adversary", default=None)
+
+
+def _adversary_objective(model, atoms, index, rule, seed: int):
+    """Random weights on the lessons `rule` talks about, biased towards
+    putting them where a ban would forbid them (or away from where a
+    requirement wants them). Not a proof: different seeds look in different
+    places, and the caller checks each result with the real rule checker."""
+    import random as _random
+    from app.services.constraint_ir import Adjacency, Bucket, Conditional, Count
+    from app.services.constraint_ir_compiler import _matches, _resolve
+
+    rng = _random.Random(seed)
+    form = rule.form
+    selectors, bias = [], 0
+    if isinstance(form, Count):
+        selectors = [form.selector]
+        bias = -3 if form.relation in ("<=", "==") else 3
+    elif isinstance(form, (Adjacency, Bucket)):
+        selectors = [form.first, form.second]
+    elif isinstance(form, Conditional):
+        selectors = [form.when.selector, getattr(form.then, "selector", None) or form.when.selector]
+    else:
+        selectors = [getattr(form, "selector")]
+    resolved = []
+    for sel in selectors:
+        try:
+            resolved.append(_resolve(sel, index))
+        except Exception:  # noqa: BLE001 - an unknown name: no steer from it
+            continue
+    terms = []
+    for atom in atoms:
+        hit = any(_matches(atom, r) for r in resolved)
+        weight = rng.randint(-4, 4) + (bias if hit else 0) if hit else rng.randint(-1, 1)
+        if weight:
+            terms.append(weight * atom.var)
+    model.Minimize(sum(terms) if terms else 0)
 
 
 def _constraint_query(db: Session):
@@ -1697,7 +1739,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     )
     deferred_rules: list = []
     deferred_compile = None
-    if ir_constraints:
+    adversary = _ADVERSARY.get()
+    adversary_steer = None
+    if ir_constraints or adversary is not None:
         atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id, no_teacher)
         atoms.extend(_block_atoms(block_occ, option_x, option_reqs, periods_by_id))
         index = SchoolIndex(
@@ -1724,6 +1768,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 for day, day_periods in periods_by_day.items()
             },
         )
+        if adversary is not None:
+            adversary_steer = (atoms, index)
         rules = []
         for c in ir_constraints:
             try:
@@ -1774,6 +1820,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         return True
     if penalties:
         model.Minimize(sum(penalties))
+    if adversary is not None:
+        # Steer towards breaking it; nothing else is optimised.
+        _adversary_objective(model, adversary_steer[0], adversary_steer[1], adversary[0], adversary[1])
 
     # Cheap and decisive: if whole sections can't be shared out between the
     # teachers at all, no timetable exists - say so in a second rather than
@@ -1788,9 +1837,12 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             errors=errors + staffing, warnings=warnings,
         )
 
-    solver, status = _solve_timetable_model(
-        model, bool(penalties), add_later if (deferred_rules or _DEFAULT_HABITS.get()) else None,
-    )
+    if adversary is not None:
+        solver, status = _solve_timetable_model(model, True, None)
+    else:
+        solver, status = _solve_timetable_model(
+            model, bool(penalties), add_later if (deferred_rules or _DEFAULT_HABITS.get()) else None,
+        )
 
     status_name = {
         cp_model.OPTIMAL: "optimal",

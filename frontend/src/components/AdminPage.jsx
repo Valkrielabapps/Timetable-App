@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, getToken, setToken } from '../api'
 import AuthPage from './AuthPage'
 import AdminTab from './AdminTab'
+import AdminRuleEvents from './AdminRuleEvents'
 
 /**
  * timetablz.com/admin - the Valkyrie Labs console. A page of its own, outside
@@ -82,6 +83,7 @@ export default function AdminPage() {
             {[
               ['dashboard', 'Dashboard'],
               ['accounts', 'Accounts'],
+              ['rules', 'Rule reading'],
             ].map(([id, label]) => (
               <button
                 key={id}
@@ -102,7 +104,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">{view === 'dashboard' ? <Dashboard /> : <Accounts />}</main>
+      <main className="mx-auto max-w-7xl px-6 py-8">{view === 'dashboard' ? <Dashboard /> : view === 'rules' ? <AdminRuleEvents /> : <Accounts />}</main>
     </div>
   )
 }

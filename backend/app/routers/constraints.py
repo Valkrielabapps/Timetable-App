@@ -11,7 +11,7 @@ from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import ClassGroup, Constraint, Period, School, Subject, Teacher
-from app.services import plans
+from app.services import plans, rule_events
 from app.models.user import User
 from app.schemas.constraint import (
     ConstraintBatchParseRequest,
@@ -456,12 +456,31 @@ def _revert_teacher_side_effects(db: Session, constraint: Constraint) -> None:
     teacher.unavailable_period_ids = sorted(set(teacher.unavailable_period_ids or []) - release)
 
 
+def _record_quick_delete(constraint: Constraint, user_id: int) -> None:
+    """A rule deleted soon after it was saved was most likely misread."""
+    from datetime import datetime, timezone
+    created = constraint.created_at
+    if created is None or not constraint.source_text:
+        return
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    age_minutes = (datetime.now(timezone.utc) - created).total_seconds() / 60
+    if age_minutes <= rule_events.QUICK_DELETE_MINUTES:
+        rule_events.record(
+            "quick_delete", constraint.source_text, school_id=constraint.school_id, user_id=user_id,
+            constraint_id=constraint.id,
+            detail={"description": constraint.description, "type": constraint.type,
+                    "parameters": constraint.parameters, "minutes_after_saving": round(age_minutes, 1)},
+        )
+
+
 @router.delete("/{constraint_id}", status_code=204)
 def delete_constraint(constraint_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     constraint = db.get(Constraint, constraint_id)
     if not constraint:
         raise HTTPException(status_code=404, detail="Constraint not found")
     require_school_access(db, current_user, constraint.school_id, min_role="admin")
+    _record_quick_delete(constraint, current_user.id)
     _revert_teacher_side_effects(db, constraint)
     db.delete(constraint)
     db.commit()
@@ -498,6 +517,7 @@ def delete_many_constraints(
         .all()
     )
     for constraint in rows:
+        _record_quick_delete(constraint, current_user.id)
         _revert_teacher_side_effects(db, constraint)
         db.delete(constraint)
         db.flush()
@@ -894,6 +914,12 @@ def parse_and_create_constraint(payload: ConstraintParseRequest, db: Session = D
     db.refresh(constraint)
 
     out = _to_out(db, constraint)
+    if not out.enforced:
+        rule_events.record(
+            "not_applied", payload.text, school_id=payload.school_id, user_id=current_user.id,
+            constraint_id=constraint.id,
+            detail={"description": constraint.description, "type": constraint.type, "parsed_by": constraint.parsed_by},
+        )
     return ConstraintParseResponse(constraint=out, enforced=out.enforced)
 
 
@@ -1045,6 +1071,11 @@ def parse_and_create_constraints_batch(
                 source_text=item.source_text, parsed_by=item.parsed_by,
             ))
 
+    for item in unread:
+        rule_events.record(
+            "batch_unread", item.get("text"), school_id=payload.school_id, user_id=current_user.id,
+            detail={"reason": item.get("reason")},
+        )
     if not rows and unread:
         return ConstraintBatchResponse(created=[], unread=unread)
     if not rows:
@@ -1067,6 +1098,13 @@ def parse_and_create_constraints_batch(
     responses = []
     for constraint in created:
         out = _to_out(db, constraint)
+        if not out.enforced:
+            rule_events.record(
+                "not_applied", constraint.source_text or constraint.description, school_id=payload.school_id,
+                user_id=current_user.id, constraint_id=constraint.id,
+                detail={"description": constraint.description, "type": constraint.type,
+                        "parsed_by": constraint.parsed_by, "via": "batch"},
+            )
         responses.append(ConstraintParseResponse(constraint=out, enforced=out.enforced))
     return ConstraintBatchResponse(created=responses, unread=unread)
 
@@ -1088,6 +1126,11 @@ def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db
 
     # The old rule's effect on the teacher goes first; resolving the new text
     # below re-applies whatever the reworded rule still asks for.
+    rule_events.record(
+        "reworded", constraint.source_text or constraint.description, school_id=constraint.school_id,
+        user_id=current_user.id, constraint_id=constraint.id,
+        detail={"was": constraint.description, "reworded_to": payload.text, "after_saving": True},
+    )
     _revert_teacher_side_effects(db, constraint)
     allow_llm = plans.use_ai(db, db.get(School, constraint.school_id))
     resolved = _resolve_constraint_text(db, constraint.school_id, payload.text, allow_llm)
@@ -1175,7 +1218,11 @@ def interpret_constraint(
             detail="Rule interpretation is unavailable right now. Try again shortly.",
         )
 
+    def log(kind, detail):
+        rule_events.record(kind, payload.text, school_id=payload.school_id, user_id=current_user.id, detail=detail)
+
     if result.invalid is not None:
+        log("invalid", {"error": str(result.invalid)[:500]})
         # The model answered, was told why its rule was refused, and still sent
         # one the schema would not take (see parse_rule_llm's retry). The admin
         # can't act on the validator's wording, so they get something they can
@@ -1192,16 +1239,20 @@ def interpret_constraint(
 
     if result.unclear is not None:
         u = result.unclear
+        log("unclear", {"reason": u.reason, "explanation": u.explanation, "question": u.question,
+                        "readings": list(u.readings or [])})
         return ConstraintInterpretResponse(
             understood=False, reason=u.reason, explanation=u.explanation,
             question=u.question, readings=u.readings,
         )
 
+    unknown = _unknown_names(result.rule, data)
+    log("interpreted", {"sentence": result.sentence, "rule": rule_to_dict(result.rule), "unknown_names": unknown})
     return ConstraintInterpretResponse(
         understood=True,
         sentence=result.sentence,
         rule=rule_to_dict(result.rule),
-        unknown_names=_unknown_names(result.rule, data),
+        unknown_names=unknown,
     )
 
 
@@ -1251,4 +1302,30 @@ def confirm_constraint(
     db.add(constraint)
     db.commit()
     db.refresh(constraint)
+    rule_events.record(
+        "confirmed", payload.source_text or constraint.description, school_id=payload.school_id,
+        user_id=current_user.id, constraint_id=constraint.id,
+        detail={"sentence": constraint.description, "rule": constraint.parameters},
+    )
     return _to_out(db, constraint)
+
+
+class _FeedbackIn(BaseModel):
+    school_id: int
+    text: str = Field(min_length=1, max_length=2000)
+    # What the admin did with what the parser showed them.
+    action: str = Field(pattern="^(cancelled|reworded)$")
+    # What they were looking at: the sentence, or the question asked.
+    shown: str | None = Field(default=None, max_length=2000)
+    reworded_to: str | None = Field(default=None, max_length=2000)
+
+
+@router.post("/feedback", status_code=204)
+def rule_feedback(payload: _FeedbackIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """The Constraints tab reports a reading the admin turned down - Cancel, or
+    Reword it. Recorded for the Timetablz team only; changes nothing."""
+    require_school_access(db, current_user, payload.school_id, min_role="admin")
+    rule_events.record(
+        payload.action, payload.text, school_id=payload.school_id, user_id=current_user.id,
+        detail={k: v for k, v in {"shown": payload.shown, "reworded_to": payload.reworded_to}.items() if v},
+    )

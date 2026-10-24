@@ -115,3 +115,22 @@ phrasings are half the data.
 
 **No real staff names.** Use "Teacher A". The rule shapes are the point; the
 names are a real school's employee data and carry nothing useful.
+
+## Improving rule reading: the weekly loop
+
+1. **Collect.** The app records every sentence the parser struggled with: a question asked, a refusal,
+   a reading the admin cancelled or reworded, a rule deleted within 30 minutes of saving, a rule saved
+   but not applied. See them at timetablz.com/admin → **Rule reading**.
+2. **File.** Mark each one: *Misread* (fix with an example or prompt line), *Checker* (read right,
+   refused by the rule checker), *Unsupported* (needs a new kind of rule), *Ambiguous* (needs a
+   better question), or *Nothing wrong*.
+3. **Fix**, then add the sentence and the rule it should mean to `behaviour-cases.json`.
+4. **Check** before shipping any parser or checker change:
+
+       cd backend
+       python scripts/eval_rule_behaviour.py            # calls the API, writes behaviour-run-<date>.tsv
+       python scripts/eval_rule_behaviour.py --dry-run  # no API: checks the cases themselves
+
+   It compares what each parsed rule *does* to what the sentence means, on a small eval school, and
+   flags LOOSER / STRICTER / DIFFERENT readings. Anything that passed in the last run and fails now is
+   a regression.

@@ -10,6 +10,8 @@ not for school admins.
     POST   /api/admin/schools/{id}/downgrade      end a paid plan (after a refund)
     GET    /api/admin/invoices                    recent invoices
     GET    /api/admin/stats                       dashboard totals
+    GET    /api/admin/rule-events                 rules the parser struggled with
+    PATCH  /api/admin/rule-events/{id}            file one into what needs fixing
 
 Granting a plan and issuing the invoice go through app/services/billing.py,
 the same functions a Cashfree payment uses.
@@ -18,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
@@ -292,3 +295,92 @@ def accounts(
         }
         for u in users
     ]
+
+
+# ---------------------------------------------------------------------------
+# How well rules are being read (see app/services/rule_events.py)
+# ---------------------------------------------------------------------------
+
+# The moments that point at something to fix. "interpreted" and "confirmed"
+# are the successes, counted in the summary but not listed by default.
+_PROBLEM_KINDS = ("unclear", "invalid", "cancelled", "reworded", "batch_unread", "not_applied", "quick_delete")
+
+
+@router.get("/rule-events")
+def rule_events_list(
+    kind: str | None = None,
+    triage: str | None = None,
+    q: str | None = None,
+    days: int = 30,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+):
+    """Rule-reading moments worth looking at, newest first, plus totals.
+
+    `kind=all` includes the successes too. `triage=none` is what hasn't been
+    looked at yet."""
+    from app.models.school import RuleReadEvent
+
+    since = _naive_now() - timedelta(days=max(1, min(days, 365)))
+    base = db.query(RuleReadEvent).filter(RuleReadEvent.created_at >= since)
+    counts: dict[str, int] = {}
+    for k, n in (
+        db.query(RuleReadEvent.kind, func.count(RuleReadEvent.id))
+        .filter(RuleReadEvent.created_at >= since)
+        .group_by(RuleReadEvent.kind)
+        .all()
+    ):
+        counts[k] = n
+
+    query = base
+    if kind and kind != "all":
+        query = query.filter(RuleReadEvent.kind == kind)
+    elif not kind:
+        query = query.filter(RuleReadEvent.kind.in_(_PROBLEM_KINDS))
+    if triage == "none":
+        query = query.filter(RuleReadEvent.triage.is_(None))
+    elif triage:
+        query = query.filter(RuleReadEvent.triage == triage)
+    if q:
+        query = query.filter(RuleReadEvent.text.ilike(f"%{q.strip()}%"))
+    rows = query.order_by(RuleReadEvent.id.desc()).limit(300).all()
+    names = {s.id: s.name for s in db.query(School).filter(School.id.in_({r.school_id for r in rows if r.school_id})).all()}
+
+    interpreted = counts.get("interpreted", 0)
+    return {
+        "counts": counts,
+        # Of the sentences the parser read into a rule, how many the admin kept.
+        "confirmed_share": round(counts.get("confirmed", 0) / interpreted, 3) if interpreted else None,
+        "events": [
+            {
+                "id": r.id, "created_at": r.created_at.isoformat() if r.created_at else None,
+                "kind": r.kind, "text": r.text, "detail": r.detail or {},
+                "school_id": r.school_id, "school_name": names.get(r.school_id),
+                "constraint_id": r.constraint_id, "triage": r.triage,
+            }
+            for r in rows
+        ],
+    }
+
+
+class _TriageIn(BaseModel):
+    # None clears it.
+    triage: str | None = Field(default=None, pattern="^(misread|checker|unsupported|ambiguous|fine)$")
+
+
+@router.patch("/rule-events/{event_id}")
+def rule_event_triage(
+    event_id: int, payload: _TriageIn,
+    db: Session = Depends(get_db), admin: User = Depends(require_platform_admin),
+):
+    """File one moment into what needs fixing - the prompt (misread), the rule
+    checker, a new kind of rule (unsupported), a better question (ambiguous) -
+    or mark it as nothing wrong."""
+    from app.models.school import RuleReadEvent
+
+    row = db.get(RuleReadEvent, event_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    row.triage = payload.triage
+    db.commit()
+    return {"id": row.id, "triage": row.triage}

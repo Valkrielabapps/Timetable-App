@@ -160,8 +160,15 @@ def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
         outer = tuple(d for d in form.scope if d not in form.exists_over)
         inner = tuple(d for d in form.scope if d in form.exists_over)
         found = []
+        all_days = set(index.orders_by_day)
         for _key, outer_group in _group(members, outer).items():
             satisfied, everything = False, []
+            # A day with nothing on it is a day too. Placements only form groups
+            # where lessons are, so "every teacher gets a day off" read the day
+            # off as missing and reported a rule the timetable keeps.
+            if inner == ("day",) and _holds(0, form.relation, form.value) \
+                    and all_days - {p.day_of_week for p in outer_group}:
+                continue
             for _inner_key, inner_group in _group(outer_group, inner).items():
                 actual, matching = _count_in(inner_group, resolved, form, side)
                 everything.extend(matching)

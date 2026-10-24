@@ -392,6 +392,34 @@ class Constraint(Base):
     school = relationship("School", back_populates="constraints")
 
 
+class RuleReadEvent(Base):
+    """One moment worth learning from in turning a sentence into a rule.
+
+    Written alongside the normal flow and never read by it: what the admin
+    typed, what the parser made of it, and what happened next (confirmed,
+    cancelled, reworded, deleted soon after, handed back unread). The Timetablz
+    admin page lists these so misreadings can be found and fixed - see
+    app/services/rule_events.py. Logging failing never affects the rule itself.
+    """
+    __tablename__ = "rule_read_events"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # interpreted | unclear | invalid | confirmed | cancelled | reworded |
+    # batch_unread | not_applied | quick_delete
+    kind = Column(String(32), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    # Whatever explains it: the parser's sentence or rule, its reason and
+    # question, the description that was deleted.
+    detail = Column(JSON, nullable=True)
+    constraint_id = Column(Integer, nullable=True)
+    # Set from the admin page once looked at, with the bucket it was put in:
+    # misread | checker | unsupported | ambiguous | fine.
+    triage = Column(String(16), nullable=True)
+
+
 class Timetable(Base):
     """A generated schedule (one solver run's output).
 
