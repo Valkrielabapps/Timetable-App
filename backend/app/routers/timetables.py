@@ -347,9 +347,12 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                     class_group_id=a["class_group_id"],
                     subject_id=a["subject_id"],
                     teacher_id=a["teacher_id"],
-                    # Not reserved for a lesson with no teacher yet, so not carried onto it.
+                    # A frozen lesson keeps its own. Otherwise the plan's current
+                    # assistant - but not for a lesson with no teacher yet,
+                    # which isn't reserved, so nothing is carried onto it.
                     assistant_teacher_id=(
-                        assistant_by_requirement.get((a["class_group_id"], a["subject_id"]))
+                        a.get("assistant_teacher_id") if a.get("frozen")
+                        else assistant_by_requirement.get((a["class_group_id"], a["subject_id"]))
                         if a["teacher_id"] is not None else None
                     ),
                     period_id=a["period_id"],
@@ -640,12 +643,25 @@ def _check_lesson_slot(db: Session, period_id: int, class_group_id: int) -> None
             )
 
 
+def _refuse_if_frozen(db: Session, class_group_id: int) -> None:
+    """A frozen section's timetable doesn't change - by drag, lock, swap or the
+    edit box - until it is unfrozen. See app/services/freezing.py."""
+    class_group = db.get(ClassGroup, class_group_id)
+    if class_group is not None and class_group.frozen:
+        name = f"{class_group.grade} {class_group.name}" if class_group.grade else class_group.name
+        raise HTTPException(
+            status_code=400,
+            detail=f"{name} is frozen. Unfreeze it to change its timetable.",
+        )
+
+
 def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:
     """The actual mutation behind PATCH /entries/{id} — factored out so
     POST /timetables/{id}/edit-command (conversational editing) performs
     the EXACT same conflict-checked update instead of a second copy of
     this logic. Callers are responsible for auth/status checks; this just
     validates the slot and applies the change."""
+    _refuse_if_frozen(db, entry.class_group_id)
     if "period_id" in data and entry.elective_block_id is not None \
             and data["period_id"] != entry.period_id:
         raise HTTPException(
@@ -729,6 +745,8 @@ def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry)
                 "run together. Move the whole block instead."
             ),
         )
+    _refuse_if_frozen(db, entry.class_group_id)
+    _refuse_if_frozen(db, other.class_group_id)
     both_ids = {entry.id, other.id}
     _check_lesson_slot(db, other.period_id, entry.class_group_id)
     _check_lesson_slot(db, entry.period_id, other.class_group_id)
@@ -797,6 +815,7 @@ def move_slot(
     would double-book, nothing moves.
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _refuse_if_frozen(db, payload.class_group_id)
     if payload.from_period_id == payload.to_period_id:
         raise HTTPException(status_code=400, detail="That's the same period.")
     for period_id in (payload.from_period_id, payload.to_period_id):
@@ -856,6 +875,7 @@ def lock_slot(
     unclear which teachers were meant to stay.
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _refuse_if_frozen(db, payload.class_group_id)
     entries = _slot_entries(db, timetable.id, payload.class_group_id, payload.period_id)
     if not entries:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")

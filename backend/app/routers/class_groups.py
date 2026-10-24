@@ -15,12 +15,15 @@ from app.schemas.class_group import (
     ClassGroupCreate,
     ClassGroupOut,
     ClassGroupUpdate,
+    FreezeRequest,
+    FrozenStatusOut,
     SubjectRequirementCreate,
     SubjectRequirementOut,
     SubjectRequirementUpdate,
 )
 from app.services.bulk_import import TEMPLATES, import_class_groups, parse_rows
 from app.services import plans
+from app.services.freezing import FreezeError, set_frozen, staleness
 
 router = APIRouter(prefix="/api/class-groups", tags=["class groups"])
 
@@ -40,6 +43,39 @@ def create_class_group(payload: ClassGroupCreate, db: Session = Depends(get_db),
 def list_class_groups(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_school_access(db, current_user, school_id)
     return db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+
+
+def _frozen_status(db: Session, school_id: int) -> list[FrozenStatusOut]:
+    sections = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+    stale = staleness(db, school_id, sections)
+    return [
+        FrozenStatusOut(class_group_id=cg.id, frozen=cg.frozen, frozen_at=cg.frozen_at,
+                        stale_reason=stale.get(cg.id))
+        for cg in sections
+    ]
+
+
+@router.get("/frozen-status", response_model=list[FrozenStatusOut])
+def frozen_status(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Which sections are frozen, and which of those no longer match what they
+    were built from. Separate from the section list so the timetable can ask
+    for it fresh - a plan edited on another page makes a section out of date."""
+    require_school_access(db, current_user, school_id)
+    return _frozen_status(db, school_id)
+
+
+@router.post("/freeze", response_model=list[FrozenStatusOut])
+def freeze_sections(payload: FreezeRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Freeze or unfreeze sections - one, or a whole grade's worth at once.
+    Returns every section's status, since freezing a grade changes several."""
+    require_school_access(db, current_user, payload.school_id, min_role="admin")
+    try:
+        set_frozen(db, payload.school_id, payload.class_group_ids, payload.frozen)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Section not found") from None
+    except FreezeError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return _frozen_status(db, payload.school_id)
 
 
 @router.get("/requirements", response_model=list[SubjectRequirementOut])

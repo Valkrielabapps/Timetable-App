@@ -58,5 +58,8 @@ export const keys = {
   timetable: (timetableId) => ['timetable', timetableId],
   requirements: (schoolId) => ['requirements', schoolId],
   electiveBlocks: (schoolId) => ['electiveBlocks', schoolId],
+  // Per timetable too: a new timetable can change whether a frozen section
+  // still matches what it was frozen with.
+  frozenStatus: (schoolId, timetableId) => ['frozenStatus', schoolId, timetableId],
   entitlements: (schoolId) => ['entitlements', schoolId],
 }

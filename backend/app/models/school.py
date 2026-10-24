@@ -8,7 +8,7 @@ schema assuming a fixed structure.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, func
+    Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, false, func
 )
 from sqlalchemy.orm import relationship
 
@@ -256,6 +256,16 @@ class ClassGroup(Base):
     class_teacher_id = Column(
         Integer, ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # A frozen section keeps its timetable exactly as it is through every later
+    # generation: its lessons are copied forward as fixed facts and the solver
+    # schedules everyone else around them. See generate_school_timetable.
+    frozen = Column(Boolean, nullable=False, default=False, server_default=false())
+    frozen_at = Column(DateTime, nullable=True)
+    # What the section's plan and timetable looked like when it was frozen, so
+    # a later change - a subject's periods, a block, a lesson lost to a
+    # structure change - can be pointed out instead of silently ignored.
+    frozen_signature = Column(String, nullable=True)
+    frozen_lessons = Column(Integer, nullable=True)
 
     school = relationship("School", back_populates="class_groups")
     requirements = relationship(

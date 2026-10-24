@@ -263,3 +263,35 @@ export function useElectiveBlockMutations(schoolId) {
     invalidate,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Frozen sections
+// ---------------------------------------------------------------------------
+
+/**
+ * Which sections are frozen, and which of those no longer match what they
+ * were frozen with. Always re-read when the Timetable tab opens: a plan
+ * edited on another page is what makes a frozen section out of date, and the
+ * warning is only useful if it is current.
+ */
+export function useFrozenStatus(schoolId, timetableId) {
+  return useQuery({
+    queryKey: keys.frozenStatus(schoolId, timetableId),
+    queryFn: () => api.getFrozenStatus(schoolId),
+    enabled: schoolId != null,
+    staleTime: 0,
+  })
+}
+
+/** Freeze or unfreeze sections; the response is every section's new status. */
+export function useSetFrozen(schoolId, timetableId) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: ({ ids, frozen }) => api.setFrozen(schoolId, ids, frozen),
+    onSuccess: (statuses) => queryClient.setQueryData(keys.frozenStatus(schoolId, timetableId), statuses),
+  })
+  return {
+    setFrozen: (ids, frozen) => mutation.mutateAsync({ ids, frozen }),
+    isSaving: mutation.isPending,
+  }
+}

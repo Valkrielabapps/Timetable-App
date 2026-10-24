@@ -5,6 +5,8 @@ import ScheduleGrid from './ScheduleGrid.jsx'
 import {
   useApplyEntryUpdates,
   useElectiveBlocks,
+  useFrozenStatus,
+  useSetFrozen,
   useOptimisticSlotMove,
   useGenerateTimetable,
   useTimetable,
@@ -196,6 +198,22 @@ export default function TimetableTab({
   const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
   const subjectName = (id) => subjects.find((s) => s.id === id)?.name ?? '?'
 
+  // Frozen sections keep their timetable through every later generation -
+  // see backend/app/services/freezing.py. Keyed by the timetable on screen so
+  // a new one re-checks whether each still matches what it was frozen with.
+  const { data: frozenList = [] } = useFrozenStatus(schoolId, timetable?.id)
+  const frozenById = new Map(frozenList.filter((f) => f.frozen).map((f) => [f.class_group_id, f]))
+  const { setFrozen, isSaving: freezing } = useSetFrozen(schoolId, timetable?.id)
+
+  async function handleFreeze(ids, frozen) {
+    setError(null)
+    try {
+      await setFrozen(ids, frozen)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function handleGenerate() {
     setError(null)
     try {
@@ -263,6 +281,10 @@ export default function TimetableTab({
     if (kindOf(targetPeriod) !== 'lesson') {
       const what = { class_teacher: 'the class teacher period', zero: 'the zero period' }[kindOf(targetPeriod)]
       setError(`Nothing can be scheduled in ${what ?? 'a break'}.`)
+      return
+    }
+    if (frozenById.has(classGroupId)) {
+      setError('This section is frozen. Unfreeze it to change its timetable.')
       return
     }
     const section = classGroups.find((cg) => cg.id === classGroupId)
@@ -797,10 +819,25 @@ export default function TimetableTab({
             // which is how a timetable is read on paper and how it gets
             // checked against itself.
             <div className="flex flex-col gap-8">
-              {sections.map((cg) => (
+              <FrozenSummary sections={sections} frozenById={frozenById} />
+              {sections.map((cg, i) => (
+                <div key={cg.id} className="flex flex-col gap-3">
+                {cg.grade && cg.grade !== sections[i - 1]?.grade && (
+                  <GradeFreezeRow
+                    grade={cg.grade}
+                    sections={sections.filter((s) => s.grade === cg.grade)}
+                    frozenById={frozenById}
+                    canFreeze={!readOnly}
+                    busy={freezing}
+                    onFreeze={handleFreeze}
+                  />
+                )}
                 <SectionTimetable
-                  key={cg.id}
                   classGroup={cg}
+                  frozen={frozenById.get(cg.id) ?? null}
+                  canFreeze={!readOnly}
+                  freezing={freezing}
+                  onToggleFreeze={() => handleFreeze([cg.id], !frozenById.has(cg.id))}
                   timetableId={timetable.id}
                   watermark={watermark}
                   combinations={combinationsFor(electiveBlocks, cg.id, subjectName)}
@@ -819,6 +856,7 @@ export default function TimetableTab({
                   rowLabel={rowLabel}
                   specialCell={(d, o) => sectionSpecial(d, o, cg)}
                 />
+                </div>
               ))}
             </div>
           ) : (
@@ -872,8 +910,69 @@ export default function TimetableTab({
  * block, which is not what dragging the one subject on screen looks like it
  * should do.
  */
+/**
+ * What generating will and won't change, said once above the sections.
+ * Whole grades are named as grades, so "Grades 11-12 frozen" reads at a
+ * glance instead of a list of every section in them.
+ */
+function FrozenSummary({ sections, frozenById }) {
+  const frozen = sections.filter((cg) => frozenById.has(cg.id))
+  if (frozen.length === 0) return null
+  const names = []
+  const seen = new Set()
+  for (const cg of frozen) {
+    if (cg.grade && !seen.has(cg.grade)) {
+      const grade = sections.filter((s) => s.grade === cg.grade)
+      if (grade.every((s) => frozenById.has(s.id))) {
+        names.push(cg.grade)
+        seen.add(cg.grade)
+        continue
+      }
+    }
+    if (!cg.grade || !seen.has(cg.grade)) names.push(cg.grade ? `${cg.grade} · ${cg.name}` : cg.name)
+  }
+  const others = sections.length - frozen.length
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+      <span aria-hidden="true">❄</span>
+      <span>
+        Frozen: {names.join(', ')} ({frozen.length} section{frozen.length === 1 ? '' : 's'}). Generating keeps{' '}
+        {frozen.length === 1 ? 'it' : 'them'} exactly as {frozen.length === 1 ? 'it is' : 'they are'}
+        {others > 0
+          ? ` and only changes the other ${others}.`
+          : ' - every section is frozen, so nothing will change.'}
+      </span>
+    </div>
+  )
+}
+
+/** A grade's heading, with freezing or unfreezing all of its sections at once. */
+function GradeFreezeRow({ grade, sections, frozenById, canFreeze, busy, onFreeze }) {
+  const allFrozen = sections.every((s) => frozenById.has(s.id))
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
+      <h3 className="text-sm font-semibold text-slate-800">{grade}</h3>
+      {canFreeze && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onFreeze(sections.map((s) => s.id), !allFrozen)}
+          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {allFrozen ? `Unfreeze all of ${grade}` : `Freeze all of ${grade}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function SectionTimetable({
   classGroup,
+  // { frozen_at, stale_reason } when frozen, null otherwise.
+  frozen = null,
+  canFreeze = false,
+  freezing = false,
+  onToggleFreeze,
   timetableId,
   // [] - no blocks, the same for everyone; null - too many to list.
   combinations,
@@ -911,18 +1010,41 @@ function SectionTimetable({
   return (
     <section
       id={sectionAnchorId(classGroup.id)}
+      aria-label={label}
       // Clears the sticky header when the sidebar scrolls here.
-      className="flex scroll-mt-6 flex-col gap-2"
+      className={`flex scroll-mt-6 flex-col gap-2 ${
+        frozen ? 'rounded-md bg-sky-50/50 p-2 ring-1 ring-sky-200' : ''
+      }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-medium text-slate-700">
           {label}
+          {frozen && (
+            <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-900">
+              ❄ Frozen
+            </span>
+          )}
           {violationCount > 0 && (
             <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-900">
               {violationCount} slot{violationCount === 1 ? '' : 's'} breaking a rule
             </span>
           )}
         </h4>
+        {canFreeze && (
+          <button
+            type="button"
+            disabled={freezing}
+            onClick={onToggleFreeze}
+            title={
+              frozen
+                ? 'Let the next Generate change this section again'
+                : 'Keep this section exactly as it is when generating again'
+            }
+            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {frozen ? 'Unfreeze' : 'Freeze'}
+          </button>
+        )}
         {combinations === null && (
           <span className="text-xs text-slate-400">
             This section's blocks allow more than {MAX_COMBINATIONS} subject combinations. Check
@@ -965,12 +1087,18 @@ function SectionTimetable({
           </div>
         )}
       </div>
+      {frozen?.stale_reason && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
+          {frozen.stale_reason}
+        </p>
+      )}
       <ScheduleGrid
         {...gridProps}
         entriesAt={
           combination ? (d, o) => entriesAt(d, o).filter((e) => keeps(combination, e)) : entriesAt
         }
-        editable={editable && !combination}
+        // Frozen means nothing moves it - not a drag, not a lock.
+        editable={editable && !combination && !frozen}
         secondaryLine={(e) => e.teacher_name ?? 'No teacher yet'}
         showAssistant
         showBlockName={!combination}

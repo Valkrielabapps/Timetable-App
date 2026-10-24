@@ -37,6 +37,7 @@ from app.models.school import (
     SubjectRequirement,
     Teacher,
     Timetable,
+    TimetableEntry,
     ZeroPeriod,
 )
 
@@ -597,6 +598,27 @@ def _block_atoms(block_occ, option_x, option_reqs, periods_by_id) -> list[Atom]:
     return atoms
 
 
+def _frozen_assignment(e: "TimetableEntry") -> dict:
+    """A frozen lesson in the shape the solver hands back, carrying everything
+    the entry had - the assistant included, since it is kept as it was rather
+    than re-derived from the plan."""
+    return {
+        "class_group_id": e.class_group_id,
+        "subject_id": e.subject_id,
+        "teacher_id": e.teacher_id,
+        "period_id": e.period_id,
+        "batch": e.lab_batch,
+        "elective_block_id": e.elective_block_id,
+        "assistant_teacher_id": e.assistant_teacher_id,
+        "room_id": e.room_id,
+        "frozen": True,
+    }
+
+
+def _assignment_key(a: dict) -> tuple[int, int, int, int]:
+    return (a["class_group_id"], a["subject_id"], a["teacher_id"], a["period_id"])
+
+
 def _class_group_labels(class_groups: list[ClassGroup]) -> dict[str, list[int]]:
     """Label -> the class groups it names, for resolving an IR rule's names.
 
@@ -891,9 +913,67 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     teaching_runs = _runs_by_day(all_periods)
 
     class_groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+
+    # The timetable on screen: where locked slots are read from, and where a
+    # frozen section's lessons are copied from. Only the most recent "draft"
+    # counts - older ones are history, not the current schedule.
+    previous_timetable = (
+        db.query(Timetable)
+        .filter(Timetable.school_id == school_id, Timetable.status == "draft")
+        .order_by(Timetable.id.desc())
+        .first()
+    )
+
+    # ------------------------------------------------------------------
+    # Frozen sections
+    # ------------------------------------------------------------------
+    # A frozen section is not solved at all. Its lessons in the timetable on
+    # screen are copied forward unchanged and enter the model as fixed facts:
+    # its teachers are busy then, its rooms are taken, and every rule that
+    # counts a teacher's day or week still counts them. The other sections
+    # are placed around it. See app/services/freezing.py.
+    #
+    # A lesson that can no longer be kept as it was - its period is gone, or
+    # is no longer a lesson slot, or its teacher has left - is dropped with a
+    # warning rather than moved: moving it is what freezing promised not to do.
+    frozen_warnings: list[str] = []
+    frozen_entries: list[TimetableEntry] = []
+    frozen_ids = {cg.id for cg in class_groups if cg.frozen}
+    if frozen_ids:
+        lesson_period_ids = {p.id for p in periods}
+        teacher_ids = {tid for (tid,) in db.query(Teacher.id).filter(Teacher.school_id == school_id)}
+        dropped: dict[int, int] = {}
+        for e in (previous_timetable.entries if previous_timetable else []):
+            if e.class_group_id not in frozen_ids:
+                continue
+            # No teacher yet is a lesson that can be kept as it is; a
+            # teacher who has since left is not.
+            if e.period_id not in lesson_period_ids or (
+                e.teacher_id is not None and e.teacher_id not in teacher_ids
+            ):
+                dropped[e.class_group_id] = dropped.get(e.class_group_id, 0) + 1
+                continue
+            frozen_entries.append(e)
+        kept = {e.class_group_id for e in frozen_entries}
+        for cg in class_groups:
+            if cg.id in frozen_ids and cg.id not in kept:
+                frozen_warnings.append(
+                    f"{_class_group_label(cg)} is frozen, but the current timetable has no lessons "
+                    f"for it, so it was generated afresh."
+                )
+            elif cg.id in dropped:
+                n = dropped[cg.id]
+                frozen_warnings.append(
+                    f"{n} of {_class_group_label(cg)}'s frozen lesson{'' if n == 1 else 's'} "
+                    f"{'was' if n == 1 else 'were'} in a period or with a teacher that no longer "
+                    f"exists, and {'was' if n == 1 else 'were'} left out."
+                )
+        frozen_ids = kept
+
     requirements: list[SubjectRequirement] = []
     for cg in class_groups:
-        requirements.extend(cg.requirements)
+        if cg.id not in frozen_ids:
+            requirements.extend(cg.requirements)
 
     # Elective blocks (see ElectiveBlock): subjects a section studies at the
     # same time, each student taking one. Each option is wrapped to look like
@@ -903,7 +983,9 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # needing a block-aware copy. What makes a block a block is handled in its
     # own section further down: one shared "does the block meet here"
     # variable per period, which every option's teacher choice is tied to.
-    all_blocks: list[ElectiveBlock] = [b for cg in class_groups for b in cg.elective_blocks]
+    all_blocks: list[ElectiveBlock] = [
+        b for cg in class_groups if cg.id not in frozen_ids for b in cg.elective_blocks
+    ]
     blocks = [b for b in all_blocks if b.options]
     option_reqs: list[_OptionReq] = [
         _OptionReq(
@@ -915,6 +997,15 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     ]
 
     if not requirements and not blocks:
+        if frozen_entries:
+            # Every section with anything to place is frozen: the timetable is
+            # the frozen one, unchanged.
+            assignments = [_frozen_assignment(e) for e in frozen_entries]
+            return TimetableSolveResult(
+                status="optimal", assignments=assignments,
+                locked_keys={_assignment_key(a) for a, e in zip(assignments, frozen_entries) if e.locked},
+                warnings=frozen_warnings,
+            )
         return TimetableSolveResult(
             status="no_requirements",
             errors=["No class group has any subject requirements yet. Add at least one before generating."],
@@ -1028,7 +1119,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
 
     errors = []
     # Rules that could not be applied — see TimetableSolveResult.warnings.
-    warnings: list[str] = []
+    warnings: list[str] = list(frozen_warnings)
     model = cp_model.CpModel()
 
     # x[(requirement_id, teacher_id, period_id)] = this requirement's
@@ -1211,12 +1302,6 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # it. Only the most recent "draft" timetable's locks are read — older
     # ones are history, not the current schedule. Read before the blocks are
     # built, because a locked block slot changes which variables a block gets.
-    previous_timetable = (
-        db.query(Timetable)
-        .filter(Timetable.school_id == school_id, Timetable.status == "draft")
-        .order_by(Timetable.id.desc())
-        .first()
-    )
     locked_keys: set[tuple[int, int, int, int]] = set()
     locked_rooms: dict[tuple[int, int, int, int], int | None] = {}
 
@@ -1510,6 +1595,59 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
             if occ is not None:
                 penalties.append(weight * occ)
 
+    # Frozen lessons as fixed facts: a variable pinned to 1 in the same lists a
+    # solved lesson's variable would go in, so "no teacher double-booked",
+    # "at most N a week", a teacher's back-to-back limits and every rule all
+    # see them without a frozen-aware copy of each. The section's slot is one
+    # variable shared by everything in it - a block's options or a lab's
+    # batches are one period of the section - and each teacher has their own.
+    frozen_atoms: list[Atom] = []
+    frozen_slot_vars: dict[tuple[int, int], cp_model.IntVar] = {}
+    frozen_load: dict[int, int] = {}
+    for e in frozen_entries:
+        period = periods_by_id[e.period_id]
+        fixed = model.NewBoolVar(f"frozen_e{e.id}")
+        model.Add(fixed == 1)
+        busy = [e.teacher_id] if e.teacher_id is not None else []
+        if e.assistant_teacher_id and e.assistant_teacher_id != e.teacher_id \
+                and e.assistant_teacher_id in teachers_by_id:
+            busy.append(e.assistant_teacher_id)
+        for teacher_id in busy:
+            teacher_period_vars.setdefault((teacher_id, e.period_id), []).append(fixed)
+            teacher_total_vars.setdefault(teacher_id, []).append(fixed)
+            frozen_load[teacher_id] = frozen_load.get(teacher_id, 0) + 1
+        slot = frozen_slot_vars.get((e.class_group_id, e.period_id))
+        if slot is None:
+            slot = model.NewBoolVar(f"frozen_slot_cg{e.class_group_id}_p{e.period_id}")
+            model.Add(slot == 1)
+            frozen_slot_vars[(e.class_group_id, e.period_id)] = slot
+        tag = -(10**9 + e.id)  # names only - see Atom.requirement_id
+        frozen_atoms.append(Atom(
+            var=slot, requirement_id=tag, class_group_id=e.class_group_id, subject_id=e.subject_id,
+            teacher_id=None, period_id=e.period_id, day_of_week=period.day_of_week,
+            order=period.order, occupies_class=True, occupies_teacher=False,
+        ))
+        if e.teacher_id is not None:
+            frozen_atoms.append(Atom(
+                var=fixed, requirement_id=tag, class_group_id=e.class_group_id, subject_id=e.subject_id,
+                teacher_id=e.teacher_id, period_id=e.period_id, day_of_week=period.day_of_week,
+                order=period.order, occupies_class=False, occupies_teacher=True,
+            ))
+    # Said plainly rather than left to the general diagnosis: frozen lessons
+    # can't move, so a teacher they already overload can't be fixed by
+    # anything except unfreezing or changing the limit.
+    for teacher_id, load in frozen_load.items():
+        teacher = teachers_by_id.get(teacher_id)
+        if teacher is not None and teacher.max_periods_per_week is not None \
+                and load > teacher.max_periods_per_week:
+            errors.append(
+                f"{teacher.name}'s lessons in frozen sections alone come to {load} periods a week, "
+                f"over their limit of {teacher.max_periods_per_week}. Unfreeze one of those sections "
+                f"or raise the limit."
+            )
+    if errors:
+        return TimetableSolveResult(status="infeasible", errors=errors, warnings=warnings)
+
     # Each requirement must be met exactly (periods_per_week times).
     for req in requirements:
         model.Add(sum(requirement_vars[req.id]) == req.periods_per_week)
@@ -1744,6 +1882,7 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     if ir_constraints or adversary is not None:
         atoms = _ir_atoms(x, batch_x, batch_occ, requirements_by_id, periods_by_id, no_teacher)
         atoms.extend(_block_atoms(block_occ, option_x, option_reqs, periods_by_id))
+        atoms.extend(frozen_atoms)
         index = SchoolIndex(
             subject_ids={s.name: s.id for s in subjects_by_id.values()},
             teacher_ids={t.name: t.id for t in teachers},
@@ -1914,6 +2053,13 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                         "class_group_id": o.class_group_id, "subject_id": o.subject_id,
                         "teacher_id": None, "period_id": period_id, "elective_block_id": block_id,
                     })
+        # Frozen lessons go out exactly as they came in, room and lock included.
+        for e in frozen_entries:
+            a = _frozen_assignment(e)
+            assignments.append(a)
+            locked_rooms[_assignment_key(a)] = e.room_id
+            if e.locked:
+                locked_keys.add(_assignment_key(a))
         _assign_rooms(db, school_id, assignments, locked_rooms=locked_rooms)
 
     if status_name in ("infeasible", "unknown"):
@@ -1943,6 +2089,16 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
                 db, school_id, requirements, teachers, teachers_by_id, periods,
                 periods_by_day, teaching_runs, first_period_ids, last_period_ids,
                 period_ids_by_day, class_groups_by_id, subjects_by_id, class_groups,
+            )
+        if frozen_entries:
+            # The diagnosis above looks only at what was being placed. Frozen
+            # lessons are fixed underneath it, and are often the real reason a
+            # teacher has no room left - which only unfreezing can change.
+            n = len({e.class_group_id for e in frozen_entries})
+            errors.append(
+                f"{n} frozen section{'' if n == 1 else 's'} kept {'its' if n == 1 else 'their'} "
+                f"lessons where they were. If a teacher they share with the rest is what's out of "
+                f"room, unfreezing {'it' if n == 1 else 'one'} lets those lessons move."
             )
 
     return TimetableSolveResult(

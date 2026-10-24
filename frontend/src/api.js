@@ -239,6 +239,11 @@ export const api = {
   listClassGroups: (schoolId) => get(`/class-groups?school_id=${schoolId}`),
   createClassGroup: (data) => post("/class-groups", data),
   updateClassGroup: (id, data) => put(`/class-groups/${id}`, data),
+  // Frozen sections keep their timetable through later generations - see
+  // backend/app/services/freezing.py. Both return every section's status.
+  getFrozenStatus: (schoolId) => get(`/class-groups/frozen-status?school_id=${schoolId}`),
+  setFrozen: (schoolId, classGroupIds, frozen) =>
+    post("/class-groups/freeze", { school_id: schoolId, class_group_ids: classGroupIds, frozen }),
   deleteClassGroup: (id) => del(`/class-groups/${id}`),
 
   // Subject requirements (nested under class groups)

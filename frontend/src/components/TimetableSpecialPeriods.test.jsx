@@ -14,6 +14,8 @@ vi.mock('../hooks/useSchoolData', () => ({
   useGenerateTimetable: () => ({ generate: vi.fn(), isGenerating: false }),
   useApplyEntryUpdates: () => vi.fn(),
   useOptimisticSlotMove: () => vi.fn(() => vi.fn()),
+  useFrozenStatus: () => ({ data: [] }),
+  useSetFrozen: () => ({ setFrozen: vi.fn(), isSaving: false }),
   useElectiveBlocks: () => ({ data: [] }),
 }))
 
