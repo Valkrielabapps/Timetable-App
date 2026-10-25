@@ -50,7 +50,7 @@ _SPELLINGS = {
 # WhatsApp messages; the model usually knows them, but "baad" vs "pehle" is the
 # whole rule, so it is spelled out rather than left to chance.
 _HINGLISH = {
-    "baad": "after", "bad": None, "pehle": "before", "pahle": "before", "sirf": "only", "bas": None,
+    "baad": "after", "turant": "immediately", "fauran": "immediately", "lagatar": "back to back", "bad": None, "pehle": "before", "pahle": "before", "sirf": "only", "bas": None,
     "mat": "don't", "nahi": "not", "nahin": "not", "na": None, "zyada": "more", "jyada": "more",
     "kam": "fewer", "kabhi": "ever", "hamesha": "always", "roz": "every day", "rozana": "every day",
     "din": "day", "hafte": "week", "hafta": "week", "ek": "one", "do": None, "teen": "three", "char": "four",
@@ -61,7 +61,7 @@ _HINGLISH = {
 }
 
 # Hinglish words that are never English, so they are glossed even alone.
-_HINGLISH_SURE = {"baad", "pehle", "pahle", "sirf", "nahi", "nahin", "zyada", "jyada", "kabhi", "hamesha",
+_HINGLISH_SURE = {"turant", "lagatar", "baad", "pehle", "pahle", "sirf", "nahi", "nahin", "zyada", "jyada", "kabhi", "hamesha",
                   "rozana", "hafte", "chahiye", "somvar", "mangalvar", "budhvar", "guruvar", "brihaspativar",
                   "shukravar", "shanivar", "ravivar"}
 

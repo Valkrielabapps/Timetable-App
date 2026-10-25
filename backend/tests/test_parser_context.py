@@ -238,3 +238,30 @@ def test_misspelt_subjects_and_hinglish_words_get_hints():
     h = sentence_hints("libry sirf period 6 me hi allowed", TEACHERS, SUBJECTS + ["Library"], LABELS)
     assert "'libry' = Library" in h and "'sirf' = only" in h
     assert sentence_hints("do not put art on monday", TEACHERS, SUBJECTS, LABELS) == []
+
+
+def test_free_named_periods_are_the_banned_ones():
+    backwards = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Coach Biju"],
+                                                                    "period_orders": [3, 4, 5, 6]},
+                         "relation": "==", "value": 0})
+    fixed = P._sanity(backwards, "Coach Biju will be free during period 1 and period 2 all days only.", LUNCH_WEEK)
+    assert fixed.rule.form.selector.period_orders == (1, 2)
+
+
+def test_a_per_day_cap_read_as_back_to_back_becomes_a_count():
+    run = _parsed({"form": "run", "scope": ["class_group"], "selector": {"subjects": ["English"]}, "max_consecutive": 1})
+    fixed = P._sanity(run, "no class can have more than one english period in a single day", LUNCH_WEEK)
+    f = fixed.rule.form
+    assert f.relation == "<=" and f.value == 1 and "day" in f.scope
+    # Genuinely back-to-back sentences keep their run rule.
+    assert P._sanity(run, "no more than one english period in a row", LUNCH_WEEK) is run
+
+
+def test_a_negated_right_after_is_a_ban_not_a_requirement():
+    follow = _parsed({"form": "adjacency", "scope": ["class_group"], "first": {"subjects": ["Hindi"]},
+                      "second": {"subjects": ["English"]}, "must_follow": True})
+    for text in ("English ko Hindi ke turant baad schedule mat karna",
+                 "English must not come right after Hindi"):
+        f = P._sanity(follow, text, LUNCH_WEEK).rule.form
+        assert not f.must_follow and f.directional
+    assert P._sanity(follow, "Physics practical must come right after Physics theory", LUNCH_WEEK) is follow

@@ -1323,6 +1323,8 @@ def _periods_named(text: str) -> set[int]:
     if not out:
         for n in re.findall(r"\b(\d)(?:st|nd|rd|th)\b(?=[^.]*\bperiod)", low):
             out.add(int(n))
+        for n in re.findall(r"\b(?:period|p)\s*(\d{1,2})\b", low):
+            out.add(int(n))
     return out
 
 
@@ -1415,7 +1417,18 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
         if form is not rule.form:
             rule = _replace(rule, form=form)
 
-        # 6. A ban on every period of the day is never meant - it makes the
+        # 6. "free during period 1 and 2 only": the named periods are the ones
+        #    the teacher must NOT teach. Read backwards in the rewrite run, as
+        #    a ban on everything else.
+        f = rule.form
+        if isinstance(f, Count) and _AWAY_WORDS.search(text) and f.relation in ("==", "<=") and f.value == 0 \
+                and f.selector.period_orders and numbers:
+            named = _periods_named(text)
+            if named and named < set(numbers) and set(f.selector.period_orders) == set(numbers) - named:
+                rule = _replace(rule, form=_replace(f, selector=_replace(f.selector, period_orders=tuple(sorted(named)))))
+                changed = True
+
+        # 7. A ban on every period of the day is never meant - it makes the
         #    subject or teacher impossible to timetable. Seen when a long message
         #    listed the periods NOT allowed alongside the one that was ("Not
         #    period 5, not period 7, just period 6"). Ask instead.
@@ -1429,9 +1442,41 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
                 question="Which periods should it be allowed in?",
             ))
 
+    # 8. "no more than one English period in a single day" read as "no two
+    #    back to back". The sentence counts a day; a run rule doesn't.
+    from app.services.constraint_ir import Adjacency, Run
+    f = rule.form
+    m = _PER_DAY_CAP.search(text)
+    if isinstance(f, Run) and f.max_consecutive and not f.block_size and m \
+            and not re.search(r"in a row|back[\s-]*to[\s-]*back|consecutive|continuous|straight|together", text, re.IGNORECASE):
+        n = _NUMBER_WORDS.get(m.group(1).lower()) or (int(m.group(1)) if m.group(1).isdigit() else None)
+        if n == f.max_consecutive:
+            scope = tuple(dict.fromkeys([*(d for d in f.scope if d != "subject"), "day"]))
+            rule = _replace(rule, form=Count(scope=scope, selector=f.selector, relation="<=", value=n))
+            changed = True
+
+    # 9. "English ko Hindi ke turant baad mat karna" / "English must not come
+    #    right after Hindi" read as REQUIRING it to follow. A negation before
+    #    the "after" makes it a ban.
+    f = rule.form
+    if isinstance(f, Adjacency) and f.must_follow:
+        after = re.search(r"\bafter\b|\bbaad\b|\bfollow", text, re.IGNORECASE)
+        neg = re.search(r"\bnot\b|\bnever\b|n't\b|\bmat\b|\bnahi\b|\bnahin\b|\bna\b|\bavoid", text, re.IGNORECASE)
+        neg_after = re.search(r"\bmat\b|\bnahi\b|\bnahin\b", text[after.end():], re.IGNORECASE) if after else None
+        if after and ((neg and neg.start() < after.start()) or neg_after):
+            rule = _replace(rule, form=_replace(f, must_follow=False, directional=True, min_gap=1))
+            changed = True
+
     if not changed:
         return result
     return IRParse(rule=rule, sentence=render(rule), usage=result.usage)
+
+
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "once": 1, "twice": 2, "ek": 1, "do": 2}
+_PER_DAY_CAP = re.compile(
+    r"(?:more than|max(?:imum)?(?: of)?|at most|not more than|upto|up to)\s+(\w+)\s+[\w ]{0,30}?"
+    r"(?:in a (?:single )?day|per day|a day|each day|in one day|on any (?:given )?day|daily)",
+    re.IGNORECASE)
 
 
 def _read_block(block, text: str, usage) -> "IRParse":
