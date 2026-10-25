@@ -197,3 +197,44 @@ def test_a_same_subject_run_is_grouped_by_subject_without_a_retry():
         input = {"form": "run", "scope": ["class_group"], "selector": {}, "max_consecutive": 1}
     out = P._read_block(Block(), "No section should have the same subject twice in a row", None)
     assert out.invalid is None and "subject" in out.rule.form.scope
+
+
+# --- from the paraphrase run ----------------------------------------------
+
+def test_a_free_only_ban_is_not_flipped():
+    """'free during period 1 and 2 only' bans exactly periods 1 and 2."""
+    right = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Coach Biju"], "period_orders": [1, 2]},
+                     "relation": "==", "value": 0})
+    assert P._sanity(right, "Coach Biju will be free during period 1 and period 2 all days only.", LUNCH_WEEK) is right
+
+
+def test_restricted_to_days_counts_as_only():
+    wrong = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Mr. Nair"], "days": [0, 2, 4, 5]},
+                     "relation": "==", "value": 0})
+    fixed = P._sanity(wrong, "Mr. Nair's teaching schedule is restricted to Tuesday, Thursday, and Saturday.", LUNCH_WEEK)
+    assert fixed.rule.form.selector.days == (0, 2, 4)
+
+
+def test_days_off_named_with_only_are_not_flipped():
+    right = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Mr. Nair"], "days": [4]},
+                     "relation": "==", "value": 0})
+    assert P._sanity(right, "Mr. Nair is off only on Fridays", LUNCH_WEEK) is right
+
+
+def test_a_ban_on_every_period_becomes_a_question():
+    out = P._sanity(_parsed({"form": "count", "scope": [], "selector": {"subjects": ["Library"],
+                                                                        "period_orders": [1, 2, 3, 4, 5, 6]},
+                             "relation": "==", "value": 0}), "library just period 6, not period 5", LUNCH_WEEK)
+    assert out.rule is None and out.unclear is not None
+
+
+def test_hinglish_after_lunch_means_every_period_after_it():
+    narrow = _parsed({"form": "count", "scope": [], "selector": {"subjects": ["PE"], "period_orders": [5]},
+                      "relation": "==", "value": 0})
+    assert P._sanity(narrow, "pt class ko lunch ke baad mat rakho", LUNCH_WEEK).rule.form.selector.period_orders == (5, 6)
+
+
+def test_misspelt_subjects_and_hinglish_words_get_hints():
+    h = sentence_hints("libry sirf period 6 me hi allowed", TEACHERS, SUBJECTS + ["Library"], LABELS)
+    assert "'libry' = Library" in h and "'sirf' = only" in h
+    assert sentence_hints("do not put art on monday", TEACHERS, SUBJECTS, LABELS) == []

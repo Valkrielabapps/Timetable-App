@@ -46,6 +46,25 @@ _SPELLINGS = {
     "perod": "period", "periods": None, "practicle": "practical", "libary": "library",
 }
 
+# Hinglish words that carry the rule's meaning. Common in North Indian schools'
+# WhatsApp messages; the model usually knows them, but "baad" vs "pehle" is the
+# whole rule, so it is spelled out rather than left to chance.
+_HINGLISH = {
+    "baad": "after", "bad": None, "pehle": "before", "pahle": "before", "sirf": "only", "bas": None,
+    "mat": "don't", "nahi": "not", "nahin": "not", "na": None, "zyada": "more", "jyada": "more",
+    "kam": "fewer", "kabhi": "ever", "hamesha": "always", "roz": "every day", "rozana": "every day",
+    "din": "day", "hafte": "week", "hafta": "week", "ek": "one", "do": None, "teen": "three", "char": "four",
+    "somvar": "Monday", "mangalvar": "Tuesday", "budhvar": "Wednesday", "guruvar": "Thursday",
+    "brihaspativar": "Thursday", "shukravar": "Friday", "shanivar": "Saturday", "ravivar": "Sunday",
+    "ke": None, "ko": None, "mein": "in", "chahiye": "should", "dena": "give", "rakho": "put",
+    "lagao": "schedule", "jana": "leave", "jaana": "leave", "aana": "come", "ata": "come", "aata": "come",
+}
+
+# Hinglish words that are never English, so they are glossed even alone.
+_HINGLISH_SURE = {"baad", "pehle", "pahle", "sirf", "nahi", "nahin", "zyada", "jyada", "kabhi", "hamesha",
+                  "rozana", "hafte", "chahiye", "somvar", "mangalvar", "budhvar", "guruvar", "brihaspativar",
+                  "shukravar", "shanivar", "ravivar"}
+
 _ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
           "xi": 11, "xii": 12}
 
@@ -166,11 +185,42 @@ def _subject_hints(text: str, subject_names: list[str]) -> list[str]:
 
 def _spelling_hints(text: str) -> list[str]:
     found = []
-    for word in re.findall(r"[a-z0-9']+", text.lower()):
-        meaning = _SPELLINGS.get(word)
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    # Hinglish only when the sentence is clearly in it, so "do" and "bad" in an
+    # English sentence aren't translated.
+    hinglish = sum(w in _HINGLISH for w in words) >= 2
+    for word in words:
+        meaning = _SPELLINGS.get(word) or (_HINGLISH.get(word) if hinglish or word in _HINGLISH_SURE else None)
         if meaning and f"'{word}' = {meaning}" not in found:
             found.append(f"'{word}' = {meaning}")
     return found
+
+
+def _misspelt_subject_hints(text: str, subject_names: list[str]) -> list[str]:
+    """'libry' = Library, 'chemestry' = Chemistry: one or two letters off a
+    subject the school has, and not a near-miss of anything else."""
+    out = []
+    singles = {s.lower(): s for s in subject_names if " " not in s}
+    for word in set(re.findall(r"[a-z]+", text.lower())):
+        if len(word) < 5 or word in singles:
+            continue
+        close = [s for low, s in singles.items() if len(low) >= 5 and _edits(word, low) <= (1 if len(low) < 7 else 2)]
+        if len(close) == 1:
+            out.append(f"'{word}' = {close[0]}")
+    return out
+
+
+def _edits(a: str, b: str) -> int:
+    """Levenshtein distance, early-out above 2."""
+    if abs(len(a) - len(b)) > 2:
+        return 3
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
 
 
 def sentence_hints(text: str, teacher_names: list[str], subject_names: list[str],
@@ -178,6 +228,7 @@ def sentence_hints(text: str, teacher_names: list[str], subject_names: list[str]
     """Hints for the parser, each "'as typed' = as the school stores it"."""
     try:
         return (_teacher_hints(text, teacher_names) + _class_hints(text, class_group_labels)
-                + _subject_hints(text, subject_names) + _spelling_hints(text))
+                + _subject_hints(text, subject_names) + _misspelt_subject_hints(text, subject_names)
+                + _spelling_hints(text))
     except Exception:  # noqa: BLE001 - reading aids must never break parsing
         return []

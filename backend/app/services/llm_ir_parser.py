@@ -583,6 +583,8 @@ Readings that are easy to get backwards - apply them to every sentence:
   nice"). "should", "must", "needs", "has to", "can't", "never" are all required.
 - "classes", "lessons" and "periods" as a count mean periods. Count different
   sections only when the sentence says so ("different classes", "sections").
+- A teacher who leaves, comes in late or "goes after P4" is an availability rule
+  (no lessons after / before that point). Record it; don't ask whether it's a rule.
 - A sentence may restate the weekly plan ("PE twice a week but..."). Periods per
   week are set in the plan, not by a rule: encode the rest of the sentence.
 
@@ -1324,6 +1326,13 @@ def _periods_named(text: str) -> set[int]:
     return out
 
 
+# Words that make a list of days or periods the ALLOWED ones.
+_ONLY_WORDS = re.compile(r"\bonly\b|\bsirf\b|\bbas\b|\bexclusively\b|\brestricted to\b|\bjust on\b|\blimited to\b",
+                         re.IGNORECASE)
+# ...unless the sentence is about being away or free on them, where the named
+# days are the banned ones ("free on Mon and Tue only", "off only on Fridays").
+_AWAY_WORDS = re.compile(r"\bfree\b|\boff\b|\bleave\b|\babsent\b|\bunavailable\b|\bnot (?:available|there|come)"
+                         r"|\bcan'?t\b|\bcannot\b|\bno classes\b|\bholiday\b|\bnahi\b", re.IGNORECASE)
 _DISTINCT_CLASS_WORDS = re.compile(r"different|diff\b|distinct|separate|\bsections?\b|\bvarious\b", re.IGNORECASE)
 
 
@@ -1355,7 +1364,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
 
     form = rule.form
     if isinstance(form, Count) and form.selector.days and form.relation in ("==", "<=") and form.value == 0 \
-            and re.search(r"\bonly\b", text, re.IGNORECASE):
+            and _ONLY_WORDS.search(text) and not _AWAY_WORDS.search(text):
         named = _days_named(text)
         banned = set(form.selector.days)
         if named and banned & named:
@@ -1373,12 +1382,16 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
 
         # 3. "only in periods 1 to 3" read as "at least one in periods 1 to 3",
         #    or as a ban on 1 to 3: it bans every other period.
-        if re.search(r"\bonly\b", text, re.IGNORECASE) and sel.period_orders and numbers:
+        if _ONLY_WORDS.search(text) and sel.period_orders and numbers:
             named = _periods_named(text)
             given = set(sel.period_orders)
             if named and given == named and named < set(numbers):
                 others = tuple(n for n in numbers if n not in named)
-                if form.relation in (">=",) or (form.relation in ("==", "<=") and form.value == 0):
+                # Only the "at least one in them" reading is fixed. A ban on the
+                # named periods can be exactly what was meant ("Coach Biju will
+                # be free during period 1 and 2 only"), and flipping it was
+                # wrong in the paraphrase run.
+                if form.relation == ">=":
                     form = _replace(form, selector=_replace(sel, period_orders=others), relation="==", value=0,
                                     scope=tuple(d for d in form.scope if d != "day"), distinct=None)
                     changed = True
@@ -1388,7 +1401,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
         sel = form.selector
         if after_lunch and sel.period_orders and len(sel.period_orders) == 1 \
                 and sel.period_orders[0] == after_lunch[0] and len(after_lunch) > 1 \
-                and re.search(r"after\s+lunch|afternoon", text, re.IGNORECASE) \
+                and re.search(r"after\s+(?:the\s+)?lunch|afternoon|post[\s-]*lunch|lunch\s+ke\s+ba+d", text, re.IGNORECASE) \
                 and not re.search(r"(?:right|just|immediately|straight|directly)\s+after", text, re.IGNORECASE):
             form = _replace(form, selector=_replace(sel, period_orders=tuple(after_lunch)))
             changed = True
@@ -1401,6 +1414,20 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
 
         if form is not rule.form:
             rule = _replace(rule, form=form)
+
+        # 6. A ban on every period of the day is never meant - it makes the
+        #    subject or teacher impossible to timetable. Seen when a long message
+        #    listed the periods NOT allowed alongside the one that was ("Not
+        #    period 5, not period 7, just period 6"). Ask instead.
+        f = rule.form
+        if isinstance(f, Count) and f.relation in ("==", "<=") and f.value == 0 and numbers \
+                and f.selector.period_orders and set(f.selector.period_orders) >= set(numbers) \
+                and not f.selector.days:
+            return IRParse(usage=result.usage, unclear=Unclear(
+                reason="ambiguous",
+                explanation="As read, this would rule out every period of the day, so it could never be timetabled.",
+                question="Which periods should it be allowed in?",
+            ))
 
     if not changed:
         return result

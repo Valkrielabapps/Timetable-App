@@ -2693,6 +2693,2101 @@
    "split": "held_out_2",
    "typed": "keep the toughest subjects in the morning",
    "expect": "ask"
+  },
+  {
+   "id": "PH42a",
+   "split": "paraphrase",
+   "typed": "Khan Sir shall not be assigned more than 2 Hindi classes in any single day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   },
+   "from": "H42"
+  },
+  {
+   "id": "PH42b",
+   "split": "paraphrase",
+   "typed": "okay so basically khan sir like he can only teach hindi maximum two times per day thats it",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   },
+   "from": "H42"
+  },
+  {
+   "id": "PH42c",
+   "split": "paraphrase",
+   "typed": "khan sir ko ek din mein hindi ke sirf 2 classes hi dene hain zyada nahi chalega",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   },
+   "from": "H42"
+  },
+  {
+   "id": "PH42d",
+   "split": "paraphrase",
+   "typed": "You see the thing is khan sir has been looking quite fatigued lately with back-to-back hindi classes and the students also need time to digest the material properly so we have decided that khan sir will teach hindi maximum 2 times per day only because otherwise both the teacher and the students suffer and the quality of education goes down so please make sure this is followed strictly in the timetable",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   },
+   "from": "H42"
+  },
+  {
+   "id": "PH20a",
+   "split": "paraphrase",
+   "typed": "okay so basically like ninth standard needs to finish their maths class before lunch happens you know",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H20"
+  },
+  {
+   "id": "PH20b",
+   "split": "paraphrase",
+   "typed": "Mathematics instruction for Grade 9 shall be completed prior to the lunch period.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H20"
+  },
+  {
+   "id": "PH20c",
+   "split": "paraphrase",
+   "typed": "9th std ka maths lunch se pehle khatam hona chahiye okay thanks",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H20"
+  },
+  {
+   "id": "PH20d",
+   "split": "paraphrase",
+   "typed": "9th standard maths class to be finished before lunch break.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H20"
+  },
+  {
+   "id": "PN01a",
+   "split": "paraphrase",
+   "typed": "thomas sir thurs aur sat ko school nahi aata hai",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Thomas"
+     ],
+     "days": [
+      3,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N01"
+  },
+  {
+   "id": "PN01b",
+   "split": "paraphrase",
+   "typed": "okay so thomas teacher is like not available on thursday and saturday basically",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Thomas"
+     ],
+     "days": [
+      3,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N01"
+  },
+  {
+   "id": "PN01c",
+   "split": "paraphrase",
+   "typed": "thomas sir wont b there thurs n sat lol",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Thomas"
+     ],
+     "days": [
+      3,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N01"
+  },
+  {
+   "id": "PN34a",
+   "split": "paraphrase",
+   "typed": "Library access shall be restricted to Period 6 only.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N34"
+  },
+  {
+   "id": "PN34b",
+   "split": "paraphrase",
+   "typed": "libry sirf period 6 me hi allowed yaar no other time ok??",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N34"
+  },
+  {
+   "id": "PN34c",
+   "split": "paraphrase",
+   "typed": "Ek baat dhyaan rakho - library ka access sirf period 6 mein hi hona chahiye. Baaki periods mein nahi chalega.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N34"
+  },
+  {
+   "id": "PN34d",
+   "split": "paraphrase",
+   "typed": "Listen, the reason we're making this rule is because the library gets too crowded and chaotic when students go there randomly throughout the day, and our librarian cannot manage multiple classes at once. Also, we need to keep proper records of who's using the library and when. So here's what we're doing: students can ONLY use the library during period 6. No exceptions. Not period 5, not period 7, just period 6. This way everything stays organized and everyone gets a fair chance to use the resources without it turning into a free-for-all.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N34"
+  },
+  {
+   "id": "PH07a",
+   "split": "paraphrase",
+   "typed": "The reason we have this policy is that we've found that concentrating too many English classes into a single day can overwhelm students and prevent them from properly absorbing the material, so we've decided that no class should be scheduled for more than one English period in any given day, which ensures better learning outcomes and gives students time to process what they've learned.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   },
+   "from": "H07"
+  },
+  {
+   "id": "PH07b",
+   "split": "paraphrase",
+   "typed": "okay so like basically no class can have more than one english period in a single day because we need to spread it out and give the students time to actually digest the content you know so thats just the rule we go by",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   },
+   "from": "H07"
+  },
+  {
+   "id": "PH07c",
+   "split": "paraphrase",
+   "typed": "yo so basically dont put more than one eng class per day for any class cuz it messes w/ learning or whatevr lol just keep it to one period max",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   },
+   "from": "H07"
+  },
+  {
+   "id": "PH07d",
+   "split": "paraphrase",
+   "typed": "haan to dekho basically ek hi din mein kisi bhi class ko do english periods nahi dene hain okay one period per day max that's the rule bas",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   },
+   "from": "H07"
+  },
+  {
+   "id": "PH10a",
+   "split": "paraphrase",
+   "typed": "okay so like science classes for grade six they cannot happen in first or second period like that's just not allowed",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H10"
+  },
+  {
+   "id": "PH10c",
+   "split": "paraphrase",
+   "typed": "science cannot b scheduled in 1st or 2nd period for 6th std like its just not gonna happen",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H10"
+  },
+  {
+   "id": "PH10d",
+   "split": "paraphrase",
+   "typed": "Science instruction for Grade 6 students shall not be timetabled during the first or second periods of the school day.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H10"
+  },
+  {
+   "id": "PN19a",
+   "split": "paraphrase",
+   "typed": "english ke liye back to back periods allowed nahi hai ok, iska matlab alag alag periods mein hi classes rakhni hain",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "max_consecutive": 1
+   },
+   "from": "N19"
+  },
+  {
+   "id": "PN19b",
+   "split": "paraphrase",
+   "typed": "okay so basically like we cannot have two english periods like right after each other you know so they need to be separated throughout the day",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "max_consecutive": 1
+   },
+   "from": "N19"
+  },
+  {
+   "id": "PN19c",
+   "split": "paraphrase",
+   "typed": "English subject shall not be scheduled in consecutive periods. Each English class must be allotted in separate non-adjacent time slots.",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "max_consecutive": 1
+   },
+   "from": "N19"
+  },
+  {
+   "id": "PN19d",
+   "split": "paraphrase",
+   "typed": "We have found that when students have English back-to-back, they get fatigued and cannot absorb the language material effectively, plus teachers also need a breather between classes to prepare properly, so therefore we are implementing this rule that no two English periods can be scheduled consecutively one after another in the timetable",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "max_consecutive": 1
+   },
+   "from": "N19"
+  },
+  {
+   "id": "PH13a",
+   "split": "paraphrase",
+   "typed": "maths aur english kabhi bhi consecutive periods mein nahi ho sakte, hamesha alag rakhna hai",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   },
+   "from": "H13"
+  },
+  {
+   "id": "PH13b",
+   "split": "paraphrase",
+   "typed": "okay so basically maths and english can never be like back to back periods so you gotta keep them separated",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   },
+   "from": "H13"
+  },
+  {
+   "id": "PH13c",
+   "split": "paraphrase",
+   "typed": "maths n english cant b in consecutive periods ever, keep em apart alwayz lol",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   },
+   "from": "H13"
+  },
+  {
+   "id": "PH13d",
+   "split": "paraphrase",
+   "typed": "Mathematics and English subjects shall not be scheduled in consecutive periods at any time.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   },
+   "from": "H13"
+  },
+  {
+   "id": "PH47a",
+   "split": "paraphrase",
+   "typed": "Rao madam shall not be assigned more than 4 periods on any single day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H47"
+  },
+  {
+   "id": "PH47b",
+   "split": "paraphrase",
+   "typed": "okay so basically rao maam like she can't have more than four periods on any given day you know",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H47"
+  },
+  {
+   "id": "PH47c",
+   "split": "paraphrase",
+   "typed": "Mrs. Rao shall not be scheduled for more than four instructional periods in any single calendar day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H47"
+  },
+  {
+   "id": "PH47d",
+   "split": "paraphrase",
+   "typed": "rao maam cant have more thn 4 periods in 1 day lol",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H47"
+  },
+  {
+   "id": "PN25a",
+   "split": "paraphrase",
+   "typed": "Hindi instruction shall not be scheduled on consecutive days within the weekly timetable.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false,
+    "unit": "day"
+   },
+   "from": "N25"
+  },
+  {
+   "id": "PN25b",
+   "split": "paraphrase",
+   "typed": "okay so basically hindi like you cant have it on back to back days right so like one day gap minimum",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false,
+    "unit": "day"
+   },
+   "from": "N25"
+  },
+  {
+   "id": "PN25c",
+   "split": "paraphrase",
+   "typed": "Hindi class is not to be kept on two days one after the other only.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false,
+    "unit": "day"
+   },
+   "from": "N25"
+  },
+  {
+   "id": "PN25d",
+   "split": "paraphrase",
+   "typed": "hindi shld not b on 2 days in a row lol like gotta space it out",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false,
+    "unit": "day"
+   },
+   "from": "N25"
+  },
+  {
+   "id": "PH08a",
+   "split": "paraphrase",
+   "typed": "The reason we have this rule is because Hindi language instruction is really important for students' linguistic development and cultural education, so we've decided that all students in 6th standard must have at least one Hindi class scheduled during Monday, no exceptions, to ensure consistent exposure to the language throughout the week.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      0
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H08"
+  },
+  {
+   "id": "PH08b",
+   "split": "paraphrase",
+   "typed": "ok so 6th std needs 2 have hindi atleast 1 time on monday like its mandatory u cant skip it or anything lol",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      0
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H08"
+  },
+  {
+   "id": "PH08c",
+   "split": "paraphrase",
+   "typed": "okay so basically what we're saying is that for sixth standard you know they need to have hindi class at least once on monday like that's non negotiable so make sure that's on the timetable",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      0
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H08"
+  },
+  {
+   "id": "PH08d",
+   "split": "paraphrase",
+   "typed": "It is hereby notified that Hindi language shall be scheduled minimum one period per week on Monday for 6th standard students without fail.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      0
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H08"
+  },
+  {
+   "id": "PN15a",
+   "split": "paraphrase",
+   "typed": "yo mr khan cant hav more than 3 periods in 1 day ok?? thats the limit lol",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ]
+    },
+    "relation": "<=",
+    "value": 3
+   },
+   "from": "N15"
+  },
+  {
+   "id": "PN15b",
+   "split": "paraphrase",
+   "typed": "Mr Khan ko ek din mein 3 periods se zyada nahi dene hain. Ye rule strict hai.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ]
+    },
+    "relation": "<=",
+    "value": 3
+   },
+   "from": "N15"
+  },
+  {
+   "id": "PN15c",
+   "split": "paraphrase",
+   "typed": "The reason we have this policy is because Mr Khan needs adequate time for preparation and rest during the school day, so we must ensure that Mr Khan is not assigned more than three periods on any single day, as overloading him would compromise teaching quality.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ]
+    },
+    "relation": "<=",
+    "value": 3
+   },
+   "from": "N15"
+  },
+  {
+   "id": "PN15d",
+   "split": "paraphrase",
+   "typed": "It is hereby stipulated that Mr. Khan shall not be allocated more than three instructional periods on any given day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ]
+    },
+    "relation": "<=",
+    "value": 3
+   },
+   "from": "N15"
+  },
+  {
+   "id": "PH28a",
+   "split": "paraphrase",
+   "typed": "The timetable for Grade 6 shall not include more than four distinct subjects on any single day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "relation": "<=",
+    "value": 4,
+    "distinct": "subject"
+   },
+   "from": "H28"
+  },
+  {
+   "id": "PH28b",
+   "split": "paraphrase",
+   "typed": "We have found that when 6th std students are exposed to too many different subjects in one day, they become overwhelmed and fatigued, which reduces their ability to concentrate and retain information. Therefore, we have implemented a policy that 6th std will not be scheduled for more than 4 different subjects in one day, ensuring they have adequate time to focus deeply on each subject.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "relation": "<=",
+    "value": 4,
+    "distinct": "subject"
+   },
+   "from": "H28"
+  },
+  {
+   "id": "PH28c",
+   "split": "paraphrase",
+   "typed": "6th std maximum 4 different subjects per day only.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "relation": "<=",
+    "value": 4,
+    "distinct": "subject"
+   },
+   "from": "H28"
+  },
+  {
+   "id": "PH28d",
+   "split": "paraphrase",
+   "typed": "yo so 6th std cant hv more than 4 diff subjects in 1 day... like keep it to 4 max lol",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "relation": "<=",
+    "value": 4,
+    "distinct": "subject"
+   },
+   "from": "H28"
+  },
+  {
+   "id": "PH05a",
+   "split": "paraphrase",
+   "typed": "okay so basically PT like you know it should not be scheduled after lunch time like that's just not gonna work",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H05"
+  },
+  {
+   "id": "PH05b",
+   "split": "paraphrase",
+   "typed": "pt class ko lunch ke baad mat rakho yaar, timing theek se set karo",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H05"
+  },
+  {
+   "id": "PH05c",
+   "split": "paraphrase",
+   "typed": "PT period shall not be allocated after lunch break.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H05"
+  },
+  {
+   "id": "PH05d",
+   "split": "paraphrase",
+   "typed": "We have found that when physical education classes are conducted in the afternoon slots after the lunch period, the students tend to feel sluggish and uncomfortable, their digestion gets affected, and the quality of instruction suffers considerably, therefore it is our firm directive that PT must always be scheduled before the lunch break so that the children have adequate time to digest their food before engaging in strenuous physical activity.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H05"
+  },
+  {
+   "id": "PH12a",
+   "split": "paraphrase",
+   "typed": "English instruction shall not be scheduled immediately following Hindi instruction.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   },
+   "from": "H12"
+  },
+  {
+   "id": "PH12b",
+   "split": "paraphrase",
+   "typed": "eng cant b right after hindi lol like literally back 2 back is not allowed",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   },
+   "from": "H12"
+  },
+  {
+   "id": "PH12c",
+   "split": "paraphrase",
+   "typed": "We have found it necessary to implement a guideline regarding the sequencing of our language instruction periods. The rationale behind this is that students need adequate mental transition time between intensive language study sessions, particularly when moving between two different language systems with distinct phonetic and grammatical structures. Therefore, English classes should not be timetabled in the period immediately following Hindi classes, as this allows students proper cognitive recovery and prevents language interference.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   },
+   "from": "H12"
+  },
+  {
+   "id": "PH12d",
+   "split": "paraphrase",
+   "typed": "Dekho, English ko Hindi ke turant baad schedule mat karna. Iska matlab hai ki agar Hindi period ho to English next period mein nahi aana chahiye. Bilkul seedha-seedha rule hai.",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   },
+   "from": "H12"
+  },
+  {
+   "id": "PN06a",
+   "split": "paraphrase",
+   "typed": "Hindi instruction shall not be scheduled during Period 6.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "period_orders": [
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N06"
+  },
+  {
+   "id": "PN06c",
+   "split": "paraphrase",
+   "typed": "Hindi ko P6 me mat rakho yaar. Strictly follow this.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "period_orders": [
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N06"
+  },
+  {
+   "id": "PN06d",
+   "split": "paraphrase",
+   "typed": "Listen, the thing is that we've noticed Period 6 is when most students are getting tired and losing focus, so we've made a firm decision that Hindi classes should not be conducted during this period\u2014it's better to have them earlier in the day when students can actually concentrate and learn properly, so please make sure Hindi is scheduled anywhere except P6.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "period_orders": [
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N06"
+  },
+  {
+   "id": "PN04a",
+   "split": "paraphrase",
+   "typed": "pillai maam ko friday ko P4 ke baad jana hai, samjhe?",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "days": [
+      4
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N04"
+  },
+  {
+   "id": "PN04b",
+   "split": "paraphrase",
+   "typed": "okay so basically pillai maam leaves after period four on fridays like thats when she goes",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "days": [
+      4
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N04"
+  },
+  {
+   "id": "PN04c",
+   "split": "paraphrase",
+   "typed": "So the thing is pillai maam has some personal commitments on Friday afternoons, which is totally understandable, so what we've arranged is that she finishes up after P4 and then she's free to go handle whatever she needs to, so pillai maam leaves after P4 on fridays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "days": [
+      4
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N04"
+  },
+  {
+   "id": "PH09a",
+   "split": "paraphrase",
+   "typed": "9A \u0915\u094b \u092c\u0941\u0927\u0935\u093e\u0930 \u0915\u094b \u092b\u093f\u091c\u093f\u0915\u094d\u0938 \u0939\u094b\u0928\u093e \u091a\u093e\u0939\u093f\u090f\u0964",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H09"
+  },
+  {
+   "id": "PH09b",
+   "split": "paraphrase",
+   "typed": "\u0926\u0947\u0916\u094b, 9A \u0915\u0947 \u092c\u091a\u094d\u091a\u094b\u0902 \u0915\u094b \u092b\u093f\u091c\u093f\u0915\u094d\u0938 \u092a\u0922\u093c\u0928\u093e \u092c\u0939\u0941\u0924 \u091c\u0930\u0942\u0930\u0940 \u0939\u0948 \u0915\u094d\u092f\u094b\u0902\u0915\u093f \u0935\u094b \u092c\u094b\u0930\u094d\u0921 \u0915\u0940 \u092a\u0930\u0940\u0915\u094d\u0937\u093e \u0915\u0940 \u0924\u0948\u092f\u093e\u0930\u0940 \u0915\u0930 \u0930\u0939\u0947 \u0939\u0948\u0902, \u0907\u0938\u0932\u093f\u090f \u0939\u092e\u0928\u0947 \u0938\u094b\u091a\u093e \u0915\u093f \u092c\u0941\u0927\u0935\u093e\u0930 \u0915\u094b \u0909\u0928\u0915\u0947 \u092a\u093e\u0938 \u092b\u093f\u091c\u093f\u0915\u094d\u0938 \u0915\u094d\u0932\u093e\u0938 \u0939\u094b\u0928\u0940 \u091a\u093e\u0939\u093f\u090f\u0964",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H09"
+  },
+  {
+   "id": "PH09c",
+   "split": "paraphrase",
+   "typed": "It is hereby stipulated that Class 9A shall be scheduled for Physics instruction on Wednesday.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H09"
+  },
+  {
+   "id": "PH09d",
+   "split": "paraphrase",
+   "typed": "okay so basically like nine A needs to have physics on wednesday right so that's the thing",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   },
+   "from": "H09"
+  },
+  {
+   "id": "PH31a",
+   "split": "paraphrase",
+   "typed": "Mrs. Pillai shall be assigned teaching duties exclusively during periods three through six.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H31"
+  },
+  {
+   "id": "PH31b",
+   "split": "paraphrase",
+   "typed": "pillai maam ka teaching sirf periods 3 se 6 tak hai okay... baaki time nahi",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H31"
+  },
+  {
+   "id": "PH31c",
+   "split": "paraphrase",
+   "typed": "okay so basically mrs pillai can only teach during like periods three four five and six thats it",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H31"
+  },
+  {
+   "id": "PH31d",
+   "split": "paraphrase",
+   "typed": "mrs pillai can only teach periods 3-6 thts it no other times lol",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H31"
+  },
+  {
+   "id": "PN31a",
+   "split": "paraphrase",
+   "typed": "It is mandatory that each member of the teaching staff be allocated one full day without instructional duties during the school week.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0,
+    "exists_over": [
+     "day"
+    ]
+   },
+   "from": "N31"
+  },
+  {
+   "id": "PN31b",
+   "split": "paraphrase",
+   "typed": "har teacher ko ek din zaroor milna chahiye jab unhe classes nahi leni padein okay suno sabko weekly mein atleast one free day dedena compulsory hai",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0,
+    "exists_over": [
+     "day"
+    ]
+   },
+   "from": "N31"
+  },
+  {
+   "id": "PN31c",
+   "split": "paraphrase",
+   "typed": "okay so basically every single teacher needs to have like one day off during the week where they dont have to teach anything like completely free",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0,
+    "exists_over": [
+     "day"
+    ]
+   },
+   "from": "N31"
+  },
+  {
+   "id": "PN31d",
+   "split": "paraphrase",
+   "typed": "The school recognizes that teachers need adequate time to rest, prepare lessons, mark papers, and attend to personal matters, which is why it is essential that every teacher receives at least one full day free from teaching duties during each school week so they can recharge and maintain their wellbeing.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0,
+    "exists_over": [
+     "day"
+    ]
+   },
+   "from": "N31"
+  },
+  {
+   "id": "PN21a",
+   "split": "paraphrase",
+   "typed": "9th std chemistry - one double period per week only",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Chemistry"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   },
+   "from": "N21"
+  },
+  {
+   "id": "PN21b",
+   "split": "paraphrase",
+   "typed": "So you see, the thing is, chemistry for the 9th standard students really does need a proper double period each week because that's the only way they can get through the experiments and the theory both without rushing, and honestly if we split it up into single periods the students lose focus and the practicals don't work out properly, so we've decided it should be one double period weekly",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Chemistry"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   },
+   "from": "N21"
+  },
+  {
+   "id": "PN21c",
+   "split": "paraphrase",
+   "typed": "Chemistry instruction for Grade 9 shall be conducted in the form of one double period per week.",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Chemistry"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   },
+   "from": "N21"
+  },
+  {
+   "id": "PN21d",
+   "split": "paraphrase",
+   "typed": "chem for 9th shld b 1 double period a week thats it",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Chemistry"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   },
+   "from": "N21"
+  },
+  {
+   "id": "PN05a",
+   "split": "paraphrase",
+   "typed": "Coach Biju will be free during period 1 and period 2 all days only.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N05"
+  },
+  {
+   "id": "PN05b",
+   "split": "paraphrase",
+   "typed": "Coach Biju shall remain unavailable for instruction during periods one and two throughout the school week.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N05"
+  },
+  {
+   "id": "PN05c",
+   "split": "paraphrase",
+   "typed": "Since Coach Biju needs to prepare the sports equipment and plan the PT sessions for the day, it has been decided that he will be kept free in the first two periods every single day without exception, so that he can do his groundwork properly before classes begin.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N05"
+  },
+  {
+   "id": "PN05d",
+   "split": "paraphrase",
+   "typed": "Guys just so you know - Coach Biju ko 1st aur 2nd period mein free rakhna hai every day. Ye strict hai, no adjustments. Pehle do periods mein use class nahi deni. Samjha?",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N05"
+  },
+  {
+   "id": "PN35a",
+   "split": "paraphrase",
+   "typed": "Mr. Nair's teaching schedule is restricted to Tuesday, Thursday, and Saturday.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Nair"
+     ],
+     "days": [
+      0,
+      2,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N35"
+  },
+  {
+   "id": "PN35b",
+   "split": "paraphrase",
+   "typed": "Due to Mr. Nair's other commitments and administrative responsibilities, we have arranged his timetable such that he teaches only on Tuesday, Thursday, and Saturday, which allows him to manage his workload effectively while ensuring consistent instruction for his classes.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Nair"
+     ],
+     "days": [
+      0,
+      2,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N35"
+  },
+  {
+   "id": "PN35c",
+   "split": "paraphrase",
+   "typed": "nair sir teaches tue thu n sat only... no other days lol",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Nair"
+     ],
+     "days": [
+      0,
+      2,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N35"
+  },
+  {
+   "id": "PN35d",
+   "split": "paraphrase",
+   "typed": "okay so basically nair sir he only teaches on like tuesday and thursday and then saturday so those are the three days that he comes in for teaching okay",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Nair"
+     ],
+     "days": [
+      0,
+      2,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "N35"
+  },
+  {
+   "id": "PH16a",
+   "split": "paraphrase",
+   "typed": "kisi bhi teacher ko ek din mein 4 se zyada classes nahi padaani chahiye okay",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H16"
+  },
+  {
+   "id": "PH16b",
+   "split": "paraphrase",
+   "typed": "It is hereby stipulated that no faculty member shall be assigned to teach more than four classes in any single day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H16"
+  },
+  {
+   "id": "PH16c",
+   "split": "paraphrase",
+   "typed": "No teacher should take more than 4 classes per day.",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H16"
+  },
+  {
+   "id": "PH16d",
+   "split": "paraphrase",
+   "typed": "okay so basically like no teacher should be teaching more than four classes in a single day right",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 4
+   },
+   "from": "H16"
+  },
+  {
+   "id": "PH29a",
+   "split": "paraphrase",
+   "typed": "The reason we've decided on this is that students need time to settle in on Monday mornings, and maths being such a demanding subject requiring full concentration, it just makes sense to give everyone a chance to ease into the week first, so we've made it a policy that no class is scheduled to have maths during the first period on Mondays.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H29"
+  },
+  {
+   "id": "PH29b",
+   "split": "paraphrase",
+   "typed": "yo so like no class can hav maths 1st period on monday ok?? its jst not allowed lol",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H29"
+  },
+  {
+   "id": "PH29c",
+   "split": "paraphrase",
+   "typed": "okay so basically what we're saying is like you know no class should ever have math in the first period on Monday so just make sure that doesn't happen",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H29"
+  },
+  {
+   "id": "PH29d",
+   "split": "paraphrase",
+   "typed": "No class shall be allocated Mathematics instruction during the first period on Monday.",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "from": "H29"
   }
  ]
 }

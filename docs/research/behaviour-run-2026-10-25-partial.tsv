@@ -1,51 +1,101 @@
 ID	SPLIT	VERDICT	PASS	TYPED	READ_AS	NOTE
-N01	held_out_2	OK	yes	thomas teacher is not there on thurs and sat	Ms. Thomas has no periods on Thursday or Saturday.	
-N02	held_out_2	OK	yes	Menon sir works Monday to Wednesday only	Mr. Menon has no periods on Thursday, Friday or Saturday.	
-N03	held_out_2	OK	yes	no P1 for iyer sir on mondays	Mr. Iyer has no periods in period 1 on Monday.	
-N04	held_out_2	OK	yes	pillai maam leaves after P4 on fridays	Mrs. Pillai has no periods in periods 5 or 6 on Friday.	
-N05	held_out_2	OK	yes	Coach Biju is free in the first two periods every day	Coach Biju has at most 0 periods in periods 1 or 2.	
-N06	held_out_2	OK	yes	Hindi not in P6	The school has no Hindi periods in period 6.	
-N07	held_out_2	OK	yes	Social studies never first thing in the morning	No class has Social Studies periods in the first period of the day.	
-N08	held_out_2	OK	yes	no Art on Mondays and Tuesdays	No class has Art periods on Monday or Tuesday.	
-N09	held_out_2	OK	yes	6A and 6B shouldn't have Science on Saturday	Grade 6 - A or Grade 6 - B has no Science periods on Saturday.	
-N10	held_out_2	OK	yes	grade 9 cant have more than two maths periods a day	Grade 9 has at most 2 Maths periods on any day.	
-N11	held_out_2	OK	yes	each section should get at most one PE period per day	Every class has at most 1 PE period on any day.	
-N12	held_out_2	OK	yes	Hindi max once a day for 9th	Grade 9 has at most 1 Hindi period on any day.	
-N13	held_out_2	OK	yes	Every class must have English on Monday	Every class has at least 1 English period on Monday.	
-N14	held_out_2	OK	yes	6B needs maths in the first period on Tuesday	Grade 6 - B has at least 1 Maths period in period 1 on Tuesday.	
-N15	held_out_2	OK	yes	Mr. Khan shouldn't have more than three periods on any day	Mr. Khan has at most 3 periods on any day.	WEAK: the reference never bites on the eval school
-N16	held_out_2	OK	yes	teachers can take a maximum of 5 periods daily	Every teacher has at most 5 periods on any day.	
-N17	held_out_2	OK	yes	das miss max 2 periods on saturday	Ms. Das has at most 2 periods on Saturday.	
-N18	held_out_2	OK	yes	Maths periods should never be one after the other	For every class, no two Maths periods are back to back on any day.	
-N19	held_out_2	OK	yes	no double periods of english	For every class, no two English periods are back to back on any day.	
-N20	held_out_2	OK	yes	Mrs Rao shouldn't take two classes back to back	For Mrs. Rao, no two periods are back to back on any day.	
-N21	held_out_2	OK	yes	chemistry for grade 9 should be one double period a week	For Grade 9, Chemistry periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
-N22	held_out_2	OK	yes	don't schedule hindi immediately after maths	For every class, Hindi periods never come in the period straight after Maths periods.	
-N23	held_out_2	OK	yes	science shouldnt be right before PE	For every class, PE periods never come in the period straight after Science periods.	
-N24	held_out_2	OK	yes	english and hindi should not be next to each other	For every class, English periods and Hindi periods are never back to back, in either order.	
-N25	held_out_2	OK	yes	hindi should not be on two consecutive days	For every class, Hindi periods are never on two days in a row.	
-N26	held_out_2	OK	yes	hindi and social studies on different days for 9A	For Grade 9 - A, Hindi periods and Social Studies periods never fall on the same day.	
-N27	held_out_2	OK	yes	PE and Science must never fall on the same day	For every class, PE periods and Science periods never fall on the same day.	
-N28	held_out_2	OK	yes	try to avoid hindi in the last period on saturday	Where it can be arranged, every class has at most 0 Hindi periods in the last period of the day on Saturday.	
-N29	held_out_2	OK	yes	it would be better if maths is not after lunch	Where it can be arranged, no class has Maths periods in periods 5 or 6.	
-N30	held_out_2	OK	yes	If possible keep art out of the first period	Where it can be arranged, no class has Art periods in the first period of the day.	
-N31	held_out_2	OK	yes	every teacher needs a free day during the week	Every teacher has at most 0 periods on at least one day.	
-N32	held_out_2	OK	yes	6th std should not have more than two different subjects on saturday	Grade 6 has at most 2 different subjects across its periods on Saturday.	
-N33	held_out_2	OK	yes	maths only before the short break	No class has Maths periods in periods 3, 4, 5 or 6.	
-N34	held_out_2	OK	yes	Library only in period 6	Every class has at least 1 Library period in period 6.	
-N35	held_out_2	OK	yes	nair sir teaches only on tuesday, thursday and saturday	Mr. Nair has no periods on Monday, Wednesday or Friday.	
-N36	held_out_2	OK	yes	Ms Thomas only in the afternoons	Ms. Thomas has no periods in periods 1, 2, 3 or 4.	
-N37	held_out_2	OK	yes	for 9A, english should be in the first period every weekday	Grade 9 - A has at least 1 English period in the first period of the day on Monday, Tuesday, Wednesday, Thursday or Friday.	
-N38	held_out_2	OK	yes	no physics on saturdays	No class has Physics periods on Saturday.	
-N39	held_out_2	OK	yes	geography... sorry I mean social studies, never on friday	No class has Social Studies periods on Friday.	
-N40	held_out_2	OK	yes	Hindi teacher Khan sir not before 10am, that is no P1 or P2	Mr. Khan has no Hindi periods in periods 1 or 2.	
-N41	held_out_2	OK	yes	no subject more than twice in one day for 6A	Grade 6 - A and each subject has at most 2 periods on any day.	
-N42	held_out_2	OK	yes	menon sir max 3 maths classes a day	Mr. Menon has at most 3 Maths periods on any day.	
-N43	held_out_2	OK	yes	Grade 6 art should be after lunch	Grade 6 has no Art periods in periods 1, 2, 3 or 4.	
-N44	held_out_2	OK	yes	maths shouldnt come straight after hindi for 6th	For Grade 6, Maths periods never come in the period straight after Hindi periods.	
-N45	held_out_2	OK	yes	mrs rao must not teach on wednesday afternoons	Mrs. Rao has no periods in periods 5 or 6 on Wednesday.	
-NA1	held_out_2	ASKED	yes	the timetable should be fair	What specifically should be fair? For example: should teachers' periods be spread evenly across days, should classes have similar numbers of periods per day, should certain subjects be avoided on particular days, or something else?	
-NA2	held_out_2	ASKED	yes	Ms. Kavitha is on maternity leave from December	Did you mean one of the known teachers, or is Ms. Kavitha a new staff member?	
-NA3	held_out_2	ASKED	yes	smart room only for grade 9	This rule is about which room a lesson uses. The timetabling system cannot yet represent rules about rooms, labs, halls or equipment - only about teachers, subjects, class groups, days and periods.	
-NA4	held_out_2	ASKED	yes	seniors should have maths daily	"Which grade or class group do you mean by ""seniors""?"	
-NA5	held_out_2	ASKED	yes	keep the toughest subjects in the morning	Which subjects should be kept in the morning - for example, Physics, Chemistry, and Maths?	
+PH42a	paraphrase	OK	yes	Khan Sir shall not be assigned more than 2 Hindi classes in any single day.	Mr. Khan has at most 2 Hindi periods on any day.	
+PH42b	paraphrase	OK	yes	okay so basically khan sir like he can only teach hindi maximum two times per day thats it	Mr. Khan has at most 2 Hindi periods on any day.	
+PH42c	paraphrase	OK	yes	khan sir ko ek din mein hindi ke sirf 2 classes hi dene hain zyada nahi chalega	Mr. Khan has at most 2 Hindi periods on any day.	
+PH42d	paraphrase	OK	yes	You see the thing is khan sir has been looking quite fatigued lately with back-to-back hindi classes and the students also need time to digest the material properly so we have decided that khan sir will teach hindi maximum 2 times per day only because otherwise both the teacher and the students suffer and the quality of education goes down so please make sure this is followed strictly in the timetable	Mr. Khan has at most 2 Hindi periods on any day.	
+PH20a	paraphrase	OK	yes	okay so basically like ninth standard needs to finish their maths class before lunch happens you know	Grade 9 has no Maths periods in periods 5 or 6.	
+PH20b	paraphrase	OK	yes	Mathematics instruction for Grade 9 shall be completed prior to the lunch period.	Grade 9 has no Maths periods in periods 5 or 6.	
+PH20c	paraphrase	OK	yes	9th std ka maths lunch se pehle khatam hona chahiye okay thanks	Grade 9 has no Maths periods in periods 5 or 6.	
+PH20d	paraphrase	OK	yes	9th standard maths class to be finished before lunch break.	Grade 9 has no Maths periods in periods 5 or 6.	
+PN01a	paraphrase	OK	yes	thomas sir thurs aur sat ko school nahi aata hai	Ms. Thomas has no periods on Thursday or Saturday.	
+PN01b	paraphrase	OK	yes	okay so thomas teacher is like not available on thursday and saturday basically	Ms. Thomas has no periods on Thursday or Saturday.	
+PN01c	paraphrase	OK	yes	thomas sir wont b there thurs n sat lol	Ms. Thomas has no periods on Thursday or Saturday.	
+PN01d	paraphrase	ASKED	no	Mr. Thomas shall be absent on Thursdays and Saturdays.	Is the teacher Ms. Thomas, or is there a Mr. Thomas not yet in the system?	asked where a rule was expected
+PN34a	paraphrase	OK	yes	Library access shall be restricted to Period 6 only.	Every class has at least 1 Library period in period 6.	
+PN34b	paraphrase	IMPOSSIBLE	no	libry sirf period 6 me hi allowed yaar no other time ok??	Every class has at most 0 Library periods in the week.	the parsed reading leaves no timetable on the eval school
+PN34c	paraphrase	OK	yes	Ek baat dhyaan rakho - library ka access sirf period 6 mein hi hona chahiye. Baaki periods mein nahi chalega.	The school has no Library periods in periods 1, 2, 3, 4 or 5.	
+PN34d	paraphrase	IMPOSSIBLE	no	Listen, the reason we're making this rule is because the library gets too crowded and chaotic when students go there randomly throughout the day, and our librarian cannot manage multiple classes at once. Also, we need to keep proper records of who's using the library and when. So here's what we're doing: students can ONLY use the library during period 6. No exceptions. Not period 5, not period 7, just period 6. This way everything stays organized and everyone gets a fair chance to use the resources without it turning into a free-for-all.	No class has Library periods in periods 1, 2, 3, 4, 5 or 6.	the parsed reading leaves no timetable on the eval school
+PH07a	paraphrase	ERROR	no	The reason we have this policy is that we've found that concentrating too many English classes into a single day can overwhelm students and prevent them from properly absorbing the material, so we've decided that no class should be scheduled for more than one English period in any given day, which ensures better learning outcomes and gives students time to process what they've learned.		the API call failed
+PH07b	paraphrase	ERROR	no	okay so like basically no class can have more than one english period in a single day because we need to spread it out and give the students time to actually digest the content you know so thats just the rule we go by		the API call failed
+PH07c	paraphrase	OK	yes	yo so basically dont put more than one eng class per day for any class cuz it messes w/ learning or whatevr lol just keep it to one period max	Every class has at most 1 English period on any day.	
+PH07d	paraphrase	OK	yes	haan to dekho basically ek hi din mein kisi bhi class ko do english periods nahi dene hain okay one period per day max that's the rule bas	Every class has at most 1 English period on any day.	
+PH10a	paraphrase	OK	yes	okay so like science classes for grade six they cannot happen in first or second period like that's just not allowed	Grade 6 has no Science periods in periods 1 or 2.	
+PH10b	paraphrase	DIFFERENT	no	Science periods for Grade 6 shall not be scheduled during 1st and 2nd period only.	Grade 6 has no Science periods in periods 3, 4, 5 or 6.	allows what the sentence forbids, and forbids what it allows
+PH10c	paraphrase	OK	yes	science cannot b scheduled in 1st or 2nd period for 6th std like its just not gonna happen	Grade 6 has no Science periods in periods 1 or 2.	
+PH10d	paraphrase	OK	yes	Science instruction for Grade 6 students shall not be timetabled during the first or second periods of the school day.	Grade 6 has no Science periods in periods 1 or 2.	
+PN19a	paraphrase	OK	yes	english ke liye back to back periods allowed nahi hai ok, iska matlab alag alag periods mein hi classes rakhni hain	For every class, no two English periods are back to back on any day.	
+PN19b	paraphrase	OK	yes	okay so basically like we cannot have two english periods like right after each other you know so they need to be separated throughout the day	For every class, no two English periods are back to back on any day.	
+PN19c	paraphrase	OK	yes	English subject shall not be scheduled in consecutive periods. Each English class must be allotted in separate non-adjacent time slots.	For every class, no two English periods are back to back on any day.	
+PN19d	paraphrase	OK	yes	We have found that when students have English back-to-back, they get fatigued and cannot absorb the language material effectively, plus teachers also need a breather between classes to prepare properly, so therefore we are implementing this rule that no two English periods can be scheduled consecutively one after another in the timetable	For every class, no two English periods are back to back on any day.	
+PH13a	paraphrase	OK	yes	maths aur english kabhi bhi consecutive periods mein nahi ho sakte, hamesha alag rakhna hai	For every class, Maths periods and English periods are never back to back, in either order.	
+PH13b	paraphrase	OK	yes	okay so basically maths and english can never be like back to back periods so you gotta keep them separated	For every class, Maths periods and English periods are never back to back, in either order.	
+PH13c	paraphrase	OK	yes	maths n english cant b in consecutive periods ever, keep em apart alwayz lol	For every class, Maths periods and English periods are never back to back, in either order.	
+PH13d	paraphrase	OK	yes	Mathematics and English subjects shall not be scheduled in consecutive periods at any time.	For every class, Maths periods and English periods are never back to back, in either order.	
+PH47a	paraphrase	OK	yes	Rao madam shall not be assigned more than 4 periods on any single day.	Mrs. Rao has at most 4 periods on any day.	
+PH47b	paraphrase	OK	yes	okay so basically rao maam like she can't have more than four periods on any given day you know	Mrs. Rao has at most 4 periods on any day.	
+PH47c	paraphrase	OK	yes	Mrs. Rao shall not be scheduled for more than four instructional periods in any single calendar day.	Mrs. Rao has at most 4 periods on any day.	
+PH47d	paraphrase	OK	yes	rao maam cant have more thn 4 periods in 1 day lol	Mrs. Rao has at most 4 periods on any day.	WEAK: the reference never bites on the eval school
+PN25a	paraphrase	OK	yes	Hindi instruction shall not be scheduled on consecutive days within the weekly timetable.	For every class, Hindi periods are never on two days in a row.	
+PN25b	paraphrase	OK	yes	okay so basically hindi like you cant have it on back to back days right so like one day gap minimum	For every class, Hindi periods are never on two days in a row.	
+PN25c	paraphrase	OK	yes	Hindi class is not to be kept on two days one after the other only.	For every class, Hindi periods are never on two days in a row.	
+PN25d	paraphrase	OK	yes	hindi shld not b on 2 days in a row lol like gotta space it out	For every class, Hindi periods are never on two days in a row.	
+PH08a	paraphrase	OK	yes	The reason we have this rule is because Hindi language instruction is really important for students' linguistic development and cultural education, so we've decided that all students in 6th standard must have at least one Hindi class scheduled during Monday, no exceptions, to ensure consistent exposure to the language throughout the week.	Grade 6 has at least 1 Hindi period on Monday.	
+PH08b	paraphrase	OK	yes	ok so 6th std needs 2 have hindi atleast 1 time on monday like its mandatory u cant skip it or anything lol	Grade 6 has at least 1 Hindi period on Monday.	
+PH08c	paraphrase	OK	yes	okay so basically what we're saying is that for sixth standard you know they need to have hindi class at least once on monday like that's non negotiable so make sure that's on the timetable	Grade 6 has at least 1 Hindi period on Monday.	
+PH08d	paraphrase	OK	yes	It is hereby notified that Hindi language shall be scheduled minimum one period per week on Monday for 6th standard students without fail.	Grade 6 has at least 1 Hindi period on Monday.	
+PN15a	paraphrase	OK	yes	yo mr khan cant hav more than 3 periods in 1 day ok?? thats the limit lol	Mr. Khan has at most 3 periods on any day.	
+PN15b	paraphrase	OK	yes	Mr Khan ko ek din mein 3 periods se zyada nahi dene hain. Ye rule strict hai.	Mr. Khan has at most 3 periods on any day.	WEAK: the reference never bites on the eval school
+PN15c	paraphrase	OK	yes	The reason we have this policy is because Mr Khan needs adequate time for preparation and rest during the school day, so we must ensure that Mr Khan is not assigned more than three periods on any single day, as overloading him would compromise teaching quality.	Mr. Khan has at most 3 periods on any day.	
+PN15d	paraphrase	OK	yes	It is hereby stipulated that Mr. Khan shall not be allocated more than three instructional periods on any given day.	Mr. Khan has at most 3 periods on any day.	WEAK: the reference never bites on the eval school
+PH28a	paraphrase	OK	yes	The timetable for Grade 6 shall not include more than four distinct subjects on any single day.	Grade 6 has at most 4 different subjects on any day.	
+PH28b	paraphrase	OK	yes	We have found that when 6th std students are exposed to too many different subjects in one day, they become overwhelmed and fatigued, which reduces their ability to concentrate and retain information. Therefore, we have implemented a policy that 6th std will not be scheduled for more than 4 different subjects in one day, ensuring they have adequate time to focus deeply on each subject.	Grade 6 has at most 4 different subjects on any day.	
+PH28c	paraphrase	OK	yes	6th std maximum 4 different subjects per day only.	Grade 6 has at most 4 different subjects on any day.	
+PH28d	paraphrase	OK	yes	yo so 6th std cant hv more than 4 diff subjects in 1 day... like keep it to 4 max lol	Grade 6 has at most 4 different subjects on any day.	
+PH05a	paraphrase	OK	yes	okay so basically PT like you know it should not be scheduled after lunch time like that's just not gonna work	No class has PE periods in periods 5 or 6.	
+PH05b	paraphrase	LOOSER	no	pt class ko lunch ke baad mat rakho yaar, timing theek se set karo	The school has no PE periods in period 5.	allows something the sentence forbids
+PH05c	paraphrase	OK	yes	PT period shall not be allocated after lunch break.	No class has PE periods in periods 5 or 6.	
+PH05d	paraphrase	OK	yes	We have found that when physical education classes are conducted in the afternoon slots after the lunch period, the students tend to feel sluggish and uncomfortable, their digestion gets affected, and the quality of instruction suffers considerably, therefore it is our firm directive that PT must always be scheduled before the lunch break so that the children have adequate time to digest their food before engaging in strenuous physical activity.	No class has PE periods in periods 5 or 6.	
+PH12a	paraphrase	OK	yes	English instruction shall not be scheduled immediately following Hindi instruction.	For every class, English periods never come in the period straight after Hindi periods.	
+PH12b	paraphrase	ERROR	no	eng cant b right after hindi lol like literally back 2 back is not allowed		the API call failed
+PH12c	paraphrase	ERROR	no	We have found it necessary to implement a guideline regarding the sequencing of our language instruction periods. The rationale behind this is that students need adequate mental transition time between intensive language study sessions, particularly when moving between two different language systems with distinct phonetic and grammatical structures. Therefore, English classes should not be timetabled in the period immediately following Hindi classes, as this allows students proper cognitive recovery and prevents language interference.		the API call failed
+PH12d	paraphrase	ERROR	no	Dekho, English ko Hindi ke turant baad schedule mat karna. Iska matlab hai ki agar Hindi period ho to English next period mein nahi aana chahiye. Bilkul seedha-seedha rule hai.		the API call failed
+PN06a	paraphrase	OK	yes	Hindi instruction shall not be scheduled during Period 6.	No class has Hindi periods in period 6.	
+PN06b	paraphrase	LOOSER	no	Hindi class not to be fixed in P6 only.	Every class has at most 5 Hindi periods in period 6.	allows something the sentence forbids
+PN06c	paraphrase	OK	yes	Hindi ko P6 me mat rakho yaar. Strictly follow this.	No class has Hindi periods in period 6.	
+PN06d	paraphrase	OK	yes	Listen, the thing is that we've noticed Period 6 is when most students are getting tired and losing focus, so we've made a firm decision that Hindi classes should not be conducted during this period—it's better to have them earlier in the day when students can actually concentrate and learn properly, so please make sure Hindi is scheduled anywhere except P6.	No class has Hindi periods in period 6.	
+PN04a	paraphrase	ASKED	no	pillai maam ko friday ko P4 ke baad jana hai, samjhe?	Should Mrs. Pillai have no lessons scheduled after period 4 on Friday, or is she simply unavailable then and we should avoid scheduling her if possible?	asked where a rule was expected
+PN04b	paraphrase	OK	yes	okay so basically pillai maam leaves after period four on fridays like thats when she goes	Mrs. Pillai has no periods in periods 5 or 6 on Friday.	
+PN04c	paraphrase	OK	yes	So the thing is pillai maam has some personal commitments on Friday afternoons, which is totally understandable, so what we've arranged is that she finishes up after P4 and then she's free to go handle whatever she needs to, so pillai maam leaves after P4 on fridays	Mrs. Pillai has no periods in periods 5 or 6 on Friday.	
+PN04d	paraphrase	ASKED	no	pillai maam dips after p4 on fri fyi just so evryones aware lol	Should Mrs. Pillai have no lessons scheduled after period 4 on Fridays, or is this just a heads-up about her availability?	asked where a rule was expected
+PH09a	paraphrase	OK	yes	9A को बुधवार को फिजिक्स होना चाहिए।	Grade 9 - A has at least 1 Physics period on Wednesday.	
+PH09b	paraphrase	OK	yes	देखो, 9A के बच्चों को फिजिक्स पढ़ना बहुत जरूरी है क्योंकि वो बोर्ड की परीक्षा की तैयारी कर रहे हैं, इसलिए हमने सोचा कि बुधवार को उनके पास फिजिक्स क्लास होनी चाहिए।	Grade 9 - A has at least 1 Physics period on Wednesday.	
+PH09c	paraphrase	OK	yes	It is hereby stipulated that Class 9A shall be scheduled for Physics instruction on Wednesday.	Grade 9 - A has at least 1 Physics period on Wednesday.	
+PH09d	paraphrase	OK	yes	okay so basically like nine A needs to have physics on wednesday right so that's the thing	Grade 9 - A has at least 1 Physics period on Wednesday.	
+PH31a	paraphrase	OK	yes	Mrs. Pillai shall be assigned teaching duties exclusively during periods three through six.	Mrs. Pillai has no periods in periods 1 or 2.	
+PH31b	paraphrase	OK	yes	pillai maam ka teaching sirf periods 3 se 6 tak hai okay... baaki time nahi	Mrs. Pillai has no periods in periods 1 or 2.	
+PH31c	paraphrase	OK	yes	okay so basically mrs pillai can only teach during like periods three four five and six thats it	Mrs. Pillai has no periods in periods 1 or 2.	
+PH31d	paraphrase	OK	yes	mrs pillai can only teach periods 3-6 thts it no other times lol	Mrs. Pillai has no periods in periods 1 or 2.	
+PN31a	paraphrase	OK	yes	It is mandatory that each member of the teaching staff be allocated one full day without instructional duties during the school week.	Every teacher has at most 0 periods on at least one day.	
+PN31b	paraphrase	OK	yes	har teacher ko ek din zaroor milna chahiye jab unhe classes nahi leni padein okay suno sabko weekly mein atleast one free day dedena compulsory hai	Every teacher has at most 0 periods on at least one day.	
+PN31c	paraphrase	OK	yes	okay so basically every single teacher needs to have like one day off during the week where they dont have to teach anything like completely free	Every teacher has at most 0 periods on at least one day.	
+PN31d	paraphrase	OK	yes	The school recognizes that teachers need adequate time to rest, prepare lessons, mark papers, and attend to personal matters, which is why it is essential that every teacher receives at least one full day free from teaching duties during each school week so they can recharge and maintain their wellbeing.	Every teacher has at most 0 periods on at least one day.	
+PN21a	paraphrase	OK	yes	9th std chemistry - one double period per week only	For Grade 9, Chemistry periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
+PN21b	paraphrase	OK	yes	So you see, the thing is, chemistry for the 9th standard students really does need a proper double period each week because that's the only way they can get through the experiments and the theory both without rushing, and honestly if we split it up into single periods the students lose focus and the practicals don't work out properly, so we've decided it should be one double period weekly	For Grade 9, Chemistry periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
+PN21c	paraphrase	OK	yes	Chemistry instruction for Grade 9 shall be conducted in the form of one double period per week.	For Grade 9, Chemistry periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
+PN21d	paraphrase	OK	yes	chem for 9th shld b 1 double period a week thats it	For Grade 9, Chemistry periods come as exactly one double a week (2 back to back), with no more than one on any other day.	
+PN05a	paraphrase	DIFFERENT	no	Coach Biju will be free during period 1 and period 2 all days only.	Coach Biju has no periods in periods 3, 4, 5 or 6.	allows what the sentence forbids, and forbids what it allows
+PN05b	paraphrase	OK	yes	Coach Biju shall remain unavailable for instruction during periods one and two throughout the school week.	Coach Biju has no periods in periods 1 or 2.	
+PN05c	paraphrase	OK	yes	Since Coach Biju needs to prepare the sports equipment and plan the PT sessions for the day, it has been decided that he will be kept free in the first two periods every single day without exception, so that he can do his groundwork properly before classes begin.	Coach Biju has no periods in periods 1 or 2.	
+PN05d	paraphrase	OK	yes	Guys just so you know - Coach Biju ko 1st aur 2nd period mein free rakhna hai every day. Ye strict hai, no adjustments. Pehle do periods mein use class nahi deni. Samjha?	Coach Biju has no periods in periods 1 or 2.	
+PN35a	paraphrase	STRICTER	no	Mr. Nair's teaching schedule is restricted to Tuesday, Thursday, and Saturday.	Mr. Nair has no periods on Monday, Wednesday, Friday or Saturday.	forbids something the sentence allows
+PN35b	paraphrase	OK	yes	Due to Mr. Nair's other commitments and administrative responsibilities, we have arranged his timetable such that he teaches only on Tuesday, Thursday, and Saturday, which allows him to manage his workload effectively while ensuring consistent instruction for his classes.	Mr. Nair has no periods on Monday, Wednesday or Friday.	
+PN35c	paraphrase	OK	yes	nair sir teaches tue thu n sat only... no other days lol	Mr. Nair has no periods on Monday, Wednesday or Friday.	
+PN35d	paraphrase	OK	yes	okay so basically nair sir he only teaches on like tuesday and thursday and then saturday so those are the three days that he comes in for teaching okay	Mr. Nair has no periods on Monday, Wednesday or Friday.	
+PH16a	paraphrase	OK	yes	kisi bhi teacher ko ek din mein 4 se zyada classes nahi padaani chahiye okay	Every teacher has at most 4 periods on any day.	
+PH16b	paraphrase	OK	yes	It is hereby stipulated that no faculty member shall be assigned to teach more than four classes in any single day.	Every teacher has at most 4 periods on any day.	
+PH16c	paraphrase	OK	yes	No teacher should take more than 4 classes per day.	Every teacher has at most 4 periods on any day.	
+PH16d	paraphrase	OK	yes	okay so basically like no teacher should be teaching more than four classes in a single day right	Every teacher has at most 4 periods on any day.	
+PH29a	paraphrase	OK	yes	The reason we've decided on this is that students need time to settle in on Monday mornings, and maths being such a demanding subject requiring full concentration, it just makes sense to give everyone a chance to ease into the week first, so we've made it a policy that no class is scheduled to have maths during the first period on Mondays.	No class has Maths periods in period 1 on Monday.	
+PH29b	paraphrase	OK	yes	yo so like no class can hav maths 1st period on monday ok?? its jst not allowed lol	No class has Maths periods in period 1 on Monday.	
+PH29c	paraphrase	OK	yes	okay so basically what we're saying is like you know no class should ever have math in the first period on Monday so just make sure that doesn't happen	No class has Maths periods in period 1 on Monday.	
+PH29d	paraphrase	OK	yes	No class shall be allocated Mathematics instruction during the first period on Monday.	No class has Maths periods in period 1 on Monday.	
