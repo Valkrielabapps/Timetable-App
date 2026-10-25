@@ -270,7 +270,8 @@ def main():
             note = (note + "; " if note else "") + "WEAK: the reference never bites on the eval school"
 
         passed = verdict == "OK" or (verdict == "ASKED" and expect in ("ask", "either"))
-        rows.append({"ID": case["id"], "VERDICT": verdict, "PASS": "yes" if passed else "no",
+        rows.append({"ID": case["id"], "SPLIT": case.get("split", "seen"), "VERDICT": verdict,
+                     "PASS": "yes" if passed else "no",
                      "TYPED": case["typed"], "READ_AS": read_as, "NOTE": note})
         print(f"{case['id']:5} {verdict:10} {'' if passed else 'FAIL '}{case['typed']}"
               + (f"\n      read as: {read_as}" if read_as and not passed else "")
@@ -278,6 +279,13 @@ def main():
 
     passed = sum(r["PASS"] == "yes" for r in rows)
     print(f"\n{passed}/{len(rows)} pass  ({time.monotonic() - started:.0f}s)")
+    # Held-out sentences have no worked example in the prompt, so their score is
+    # the honest one: how well the parser reads sentences it has never seen.
+    for split, label in (("seen", "seen (worked examples cover these)"), ("held_out", "held out (never shown to the parser)")):
+        mine = [r for r in rows if r["SPLIT"] == split]
+        if mine:
+            ok = sum(r["PASS"] == "yes" for r in mine)
+            print(f"  {label}: {ok}/{len(mine)}")
     if not args.dry_run:
         out = ROOT / "docs" / "research" / f"behaviour-run-{datetime.date.today().isoformat()}{'-partial' if args.only else ''}.tsv"
         with out.open("w", newline="", encoding="utf-8") as f:

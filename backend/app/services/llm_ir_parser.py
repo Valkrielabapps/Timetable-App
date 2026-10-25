@@ -39,6 +39,8 @@ from app.core.config import settings
 from app.services.constraint_ir import IRError, Rule, rule_from_dict
 from app.services.constraint_ir_english import render
 from app.services.llm_constraint_parser import _READING_RULES, _period_summary
+from app.services.ir_example_retrieval import Library, parse_library
+from app.services.rule_text_hints import sentence_hints
 
 logger = logging.getLogger(__name__)
 
@@ -488,12 +490,6 @@ Informal rules reduce the same way. These all sound harder than they are:
   (no subject filter: "counting all subjects together" is what an absent
   subjects field already means)
 
-"every teacher needs atleast one light day mon to fri, 4 periods or less"
-  form=count scope=["teacher","day"] selector={days:[0,1,2,3,4]} relation="<=" value=4 strength="preference"
-  (the exact rule is "at least one such day", which cannot be said here. The
-  main effect can, so record it and say in `description` that it applies to
-  every weekday rather than to one - do not refuse over the gap)
-
 "rao mam - on days she has 12th dont give her 10th also, too much prep switching"
   form=conditional scope=["teacher","day"]
     when={scope:["teacher","day"],selector:{teachers:["Mrs. Rao"],class_groups:["Grade 12"]},relation:">=",value:1}
@@ -560,9 +556,6 @@ Rules that sound vague and are not. Say these, don't refuse them:
 
 "Spread Mr. Khan's classes evenly through the week"
   form=balance scope=["teacher"] across=["day"] selector={teachers:["Mr. Khan"]} max_spread=1 strength="preference"
-
-"same grade sections should have roughly same number of free gaps"
-  form=balance scope=[] across=["class_group"] selector={class_groups:["Grade 9"]} max_spread=2 strength="preference"
 
 "Don't leave teachers with 3 free periods in the middle of the day"
   form=span scope=["teacher","day"] max_idle=2 strength="preference"
@@ -701,6 +694,59 @@ what, what shares a day, or what happens only on certain days, can be
 expressed - even when the sentence is long or informal."""
 
 
+# Always sent: one or two of every form, and the contrasts that are easiest to
+# get wrong. Everything else in _EXAMPLES is retrieved per sentence (see
+# app/services/ir_example_retrieval.py).
+_CORE_EXAMPLES = {
+    "No teacher should teach more than 6 periods in a day",
+    "Priya should not have more than 28 periods a week",
+    "No PE on Fridays",
+    "Mrs. Rao doesn't come on Saturdays",
+    "Maths should always be the first period for Grade 10",
+    "Not more than 2 Maths periods in a row",
+    "Maths can't come right after PE",
+    "Maths and Science should never be back to back",
+    "Keep Physics and Chemistry on different days",
+    "Biology and Computer Science for Grade 11 at the same time",
+    "If Priya has a Grade 12 class that day, give her at most 5 periods",
+    "Spread Mr. Khan's classes evenly through the week",
+    "Don't leave teachers with 3 free periods in the middle of the day",
+    "Make the timetable balanced and nice for everyone",
+}
+_LIBRARY_EXAMPLES, _GUIDANCE = parse_library(_EXAMPLES)
+_LIBRARY = Library(_LIBRARY_EXAMPLES, _CORE_EXAMPLES)
+# How many retrieved examples join the core ones for each sentence.
+_RETRIEVED = 12
+
+
+def _core_examples_text() -> str:
+    return (
+        "Worked examples (more, chosen for this sentence, follow the school's data):\n\n"
+        + "\n\n".join(e.body for e in _LIBRARY.core)
+        + "\n\n"
+        + "\n\n".join(_GUIDANCE)
+    )
+
+
+def _sentence_context(text, teacher_names, subject_names, class_group_labels) -> str:
+    """The part of the prompt that changes with every sentence: reading aids
+    for the names in it, and the worked examples closest to it. Sent after the
+    cache breakpoint so the cached prefix stays identical between calls."""
+    parts = []
+    hints = sentence_hints(text, teacher_names, subject_names, class_group_labels)
+    if hints:
+        parts.append(
+            "Reading aids for this sentence, worked out from the school's data. They are "
+            "usually right; ignore one only if the sentence clearly means something else:\n"
+            + "\n".join(f"- {h}" for h in hints)
+        )
+    closest = _LIBRARY.closest(text, _RETRIEVED)
+    if closest:
+        parts.append("More worked examples, the ones closest to this sentence:\n\n"
+                     + "\n\n".join(e.body for e in closest))
+    return "\n\n".join(parts)
+
+
 def _system_prompt(teacher_names, subject_names, class_group_labels, periods) -> str:
     return (
         "You turn one sentence from a school admin into a structured scheduling "
@@ -731,7 +777,7 @@ def _system_prompt(teacher_names, subject_names, class_group_labels, periods) ->
         "meant.\n\n"
         + _READING_RULES
         + "\n\n"
-        + _EXAMPLES
+        + _core_examples_text()
     )
 
 
@@ -1098,6 +1144,12 @@ def parse_rule_llm(
         # was set to be safe and burned through a prepaid balance instead.
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
         system = _system_prompt(teacher_names, subject_names, class_group_labels, periods)
+        system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+        context = _sentence_context(text, teacher_names, subject_names, class_group_labels)
+        if context:
+            # After the breakpoint: varies per sentence, so it must not be part
+            # of the cached prefix.
+            system_blocks.append({"type": "text", "text": context})
         messages = [{"role": "user", "content": text}]
         response = client.messages.create(
             model=settings.llm_model,
@@ -1117,11 +1169,7 @@ def parse_rule_llm(
             # large as the system prompt, and measuring the system prompt alone
             # put the prefix under Haiku 4.5's 4,096-token minimum and led to
             # the wrong conclusion that caching could not apply.
-            system=[{
-                "type": "text",
-                "text": system,
-                "cache_control": {"type": "ephemeral"},
-            }],
+            system=system_blocks,
             tools=[_RULE_TOOL, _UNCLEAR_TOOL],
             # "any" rather than a named tool: the model must be able to choose
             # report_unclear, which is the whole point of offering it.
@@ -1152,7 +1200,7 @@ def parse_rule_llm(
             # default temperature two eval runs of unchanged code read
             # "No PE right after lunch" correctly once and wrongly once.
             temperature=0,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+            system=system_blocks,
             tools=[_RULE_TOOL, _UNCLEAR_TOOL],
             tool_choice={"type": "any"},
             messages=[

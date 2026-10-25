@@ -1,5 +1,5 @@
 {
- "_about": "Phrasings with the rule they should mean, for scripts/eval_rule_behaviour.py. 'reference' is the IR the sentence must be equivalent to on the eval school; 'expect': 'ask' means the right answer is a question back. Names must exist in the eval school (see the script). Add a case for every misreading fixed from the admin Rule reading page.",
+ "_about": "Phrasings with the rule they should mean, for scripts/eval_rule_behaviour.py. 'reference' is the IR the sentence must be equivalent to on the eval school; 'expect': 'ask' means the right answer is a question back. Names must exist in the eval school (see the script). Add a case for every misreading fixed from the admin Rule reading page. Cases with split 'held_out' must never be added to the parser's worked examples: their score is the honest measure of how well it reads sentences it has not seen.",
  "cases": [
   {
    "id": "B01",
@@ -606,6 +606,1093 @@
    "typed": "Physics practical should be right after Physics theory",
    "expect": "ask",
    "_note": "The eval school has no separate lab subject, so theory and practical can't be told apart: the right answer is to ask for one."
+  },
+  {
+   "id": "H01",
+   "split": "held_out",
+   "typed": "khan sir doesnt come on tuesdays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "days": [
+      1
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H02",
+   "split": "held_out",
+   "typed": "Rao ma'am is only available Monday to Thursday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ],
+     "days": [
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H03",
+   "split": "held_out",
+   "typed": "das miss cant take 1st period any day",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Das"
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H04",
+   "split": "held_out",
+   "typed": "no games in the last period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H05",
+   "split": "held_out",
+   "typed": "pt shouldnt be after lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H06",
+   "split": "held_out",
+   "typed": "maths max 2 per day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   }
+  },
+  {
+   "id": "H07",
+   "split": "held_out",
+   "typed": "dont give any class more than one english period a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H08",
+   "split": "held_out",
+   "typed": "hindi atleast once on monday for 6th std",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      0
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H09",
+   "split": "held_out",
+   "typed": "9A should have physics on wednesday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H10",
+   "split": "held_out",
+   "typed": "no science in 1st or 2nd period for grade 6",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H11",
+   "split": "held_out",
+   "typed": "no two hindi periods back to back",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "max_consecutive": 1
+   }
+  },
+  {
+   "id": "H12",
+   "split": "held_out",
+   "typed": "english shouldnt come right after hindi",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   }
+  },
+  {
+   "id": "H13",
+   "split": "held_out",
+   "typed": "keep maths and english apart, never in consecutive periods",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "English"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   }
+  },
+  {
+   "id": "H14",
+   "split": "held_out",
+   "typed": "art and hindi not on the same day for any section",
+   "reference": {
+    "form": "bucket",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Art"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "dimension": "day",
+    "relation": "different"
+   }
+  },
+  {
+   "id": "H15",
+   "split": "held_out",
+   "typed": "Library and PE not on the same day for 9A",
+   "reference": {
+    "form": "bucket",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Library"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "PE"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ]
+    },
+    "dimension": "day",
+    "relation": "different"
+   }
+  },
+  {
+   "id": "H16",
+   "split": "held_out",
+   "typed": "nobody should teach more than 4 classes in a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 4
+   }
+  },
+  {
+   "id": "H17",
+   "split": "held_out",
+   "typed": "mrs rao max 3 periods a day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 3
+   }
+  },
+  {
+   "id": "H18",
+   "split": "held_out",
+   "typed": "iyer sir shouldnt have back to back classes",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "teacher"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Iyer"
+     ]
+    },
+    "max_consecutive": 1
+   }
+  },
+  {
+   "id": "H19",
+   "split": "held_out",
+   "typed": "PE twice a week but never on consecutive days",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false,
+    "unit": "day"
+   }
+  },
+  {
+   "id": "H20",
+   "split": "held_out",
+   "typed": "Grade 9 should finish maths before lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H21",
+   "split": "held_out",
+   "typed": "art only in the afternoon",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Art"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H22",
+   "split": "held_out",
+   "typed": "library on saturdays only",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Library"
+     ],
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H23",
+   "split": "held_out",
+   "typed": "biju sir only after lunch",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Coach Biju"
+     ],
+     "period_orders": [
+      1,
+      2,
+      3,
+      4
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H24",
+   "split": "held_out",
+   "typed": "menon sir off on wednesdays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Menon"
+     ],
+     "days": [
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H25",
+   "split": "held_out",
+   "typed": "Try not to put maths in the last period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "strength": "preference"
+  },
+  {
+   "id": "H26",
+   "split": "held_out",
+   "typed": "would be nice if pe is not the first period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "PE"
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   },
+   "strength": "preference"
+  },
+  {
+   "id": "H27",
+   "split": "held_out",
+   "typed": "every teacher should get one day off in the week",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 0,
+    "exists_over": [
+     "day"
+    ]
+   }
+  },
+  {
+   "id": "H28",
+   "split": "held_out",
+   "typed": "6th std not more than 4 different subjects in one day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "relation": "<=",
+    "value": 4,
+    "distinct": "subject"
+   }
+  },
+  {
+   "id": "H29",
+   "split": "held_out",
+   "typed": "no class should have maths in the first period on monday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H30",
+   "split": "held_out",
+   "typed": "9A english in 1st period every monday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "English"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "days": [
+      0
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H31",
+   "split": "held_out",
+   "typed": "mrs pillai can teach only periods 3 to 6",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mrs. Pillai"
+     ],
+     "period_orders": [
+      1,
+      2
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H32",
+   "split": "held_out",
+   "typed": "nair sir not available in the afternoons",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Nair"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H33",
+   "split": "held_out",
+   "typed": "Mary maam comes only on Mon Wed Fri",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Mary"
+     ],
+     "days": [
+      1,
+      3,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H34",
+   "split": "held_out",
+   "typed": "Hindi can't be on Saturday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "days": [
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H35",
+   "split": "held_out",
+   "typed": "Science for 6B shouldn't be in the first period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6 - B"
+     ],
+     "period_positions": [
+      "first"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H36",
+   "split": "held_out",
+   "typed": "Physics for grade 9 must come as one double period every week",
+   "reference": {
+    "form": "run",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Physics"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "block_size": 2,
+    "blocks": 1,
+    "blocks_relation": "=="
+   }
+  },
+  {
+   "id": "H37",
+   "split": "held_out",
+   "typed": "never put chemistry right after physics",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Physics"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Chemistry"
+     ]
+    },
+    "min_gap": 1,
+    "directional": true
+   }
+  },
+  {
+   "id": "H38",
+   "split": "held_out",
+   "typed": "no maths after lunch on fridays",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "days": [
+      4
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H39",
+   "split": "held_out",
+   "typed": "social studies only from monday to thursday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Social Studies"
+     ],
+     "days": [
+      4,
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H40",
+   "split": "held_out",
+   "typed": "english not more than once a day for grade 9",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day"
+    ],
+    "selector": {
+     "subjects": [
+      "English"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ]
+    },
+    "relation": "<=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H41",
+   "split": "held_out",
+   "typed": "grade 6 needs atleast one maths period on saturday",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group"
+    ],
+    "selector": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ],
+     "days": [
+      5
+     ]
+    },
+    "relation": ">=",
+    "value": 1
+   }
+  },
+  {
+   "id": "H42",
+   "split": "held_out",
+   "typed": "khan sir max 2 hindi classes per day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mr. Khan"
+     ],
+     "subjects": [
+      "Hindi"
+     ]
+    },
+    "relation": "<=",
+    "value": 2
+   }
+  },
+  {
+   "id": "H43",
+   "split": "held_out",
+   "typed": "pe and art never back to back",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "PE"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Art"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   }
+  },
+  {
+   "id": "H44",
+   "split": "held_out",
+   "typed": "same subject shouldnt come more than twice in a day for any class",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "class_group",
+     "day",
+     "subject"
+    ],
+    "selector": {},
+    "relation": "<=",
+    "value": 2
+   }
+  },
+  {
+   "id": "H45",
+   "split": "held_out",
+   "typed": "no lessons for Ms. Das on Saturday",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Ms. Das"
+     ],
+     "days": [
+      5
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H46",
+   "split": "held_out",
+   "typed": "Hindi for 9A only in the morning",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Hindi"
+     ],
+     "class_groups": [
+      "Grade 9 - A"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H47",
+   "split": "held_out",
+   "typed": "rao maam not more than 4 periods on any day",
+   "reference": {
+    "form": "count",
+    "scope": [
+     "teacher",
+     "day"
+    ],
+    "selector": {
+     "teachers": [
+      "Mrs. Rao"
+     ]
+    },
+    "relation": "<=",
+    "value": 4
+   }
+  },
+  {
+   "id": "H48",
+   "split": "held_out",
+   "typed": "maths and science not in consecutive periods for 6th",
+   "reference": {
+    "form": "adjacency",
+    "scope": [
+     "class_group"
+    ],
+    "first": {
+     "subjects": [
+      "Maths"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "second": {
+     "subjects": [
+      "Science"
+     ],
+     "class_groups": [
+      "Grade 6"
+     ]
+    },
+    "min_gap": 1,
+    "directional": false
+   }
+  },
+  {
+   "id": "H49",
+   "split": "held_out",
+   "typed": "for 9th, chem should never be in the last period",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "subjects": [
+      "Chemistry"
+     ],
+     "class_groups": [
+      "Grade 9"
+     ],
+     "period_positions": [
+      "last"
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "H50",
+   "split": "held_out",
+   "typed": "Iyer sir comes only in the mornings",
+   "reference": {
+    "form": "count",
+    "scope": [],
+    "selector": {
+     "teachers": [
+      "Mr. Iyer"
+     ],
+     "period_orders": [
+      5,
+      6
+     ]
+    },
+    "relation": "==",
+    "value": 0
+   }
+  },
+  {
+   "id": "HA1",
+   "split": "held_out",
+   "typed": "make sure all the teachers are happy with the timetable",
+   "expect": "ask"
+  },
+  {
+   "id": "HA2",
+   "split": "held_out",
+   "typed": "PTM on 22 nov, keep P5 free for all teachers",
+   "expect": "ask"
+  },
+  {
+   "id": "HA3",
+   "split": "held_out",
+   "typed": "the computer lab is free only on tuesdays",
+   "expect": "ask"
+  },
+  {
+   "id": "HA4",
+   "split": "held_out",
+   "typed": "Mr. Sharma can't come on Fridays",
+   "expect": "ask"
+  },
+  {
+   "id": "HA5",
+   "split": "held_out",
+   "typed": "primary classes should have maths in the morning",
+   "expect": "ask"
   }
  ]
 }
