@@ -33,6 +33,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from app.core.config import settings
@@ -500,9 +501,11 @@ Rules that sound vague and are not. Say these, don't refuse them:
 "rao mam son is in 9B, she shouldnt teach 9B"
   form=count scope=[] selector={teachers:["Mrs. Rao"],class_groups:["Grade 9 - B"]} relation="==" value=0
 
-"English every day for primary"
+"English every day for 1st std"
   form=count scope=["class_group","day"] selector={subjects:["English"],class_groups:["Grade 1"]} relation=">=" value=1
-  (one per grade named; "every day" is scope, not a filter)
+  ("every day" is scope, not a filter. A group word the school's list doesn't
+  have - "primary", "juniors", "middle school" - is NOT a grade you pick: use
+  report_unclear reason="unknown_reference" and ask which grades it means)
 
 "Students should never have a free period"
   form=count scope=["class_group","period"] selector={} relation=">=" value=1
@@ -568,6 +571,17 @@ Rules that sound vague and are not. Say these, don't refuse them:
 
 "if eng and math are both there that day, english must come before maths"
   form=adjacency scope=["class_group"] first={subjects:["English"]} second={subjects:["Maths"]} must_precede=true
+
+Readings that are easy to get backwards - apply them to every sentence:
+- "ONLY" names what is ALLOWED. "X only on Mon, Wed, Fri" / "only in periods 1 to 3"
+  bans every OTHER day or period - never the ones named.
+- Strictness: a rule is required unless the sentence softens it ("try", "if
+  possible", "where possible", "ideally", "prefer", "would like", "would be
+  nice"). "should", "must", "needs", "has to", "can't", "never" are all required.
+- "classes", "lessons" and "periods" as a count mean periods. Count different
+  sections only when the sentence says so ("different classes", "sections").
+- A sentence may restate the weekly plan ("PE twice a week but..."). Periods per
+  week are set in the plan, not by a rule: encode the rest of the sentence.
 
 A two-sided form needs its sides to be DIFFERENT lessons. If you find yourself
 filling `first` and `second` identically, the rule is not an adjacency or a
@@ -702,6 +716,7 @@ _CORE_EXAMPLES = {
     "Priya should not have more than 28 periods a week",
     "No PE on Fridays",
     "Mrs. Rao doesn't come on Saturdays",
+    "Mr. Khan only works Monday, Wednesday and Friday",
     "Maths should always be the first period for Grade 10",
     "Not more than 2 Maths periods in a row",
     "Maths can't come right after PE",
@@ -1184,7 +1199,7 @@ def parse_rule_llm(
 
     result = _read_block(block, text, usage)
     if result.invalid is None:
-        return result
+        return _sanity(result, text, periods)
 
     # The rule was refused. Most often the model read the sentence right and
     # built it wrong - "a double once a week" sent as "always doubles" plus
@@ -1228,7 +1243,7 @@ def parse_rule_llm(
     second = _read_block(retry_block, text, combined)
     if second.invalid is not None:
         logger.warning("model produced an invalid IR rule twice for %r: %s", text, second.invalid)
-    return second
+    return _sanity(second, text, periods)
 
 
 def _usage(response) -> tuple[int, int, int, int]:
@@ -1238,6 +1253,73 @@ def _usage(response) -> tuple[int, int, int, int]:
         getattr(response.usage, "cache_read_input_tokens", 0) or 0,
         getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
     )
+
+
+_PREFERENCE_MARKERS = re.compile(
+    r"\btry\b|\btrying\b|if (?:at all )?possible|where possible|when(?:ever)? possible|\bideally\b|\bprefer"
+    r"|would (?:be )?(?:like|nice|good|better)|\bpreferabl|as much as poss|\bif poss|\bavoid\b|\bwhere it can\b"
+    r"|\bbetter if\b|\bnice if\b|\brather\b|\bpreferably\b|\bif you can\b",
+    re.IGNORECASE,
+)
+_DAY_WORDS = [
+    (0, r"mon(?:day)?s?"), (1, r"tue(?:s|sday)?s?"), (2, r"wed(?:nesday)?s?"), (3, r"thu(?:r|rs|rsday)?s?"),
+    (4, r"fri(?:day)?s?"), (5, r"sat(?:urday)?s?"), (6, r"sun(?:day)?s?"),
+]
+
+
+def _days_named(text: str) -> set[int]:
+    """Weekdays a sentence names, ranges included ("Monday to Thursday")."""
+    low = text.lower()
+    found = {d for d, pat in _DAY_WORDS if re.search(rf"\b{pat}\b", low)}
+    day_alt = "|".join(f"(?:{pat})" for _, pat in _DAY_WORDS)
+    for m in re.finditer(rf"\b({day_alt})\b\s*(?:to|-|–|till|until|through|thru)\s*\b({day_alt})\b", low):
+        ends = [next(d for d, pat in _DAY_WORDS if re.fullmatch(pat, g)) for g in m.groups()]
+        found |= set(range(min(ends), max(ends) + 1))
+    return found
+
+
+def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
+    """Deterministic fixes for two misreadings the model keeps making, applied
+    after parsing so they can't be argued away by an example that didn't make
+    it into the prompt. Both were seen in behaviour eval runs.
+
+    1. Strictness. "9A should have physics on wednesday" came back as a "try
+       to" rule. A rule is required unless the sentence softens it; balance and
+       span rules are evening-out habits and are left as the model set them.
+    2. "Only". "Mary maam comes only on Mon Wed Fri" came back banning Wed and
+       Fri - the days she DOES come. When a sentence says "only", names days,
+       and the rule bans some of those same days, the ban is flipped to the days
+       not named.
+    """
+    from dataclasses import replace as _replace
+    from app.services.constraint_ir import Balance, Count, Span
+
+    rule = result.rule
+    if rule is None:
+        return result
+    changed = False
+
+    if rule.strength != "required" and not _PREFERENCE_MARKERS.search(text) \
+            and not isinstance(rule.form, (Balance, Span)):
+        rule = _replace(rule, strength="required")
+        changed = True
+
+    form = rule.form
+    if isinstance(form, Count) and form.selector.days and form.relation in ("==", "<=") and form.value == 0 \
+            and re.search(r"\bonly\b", text, re.IGNORECASE):
+        named = _days_named(text)
+        banned = set(form.selector.days)
+        if named and banned & named:
+            school_days = sorted({p[0] for p in (periods or [])}) or [0, 1, 2, 3, 4, 5]
+            flipped = [d for d in school_days if d not in named]
+            if flipped and set(flipped) != banned:
+                logger.info("flipped an 'only' ban for %r: %s -> %s", text, sorted(banned), flipped)
+                rule = _replace(rule, form=_replace(form, selector=_replace(form.selector, days=tuple(flipped))))
+                changed = True
+
+    if not changed:
+        return result
+    return IRParse(rule=rule, sentence=render(rule), usage=result.usage)
 
 
 def _read_block(block, text: str, usage) -> "IRParse":

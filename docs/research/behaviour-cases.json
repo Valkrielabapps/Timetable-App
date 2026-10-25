@@ -1496,7 +1496,7 @@
   {
    "id": "H43",
    "split": "held_out",
-   "typed": "pe and art never back to back",
+   "typed": "maths and hindi never back to back",
    "reference": {
     "form": "adjacency",
     "scope": [
@@ -1504,17 +1504,18 @@
     ],
     "first": {
      "subjects": [
-      "PE"
+      "Maths"
      ]
     },
     "second": {
      "subjects": [
-      "Art"
+      "Hindi"
      ]
     },
     "min_gap": 1,
     "directional": false
-   }
+   },
+   "_note": "Was 'pe and art never back to back', which never bites on the eval school (too few lessons)."
   },
   {
    "id": "H44",

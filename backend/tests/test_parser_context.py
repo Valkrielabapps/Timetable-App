@@ -93,3 +93,57 @@ def test_held_out_eval_sentences_are_never_worked_examples():
     library = {e.typed.lower() for e in P._LIBRARY.examples}
     leaked = [c["id"] for c in cases if c.get("split") == "held_out" and c["typed"].lower() in library]
     assert leaked == []
+
+
+# --- deterministic checks after parsing ------------------------------------
+
+from app.services.constraint_ir import rule_from_dict  # noqa: E402
+from app.services.constraint_ir_english import render  # noqa: E402
+
+WEEK = [(d, o, None, False) for d in range(6) for o in range(1, 7)]
+
+
+def _parsed(rule_dict):
+    rule = rule_from_dict(rule_dict)
+    return P.IRParse(rule=rule, sentence=render(rule))
+
+
+def test_days_named_includes_ranges():
+    assert P._days_named("only available Monday to Thursday") == {0, 1, 2, 3}
+    assert P._days_named("comes only on Mon Wed Fri") == {0, 2, 4}
+    assert P._days_named("no PE after lunch") == set()
+
+
+def test_an_only_ban_on_the_named_days_is_flipped():
+    wrong = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Ms. Mary"], "days": [1, 2, 3, 4, 5]},
+                     "relation": "==", "value": 0})
+    fixed = P._sanity(wrong, "Mary maam comes only on Mon Wed Fri", WEEK)
+    assert fixed.rule.form.selector.days == (1, 3, 5)
+    assert "Tuesday" in fixed.sentence and "Wednesday" not in fixed.sentence
+
+
+def test_a_correct_only_ban_is_left_alone():
+    right = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Mrs. Rao"], "days": [4, 5]},
+                     "relation": "==", "value": 0})
+    assert P._sanity(right, "Rao ma'am is only available Monday to Thursday", WEEK) is right
+
+
+def test_a_rule_is_required_unless_the_sentence_softens_it():
+    soft = {"form": "count", "scope": [], "selector": {"subjects": ["Physics"], "days": [2]},
+            "relation": ">=", "value": 1, "strength": "preference"}
+    assert P._sanity(_parsed(soft), "9A should have physics on wednesday", WEEK).rule.strength == "required"
+    kept = _parsed(soft)
+    assert P._sanity(kept, "would be nice if physics is on wednesday", WEEK).rule.strength == "preference"
+    assert P._sanity(kept, "try to put physics on wednesday", WEEK).rule.strength == "preference"
+
+
+def test_evening_out_rules_keep_their_strength():
+    spread = _parsed({"form": "balance", "scope": ["teacher"], "across": ["day"], "selector": {},
+                      "max_spread": 1, "strength": "preference"})
+    assert P._sanity(spread, "Spread classes evenly", WEEK).rule.strength == "preference"
+
+
+def test_the_reading_lessons_are_always_sent():
+    prompt = P._system_prompt(TEACHERS, SUBJECTS, LABELS, None)
+    assert '"ONLY" names what is ALLOWED' in prompt
+    assert "classes\", \"lessons\" and \"periods\" as a count mean periods" in prompt
