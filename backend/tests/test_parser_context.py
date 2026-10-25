@@ -147,3 +147,61 @@ def test_the_reading_lessons_are_always_sent():
     prompt = P._system_prompt(TEACHERS, SUBJECTS, LABELS, None)
     assert '"ONLY" names what is ALLOWED' in prompt
     assert "classes\", \"lessons\" and \"periods\" as a count mean periods" in prompt
+
+
+# Six lessons a day, short break after 2, lunch after 4 - the eval school.
+LUNCH_WEEK = [
+    (d, o, label, is_break)
+    for d in range(6)
+    for o, label, is_break in [(1, None, False), (2, None, False), (3, "Short break", True), (4, None, False),
+                               (5, None, False), (6, "Lunch", True), (7, None, False), (8, None, False)]
+]
+
+
+def test_the_week_layout_is_read_in_lesson_numbers():
+    assert P._lesson_layout(LUNCH_WEEK) == ([1, 2, 3, 4, 5, 6], [5, 6])
+
+
+def test_a_day_filter_with_a_per_day_minimum_loses_the_day_grouping():
+    impossible = _parsed({"form": "count", "scope": ["class_group", "day"],
+                          "selector": {"subjects": ["Physics"], "class_groups": ["Grade 9 - A"], "days": [2]},
+                          "relation": ">=", "value": 1})
+    fixed = P._sanity(impossible, "9A should have physics on wednesday", LUNCH_WEEK)
+    assert "day" not in fixed.rule.form.scope
+
+
+def test_only_in_the_first_periods_bans_the_rest():
+    wrong = _parsed({"form": "count", "scope": ["class_group"], "selector": {"subjects": ["Maths"], "period_orders": [1, 2, 3]},
+                     "relation": ">=", "value": 1})
+    fixed = P._sanity(wrong, "Maths should only be in the first 3 periods", LUNCH_WEEK)
+    f = fixed.rule.form
+    assert f.selector.period_orders == (4, 5, 6) and f.relation == "==" and f.value == 0
+
+
+def test_a_correct_only_periods_rule_is_left_alone():
+    right = _parsed({"form": "count", "scope": [], "selector": {"teachers": ["Mrs. Pillai"], "period_orders": [1, 2]},
+                     "relation": "==", "value": 0})
+    assert P._sanity(right, "mrs pillai can teach only periods 3 to 6", LUNCH_WEEK) is right
+
+
+def test_after_lunch_means_every_period_after_it():
+    narrow = _parsed({"form": "count", "scope": [], "selector": {"subjects": ["PE"], "period_orders": [5]},
+                      "relation": "==", "value": 0})
+    assert P._sanity(narrow, "pt shouldnt be after lunch", LUNCH_WEEK).rule.form.selector.period_orders == (5, 6)
+    assert P._sanity(narrow, "No PE right after lunch", LUNCH_WEEK) is narrow
+
+
+def test_classes_are_periods_unless_the_sentence_says_different():
+    distinct = {"form": "count", "scope": ["teacher", "day"], "selector": {}, "relation": "<=", "value": 4,
+                "distinct": "class_group"}
+    assert P._sanity(_parsed(distinct), "nobody should teach more than 4 classes in a day", LUNCH_WEEK).rule.form.distinct is None
+    kept = _parsed(distinct)
+    assert P._sanity(kept, "no teacher should take more than 4 different classes in a day", LUNCH_WEEK) is kept
+
+
+def test_a_same_subject_run_is_grouped_by_subject_without_a_retry():
+    class Block:
+        name = "record_rule"
+        input = {"form": "run", "scope": ["class_group"], "selector": {}, "max_consecutive": 1}
+    out = P._read_block(Block(), "No section should have the same subject twice in a row", None)
+    assert out.invalid is None and "subject" in out.rule.form.scope

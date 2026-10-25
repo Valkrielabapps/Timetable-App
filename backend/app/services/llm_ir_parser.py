@@ -574,7 +574,10 @@ Rules that sound vague and are not. Say these, don't refuse them:
 
 Readings that are easy to get backwards - apply them to every sentence:
 - "ONLY" names what is ALLOWED. "X only on Mon, Wed, Fri" / "only in periods 1 to 3"
-  bans every OTHER day or period - never the ones named.
+  / "only in the mornings" bans every OTHER day or period - never the ones named,
+  and never "at least one in" them. This is not ambiguous: don't ask.
+- "after lunch" / "in the afternoon" is EVERY period after lunch; only "right /
+  just / immediately after lunch" is the single first one.
 - Strictness: a rule is required unless the sentence softens it ("try", "if
   possible", "where possible", "ideally", "prefer", "would like", "would be
   nice"). "should", "must", "needs", "has to", "can't", "never" are all required.
@@ -1278,6 +1281,52 @@ def _days_named(text: str) -> set[int]:
     return found
 
 
+def _lesson_layout(periods) -> tuple[list[int], list[int]]:
+    """(every lesson number, lesson numbers after lunch) for the school's week.
+    Lessons are numbered within each day, breaks between numbers - the same
+    numbering the prompt and the solver use. "After lunch" is the lessons after
+    a break labelled lunch; empty if the school has none."""
+    from app.services.llm_constraint_parser import _kind
+    by_day: dict = {}
+    for day, order, label, kind in periods or []:
+        by_day.setdefault(day, []).append((order, label or "", _kind(kind)))
+    numbers, after_lunch = set(), set()
+    for slots in by_day.values():
+        n, seen_lunch = 0, False
+        for _order, label, kind in sorted(slots):
+            if kind == "lesson":
+                n += 1
+                numbers.add(n)
+                if seen_lunch:
+                    after_lunch.add(n)
+            elif "lunch" in label.lower():
+                seen_lunch = True
+    return sorted(numbers), sorted(after_lunch)
+
+
+_ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8}
+
+
+def _periods_named(text: str) -> set[int]:
+    """Lesson numbers a sentence names: "the first 3 periods", "periods 3 to 6",
+    "P1-P4", "1st and 2nd period"."""
+    low = text.lower()
+    out: set[int] = set()
+    m = re.search(r"first\s+(\d+|two|three|four|five|six)\s+periods?", low)
+    if m:
+        n = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6}.get(m.group(1)) or int(m.group(1))
+        out |= set(range(1, n + 1))
+    for a, b in re.findall(r"(?:periods?|p)\s*(\d+)\s*(?:to|-|–|till|through)\s*(?:p(?:eriod)?\s*)?(\d+)", low):
+        out |= set(range(int(a), int(b) + 1))
+    if not out:
+        for n in re.findall(r"\b(\d)(?:st|nd|rd|th)\b(?=[^.]*\bperiod)", low):
+            out.add(int(n))
+    return out
+
+
+_DISTINCT_CLASS_WORDS = re.compile(r"different|diff\b|distinct|separate|\bsections?\b|\bvarious\b", re.IGNORECASE)
+
+
 def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
     """Deterministic fixes for two misreadings the model keeps making, applied
     after parsing so they can't be argued away by an example that didn't make
@@ -1317,6 +1366,51 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
                 rule = _replace(rule, form=_replace(form, selector=_replace(form.selector, days=tuple(flipped))))
                 changed = True
 
+    numbers, after_lunch = _lesson_layout(periods)
+    form = rule.form
+    if isinstance(form, Count):
+        sel = form.selector
+
+        # 3. A day filter AND "day" in scope with an "at least" is impossible:
+        #    every day would need a Friday lesson. Seen three times in one run
+        #    ("9A should have physics on wednesday"). The filter already pins the
+        #    day, so the per-day grouping goes.
+        if sel.days and "day" in form.scope and form.relation in (">=", "==") and form.value >= 1 \
+                and not form.exists_over:
+            form = _replace(form, scope=tuple(d for d in form.scope if d != "day"))
+            changed = True
+
+        # 4. "only in periods 1 to 3" read as "at least one in periods 1 to 3",
+        #    or as a ban on 1 to 3: it bans every other period.
+        if re.search(r"\bonly\b", text, re.IGNORECASE) and sel.period_orders and numbers:
+            named = _periods_named(text)
+            given = set(sel.period_orders)
+            if named and given == named and named < set(numbers):
+                others = tuple(n for n in numbers if n not in named)
+                if form.relation in (">=",) or (form.relation in ("==", "<=") and form.value == 0):
+                    form = _replace(form, selector=_replace(sel, period_orders=others), relation="==", value=0,
+                                    scope=tuple(d for d in form.scope if d != "day"), distinct=None)
+                    changed = True
+
+        # 5. "after lunch" means every period after it, not just the first,
+        #    unless the sentence says right / just / immediately after.
+        sel = form.selector
+        if after_lunch and sel.period_orders and len(sel.period_orders) == 1 \
+                and sel.period_orders[0] == after_lunch[0] and len(after_lunch) > 1 \
+                and re.search(r"after\s+lunch|afternoon", text, re.IGNORECASE) \
+                and not re.search(r"(?:right|just|immediately|straight|directly)\s+after", text, re.IGNORECASE):
+            form = _replace(form, selector=_replace(sel, period_orders=tuple(after_lunch)))
+            changed = True
+
+        # 6. "classes" counted as different sections without the sentence
+        #    saying so ("nobody should teach more than 4 classes in a day").
+        if form.distinct == "class_group" and not _DISTINCT_CLASS_WORDS.search(text):
+            form = _replace(form, distinct=None)
+            changed = True
+
+        if form is not rule.form:
+            rule = _replace(rule, form=form)
+
     if not changed:
         return result
     return IRParse(rule=rule, sentence=render(rule), usage=result.usage)
@@ -1335,7 +1429,16 @@ def _read_block(block, text: str, usage) -> "IRParse":
 
     seen: list[str] = []
     try:
-        rule = rule_from_dict(_clean(_rule_payload(block.input, seen)))
+        payload = _clean(_rule_payload(block.input, seen))
+        # "the same subject twice in a row" sent as a run over everything: the
+        # sentence says per subject, so group by subject rather than spend a
+        # second call learning that from the validator.
+        if payload.get("form") == "run" and not payload.get("selector") \
+                and not {"subject", "teacher"} & set(payload.get("scope") or []) \
+                and re.search(r"\b(?:same|any|each|every|a)\s+subject", text, re.IGNORECASE):
+            payload["scope"] = list(payload.get("scope") or []) + ["subject"]
+            seen.append("run over 'the same subject' -> scope gained subject")
+        rule = rule_from_dict(payload)
         if seen:
             # The point of logging these is not the rescued rule - it is
             # finding out which wordings the model reaches for, so the schema
