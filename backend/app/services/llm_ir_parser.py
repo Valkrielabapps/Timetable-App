@@ -1371,16 +1371,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
     if isinstance(form, Count):
         sel = form.selector
 
-        # 3. A day filter AND "day" in scope with an "at least" is impossible:
-        #    every day would need a Friday lesson. Seen three times in one run
-        #    ("9A should have physics on wednesday"). The filter already pins the
-        #    day, so the per-day grouping goes.
-        if sel.days and "day" in form.scope and form.relation in (">=", "==") and form.value >= 1 \
-                and not form.exists_over:
-            form = _replace(form, scope=tuple(d for d in form.scope if d != "day"))
-            changed = True
-
-        # 4. "only in periods 1 to 3" read as "at least one in periods 1 to 3",
+        # 3. "only in periods 1 to 3" read as "at least one in periods 1 to 3",
         #    or as a ban on 1 to 3: it bans every other period.
         if re.search(r"\bonly\b", text, re.IGNORECASE) and sel.period_orders and numbers:
             named = _periods_named(text)
@@ -1392,7 +1383,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
                                     scope=tuple(d for d in form.scope if d != "day"), distinct=None)
                     changed = True
 
-        # 5. "after lunch" means every period after it, not just the first,
+        # 4. "after lunch" means every period after it, not just the first,
         #    unless the sentence says right / just / immediately after.
         sel = form.selector
         if after_lunch and sel.period_orders and len(sel.period_orders) == 1 \
@@ -1402,7 +1393,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
             form = _replace(form, selector=_replace(sel, period_orders=tuple(after_lunch)))
             changed = True
 
-        # 6. "classes" counted as different sections without the sentence
+        # 5. "classes" counted as different sections without the sentence
         #    saying so ("nobody should teach more than 4 classes in a day").
         if form.distinct == "class_group" and not _DISTINCT_CLASS_WORDS.search(text):
             form = _replace(form, distinct=None)

@@ -152,8 +152,12 @@ def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
     side = _side(form.scope, form.selector)
     pool = [p for p in placements
             if (p.occupies_teacher if side == "teacher" else p.occupies_class)]
-    members = [p for p in pool if _matches(p, resolved, ignore_time=True)]
-    if not members:
+    everyone = [p for p in pool if _matches(p, resolved, ignore_time=True)]
+    # Mirrors the compiler's _in_scope_window: grouped by day and naming days,
+    # only those days are groups.
+    from app.services.constraint_ir_compiler import _in_scope_window
+    members = [p for p in everyone if _in_scope_window(p, form.scope, resolved)]
+    if not everyone:
         return []
 
     if form.exists_over:
@@ -184,7 +188,16 @@ def _check_count(placements, form: Count, index) -> list[tuple[list[int], str]]:
         return found
 
     found = []
-    for _key, group in _group(members, form.scope).items():
+    groups = _group(members, form.scope)
+    if "day" in form.scope and "days" in resolved:
+        # A named day with nothing on it is still a group - the one most likely
+        # to break "at least one on Wednesday". Placements only exist where
+        # lessons are, so build the named days' groups explicitly.
+        i = form.scope.index("day")
+        for key in {k for k in _group(everyone, form.scope)}:
+            for day in resolved["days"]:
+                groups.setdefault(key[:i] + (day,) + key[i + 1:], [])
+    for _key, group in groups.items():
         actual, matching = _count_in(group, resolved, form, side)
         if not _holds(actual, form.relation, form.value):
             found.append((

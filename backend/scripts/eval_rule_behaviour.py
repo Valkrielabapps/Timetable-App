@@ -203,12 +203,15 @@ def compare(db, school_id, parsed: list, refs: list, index, periods) -> tuple[st
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="*", help="case ids")
+    ap.add_argument("--split", help="only one split: seen, held_out or held_out_2")
     ap.add_argument("--dry-run", action="store_true", help="use each reference as the parse: checks the cases, no API")
     args = ap.parse_args()
 
     cases = json.loads(CASES.read_text(encoding="utf-8"))["cases"]
     if args.only:
         cases = [c for c in cases if c["id"] in set(args.only)]
+    if args.split:
+        cases = [c for c in cases if c.get("split", "seen") == args.split]
 
     db, school_id = build_school()
     index, periods = _index(db, school_id)
@@ -281,13 +284,15 @@ def main():
     print(f"\n{passed}/{len(rows)} pass  ({time.monotonic() - started:.0f}s)")
     # Held-out sentences have no worked example in the prompt, so their score is
     # the honest one: how well the parser reads sentences it has never seen.
-    for split, label in (("seen", "seen (worked examples cover these)"), ("held_out", "held out (never shown to the parser)")):
+    for split, label in (("seen", "seen (worked examples cover these)"),
+                         ("held_out", "held out, set 1 (fixes were made against its failures)"),
+                         ("held_out_2", "held out, set 2 (fresh: never tuned against)")):
         mine = [r for r in rows if r["SPLIT"] == split]
         if mine:
             ok = sum(r["PASS"] == "yes" for r in mine)
             print(f"  {label}: {ok}/{len(mine)}")
     if not args.dry_run:
-        out = ROOT / "docs" / "research" / f"behaviour-run-{datetime.date.today().isoformat()}{'-partial' if args.only else ''}.tsv"
+        out = ROOT / "docs" / "research" / f"behaviour-run-{datetime.date.today().isoformat()}{'-partial' if (args.only or args.split) else ''}.tsv"
         with out.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0]), delimiter="\t")
             w.writeheader()

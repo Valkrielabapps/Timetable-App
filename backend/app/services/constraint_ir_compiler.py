@@ -333,6 +333,24 @@ def _count_expr(model, group, resolved, form: Count, name: str):
     return (sum(indicators) if indicators else 0), bool(indicators)
 
 
+def _in_scope_window(atom, scope, resolved) -> bool:
+    """Whether an atom's group is one the rule's own time filter covers.
+
+    Group membership ignores the selector's time filters (see _count), but
+    when the rule is grouped BY day and also names days, only those days are
+    groups: "9A has Physics on Wednesday, per day" is one Wednesday group, not
+    a Monday group that can never hold a Wednesday lesson. Without this the
+    rule demanded a Wednesday lesson on every day of the week and no timetable
+    existed - while reading, in English, exactly as intended.
+    """
+    if "day" in scope and "days" in resolved and atom.day_of_week not in resolved["days"]:
+        return False
+    if ("period_order" in scope or "period" in scope) and "position_slots" in resolved \
+            and (atom.day_of_week, atom.order) not in resolved["position_slots"]:
+        return False
+    return True
+
+
 def _count(model, penalties, atoms, form: Count, index, weight, tag: str) -> None:
     if form.exists_over:
         return _count_exists(model, penalties, atoms, form, index, weight, tag)
@@ -347,7 +365,8 @@ def _count(model, penalties, atoms, form: Count, index, weight, tag: str) -> Non
     # its group, the sum is empty, and the rule is correctly infeasible rather
     # than quietly skipped. Skipping there would be the old failure - a rule
     # that reports itself as enforced and does nothing.
-    members = [a for a in pool if _matches(a, resolved, ignore_time=True)]
+    members = [a for a in pool if _matches(a, resolved, ignore_time=True)
+               and _in_scope_window(a, form.scope, resolved)]
     if not members:
         return
 
@@ -376,7 +395,8 @@ def _count_exists(model, penalties, atoms, form: Count, index, weight, tag: str)
     """
     resolved = _resolve(form.selector, index)
     pool = _pool(atoms, _side(form.scope, form.selector))
-    members = [a for a in pool if _matches(a, resolved, ignore_time=True)]
+    members = [a for a in pool if _matches(a, resolved, ignore_time=True)
+               and _in_scope_window(a, form.scope, resolved)]
     if not members:
         return
 

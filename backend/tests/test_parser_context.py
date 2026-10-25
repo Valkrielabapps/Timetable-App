@@ -91,7 +91,7 @@ def test_held_out_eval_sentences_are_never_worked_examples():
     cases = json.loads((pathlib.Path(__file__).resolve().parents[2] / "docs" / "research"
                         / "behaviour-cases.json").read_text(encoding="utf-8"))["cases"]
     library = {e.typed.lower() for e in P._LIBRARY.examples}
-    leaked = [c["id"] for c in cases if c.get("split") == "held_out" and c["typed"].lower() in library]
+    leaked = [c["id"] for c in cases if str(c.get("split", "")).startswith("held_out") and c["typed"].lower() in library]
     assert leaked == []
 
 
@@ -160,14 +160,6 @@ LUNCH_WEEK = [
 
 def test_the_week_layout_is_read_in_lesson_numbers():
     assert P._lesson_layout(LUNCH_WEEK) == ([1, 2, 3, 4, 5, 6], [5, 6])
-
-
-def test_a_day_filter_with_a_per_day_minimum_loses_the_day_grouping():
-    impossible = _parsed({"form": "count", "scope": ["class_group", "day"],
-                          "selector": {"subjects": ["Physics"], "class_groups": ["Grade 9 - A"], "days": [2]},
-                          "relation": ">=", "value": 1})
-    fixed = P._sanity(impossible, "9A should have physics on wednesday", LUNCH_WEEK)
-    assert "day" not in fixed.rule.form.scope
 
 
 def test_only_in_the_first_periods_bans_the_rest():
