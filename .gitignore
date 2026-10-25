@@ -1,1 +1,4 @@
 docs/Valkyrie_Labs_Business_Plan.pdf
+
+# Eval scripts: cached parser answers (local, regenerated as needed)
+docs/research/.parse-cache.json

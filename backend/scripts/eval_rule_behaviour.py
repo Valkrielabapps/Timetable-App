@@ -71,6 +71,30 @@ from app.services.constraint_ir_compiler import SchoolIndex  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CASES = ROOT / "docs" / "research" / "behaviour-cases.json"
+# Parsed answers, keyed by everything that could change them (the parser's
+# code, the school's names, the sentence). A rerun after a change that doesn't
+# touch the parser - a new case, a solver fix - costs nothing.
+CACHE = ROOT / "docs" / "research" / ".parse-cache.json"
+
+# Claude Haiku 4.5, US dollars per million tokens (see eval_ir_parser.py).
+PRICE_IN, PRICE_OUT, PRICE_CACHE_READ, PRICE_CACHE_WRITE = 1.00, 5.00, 0.10, 1.25
+
+
+def _cost(usage) -> float:
+    if not usage:
+        return 0.0
+    tin, tout, cread, cwrite = usage
+    return (tin * PRICE_IN + tout * PRICE_OUT + cread * PRICE_CACHE_READ + cwrite * PRICE_CACHE_WRITE) / 1e6
+
+
+def _parser_fingerprint() -> str:
+    """Changes whenever anything that shapes a parse changes."""
+    import hashlib
+    h = hashlib.sha256()
+    for name in ("llm_ir_parser.py", "ir_example_retrieval.py", "rule_text_hints.py", "llm_constraint_parser.py",
+                 "constraint_ir.py", "constraint_ir_english.py"):
+        h.update((pathlib.Path(__file__).resolve().parents[1] / "app" / "services" / name).read_bytes())
+    return h.hexdigest()[:16]
 
 # ---------------------------------------------------------------------------
 # The eval school. Small enough to solve in a second, with slack everywhere so
@@ -200,10 +224,32 @@ def compare(db, school_id, parsed: list, refs: list, index, periods) -> tuple[st
     return "OK", ""
 
 
+def _to_cache(result) -> dict:
+    if result.rule is not None:
+        return {"rule": rule_to_dict(result.rule), "sentence": result.sentence}
+    if result.unclear is not None:
+        u = result.unclear
+        return {"unclear": {"reason": u.reason, "explanation": u.explanation, "question": u.question}}
+    return {"invalid": result.invalid}
+
+
+def _from_cache(entry):
+    from app.services.llm_ir_parser import IRParse, Unclear
+    if "rule" in entry:
+        return IRParse(rule=rule_from_dict(entry["rule"]), sentence=entry["sentence"])
+    if "unclear" in entry:
+        u = entry["unclear"]
+        return IRParse(unclear=Unclear(reason=u["reason"], explanation=u["explanation"], question=u.get("question")))
+    return IRParse(invalid=entry.get("invalid") or "invalid")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", nargs="*", help="case ids")
-    ap.add_argument("--split", help="only one split: seen, held_out or held_out_2")
+    ap.add_argument("--split", help="only one split: seen, held_out, held_out_2 or paraphrase")
+    ap.add_argument("--budget", type=float, default=0.50,
+                    help="stop calling the API once this many US dollars are spent (default 0.50)")
+    ap.add_argument("--no-cache", action="store_true", help="re-parse even sentences answered before")
     ap.add_argument("--dry-run", action="store_true", help="use each reference as the parse: checks the cases, no API")
     args = ap.parse_args()
 
@@ -223,6 +269,15 @@ def main():
         from app.routers.constraints import _load_resolution_data
         from app.services.llm_ir_parser import parse_rule_llm
         data = _load_resolution_data(db, school_id)
+    import hashlib
+    cache = {}
+    if not args.dry_run and CACHE.exists() and not args.no_cache:
+        try:
+            cache = json.loads(CACHE.read_text(encoding="utf-8"))
+        except ValueError:
+            cache = {}
+    fingerprint = _parser_fingerprint()
+    spent, cached_hits, stopped = 0.0, 0, False
 
     rows = []
     started = time.monotonic()
@@ -243,8 +298,24 @@ def main():
             if expect == "ask":
                 verdict = "ASKED"
         else:
-            result = parse_rule_llm(case["typed"], data.teacher_names, data.subject_names,
-                                    data.class_group_labels, data.periods)
+            key = hashlib.sha256(json.dumps(
+                [fingerprint, data.teacher_names, data.subject_names, data.class_group_labels, case["typed"]]
+            ).encode()).hexdigest()
+            result = None
+            if key in cache:
+                result = _from_cache(cache[key])
+                cached_hits += 1
+            elif spent >= args.budget:
+                stopped = True
+                print(f"{case['id']:5} SKIPPED    budget of ${args.budget:.2f} reached")
+                continue
+            else:
+                result = parse_rule_llm(case["typed"], data.teacher_names, data.subject_names,
+                                        data.class_group_labels, data.periods)
+                if result is not None:
+                    spent += _cost(result.usage)
+                    cache[key] = _to_cache(result)
+                    CACHE.write_text(json.dumps(cache), encoding="utf-8")
             parsed = []
             if result is None:
                 verdict, note = "ERROR", "the API call failed"
@@ -282,11 +353,16 @@ def main():
 
     passed = sum(r["PASS"] == "yes" for r in rows)
     print(f"\n{passed}/{len(rows)} pass  ({time.monotonic() - started:.0f}s)")
+    if not args.dry_run:
+        print(f"  API spend this run: ${spent:.3f}  ({cached_hits} answers reused from earlier runs, free)")
+        if stopped:
+            print(f"  Stopped at the ${args.budget:.2f} budget - run again to continue; finished cases are cached.")
     # Held-out sentences have no worked example in the prompt, so their score is
     # the honest one: how well the parser reads sentences it has never seen.
     for split, label in (("seen", "seen (worked examples cover these)"),
                          ("held_out", "held out, set 1 (fixes were made against its failures)"),
-                         ("held_out_2", "held out, set 2 (fresh: never tuned against)")):
+                         ("held_out_2", "held out, set 2 (fresh: never tuned against)"),
+                         ("paraphrase", "rewritten by another AI in other people's styles")):
         mine = [r for r in rows if r["SPLIT"] == split]
         if mine:
             ok = sum(r["PASS"] == "yes" for r in mine)
