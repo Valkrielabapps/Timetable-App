@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import DataEntryTab from './DataEntryTab'
 
@@ -96,5 +96,34 @@ describe('an older server that ignores teacher lists', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Joseph' }))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(await screen.findByText(/teacher list wasn't saved/i)).toBeInTheDocument()
+  })
+})
+
+describe('finding a teacher in the picker', () => {
+  beforeEach(() => {
+    api.updateRequirement.mockReset()
+    api.updateRequirement.mockImplementation(async (id, data) => ({ id, ...data }))
+  })
+
+  const listed = () =>
+    within(screen.getByRole('dialog')).getAllByRole('checkbox').map((c) => c.closest('label').textContent)
+
+  it('lists teachers alphabetically', () => {
+    renderPlan()
+    fireEvent.click(pickerButton())
+    expect(listed()).toEqual(['Anita', 'Joseph', 'Priya'])
+  })
+
+  it('narrows the list as you type, and Enter ticks the best match', async () => {
+    renderPlan()
+    fireEvent.click(pickerButton())
+    const search = screen.getByLabelText('Search teachers for English')
+    fireEvent.change(search, { target: { value: 'jo' } })
+    expect(listed()).toEqual(['Joseph'])
+    fireEvent.keyDown(search, { key: 'Enter' })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    await waitFor(() =>
+      expect(api.updateRequirement).toHaveBeenCalledWith(1, { preferred_teacher_id: 2, allowed_teacher_ids: null }),
+    )
   })
 })

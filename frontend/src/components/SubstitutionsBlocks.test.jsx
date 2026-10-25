@@ -67,3 +67,21 @@ describe('substitutions with elective blocks', () => {
     expect(api.getTimetable).toHaveBeenCalledWith(9)
   })
 })
+
+describe('choosing who is absent', () => {
+  const listed = () =>
+    screen.getAllByRole('checkbox').map((c) => c.closest('label').textContent)
+
+  it('lists teachers alphabetically, titles ignored', async () => {
+    renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
+    await screen.findByLabelText('Mrs. Rao')
+    expect(listed()).toEqual(['Mr. Khan', 'Mrs. Rao'])
+  })
+
+  it('narrows the list by search', async () => {
+    renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
+    await screen.findByLabelText('Mrs. Rao')
+    fireEvent.change(screen.getByLabelText('Search teachers'), { target: { value: 'rao' } })
+    expect(listed()).toEqual(['Mrs. Rao'])
+  })
+})

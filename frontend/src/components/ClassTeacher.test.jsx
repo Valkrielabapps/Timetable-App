@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { optionsOf, pick } from '../test/pick'
 import DataEntryTab from './DataEntryTab'
 import TeachersSection from './TeachersSection'
 
@@ -11,6 +12,8 @@ vi.mock('../hooks/useSchoolData', () => ({
   useRoomMutations: () => ({ create: vi.fn(), delete: vi.fn() }),
   useElectiveBlocks: () => ({ data: [] }),
   useElectiveBlockMutations: () => ({ create: vi.fn(), update: vi.fn(), delete: vi.fn(), invalidate: vi.fn() }),
+  useTimetables: () => ({ data: [] }),
+  useTimetable: () => ({ data: null }),
 }))
 
 /**
@@ -53,7 +56,7 @@ describe('class teacher', () => {
     const updated = { id: 100, grade: 'Grade 6', name: 'A', class_teacher_id: 10 }
     api.updateClassGroup.mockResolvedValue(updated)
     const setClassGroups = renderPlan([{ id: 100, grade: 'Grade 6', name: 'A', class_teacher_id: null }])
-    fireEvent.change(screen.getByLabelText('Class teacher'), { target: { value: '10' } })
+    pick('Class teacher', 'Mrs. Rao')
     await waitFor(() => expect(api.updateClassGroup).toHaveBeenCalledWith(100, { class_teacher_id: 10 }))
     // Patched into the sections in place, not reloaded.
     const patch = setClassGroups.mock.calls[0][0]
@@ -63,7 +66,7 @@ describe('class teacher', () => {
   it('can be cleared', async () => {
     api.updateClassGroup.mockResolvedValue({ id: 100, class_teacher_id: null })
     renderPlan([{ id: 100, grade: 'Grade 6', name: 'A', class_teacher_id: 10 }])
-    fireEvent.change(screen.getByLabelText('Class teacher'), { target: { value: '' } })
+    pick('Class teacher', 'Not set')
     await waitFor(() => expect(api.updateClassGroup).toHaveBeenCalledWith(100, { class_teacher_id: null }))
   })
 

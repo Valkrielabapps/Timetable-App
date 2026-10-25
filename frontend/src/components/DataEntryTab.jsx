@@ -12,6 +12,8 @@ import {
   useRooms,
 } from '../hooks/useSchoolData'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
+import SearchableSelect from './SearchableSelect'
+import { rankMatches, sortByName, sortSections } from '../sorting'
 import { DEFAULT_STRUCTURE } from '../timetableStructure'
 import SetupExtractionPanel from './SetupExtractionPanel'
 import SubjectsSection from './SubjectsSection'
@@ -393,8 +395,9 @@ export default function DataEntryTab({
   // not every subject in the school. A school with 20 subjects but one
   // section (say, Kindergarten) that only needs 6 of them shouldn't show
   // the other 14 as rows to skip past every time this page opens.
-  const sectionSubjects = subjects.filter(
-    (s) => !s._pending && requirements.some((r) => r.subject_id === s.id)
+  // Alphabetical, like every list of subjects.
+  const sectionSubjects = sortByName(
+    subjects.filter((s) => !s._pending && requirements.some((r) => r.subject_id === s.id)),
   )
 
   const rows = sectionSubjects.map((subject) => {
@@ -532,6 +535,9 @@ export default function DataEntryTab({
           onSubjectsChanged={subjectsApi}
           institutionType={institutionType}
           readOnly={readOnly}
+          allRequirements={allRequirements}
+          teachers={teachers}
+          electiveBlocks={allElectiveBlocks}
         />
       )}
 
@@ -914,7 +920,7 @@ function PlanSection({
                   onChange={(e) => onActiveSectionChange(Number(e.target.value))}
                   className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm font-medium text-neutral-700 focus:border-neutral-900 focus:outline-none"
                 >
-                  {classGroups.map((cg) => (
+                  {sortSections(classGroups).map((cg) => (
                     <option key={cg.id} value={cg.id}>
                       {cg.grade ? `${cg.grade} · ` : ''}Section {cg.name}
                     </option>
@@ -1023,22 +1029,15 @@ function PlanSection({
                 {assistantEligibleTeachers.length === 0 ? (
                   <span className="text-xs text-slate-400">No eligible teachers</span>
                 ) : (
-                  <select
-                    value={assistantTeacherId ?? ''}
+                  <SearchableSelect
+                    ariaLabel={`Assistant teacher for ${subject.name}`}
+                    value={assistantTeacherId}
                     disabled={readOnly || periodsPerWeek <= 0}
-                    onChange={(e) =>
-                      onSetAssistantTeacher(subject.id, e.target.value ? Number(e.target.value) : null)
-                    }
-                    title="An optional second teacher for this subject in this section. Mark a teacher 'eligible as an assistant teacher' on the Teachers page to add them here"
-                    className="rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                  >
-                    <option value="">None</option>
-                    {assistantEligibleTeachers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(id) => onSetAssistantTeacher(subject.id, id)}
+                    emptyOption={{ label: 'None' }}
+                    options={assistantEligibleTeachers.map((t) => ({ value: t.id, label: t.name }))}
+                    className="text-xs"
+                  />
                 )}
               </td>
               <td className="py-2 pr-2">
@@ -1109,8 +1108,11 @@ function PlanSection({
 function TeacherPicker({ subjectName, teachers, selectedIds, disabled, onChange }) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(selectedIds)
+  const [search, setSearch] = useState('')
   const ref = useRef(null)
   const selectedKey = selectedIds.join(',')
+  // Alphabetical, titles ignored; narrowed by what's typed.
+  const shown = rankMatches(teachers, search)
 
   useEffect(() => {
     if (!open) setDraft(selectedIds)
@@ -1119,6 +1121,7 @@ function TeacherPicker({ subjectName, teachers, selectedIds, disabled, onChange 
 
   function close(save) {
     setOpen(false)
+    setSearch('')
     const changed = draft.slice().sort().join(',') !== selectedIds.slice().sort().join(',')
     if (save && changed) onChange(draft)
   }
@@ -1166,8 +1169,27 @@ function TeacherPicker({ subjectName, teachers, selectedIds, disabled, onChange 
           <p className="px-2 pb-1.5 pt-1 text-[11px] leading-snug text-neutral-500">
             Tick one to fix the teacher, or several and the solver picks one of them for the whole week.
           </p>
+          <input
+            autoFocus
+            aria-label={`Search teachers for ${subjectName}`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter ticks (or unticks) the best match, so a name can be
+              // typed and chosen without reaching for the mouse.
+              if (e.key === 'Enter' && shown[0]) {
+                e.preventDefault()
+                const t = shown[0]
+                setDraft((d) => (d.includes(t.id) ? d.filter((x) => x !== t.id) : [...d, t.id]))
+                setSearch('')
+              }
+            }}
+            placeholder="Type to search"
+            className="mb-1 w-full rounded border border-neutral-200 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none"
+          />
           <ul className="max-h-56 overflow-y-auto">
-            {teachers.map((t) => (
+            {shown.length === 0 && <li className="px-2 py-1.5 text-xs text-neutral-400">No matches</li>}
+            {shown.map((t) => (
               <li key={t.id}>
                 <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50">
                   <input
@@ -1226,26 +1248,16 @@ function ClassTeacherPicker({ section, teachers, classGroups, onChange, readOnly
   const teacherName = teachers.find((t) => t.id === section.class_teacher_id)?.name
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <label htmlFor="class-teacher-select" className="font-medium text-slate-700">
-        Class teacher
-      </label>
-      <select
+      <span className="font-medium text-slate-700">Class teacher</span>
+      <SearchableSelect
         id="class-teacher-select"
-        value={section.class_teacher_id ?? ''}
+        ariaLabel="Class teacher"
+        value={section.class_teacher_id}
         disabled={readOnly}
-        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-      >
-        <option value="">Not set</option>
-        {[...teachers]
-          .filter((t) => !t._pending)
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-      </select>
+        onChange={onChange}
+        emptyOption={{ label: 'Not set' }}
+        options={teachers.filter((t) => !t._pending).map((t) => ({ value: t.id, label: t.name }))}
+      />
       {others.length > 0 && (
         <span className="text-xs text-amber-700">
           {teacherName} is also class teacher of{' '}
@@ -1275,10 +1287,22 @@ function SectionSubjectPicker({
   readOnly,
   blockOfSubject = new Map(),
 }) {
+  const [search, setSearch] = useState('')
+  // Alphabetical; narrowed by what's typed, best matches first.
+  const shown = rankMatches(subjects, search)
   return (
     <div className="rounded-md border border-slate-200 bg-white p-4">
+      <input
+        type="search"
+        aria-label="Search subjects"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search subjects"
+        className="mb-3 w-full max-w-xs rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+      />
+      {shown.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">No subjects match.</p>}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
-        {subjects.map((s) => {
+        {shown.map((s) => {
           const inBlock = blockOfSubject.get(s.id)
           return (
             <label

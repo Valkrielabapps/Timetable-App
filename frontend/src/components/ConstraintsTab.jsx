@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import ConstraintInterpretation from './ConstraintInterpretation.jsx'
+import SearchableSelect from './SearchableSelect'
 import { confirmDialog } from './confirmDialog'
 import { useTimetable, useTimetables } from '../hooks/useSchoolData'
 import { filterOptions, filtersActive, NO_FILTERS, organise } from '../constraintGroups'
@@ -608,19 +609,14 @@ function FilterBar({ filters, onChange, options, shown, total }) {
   const active = filtersActive(filters)
   const select = (label, field, values, allLabel) =>
     values.length > 0 && (
-      <select
-        aria-label={label}
-        value={filters[field]}
-        onChange={(e) => set(field)(e.target.value)}
-        className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
-      >
-        <option value="">{allLabel}</option>
-        {values.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        ariaLabel={label}
+        value={filters[field] || null}
+        onChange={(v) => set(field)(v ?? '')}
+        emptyOption={{ label: allLabel }}
+        options={values.map((v) => ({ value: v, label: v }))}
+        className="text-xs"
+      />
     )
 
   return (

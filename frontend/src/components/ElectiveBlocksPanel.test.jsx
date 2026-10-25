@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { optionsOf, pick } from '../test/pick'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
 
 /**
@@ -72,7 +73,7 @@ describe('adding a block', () => {
     fireEvent.change(within(form()).getByLabelText('Periods/week'), { target: { value: '6' } })
     check('Physics')
     check('Accounts')
-    fireEvent.change(screen.getByLabelText('Teacher for Physics'), { target: { value: '13' } })
+    pick('Teacher for Physics', 'Mr. Das')
     fireEvent.click(screen.getByText('Save block'))
     await waitFor(() =>
       expect(mutations.create).toHaveBeenCalledWith({
@@ -137,9 +138,8 @@ describe('adding a block', () => {
     fireEvent.click(screen.getByText('+ Add elective block'))
     check('Physics')
     check('Biology')
-    const physics = within(screen.getByLabelText('Teacher for Physics'))
-      .getAllByRole('option').map((o) => o.textContent)
-    expect(physics).toEqual(['Any qualified (let solver choose)', 'Mrs. Rao', 'Mr. Das'])
+    // Alphabetical by name, titles ignored: Das before Rao.
+    expect(optionsOf('Teacher for Physics')).toEqual(['Any qualified (let solver choose)', 'Mr. Das', 'Mrs. Rao'])
     // Ms. Iyer teaches Biology, but only to Grade 12.
     expect(screen.getByText(/No qualified teacher yet/)).toBeInTheDocument()
   })

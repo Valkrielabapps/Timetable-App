@@ -350,3 +350,21 @@ def test_a_free_school_cannot_remove_the_watermark(client, world, monkeypatch):
     # The ordinary export still works, watermark and all.
     ok = _export(client, w, h, format="xlsx")
     assert ok.status_code == 200 and "Made with Timetablz Free" in _branding_text(ok.content)
+
+
+def test_teacher_pages_are_in_order_of_name_not_title(client, world):
+    """"Mrs. Zara" under Z and "Dr. Arun" under A - the order every list in the
+    app uses - rather than grouped by title."""
+    w, h = world
+    db = SessionLocal()
+    try:
+        renames = {"Rao": "Mrs. Zara", "Khan": "Dr. Arun", "Verma": "Mr. Mohan"}
+        for t in db.query(Teacher).filter(Teacher.school_id == w["school"]):
+            if t.name in renames:
+                t.name = renames[t.name]
+        db.commit()
+    finally:
+        db.close()
+    names = list(_sheets(_export(client, w, h, format="xlsx").content))
+    teachers = [n for n in names if n in {"Mrs. Zara", "Dr. Arun", "Mr. Mohan", "Das", "Nair", "Iyer"}]
+    assert teachers == ["Dr. Arun", "Das", "Iyer", "Mr. Mohan", "Nair", "Mrs. Zara"]

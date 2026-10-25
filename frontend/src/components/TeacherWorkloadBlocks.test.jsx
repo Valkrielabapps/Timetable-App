@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { optionsOf, pick } from '../test/pick'
 import TeachersSection from './TeachersSection'
 
 vi.mock('../api', () => ({ api: {} }))
@@ -8,6 +9,8 @@ vi.mock('../api', () => ({ api: {} }))
 const hooks = vi.hoisted(() => ({ blocks: [] }))
 vi.mock('../hooks/useSchoolData', () => ({
   useElectiveBlocks: () => ({ data: hooks.blocks }),
+  useTimetables: () => ({ data: [] }),
+  useTimetable: () => ({ data: null }),
 }))
 
 /**

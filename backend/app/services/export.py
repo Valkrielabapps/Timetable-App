@@ -26,6 +26,7 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, 
 from sqlalchemy.orm import Session
 
 from app.models.school import ClassGroup, ElectiveBlock, Period, Room, Subject, Teacher, Timetable, ZeroPeriod
+from app.services.naming import name_sort_key
 from app.services.timetable_structure import lesson_numbers
 
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -63,9 +64,10 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
             _natural_key(cg.name or ""),
         ),
     )
+    # By name, never by title - "Mrs. Rao" under R - as every list in the app.
     teachers = sorted(
         db.query(Teacher).filter(Teacher.school_id == school_id).all(),
-        key=lambda t: _natural_key(t.name or ""),
+        key=lambda t: name_sort_key(t.name),
     )
     subjects_by_id = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
     teachers_by_id = {t.id: t for t in teachers}

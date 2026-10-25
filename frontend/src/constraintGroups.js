@@ -1,3 +1,5 @@
+import { compareNames } from './sorting'
+
 /**
  * Organising saved rules the way an admin looks for them.
  *
@@ -143,6 +145,7 @@ export function organise(constraints, { violatedIds = new Set(), filters = NO_FI
   return { attention, categories, shown: visible.length }
 }
 
+// Alphabetical, titles ignored - the same order every list in the app uses.
 function byName(a, b) {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+  return compareNames(a, b)
 }

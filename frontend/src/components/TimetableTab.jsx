@@ -14,6 +14,8 @@ import {
 } from '../hooks/useSchoolData'
 import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
 import SubstitutionsTab from './SubstitutionsTab'
+import SearchableSelect from './SearchableSelect'
+import { sortByName, sortSections } from '../sorting'
 import GenerationFailedDialog from './GenerationFailedDialog'
 import { useEntitlements } from '../hooks/useEntitlements'
 
@@ -121,7 +123,8 @@ export default function TimetableTab({
   const unenforcedConstraints = constraints.filter((c) => !c.enforced)
   const [page, setPage] = useState('schedule') // 'schedule' | 'substitutions'
   const [view, setView] = useState('section') // 'section' | 'teacher'
-  const [selectedTeacherId, setSelectedTeacherId] = useState(teachers[0]?.id ?? null)
+  // The first teacher alphabetically, like the picker lists them.
+  const [selectedTeacherId, setSelectedTeacherId] = useState(sortByName(teachers)[0]?.id ?? null)
   const [error, setError] = useState(null)
   // Where the dragged slot came from: { classGroupId, period }. The section
   // is kept so a drop into another section's grid can be refused rather than
@@ -179,7 +182,7 @@ export default function TimetableTab({
     // silently rendering an empty "By Teacher" grid with no indication
     // why, until the admin happened to reselect manually.
     const stillValid = teachers.some((t) => t.id === selectedTeacherId)
-    if (!stillValid) setSelectedTeacherId(teachers[0]?.id ?? null)
+    if (!stillValid) setSelectedTeacherId(sortByName(teachers)[0]?.id ?? null)
   }, [teachers, selectedTeacherId])
 
   // The latest timetable for this school, polled by useTimetable while the
@@ -433,11 +436,7 @@ export default function TimetableTab({
 
   // Sections in the order the sidebar lists them, so scrolling and clicking
   // agree about what comes next.
-  const sections = [...classGroups].sort(
-    (a, b) =>
-      (a.grade ?? '').localeCompare(b.grade ?? '', undefined, { numeric: true }) ||
-      (a.name ?? '').localeCompare(b.name ?? '', undefined, { numeric: true }),
-  )
+  const sections = sortSections(classGroups)
 
   // Picking a section in the sidebar scrolls to it rather than swapping what
   // is on screen. The selection already exists and is already wired - this
@@ -743,17 +742,13 @@ export default function TimetableTab({
                 </button>
               </div>
               {view === 'teacher' && (
-                <select
-                  value={selectedTeacherId ?? ''}
-                  onChange={(e) => setSelectedTeacherId(Number(e.target.value))}
-                  className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                >
-                  {teachers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  ariaLabel="Teacher"
+                  value={selectedTeacherId}
+                  onChange={setSelectedTeacherId}
+                  options={teachers.map((t) => ({ value: t.id, label: t.name }))}
+                  className="min-w-[10rem]"
+                />
               )}
             </div>
 

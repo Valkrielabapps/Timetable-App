@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { api } from '../api'
+import SearchableSelect from './SearchableSelect'
+import { rankMatches } from '../sorting'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -11,6 +13,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
   
   const [selectedDay, setSelectedDay] = useState(0) // 0 for Monday
   const [absentTeacherIds, setAbsentTeacherIds] = useState([])
+  const [absentSearch, setAbsentSearch] = useState('')
   
   // substitutions: record of { entryId: substituteTeacherId }
   const [substitutions, setSubstitutions] = useState({})
@@ -262,8 +265,18 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
               {teachers.length === 0 ? (
                 <p className="text-gray-500 text-sm">No teachers available.</p>
               ) : (
+                <div className="space-y-2">
+                <input
+                  type="search"
+                  aria-label="Search teachers"
+                  value={absentSearch}
+                  onChange={(e) => setAbsentSearch(e.target.value)}
+                  placeholder="Search teachers"
+                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+                />
                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                  {teachers.map(t => (
+                  {/* Alphabetical, titles ignored; narrowed by the search. */}
+                  {rankMatches(teachers, absentSearch).map(t => (
                     <label key={t.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors">
                       <input
                         type="checkbox"
@@ -274,6 +287,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                       <span className="text-gray-700">{t.name}</span>
                     </label>
                   ))}
+                </div>
                 </div>
               )}
             </div>
@@ -329,27 +343,26 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
                           )}
                         </div>
                         <div className="min-w-[220px]">
-                          <select
-                            value={currentPick || ''}
-                            onChange={(e) => handleSubstituteChange(entry.id, e.target.value)}
-                            className="w-full rounded border-gray-300 shadow-sm focus:border-neutral-900 focus:ring-neutral-900"
-                          >
-                            <option value="">-- Assign Substitute --</option>
-                            {suggested.length > 0 && (
-                              <optgroup label="Suggested (qualified & free)">
-                                {suggested.map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {others.length > 0 && (
-                              <optgroup label="Other available teachers">
-                                {others.map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
+                          {/* Alphabetical within each group. The auto-filled pick is
+                              still the lightest-loaded suggestion; each name shows its
+                              load so that choice can be seen and changed. */}
+                          <SearchableSelect
+                            ariaLabel={`Substitute for ${entry.subject_name ?? 'this lesson'}`}
+                            value={currentPick || null}
+                            onChange={(id) => handleSubstituteChange(entry.id, id == null ? '' : String(id))}
+                            emptyOption={{ label: '-- Assign Substitute --' }}
+                            options={[
+                              ...suggested.map(t => ({
+                                value: t.id, label: t.name, group: 'Suggested (qualified & free)',
+                                hint: `${loadByTeacherId.get(t.id) || 0} periods`,
+                              })),
+                              ...others.map(t => ({
+                                value: t.id, label: t.name, group: 'Other available teachers',
+                                hint: `${loadByTeacherId.get(t.id) || 0} periods`,
+                              })),
+                            ]}
+                            className="w-full"
+                          />
                           {currentPick && (
                             <p className={`mt-1 text-xs ${pickIsSuggested ? 'text-emerald-600' : 'text-amber-600'}`}>
                               {pickIsSuggested

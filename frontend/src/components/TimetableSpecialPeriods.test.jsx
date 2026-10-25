@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { optionsOf, pick } from '../test/pick'
 import TimetableTab from './TimetableTab'
 
 const api = vi.hoisted(() => ({ moveSlot: vi.fn(), lockSlot: vi.fn() }))
@@ -116,7 +117,7 @@ describe('special periods on the timetable', () => {
   it("shows a teacher their own class teacher period", () => {
     renderTab()
     fireEvent.click(screen.getByRole('button', { name: 'By Teacher' }))
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '10' } })
+    pick('Teacher', 'Mrs. Rao')
     const grid = document.querySelector('table')
     expect(within(grid).getByText('Class teacher · Grade 6 A')).toBeInTheDocument()
   })

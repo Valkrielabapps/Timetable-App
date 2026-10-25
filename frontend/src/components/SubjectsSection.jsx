@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
+import { compareNames, loadChoice, matchesSearch, saveChoice } from '../sorting'
+
+const SORTS = [
+  ['name', 'Name (A–Z)'],
+  ['name-desc', 'Name (Z–A)'],
+  ['periods', 'Periods/week (most first)'],
+  ['sections', 'Sections taking it (most first)'],
+  ['teachers', 'Qualified teachers (most first)'],
+  ['teachers-asc', 'Qualified teachers (fewest first)'],
+]
+const SORT_KEY = 'timetablz.subjects.sort'
 
 /**
  * "What does your school teach" — subject name plus optional advanced
@@ -13,8 +24,30 @@ import { confirmDialog } from './confirmDialog'
  * of a single row doing five unrelated things at once (see DataEntryTab's
  * docstring for the full reasoning behind the three-way split).
  */
-export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged, institutionType, readOnly }) {
+export default function SubjectsSection({
+  schoolId,
+  subjects,
+  onSubjectsChanged,
+  institutionType,
+  readOnly,
+  // For the figures each subject is sorted by.
+  allRequirements = [],
+  teachers = [],
+  electiveBlocks = [],
+}) {
   const [error, setError] = useState(null)
+  const [search, setSearch] = useState('')
+  const [sort, setSortState] = useState(() => loadChoice(SORT_KEY, 'name'))
+  const setSort = (value) => {
+    setSortState(value)
+    saveChoice(SORT_KEY, value)
+  }
+  // Subjects added on this visit stay at the bottom, where "+ Add subject"
+  // put them, rather than jumping away mid-edit as their name is typed -
+  // "New subject" would otherwise sort under N. Next visit, they take their
+  // place in the order like everything else.
+  const presentAtStart = useRef(null)
+  if (presentAtStart.current === null) presentAtStart.current = new Set(subjects.map((x) => x.id))
   const [showImport, setShowImport] = useState(true)
   // Which subject rows have their "advanced" fields expanded — collapsed
   // by default since most subjects never set these; a row that already
@@ -46,6 +79,57 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
     lastRender.current = { ids: new Set(subjects.map((s) => s.id)), pending: subjects.filter((s) => s._pending) }
   }, [subjects])
   const rowKey = (subject) => rowKeys.current.get(subject.id) ?? subject.id
+
+  // Per subject: periods a week across the school (a block counts its
+  // periods once per section), the sections taking it, and who can teach it.
+  const stats = new Map()
+  const stat = (id) => {
+    if (!stats.has(id)) stats.set(id, { periods: 0, sections: new Set(), teachers: 0 })
+    return stats.get(id)
+  }
+  for (const r of allRequirements) {
+    const st = stat(r.subject_id)
+    st.periods += r.periods_per_week || 0
+    st.sections.add(r.class_group_id)
+  }
+  for (const b of electiveBlocks) {
+    for (const o of b.options) {
+      const st = stat(o.subject_id)
+      st.periods += b.periods_per_week || 0
+      st.sections.add(b.class_group_id)
+    }
+  }
+  for (const t of teachers) {
+    for (const id of t.qualified_subject_ids || []) stat(id).teachers += 1
+  }
+  const figures = (subject) => {
+    const st = stats.get(subject.id)
+    return { periods: st?.periods ?? 0, sections: st?.sections.size ?? 0, teachers: st?.teachers ?? 0 }
+  }
+
+  const isFresh = (subject) => !presentAtStart.current.has(subject.id) && !presentAtStart.current.has(rowKey(subject))
+  const ordered = subjects
+    .filter((x) => !isFresh(x) && matchesSearch(x.name, search))
+    .sort((a, b) => {
+      const name = compareNames(a.name, b.name)
+      const fa = figures(a)
+      const fb = figures(b)
+      switch (sort) {
+        case 'name-desc':
+          return -name
+        case 'periods':
+          return fb.periods - fa.periods || name
+        case 'sections':
+          return fb.sections - fa.sections || name
+        case 'teachers':
+          return fb.teachers - fa.teachers || name
+        case 'teachers-asc':
+          return fa.teachers - fb.teachers || name
+        default:
+          return name
+      }
+    })
+  const shownSubjects = [...ordered, ...subjects.filter(isFresh)]
 
   useEffect(() => {
     setExpandedAdvanced((prev) => {
@@ -170,6 +254,34 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {subjects.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            aria-label="Search subjects"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search subjects"
+            className="w-64 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            Sort by
+            <select
+              aria-label="Sort subjects"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            >
+              {SORTS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-200 text-left text-slate-500">
@@ -188,7 +300,7 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
               animates; everything else just appears, instantly, matching
               the pattern TeachersSection's chips already use. */}
           <AnimatePresence initial={false}>
-            {subjects.map((subject) => (
+            {shownSubjects.map((subject) => (
               <motion.tr
                 key={rowKey(subject)}
                 layout="position"
@@ -210,6 +322,15 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
                   className="w-full max-w-sm rounded px-1.5 py-1 text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none disabled:bg-transparent disabled:text-slate-700"
                 />
                 {subject._pending && <span className="ml-1.5 text-[11px] text-slate-400">Saving…</span>}
+                {!subject._pending && (() => {
+                  const f = figures(subject)
+                  return (
+                    <span className="ml-1.5 text-[11px] text-slate-400">
+                      {f.sections} section{f.sections === 1 ? '' : 's'} · {f.periods} periods/week ·{' '}
+                      {f.teachers} teacher{f.teachers === 1 ? '' : 's'}
+                    </span>
+                  )
+                })()}
                 {subject._pending ? (
                   // Holds the "+ Advanced" line's space while saving, so the
                   // row doesn't grow by a line the moment the save finishes.
@@ -316,6 +437,13 @@ export default function SubjectsSection({ schoolId, subjects, onSubjectsChanged,
             <tr>
               <td colSpan={2} className="py-4 text-sm text-slate-500">
                 No subjects yet. Add one above, or import a spreadsheet.
+              </td>
+            </tr>
+          )}
+          {subjects.length > 0 && shownSubjects.length === 0 && (
+            <tr>
+              <td colSpan={2} className="py-4 text-sm text-slate-500">
+                No subjects match "{search.trim()}".
               </td>
             </tr>
           )}

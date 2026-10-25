@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { optionsOf, pick } from '../test/pick'
 import ConstraintsTab from './ConstraintsTab'
 
 vi.mock('../api', () => ({ api: { reparseConstraint: vi.fn() } }))
@@ -145,7 +146,7 @@ describe('searching and filtering', () => {
 
   it('filters by teacher', () => {
     renderList(RULES())
-    fireEvent.change(screen.getByLabelText('Filter by teacher'), { target: { value: 'Mrs. Rao' } })
+    pick('Filter by teacher', 'Mrs. Rao')
     expect(screen.getByText('Mrs. Rao is free on Fridays.')).toBeInTheDocument()
     expect(screen.queryByText('Filler 0.')).toBeNull()
   })

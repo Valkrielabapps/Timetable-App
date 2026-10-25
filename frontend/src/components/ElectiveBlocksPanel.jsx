@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { confirmDialog } from './confirmDialog'
+import SearchableSelect from './SearchableSelect'
+import { sortByName } from '../sorting'
 
 /**
  * A section's elective blocks: subjects it studies at the same time, each
@@ -207,7 +209,7 @@ function BlockForm({ initial, subjects, unavailable, qualifiedFor, onSave, onCan
   const [error, setError] = useState(null)
 
   const chosen = new Set(options.map((o) => o.subjectId))
-  const offered = subjects.filter((s) => !s._pending && (!unavailable.has(s.id) || chosen.has(s.id)))
+  const offered = sortByName(subjects.filter((s) => !s._pending && (!unavailable.has(s.id) || chosen.has(s.id))))
 
   function toggle(subjectId, on) {
     setOptions((prev) =>
@@ -313,21 +315,14 @@ function BlockForm({ initial, subjects, unavailable, qualifiedFor, onSave, onCan
                     No qualified teacher yet. Mark one on the Teachers page
                   </span>
                 ) : (
-                  <select
-                    aria-label={`Teacher for ${subject?.name ?? 'option'}`}
-                    value={o.teacherId ?? ''}
-                    onChange={(e) =>
-                      setTeacher(o.subjectId, e.target.value ? Number(e.target.value) : null)
-                    }
-                    className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700"
-                  >
-                    <option value="">Any qualified (let solver choose)</option>
-                    {qualified.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    ariaLabel={`Teacher for ${subject?.name ?? 'option'}`}
+                    value={o.teacherId}
+                    onChange={(id) => setTeacher(o.subjectId, id)}
+                    emptyOption={{ label: 'Any qualified (let solver choose)' }}
+                    options={qualified.map((t) => ({ value: t.id, label: t.name }))}
+                    className="text-xs"
+                  />
                 )}
               </div>
             )

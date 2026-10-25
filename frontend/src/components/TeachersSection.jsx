@@ -1,9 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
-import { useElectiveBlocks } from '../hooks/useSchoolData'
+import { useElectiveBlocks, useTimetable, useTimetables } from '../hooks/useSchoolData'
+import { compareNames, loadChoice, matchesSearch, rankMatches, saveChoice, sortByName } from '../sorting'
+
+const SORTS = [
+  ['name', 'Name (A–Z)'],
+  ['name-desc', 'Name (Z–A)'],
+  ['load-desc', 'Periods/week (most first)'],
+  ['load-asc', 'Periods/week (fewest first)'],
+  ['subjects', 'Subjects (most first)'],
+  ['grades', 'Grades taught'],
+]
+const SORT_KEY = 'timetablz.teachers.sort'
 
 /**
  * "Who teaches what" — one row per teacher, their subjects shown as
@@ -14,21 +25,36 @@ import { useElectiveBlocks } from '../hooks/useSchoolData'
  * a question about the teacher, not something that should require
  * finding them in every relevant subject's own dropdown one at a time.
  */
-// Distinct grade labels across every section, in the order they first
-// appear (not alphabetized — schools tend to enter grades in a natural
-// low-to-high order already, and re-sorting strings would put "Grade 10"
-// before "Grade 2"). Shared by the inline per-teacher picker and
-// AddTeacherModal so the two can't drift.
+// Distinct grade labels across every section, in natural order - "Grade 2"
+// before "Grade 10", which a plain string sort gets wrong. Shared by the
+// inline per-teacher picker and AddTeacherModal so the two can't drift.
 function distinctGrades(classGroups) {
-  const seen = new Set()
-  const grades = []
-  for (const cg of classGroups) {
-    if (cg.grade && !seen.has(cg.grade)) {
-      seen.add(cg.grade)
-      grades.push(cg.grade)
+  return [...new Set(classGroups.map((cg) => cg.grade).filter(Boolean))].sort(compareNames)
+}
+
+/**
+ * Periods each teacher actually has in the timetable on screen - what the
+ * generator gave them, not only what was pinned on section plans. A class
+ * left on "any qualified teacher" lands on somebody; this is where it shows.
+ * Counted once per period, as the teacher or as the assistant. Null when
+ * there is no generated timetable to count from.
+ */
+function useRealLoad(schoolId) {
+  const { data: list = [] } = useTimetables(schoolId)
+  const latestId = list.length ? list.reduce((a, b) => (b.id > a.id ? b : a)).id : null
+  const { data: timetable } = useTimetable(latestId)
+  return useMemo(() => {
+    if (!timetable || timetable.status !== 'draft') return null
+    const periods = new Map()
+    for (const e of timetable.entries ?? []) {
+      for (const id of [e.teacher_id, e.assistant_teacher_id]) {
+        if (id == null) continue
+        if (!periods.has(id)) periods.set(id, new Set())
+        periods.get(id).add(e.period_id)
+      }
     }
-  }
-  return grades
+    return new Map([...periods].map(([id, set]) => [id, set.size]))
+  }, [timetable])
 }
 
 // This teacher's committed periods/week across every section in the
@@ -68,6 +94,13 @@ function teacherWorkload(teacherId, allRequirements, subjects, classGroups, elec
 
 export default function TeachersSection({ schoolId, teachers, subjects, classGroups, allRequirements, onTeachersChanged, readOnly }) {
   const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
+  const realLoad = useRealLoad(schoolId)
+  const [search, setSearch] = useState('')
+  const [sort, setSortState] = useState(() => loadChoice(SORT_KEY, 'name'))
+  const setSort = (value) => {
+    setSortState(value)
+    saveChoice(SORT_KEY, value)
+  }
   const [error, setError] = useState(null)
   const [showImport, setShowImport] = useState(true)
   const [addTeacherOpen, setAddTeacherOpen] = useState(false)
@@ -80,6 +113,46 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
   const [editingTeacherId, setEditingTeacherId] = useState(null)
 
   const allGrades = distinctGrades(classGroups)
+
+  // What the card shows and what "periods/week" sorts by.
+  const loadOf = (teacher) =>
+    realLoad
+      ? realLoad.get(teacher.id) ?? 0
+      : teacherWorkload(teacher.id, allRequirements, subjects, classGroups, electiveBlocks).total
+
+  const subjectName = (id) => subjects.find((x) => x.id === id)?.name ?? ''
+  // Searched by name, subjects and grades - typing "Hindi" finds every Hindi
+  // teacher - then ordered by the chosen sort, alphabetically within ties.
+  const shownTeachers = teachers
+    .filter((t) =>
+      matchesSearch(
+        [t.name, ...(t.qualified_subject_ids || []).map(subjectName), ...(t.qualified_grades || [])].join(' '),
+        search,
+      ),
+    )
+    .sort((a, b) => {
+      const name = compareNames(a.name, b.name)
+      switch (sort) {
+        case 'name-desc':
+          return -name
+        case 'load-desc':
+          return loadOf(b) - loadOf(a) || name
+        case 'load-asc':
+          return loadOf(a) - loadOf(b) || name
+        case 'subjects':
+          return (b.qualified_subject_ids?.length ?? 0) - (a.qualified_subject_ids?.length ?? 0) || name
+        case 'grades': {
+          // By the lowest grade taught; "all grades" (no restriction) last.
+          const low = (t) => [...(t.qualified_grades || [])].sort(compareNames)[0]
+          const la = low(a)
+          const lb = low(b)
+          if (la == null || lb == null) return (la == null) - (lb == null) || name
+          return compareNames(la, lb) || name
+        }
+        default:
+          return name
+      }
+    })
 
   async function handleAssignSubject(teacher, subjectId) {
     try {
@@ -208,20 +281,55 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      {teachers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            aria-label="Search teachers"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, subject or grade"
+            className="w-64 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            Sort by
+            <select
+              aria-label="Sort teachers"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-700"
+            >
+              {SORTS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {search.trim() && (
+            <span className="text-xs text-slate-400">
+              {shownTeachers.length} of {teachers.length}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col divide-y divide-slate-100 rounded-md border border-slate-200">
-        {teachers.map((teacher) => {
-          const qualified = subjects.filter((s) => teacher.qualified_subject_ids.includes(s.id))
+        {shownTeachers.map((teacher) => {
+          const qualified = sortByName(subjects.filter((s) => teacher.qualified_subject_ids.includes(s.id)))
           // Excludes subjects still `_pending` (optimistically shown right
           // after "+ Add subject" but not yet confirmed by the server) —
           // picking one here before it has a real id would send that
           // temporary id to the backend instead of a valid subject id.
           const available = subjects.filter((s) => !s._pending && !teacher.qualified_subject_ids.includes(s.id))
-          const qualifiedGrades = teacher.qualified_grades || []
+          const qualifiedGrades = [...(teacher.qualified_grades || [])].sort(compareNames)
           const availableGrades = allGrades.filter((g) => !qualifiedGrades.includes(g))
           const workload = teacherWorkload(teacher.id, allRequirements, subjects, classGroups, electiveBlocks)
-          const overLimit = teacher.max_periods_per_week != null && workload.total > teacher.max_periods_per_week
+          // The real load once a timetable exists; until then, what's pinned.
+          const load = loadOf(teacher)
+          const overLimit = teacher.max_periods_per_week != null && load > teacher.max_periods_per_week
           const nearLimit =
-            !overLimit && teacher.max_periods_per_week != null && workload.total >= teacher.max_periods_per_week * 0.9
+            !overLimit && teacher.max_periods_per_week != null && load >= teacher.max_periods_per_week * 0.9
           if (editingTeacherId === teacher.id) {
             return (
               <div key={teacher.id} className="p-3">
@@ -280,8 +388,15 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                       : 'No weekly limit set for this teacher'
                   }
                 >
-                  {workload.total} {workload.total === 1 ? 'period' : 'periods'}/week
+                  {load} {load === 1 ? 'period' : 'periods'}/week
                   {teacher.max_periods_per_week ? ` of ${teacher.max_periods_per_week}` : ''}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {realLoad
+                    ? workload.total > 0
+                      ? `in the timetable · ${workload.total} pinned on plans`
+                      : 'in the timetable'
+                    : 'pinned on plans (generate for the real load)'}
                 </div>
               </div>
               <div className="relative flex flex-1 flex-wrap items-center gap-1.5">
@@ -321,28 +436,14 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                 )}
                 <AnimatePresence>
                   {openDropdownId === teacher.id && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                      transition={{ duration: 0.12, ease: 'easeOut' }}
-                      className="absolute left-0 top-7 z-10 max-h-52 w-48 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-md"
-                    >
-                      {available.length === 0 && (
-                        <p className="px-2 py-1.5 text-xs text-slate-400">
-                          {subjects.length === 0 ? 'No subjects yet' : 'Already teaches everything'}
-                        </p>
-                      )}
-                      {available.map((s) => (
-                        <div
-                          key={s.id}
-                          onClick={() => handleAssignSubject(teacher, s.id)}
-                          className="cursor-pointer rounded px-2 py-1.5 text-sm hover:bg-slate-50"
-                        >
-                          {s.name}
-                        </div>
-                      ))}
-                    </motion.div>
+                    <PickerPopover
+                      ariaLabel={`Add a subject to ${teacher.name}`}
+                      items={available}
+                      getLabel={(subject) => subject.name}
+                      emptyText={subjects.length === 0 ? 'No subjects yet' : 'Already teaches everything'}
+                      onPick={(subject) => handleAssignSubject(teacher, subject.id)}
+                      className="absolute left-0 top-7 z-10"
+                    />
                   )}
                 </AnimatePresence>
               </div>
@@ -399,26 +500,14 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
                   </motion.button>
                   <AnimatePresence>
                     {openGradeDropdownId === teacher.id && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                        transition={{ duration: 0.12, ease: 'easeOut' }}
-                        className="absolute left-0 top-7 z-10 max-h-52 w-48 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-md"
-                      >
-                        {availableGrades.length === 0 && (
-                          <p className="px-2 py-1.5 text-xs text-slate-400">Already covers every grade</p>
-                        )}
-                        {availableGrades.map((g) => (
-                          <div
-                            key={g}
-                            onClick={() => handleAssignGrade(teacher, g)}
-                            className="cursor-pointer rounded px-2 py-1.5 text-sm hover:bg-slate-50"
-                          >
-                            {g}
-                          </div>
-                        ))}
-                      </motion.div>
+                      <PickerPopover
+                        ariaLabel={`Add a grade to ${teacher.name}`}
+                        items={availableGrades}
+                        getLabel={(grade) => grade}
+                        emptyText="Already covers every grade"
+                        onPick={(grade) => handleAssignGrade(teacher, grade)}
+                        className="absolute left-0 top-7 z-10"
+                      />
                     )}
                   </AnimatePresence>
                 </div>
@@ -476,6 +565,9 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
         })}
         {teachers.length === 0 && (
           <p className="p-4 text-sm text-slate-500">No teachers yet. Add one above, or import a spreadsheet.</p>
+        )}
+        {teachers.length > 0 && shownTeachers.length === 0 && (
+          <p className="p-4 text-sm text-slate-500">No teachers match "{search.trim()}".</p>
         )}
       </div>
     </div>
@@ -681,7 +773,7 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
               </p>
             ) : (
               <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 p-2">
-                {subjects.filter((s) => !s._pending).map((s) => (
+                {sortByName(subjects.filter((s) => !s._pending)).map((s) => (
                   <label
                     key={s.id}
                     className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50"
@@ -749,6 +841,58 @@ function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
           </div>
         </form>
       </motion.div>
+    </motion.div>
+  )
+}
+
+/**
+ * The "+ Add" list for a teacher's subjects or grades: alphabetical, with a
+ * search box that narrows it as you type and Enter adding the best match.
+ */
+function PickerPopover({ ariaLabel, items, getLabel, emptyText, onPick, className = '' }) {
+  const [query, setQuery] = useState('')
+  const shown = rankMatches(items, query, getLabel)
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, y: -4 }}
+      transition={{ duration: 0.12, ease: 'easeOut' }}
+      className={`w-52 rounded-md border border-slate-200 bg-white p-1 shadow-md ${className}`}
+    >
+      {items.length > 0 && (
+        <input
+          autoFocus
+          aria-label={ariaLabel}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && shown[0] !== undefined) {
+              e.preventDefault()
+              onPick(shown[0])
+            }
+          }}
+          placeholder="Type to search"
+          className="mb-1 w-full rounded border border-slate-200 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none"
+        />
+      )}
+      <div className="max-h-52 overflow-y-auto">
+        {items.length === 0 && <p className="px-2 py-1.5 text-xs text-slate-400">{emptyText}</p>}
+        {items.length > 0 && shown.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-slate-400">No matches</p>
+        )}
+        {shown.map((item) => (
+          <div
+            key={getLabel(item)}
+            role="option"
+            aria-selected={false}
+            onClick={() => onPick(item)}
+            className="cursor-pointer rounded px-2 py-1.5 text-sm hover:bg-slate-50"
+          >
+            {getLabel(item)}
+          </div>
+        ))}
+      </div>
     </motion.div>
   )
 }

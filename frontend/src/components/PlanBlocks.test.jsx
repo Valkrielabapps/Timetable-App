@@ -109,3 +109,14 @@ describe("a section's plan with elective blocks", () => {
     expect(english).not.toHaveTextContent('Block')
   })
 })
+
+describe("picking a section's subjects", () => {
+  it('lists them alphabetically and narrows them as you type', () => {
+    renderPlan([])
+    fireEvent.click(screen.getByText('Edit subjects'))
+    const listed = () => screen.getAllByRole('checkbox').map((c) => c.closest('label').firstChild.nextSibling.textContent)
+    expect(listed()).toEqual(['Accounts', 'English', 'Physics'])
+    fireEvent.change(screen.getByLabelText('Search subjects'), { target: { value: 'phy' } })
+    expect(listed()).toEqual(['Physics'])
+  })
+})
