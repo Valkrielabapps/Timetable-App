@@ -46,6 +46,9 @@ class FrozenStatusOut(BaseModel):
     # Why a frozen section no longer matches what it was built from; None
     # when it is fine or not frozen.
     stale_reason: str | None = None
+    # "Version 3 (Grades 1-5 approved)": the version its lessons are kept from.
+    frozen_from: str | None = None
+    frozen_from_timetable_id: int | None = None
 
 
 class SubjectRequirementCreate(BaseModel):

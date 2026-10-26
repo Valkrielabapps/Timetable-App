@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../api'
 import SearchableSelect from './SearchableSelect'
 import { rankMatches } from '../sorting'
+import { pickVersions } from '../lib/versions'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -37,9 +38,8 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups }) {
         // Every generation adds a draft and the list comes back unordered, so
         // taking the first match used to cover absences against an old one.
         // Ids are assigned in creation order, so the highest is the newest.
-        const active = timetablesData
-          .filter(t => t.status === 'draft' || t.status === 'published')
-          .reduce((a, b) => (a && a.id > b.id ? a : b), null)
+        // The version the school works from - the one the Timetable tab shows.
+        const active = pickVersions(timetablesData).current
         if (active) {
           const tt = await api.getTimetable(active.id)
           setTimetable(tt)

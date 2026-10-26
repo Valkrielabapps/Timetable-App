@@ -97,9 +97,19 @@ export function useTimetables(schoolId) {
  * cannot leak past an unmount or a school switch.
  */
 export function useTimetable(timetableId) {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: keys.timetable(timetableId),
-    queryFn: () => api.getTimetable(timetableId),
+    queryFn: async () => {
+      const before = queryClient.getQueryData(keys.timetable(timetableId))
+      const data = await api.getTimetable(timetableId)
+      // A generation just finished: it is now the school's current version,
+      // so re-read the list everywhere that picks a version from it.
+      if (before?.status === 'generating' && data?.status !== 'generating') {
+        queryClient.invalidateQueries({ queryKey: keys.timetables(data.school_id) })
+      }
+      return data
+    },
     enabled: timetableId != null,
     // `false` stops the polling. Returning the interval straight from the
     // status means a reload mid-generation resumes polling with no special
@@ -274,6 +284,24 @@ export function useElectiveBlockMutations(schoolId) {
  * edited on another page is what makes a frozen section out of date, and the
  * warning is only useful if it is current.
  */
+/** Open, rename or delete a timetable version; the list is re-read after each. */
+export function useVersionActions(schoolId) {
+  const queryClient = useQueryClient()
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: keys.timetables(schoolId) })
+    // Frozen status names the version each section is kept from.
+    queryClient.invalidateQueries({ queryKey: ['frozenStatus', schoolId] })
+  }
+  const open = useMutation({ mutationFn: (id) => api.makeTimetableCurrent(id), onSuccess: refresh })
+  const rename = useMutation({ mutationFn: ({ id, name }) => api.renameTimetable(id, name), onSuccess: refresh })
+  const remove = useMutation({ mutationFn: (id) => api.deleteTimetable(id), onSuccess: refresh })
+  return {
+    open: (id) => open.mutateAsync(id),
+    rename: (id, name) => rename.mutateAsync({ id, name }),
+    remove: (id) => remove.mutateAsync(id),
+  }
+}
+
 export function useFrozenStatus(schoolId, timetableId) {
   return useQuery({
     queryKey: keys.frozenStatus(schoolId, timetableId),

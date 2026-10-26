@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TimetableEntryUpdate(BaseModel):
@@ -109,6 +111,17 @@ class TimetableSummaryOut(BaseModel):
     solver_status: str | None
     error_message: str | None
     error_explanation: str | None = None
+    # Versions: a fixed number per school, the admin's label, when it was
+    # made, and whether it is the one the school works from.
+    version_number: int | None = None
+    name: str | None = None
+    created_at: datetime | None = None
+    is_current: bool = False
+
+
+class TimetableVersionUpdate(BaseModel):
+    """Rename a version. An empty name clears the label."""
+    name: str | None = Field(default=None, max_length=80)
 
 
 class TimetableOut(BaseModel):
@@ -132,6 +145,14 @@ class TimetableOut(BaseModel):
     # service didn't run or couldn't produce one, in which case the
     # frontend just shows error_message's bulleted list on its own.
     error_explanation: str | None = None
+    version_number: int | None = None
+    name: str | None = None
+    created_at: datetime | None = None
+    is_current: bool = False
+    # Notes from a generation that succeeded (see Timetable.generation_notes),
+    # and which sections it kept frozen rather than solving.
+    generation_notes: list[str] = []
+    frozen_kept: list[str] = []
     entries: list[TimetableEntryOut]
     # Rules saved after this timetable was generated: not applied to it yet,
     # and so left out of `violations` - "generate again" rather than "broken".

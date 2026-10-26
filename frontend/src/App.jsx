@@ -39,6 +39,7 @@ import { useSetupProgress } from './hooks/useSetupProgress'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { useTimetables } from './hooks/useSchoolData'
+import { pickVersions } from './lib/versions'
 
 // Substitutions used to be its own tab here, but it's really a sibling
 // view of the generated schedule (same data — entries, periods, teachers
@@ -564,10 +565,8 @@ function App() {
     }
   }, [user, selectedSchoolId])
   const locked = entitlements?.status === 'locked'
-  const latestTimetable =
-    schoolTimetables.length > 0
-      ? schoolTimetables.reduce((a, b) => (b.id > a.id ? b : a))
-      : null
+  // The version the school works from (see lib/versions.js).
+  const latestTimetable = pickVersions(schoolTimetables).current
 
   const setupProgress = useSetupProgress({
     schoolId: selectedClassGroup ? selectedSchoolId : null,

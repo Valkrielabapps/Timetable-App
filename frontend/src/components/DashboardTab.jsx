@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from '../api'
-import { useTimetables } from '../hooks/useSchoolData'
+import { useFrozenStatus, useTimetables, useVersionActions } from '../hooks/useSchoolData'
+import { pickVersions } from '../lib/versions'
 import { sortGradeKeys } from './Sidebar'
 
 /**
@@ -37,6 +38,17 @@ export default function DashboardTab({
   const { data: timetables = [], isLoading: timetablesLoading } = useTimetables(school.id)
   const versions = [...timetables].sort((a, b) => b.id - a.id)
   const latestId = versions[0]?.id ?? null
+  const { current } = pickVersions(timetables)
+  const actions = useVersionActions(school.id)
+  const { data: frozenList = [] } = useFrozenStatus(school.id, current?.id)
+  // Versions frozen sections are kept from can't be deleted until unfrozen.
+  const frozenFrom = new Map()
+  for (const f of frozenList) {
+    if (f.frozen && f.frozen_from_timetable_id) {
+      const cg = classGroups.find((c) => c.id === f.class_group_id)
+      if (cg) frozenFrom.set(f.frozen_from_timetable_id, [...(frozenFrom.get(f.frozen_from_timetable_id) ?? []), cg])
+    }
+  }
   const latestDraftId = versions.find((t) => t.status === 'draft')?.id ?? null
 
   const teachingPeriods = periods.filter((p) => !p.is_break).length
@@ -126,12 +138,26 @@ export default function DashboardTab({
                 <VersionRow
                   key={t.id}
                   timetable={t}
-                  number={versions.length - i}
+                  number={t.version_number ?? versions.length - i}
                   isLatest={t.id === latestId}
-                  onOpen={() => onNavigate('timetable')}
+                  isCurrent={t.id === current?.id}
+                  frozenSections={frozenFrom.get(t.id) ?? []}
+                  readOnly={readOnly}
+                  onOpen={async () => {
+                    if (t.id !== current?.id) await actions.open(t.id)
+                    onNavigate('timetable')
+                  }}
+                  onRename={(name) => actions.rename(t.id, name)}
+                  onDelete={() => actions.remove(t.id)}
                 />
               ))}
             </ul>
+          )}
+          {versions.length > 0 && (
+            <p className="border-t border-slate-100 px-5 py-2.5 text-xs text-slate-500">
+              The newest 5 versions are kept. Older ones are removed when you generate, except the one you&rsquo;re
+              working from and any a frozen section is kept from.
+            </p>
           )}
         </section>
 
@@ -214,47 +240,97 @@ const STATUS_STYLES = {
   archived: { label: 'Archived', cls: 'bg-slate-100 text-slate-500' },
 }
 
-function VersionRow({ timetable, number, isLatest, onOpen }) {
+function VersionRow({ timetable, number, isLatest, isCurrent, frozenSections, readOnly, onOpen, onRename, onDelete }) {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [renaming, setRenaming] = useState(false)
+  const [draftName, setDraftName] = useState(timetable.name ?? '')
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const status = STATUS_STYLES[timetable.status] || { label: timetable.status, cls: 'bg-slate-100 text-slate-600' }
-  const canExport = timetable.status === 'draft' || timetable.status === 'published'
+  const usable = timetable.status === 'draft' || timetable.status === 'published'
+  const canExport = usable
+  const locked = frozenSections.length > 0
 
-  async function exportAs(format) {
-    setBusy(format)
+  async function run(kind, fn) {
+    setBusy(kind)
     setError(null)
     try {
-      await api.downloadTimetableExport(timetable.id, format)
+      await fn()
+      return true
     } catch (err) {
       setError(err.message)
+      return false
     } finally {
       setBusy(null)
     }
   }
 
+  async function exportAs(format) {
+    await run(format, () => api.downloadTimetableExport(timetable.id, format))
+  }
+
+  const frozenNames = frozenSections.map((cg) => (cg.grade ? `${cg.grade} - ${cg.name}` : cg.name))
+
   return (
-    <li className="px-5 py-3">
+    <li className={`px-5 py-3 ${isCurrent ? 'bg-slate-50' : ''}`}>
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Version {number}</span>
-            {isLatest && (
-              <span className="rounded-full border border-slate-200 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                Latest
-              </span>
-            )}
-          </div>
-          <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${status.cls}`}>
-            {status.label}
-          </span>
-        </div>
-        <div className="flex flex-none items-center gap-1.5">
-          {isLatest && (
-            <button
-              onClick={onOpen}
-              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          {renaming ? (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (await run('rename', () => onRename(draftName))) setRenaming(false)
+              }}
+              className="flex items-center gap-1.5"
             >
-              Open
+              <input
+                autoFocus
+                value={draftName}
+                maxLength={80}
+                onChange={(e) => setDraftName(e.target.value)}
+                placeholder={`Version ${number}, e.g. Grades 1-5 approved`}
+                aria-label="Version name"
+                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-neutral-900 focus:outline-none"
+              />
+              <button disabled={busy === 'rename'} className="rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">
+                Save
+              </button>
+              <button type="button" onClick={() => setRenaming(false)} className="px-1 text-xs text-slate-500">
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">Version {number}</span>
+              {timetable.name && <span className="truncate text-sm text-slate-600">· {timetable.name}</span>}
+              {isCurrent && (
+                <span className="rounded-full bg-neutral-900 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-white">
+                  Current
+                </span>
+              )}
+              {isLatest && !isCurrent && (
+                <span className="rounded-full border border-slate-200 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  Latest
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${status.cls}`}>{status.label}</span>
+            {timetable.created_at && (
+              <span className="text-[11px] text-slate-400">{new Date(timetable.created_at).toLocaleString()}</span>
+            )}
+            {locked && <span className="text-[11px] text-sky-700">❄ {frozenNames.length} frozen from this version</span>}
+          </div>
+        </div>
+        <div className="flex flex-none flex-wrap items-center justify-end gap-1.5">
+          {usable && (!readOnly || isCurrent) && (
+            <button
+              onClick={() => run('open', onOpen)}
+              disabled={busy != null}
+              className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {busy === 'open' ? '…' : 'Open'}
             </button>
           )}
           {canExport && (
@@ -275,8 +351,58 @@ function VersionRow({ timetable, number, isLatest, onOpen }) {
               </button>
             </>
           )}
+          {!readOnly && usable && !renaming && (
+            <button
+              onClick={() => {
+                setDraftName(timetable.name ?? '')
+                setRenaming(true)
+              }}
+              className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
+            >
+              Rename
+            </button>
+          )}
+          {!readOnly && timetable.status !== 'generating' && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              disabled={busy != null}
+              title={locked ? `Frozen from this version: ${frozenNames.join(', ')}` : undefined}
+              className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
         </div>
       </div>
+      {confirmDelete && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900">
+          {locked ? (
+            <span className="flex-1">
+              {frozenNames.join(', ')} {frozenNames.length === 1 ? 'is' : 'are'} frozen from this version. Unfreeze{' '}
+              {frozenNames.length === 1 ? 'it' : 'them'} on the Timetable tab before deleting it.
+            </span>
+          ) : (
+            <>
+              <span className="flex-1">
+                Delete Version {number}
+                {isCurrent ? '? You\u2019ll switch to the newest version left.' : '? This can\u2019t be undone.'}
+              </span>
+              <button
+                onClick={async () => {
+                  if (await run('delete', onDelete)) setConfirmDelete(false)
+                }}
+                disabled={busy === 'delete'}
+                className="rounded-md bg-red-600 px-2 py-1 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {busy === 'delete' ? 'Deleting…' : 'Delete'}
+              </button>
+            </>
+          )}
+          <button onClick={() => setConfirmDelete(false)} className="px-1 font-medium text-red-900 underline">
+            {locked ? 'OK' : 'Cancel'}
+          </button>
+        </div>
+      )}
       {timetable.status === 'failed' && (timetable.error_explanation || timetable.error_message) && (
         <p className="mt-1.5 line-clamp-2 text-xs text-slate-500">
           {timetable.error_explanation || timetable.error_message}

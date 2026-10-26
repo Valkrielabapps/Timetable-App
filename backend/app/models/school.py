@@ -45,6 +45,13 @@ class School(Base):
     # no school that day). Lesson periods after a grade's last one are kept
     # empty for its sections, exactly like a zero period. Null = none.
     grade_day_limits = Column(JSON, nullable=True)
+    # The timetable version the school works from: what the Timetable tab
+    # shows and edits, what exports and substitutions read, and where the next
+    # generation takes its locked slots from. Set to each new successful
+    # version, and to any older one the admin opens. Not a foreign key, so
+    # deleting a version never cascades into the school row; a value pointing
+    # at a version that no longer exists is treated as unset.
+    current_timetable_id = Column(Integer, nullable=True)
     # Descriptive details shown and edited in Settings > School profile:
     # board, affiliation/UDISE code, principal, contact details, address,
     # academic year start, etc. One JSON column rather than a dozen
@@ -266,6 +273,10 @@ class ClassGroup(Base):
     # structure change - can be pointed out instead of silently ignored.
     frozen_signature = Column(String, nullable=True)
     frozen_lessons = Column(Integer, nullable=True)
+    # The version the section was frozen in. Its lessons are copied from this
+    # version into every later generation, however many come after - so
+    # approving Grades 1-5 in Version 3 keeps Version 3's Grades 1-5.
+    frozen_from_timetable_id = Column(Integer, nullable=True)
 
     school = relationship("School", back_populates="class_groups")
     requirements = relationship(
@@ -460,6 +471,15 @@ class Timetable(Base):
     # back to showing just the raw error_message list in that case, so a
     # null here is never a broken state, just a less-polished one.
     error_explanation = Column(Text, nullable=True)
+    # Version 1, 2, 3... per school, fixed at creation so numbers don't shift
+    # when older versions are deleted. `name` is the admin's own label.
+    version_number = Column(Integer, nullable=True)
+    name = Column(String(80), nullable=True)
+    # What a successful generation wants the admin to know: a frozen section
+    # that couldn't be kept, a rule that couldn't be applied, a subject with no
+    # teacher yet. These used to be logged and thrown away, so a freeze that
+    # silently didn't hold looked exactly like one that did.
+    generation_notes = Column(JSON, nullable=True)
 
     entries = relationship("TimetableEntry", back_populates="timetable", cascade="all, delete-orphan")
 

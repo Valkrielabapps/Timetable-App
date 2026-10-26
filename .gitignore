@@ -2,3 +2,6 @@ docs/Valkyrie_Labs_Business_Plan.pdf
 
 # Eval scripts: cached parser answers (local, regenerated as needed)
 docs/research/.parse-cache.json
+
+# Outreach lists (school contact research) - kept local, not in the repository
+outreach/

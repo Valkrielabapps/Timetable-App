@@ -374,3 +374,35 @@ def test_a_frozen_lesson_with_no_teacher_yet_is_kept(client, world):
     second = generate(w)
     assert timetable(second)[0] == "draft"
     assert lessons(second, w["eleven"]) == kept
+
+
+
+def test_the_timetable_says_which_sections_it_kept_frozen(client, world):
+    """A freeze that didn't hold used to look exactly like one that did: the
+    solver's notes were logged and thrown away. Now the timetable says which
+    sections it kept frozen, and passes the notes on."""
+    w, h = world
+    generate(w)
+    freeze(client, w, h, "eleven")
+    second = generate(w)
+    body = client.get(f"/api/timetables/{second}", headers=h).json()
+    assert body["frozen_kept"] == ["Grade 11 - A"]
+    assert body["generation_notes"] == []
+
+
+def test_a_freeze_that_could_not_hold_is_reported(client, world):
+    w, h = world
+    generate(w)
+    freeze(client, w, h, "eleven")
+    # Mrs. Rao leaves: 11A's frozen lessons can't be kept as they were.
+    db = SessionLocal()
+    try:
+        db.add(Teacher(school_id=w["school"], name="Mr. Iyer", qualified_subject_ids=[w["maths"]]))
+        db.delete(db.get(Teacher, w["rao"]))
+        db.commit()
+    finally:
+        db.close()
+    second = generate(w)
+    body = client.get(f"/api/timetables/{second}", headers=h).json()
+    assert body["frozen_kept"] == []
+    assert any("Grade 11 - A is frozen" in n for n in body["generation_notes"]), body["generation_notes"]

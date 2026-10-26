@@ -307,6 +307,11 @@ export const api = {
   // TimetableSummaryOut in backend/app/schemas/timetable.py for why it stopped
   // carrying entries.
   listTimetables: (schoolId) => get(`/timetables?school_id=${schoolId}`),
+  // Versions: open one (it becomes the one the school works from), rename it,
+  // or delete it. See backend app/services/versions.py.
+  makeTimetableCurrent: (id) => post(`/timetables/${id}/make-current`, {}),
+  renameTimetable: (id, name) => patch(`/timetables/${id}`, { name }),
+  deleteTimetable: (id) => del(`/timetables/${id}`),
   // Manual editing of one already-generated slot — lock/unlock it (kept in
   // place on the next regenerate) and/or drag it to a free period.
   // See PATCH /api/timetables/entries/{id} in backend/app/routers/timetables.py.

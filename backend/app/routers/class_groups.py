@@ -47,12 +47,17 @@ def list_class_groups(school_id: int, db: Session = Depends(get_db), current_use
 
 def _frozen_status(db: Session, school_id: int) -> list[FrozenStatusOut]:
     sections = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+    from app.services.freezing import frozen_source
+    from app.services.versions import label
     stale = staleness(db, school_id, sections)
-    return [
-        FrozenStatusOut(class_group_id=cg.id, frozen=cg.frozen, frozen_at=cg.frozen_at,
-                        stale_reason=stale.get(cg.id))
-        for cg in sections
-    ]
+    out = []
+    for cg in sections:
+        src = frozen_source(db, cg) if cg.frozen else None
+        out.append(FrozenStatusOut(
+            class_group_id=cg.id, frozen=cg.frozen, frozen_at=cg.frozen_at, stale_reason=stale.get(cg.id),
+            frozen_from=label(src) if src else None, frozen_from_timetable_id=src.id if src else None,
+        ))
+    return out
 
 
 @router.get("/frozen-status", response_model=list[FrozenStatusOut])

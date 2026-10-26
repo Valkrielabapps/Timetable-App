@@ -5,6 +5,7 @@ import SearchableSelect from './SearchableSelect'
 import { confirmDialog } from './confirmDialog'
 import { useTimetable, useTimetables } from '../hooks/useSchoolData'
 import { filterOptions, filtersActive, NO_FILTERS, organise } from '../constraintGroups'
+import { pickVersions } from '../lib/versions'
 
 // Types whose parameters include an optional class_group_ids scope —
 // these are the ones that get the "Applies to" line and scope editor.
@@ -107,8 +108,8 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
   // pass every physical check and still break one. Read from the same cached
   // query the Timetable tab uses, so this costs nothing when it is warm.
   const { data: timetableList = [] } = useTimetables(schoolId)
-  const latestTimetableId =
-    timetableList.length > 0 ? timetableList.reduce((a, b) => (b.id > a.id ? b : a)).id : null
+  // The version the school works from (see lib/versions.js).
+  const latestTimetableId = pickVersions(timetableList).current?.id ?? null
   const { data: timetable = null } = useTimetable(latestTimetableId)
   // Only rules count as broken; a preference not met everywhere is allowed
   // and gets a calmer "Not always met" tag instead of Needs attention.

@@ -62,12 +62,13 @@ from app.schemas.timetable import (
     TimetableEntryOut,
     TimetableEntryUpdate,
     TimetableOut,
+    TimetableVersionUpdate,
 )
 from app.services.constraint_ir import IRError, rule_from_dict
 from app.services.constraint_ir_checker import Placement, check_rules
 from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
-from app.services import plans
+from app.services import plans, versions
 from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.infeasibility_explainer import explain_infeasibility
@@ -133,6 +134,12 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         solver_status=timetable.solver_status,
         error_message=timetable.error_message,
         error_explanation=timetable.error_explanation,
+        version_number=timetable.version_number,
+        name=timetable.name,
+        created_at=timetable.created_at,
+        is_current=(lambda c: c is not None and c.id == timetable.id)(versions.current_version(db, timetable.school_id)),
+        generation_notes=list((timetable.generation_notes or {}).get("notes", [])),
+        frozen_kept=list((timetable.generation_notes or {}).get("frozen_kept", [])),
         entries=entries,
         violations=_violations_for(db, timetable, class_groups, subjects, teachers, periods),
         pending_constraint_ids=sorted(
@@ -265,49 +272,14 @@ def _edge_orders(school_periods: list[Period], first: bool) -> dict[int, int]:
     return {day: (min(orders) if first else max(orders)) for day, orders in by_day.items()}
 
 
-# How many successful timetables a school keeps. The newest is the one on
-# screen and the one the solver reads locks from; two more are a margin, not a
-# feature - nothing in the app shows an older timetable.
-KEEP_DRAFTS = 3
+# How many successful versions a school keeps; see app/services/versions.py.
+KEEP_DRAFTS = versions.KEEP_VERSIONS
 
 
 def _prune_old_timetables(db: Session, school_id: int) -> None:
-    """Delete timetables nobody can reach any more.
-
-    Every Generate adds a timetable of about a thousand rows and nothing ever
-    removed one, so the entries table grew forever with history the app never
-    shows. Kept:
-
-      - the newest timetable, whatever its status - it is what the Timetable
-        tab shows, including a failure and its explanation;
-      - the newest KEEP_DRAFTS successful ones - the newest of those is where
-        the next generation reads its locked slots from;
-      - anything published, archived or still generating - published is a
-        decision someone made, and a generating row belongs to a job that is
-        still running.
-
-    Everything else - older drafts and older failures - goes. Entries are
-    deleted in one statement rather than through the ORM cascade, which would
-    load every row into memory first.
-    """
-    rows = (
-        db.query(Timetable.id, Timetable.status)
-        .filter(Timetable.school_id == school_id)
-        .order_by(Timetable.id.desc())
-        .all()
-    )
-    if not rows:
-        return
-    keep = {rows[0].id}
-    keep.update([r.id for r in rows if r.status == "draft"][:KEEP_DRAFTS])
-    doomed = [r.id for r in rows if r.status in ("draft", "failed") and r.id not in keep]
-    if not doomed:
-        return
-    db.query(TimetableEntry).filter(TimetableEntry.timetable_id.in_(doomed)).delete(
-        synchronize_session=False
-    )
-    db.query(Timetable).filter(Timetable.id.in_(doomed)).delete(synchronize_session=False)
-    db.commit()
+    """Delete versions beyond the newest KEEP_VERSIONS - never the current one
+    or one a frozen section is kept from. See app/services/versions.prune."""
+    versions.prune(db, school_id)
 
 
 def _run_generation_job(timetable_id: int, school_id: int) -> None:
@@ -368,7 +340,24 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                     # reapplied by hand every time.
                     locked=key in result.locked_keys,
                 ))
+            # Kept, not logged and lost: a freeze that didn't hold has to be
+            # visible, or it looks exactly like one that did.
+            frozen_cg = {a["class_group_id"] for a in result.assignments if a.get("frozen")}
+            labels = {
+                cg.id: (f"{cg.grade} - {cg.name}" if cg.grade else cg.name)
+                for cg in db.query(ClassGroup).filter(ClassGroup.id.in_(frozen_cg)).all()
+            } if frozen_cg else {}
+            timetable.generation_notes = {
+                "notes": list(result.warnings or []),
+                "frozen_kept": sorted(labels.values()),
+            }
             timetable.status = "draft"
+            if timetable.version_number is None:
+                timetable.version_number = versions.next_version_number(db, school_id)
+            # A new successful version is the one the school works from next.
+            school_row = db.get(School, school_id)
+            if school_row is not None:
+                school_row.current_timetable_id = timetable.id
         else:
             timetable.status = "failed"
             # Newline-joined rather than "; " — result.errors may contain
@@ -438,7 +427,8 @@ def generate_timetable(school_id: int, db: Session = Depends(get_db), current_us
     """Kicks off generation and returns immediately with status=generating.
     Poll GET /api/timetables/{id} for the result."""
     require_school_access(db, current_user, school_id, min_role="admin")
-    timetable = Timetable(school_id=school_id, status="generating")
+    timetable = Timetable(school_id=school_id, status="generating",
+                          version_number=versions.next_version_number(db, school_id))
     db.add(timetable)
     db.commit()
     db.refresh(timetable)
@@ -507,7 +497,68 @@ def list_timetables(school_id: int, db: Session = Depends(get_db), current_user:
     require_school_access(db, current_user, school_id)
     # Columns only: not touching `.entries` leaves the relationship unloaded,
     # so no per-timetable query is issued for them.
-    return db.query(Timetable).filter(Timetable.school_id == school_id).all()
+    rows = db.query(Timetable).filter(Timetable.school_id == school_id).all()
+    current = versions.current_version(db, school_id)
+    current_id = current.id if current else None
+    return [
+        TimetableSummaryOut(
+            id=t.id, school_id=t.school_id, status=t.status, solver_status=t.solver_status,
+            error_message=t.error_message, error_explanation=t.error_explanation,
+            version_number=t.version_number, name=t.name, created_at=t.created_at,
+            is_current=t.id == current_id,
+        )
+        for t in rows
+    ]
+
+
+@router.post("/{timetable_id}/make-current", response_model=TimetableSummaryOut)
+def make_current(timetable_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Open an older version: it becomes the one the school works from - shown
+    and edited on the Timetable tab, exported, and used by the next Generate
+    for its locked slots."""
+    timetable = db.get(Timetable, timetable_id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found")
+    require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    try:
+        versions.set_current(db, timetable)
+    except versions.VersionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return _summary(db, timetable)
+
+
+@router.patch("/{timetable_id}", response_model=TimetableSummaryOut)
+def rename_version(timetable_id: int, payload: TimetableVersionUpdate, db: Session = Depends(get_db),
+                   current_user: User = Depends(get_current_user)):
+    timetable = db.get(Timetable, timetable_id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found")
+    require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    timetable.name = (payload.name or "").strip() or None
+    db.commit()
+    return _summary(db, timetable)
+
+
+@router.delete("/{timetable_id}", status_code=204)
+def delete_version(timetable_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    timetable = db.get(Timetable, timetable_id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found")
+    require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    try:
+        versions.delete_version(db, timetable)
+    except versions.VersionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+def _summary(db: Session, t: Timetable) -> TimetableSummaryOut:
+    current = versions.current_version(db, t.school_id)
+    return TimetableSummaryOut(
+        id=t.id, school_id=t.school_id, status=t.status, solver_status=t.solver_status,
+        error_message=t.error_message, error_explanation=t.error_explanation,
+        version_number=t.version_number, name=t.name, created_at=t.created_at,
+        is_current=current is not None and current.id == t.id,
+    )
 
 
 def _check_slot_conflict(

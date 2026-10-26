@@ -54,13 +54,21 @@ def plan_signature(cg: ClassGroup) -> str:
 
 
 def latest_draft(db: Session, school_id: int) -> Timetable | None:
-    """The timetable on screen - the one frozen lessons are copied from."""
-    return (
-        db.query(Timetable)
-        .filter(Timetable.school_id == school_id, Timetable.status == "draft")
-        .order_by(Timetable.id.desc())
-        .first()
-    )
+    """The version on screen - the school's current version, which is the one a
+    section is frozen from. See app/services/versions.py."""
+    from app.services.versions import current_version
+    return current_version(db, school_id)
+
+
+def frozen_source(db: Session, cg: ClassGroup) -> Timetable | None:
+    """The version a frozen section is kept from: the one it was frozen in,
+    falling back to the current version for sections frozen before versions
+    were tracked."""
+    if cg.frozen_from_timetable_id:
+        t = db.get(Timetable, cg.frozen_from_timetable_id)
+        if t is not None and t.school_id == cg.school_id:
+            return t
+    return latest_draft(db, cg.school_id)
 
 
 def _lesson_counts(db: Session, timetable: Timetable | None) -> dict[int, int]:
@@ -85,9 +93,14 @@ def staleness(db: Session, school_id: int, class_groups: list[ClassGroup]) -> di
     frozen = [cg for cg in class_groups if cg.frozen]
     if not frozen:
         return {}
-    counts = _lesson_counts(db, latest_draft(db, school_id))
+    counts_by_source: dict = {}
     out: dict[int, str] = {}
     for cg in frozen:
+        source = frozen_source(db, cg)
+        key = source.id if source else None
+        if key not in counts_by_source:
+            counts_by_source[key] = _lesson_counts(db, source)
+        counts = counts_by_source[key]
         if cg.frozen_signature and plan_signature(cg) != cg.frozen_signature:
             out[cg.id] = (
                 "Its plan has changed since it was frozen - unfreeze it to regenerate it with the change."
@@ -134,12 +147,14 @@ def set_frozen(db: Session, school_id: int, class_group_ids: list[int], frozen: 
             cg.frozen_at = now
             cg.frozen_signature = plan_signature(cg)
             cg.frozen_lessons = counts[cg.id]
+            cg.frozen_from_timetable_id = timetable.id
     else:
         for cg in sections:
             cg.frozen = False
             cg.frozen_at = None
             cg.frozen_signature = None
             cg.frozen_lessons = None
+            cg.frozen_from_timetable_id = None
     db.commit()
     for cg in sections:
         db.refresh(cg)

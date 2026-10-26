@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { pickVersions, versionLabel } from '../lib/versions'
 import { api } from '../api'
 import ScheduleGrid from './ScheduleGrid.jsx'
 import {
@@ -190,11 +191,12 @@ export default function TimetableTab({
   // interval is derived from the row's status, so it stops on its own and
   // resumes by itself after a reload mid-generation.
   const { data: timetableList = [] } = useTimetables(schoolId)
-  // No created_at on TimetableOut - ids are assigned in creation order, so
-  // the highest id is the most recent.
-  const latestTimetableId =
-    timetableList.length > 0 ? timetableList.reduce((a, b) => (b.id > a.id ? b : a)).id : null
-  const { data: timetable = null } = useTimetable(latestTimetableId)
+  // The school's current version, or a generation still running; a failure
+  // after the current version is reported beside it, not instead of it.
+  const { shownId, failure: failedVersion, current: currentVersion } = pickVersions(timetableList)
+  const { data: timetable = null } = useTimetable(shownId)
+  const { data: failureTimetable = null } = useTimetable(failedVersion?.id ?? null)
+
   const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
   const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
   const optimisticSlotMove = useOptimisticSlotMove(timetable?.id)
@@ -217,7 +219,15 @@ export default function TimetableTab({
     }
   }
 
+  // With sections frozen, say what Generate will keep and what it will build
+  // before it starts.
+  const [confirmGenerate, setConfirmGenerate] = useState(false)
   async function handleGenerate() {
+    if (frozenById.size > 0 && !confirmGenerate) {
+      setConfirmGenerate(true)
+      return
+    }
+    setConfirmGenerate(false)
     setError(null)
     try {
       await generate()
@@ -459,12 +469,15 @@ export default function TimetableTab({
   }, [classGroup, view])
 
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
-  const failed = !isGenerating && timetable?.status === 'failed'
+  // The failed run: the one on screen if there is no version to fall back on,
+  // otherwise the failure newer than the current version.
+  const failedRun = timetable?.status === 'failed' ? timetable : failureTimetable?.status === 'failed' ? failureTimetable : null
+  const failed = !isGenerating && failedRun != null
   // The reasons open by themselves when a generation fails, once per failure.
   const [failureOpen, setFailureOpen] = useState(false)
   useEffect(() => {
-    if (failed && timetable && !seenFailures.has(timetable.id)) setFailureOpen(true)
-  }, [failed, timetable])
+    if (failed && failedRun && !seenFailures.has(failedRun.id)) setFailureOpen(true)
+  }, [failed, failedRun])
   const solved = !isGenerating && timetable?.status === 'draft'
   // Rules this timetable currently breaks, computed server-side on every read
   // (see _violations_for in backend/app/routers/timetables.py). Normally
@@ -643,6 +656,46 @@ export default function TimetableTab({
         </div>
       )}
 
+      {confirmGenerate && (
+        <GenerateConfirm
+          sections={sections}
+          frozenById={frozenById}
+          onCancel={() => setConfirmGenerate(false)}
+          onConfirm={handleGenerate}
+        />
+      )}
+
+      {solved && (
+        <p className="text-sm text-slate-600">
+          Showing <span className="font-medium text-slate-900">{versionLabel(timetable)}</span>
+          {timetable.created_at && (
+            <span className="text-slate-400"> · generated {new Date(timetable.created_at).toLocaleString()}</span>
+          )}
+          . Edits here change this version. Open, rename or delete versions on the Dashboard.
+        </p>
+      )}
+
+      {solved && (timetable?.generation_notes?.length > 0 || timetable?.frozen_kept?.length > 0) && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">
+          {timetable.frozen_kept?.length > 0 && (
+            <p>
+              <span className="font-medium">Kept as frozen:</span> {timetable.frozen_kept.join(', ')}. Their timetables
+              weren&rsquo;t regenerated.
+            </p>
+          )}
+          {timetable.generation_notes?.length > 0 && (
+            <>
+              <p className={`font-medium ${timetable.frozen_kept?.length ? 'mt-1.5' : ''}`}>From this generation</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-700">
+                {timetable.generation_notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+
       {noTeacherYet.length > 0 && (
         <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
           <p className="font-medium">
@@ -698,6 +751,9 @@ export default function TimetableTab({
             <span className="h-1.5 w-1.5 rounded-full bg-red-600" aria-hidden="true" />
             The last generation couldn&rsquo;t build a timetable.
           </span>
+          {timetable?.status === 'draft' && (
+            <span className="text-slate-500">You&rsquo;re still working from {versionLabel(currentVersion ?? timetable)}.</span>
+          )}
           <button
             onClick={() => setFailureOpen(true)}
             className="font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
@@ -709,10 +765,10 @@ export default function TimetableTab({
 
       <GenerationFailedDialog
         open={failed && failureOpen}
-        explanation={timetable?.error_explanation}
-        message={timetable?.error_message}
+        explanation={failedRun?.error_explanation}
+        message={failedRun?.error_message}
         onClose={() => {
-          if (timetable) seenFailures.add(timetable.id)
+          if (failedRun) seenFailures.add(failedRun.id)
           setFailureOpen(false)
         }}
         onOpenConstraints={onOpenConstraints}
@@ -916,6 +972,71 @@ export default function TimetableTab({
  * Whole grades are named as grades, so "Grades 11-12 frozen" reads at a
  * glance instead of a list of every section in them.
  */
+/** "Grade 1, Grade 2, Grade 3 · A": whole grades named once, the rest by section. */
+function summariseSections(sections, include) {
+  const picked = sections.filter((cg) => include(cg))
+  const names = []
+  const seen = new Set()
+  for (const cg of picked) {
+    if (cg.grade && seen.has(cg.grade)) continue
+    if (cg.grade && sections.filter((s) => s.grade === cg.grade).every(include)) {
+      names.push(cg.grade)
+      seen.add(cg.grade)
+      continue
+    }
+    names.push(cg.grade ? `${cg.grade} · ${cg.name}` : cg.name)
+  }
+  return { names, count: picked.length }
+}
+
+/** Before generating with sections frozen: what is kept, from which version, and what is built. */
+function GenerateConfirm({ sections, frozenById, onCancel, onConfirm }) {
+  const kept = summariseSections(sections, (cg) => frozenById.has(cg.id))
+  const built = summariseSections(sections, (cg) => !frozenById.has(cg.id))
+  const sources = [...new Set([...frozenById.values()].map((f) => f.frozen_from).filter(Boolean))]
+  const stale = [...frozenById.values()].filter((f) => f.stale_reason).length
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Generate a new version"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+        <h3 className="text-base font-semibold">Generate a new version?</h3>
+        <dl className="mt-3 flex flex-col gap-2 text-sm">
+          <div>
+            <dt className="font-medium text-slate-900">Keeping, exactly as they are</dt>
+            <dd className="text-slate-700">
+              {kept.names.join(', ')} ({kept.count} section{kept.count === 1 ? '' : 's'}, frozen
+              {sources.length ? ` from ${sources.join(' and ')}` : ''})
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-slate-900">Building</dt>
+            <dd className="text-slate-700">
+              {built.count ? `${built.names.join(', ')} (${built.count} section${built.count === 1 ? '' : 's'})` : 'Nothing - every section is frozen.'}
+            </dd>
+          </div>
+        </dl>
+        {stale > 0 && (
+          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {stale} frozen section{stale === 1 ? ' has' : 's have'} changed since freezing. They&rsquo;ll still be kept as
+            they were; unfreeze them to rebuild with the change.
+          </p>
+        )}
+        <p className="mt-3 text-xs text-slate-500">The result is a new version. Earlier versions stay on the Dashboard.</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button type="button" onClick={onCancel}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm}
+            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700">
+            Generate
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function FrozenSummary({ sections, frozenById }) {
   const frozen = sections.filter((cg) => frozenById.has(cg.id))
   if (frozen.length === 0) return null
@@ -937,7 +1058,12 @@ function FrozenSummary({ sections, frozenById }) {
     <div className="flex items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
       <span aria-hidden="true">❄</span>
       <span>
-        Frozen: {names.join(', ')} ({frozen.length} section{frozen.length === 1 ? '' : 's'}). Generating keeps{' '}
+        Frozen: {names.join(', ')} ({frozen.length} section{frozen.length === 1 ? '' : 's'}
+        {(() => {
+          const from = [...new Set(frozen.map((cg) => frozenById.get(cg.id)?.frozen_from).filter(Boolean))]
+          return from.length ? `, from ${from.join(' and ')}` : ''
+        })()}
+        ). Generating keeps{' '}
         {frozen.length === 1 ? 'it' : 'them'} exactly as {frozen.length === 1 ? 'it is' : 'they are'}
         {others > 0
           ? ` and only changes the other ${others}.`

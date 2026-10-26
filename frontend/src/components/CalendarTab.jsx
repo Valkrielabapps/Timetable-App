@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api'
 import { useTimetable, useTimetables } from '../hooks/useSchoolData'
+import { pickVersions } from '../lib/versions'
 
 /**
  * Calendar: the generated timetable laid out against real dates.
@@ -54,8 +55,8 @@ export default function CalendarTab({ schoolId, periods, teachers, classGroups, 
   const [view, setView] = useState('teachers') // 'teachers' | 'classes' | 'rooms'
 
   const { data: list = [], isLoading: listLoading } = useTimetables(schoolId)
-  const finished = list.filter((t) => t.status === 'draft' || t.status === 'published')
-  const timetableId = finished.length > 0 ? finished.reduce((a, b) => (b.id > a.id ? b : a)).id : null
+  // The version the school works from (see lib/versions.js).
+  const timetableId = pickVersions(list).current?.id ?? null
   const { data: timetable, isLoading: timetableLoading } = useTimetable(timetableId)
   const entries = timetable?.entries ?? []
 

@@ -917,12 +917,10 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # The timetable on screen: where locked slots are read from, and where a
     # frozen section's lessons are copied from. Only the most recent "draft"
     # counts - older ones are history, not the current schedule.
-    previous_timetable = (
-        db.query(Timetable)
-        .filter(Timetable.school_id == school_id, Timetable.status == "draft")
-        .order_by(Timetable.id.desc())
-        .first()
-    )
+    # The school's current version - the one it chose, or the newest
+    # successful one (see app/services/versions.py).
+    from app.services.versions import current_version
+    previous_timetable = current_version(db, school_id)
 
     # ------------------------------------------------------------------
     # Frozen sections
@@ -943,7 +941,20 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         lesson_period_ids = {p.id for p in periods}
         teacher_ids = {tid for (tid,) in db.query(Teacher.id).filter(Teacher.school_id == school_id)}
         dropped: dict[int, int] = {}
-        for e in (previous_timetable.entries if previous_timetable else []):
+        # Each frozen section is copied from the version it was frozen in,
+        # which need not be the current one: Grades 1-5 approved in Version 3
+        # stay Version 3's however many versions come after.
+        from app.services.freezing import frozen_source
+        sources: dict[int, list] = {}
+        for cg in class_groups:
+            if cg.id in frozen_ids:
+                src = frozen_source(db, cg)
+                if src is not None:
+                    sources.setdefault(src.id, [src, set()])[1].add(cg.id)
+        source_entries = [
+            e for src, section_ids in sources.values() for e in src.entries if e.class_group_id in section_ids
+        ]
+        for e in source_entries:
             if e.class_group_id not in frozen_ids:
                 continue
             # No teacher yet is a lesson that can be kept as it is; a
@@ -958,8 +969,8 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
         for cg in class_groups:
             if cg.id in frozen_ids and cg.id not in kept:
                 frozen_warnings.append(
-                    f"{_class_group_label(cg)} is frozen, but the current timetable has no lessons "
-                    f"for it, so it was generated afresh."
+                    f"{_class_group_label(cg)} is frozen, but the version it was frozen from has no "
+                    f"lessons for it, so it was generated afresh."
                 )
             elif cg.id in dropped:
                 n = dropped[cg.id]
