@@ -23,6 +23,7 @@ from app.routers import (
     class_groups,
     constraints,
     elective_blocks,
+    grade_categories,
     invites,
     payments,
     plans,
@@ -86,6 +87,7 @@ app.include_router(constraints.router)
 app.include_router(timetables.router)
 app.include_router(solver.router)
 app.include_router(substitutions.router)
+app.include_router(grade_categories.router)
 app.include_router(setup_extraction.router)
 app.include_router(support.router)
 app.include_router(payments.router)

@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SubstitutionsTab from './SubstitutionsTab'
 
 const api = vi.hoisted(() => ({
@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   listTimetables: vi.fn(),
   listSubstitutionLogs: vi.fn(),
   getTimetable: vi.fn(),
+  getGradeCategories: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
 
@@ -33,6 +34,7 @@ function renderTab({ timetables, timetable }) {
   api.listTimetables.mockResolvedValue(timetables)
   api.listSubstitutionLogs.mockResolvedValue([])
   api.getTimetable.mockImplementation(async (id) => ({ ...timetable, id }))
+  api.getGradeCategories.mockResolvedValue([{ grade: 'Grade 11', category: 'high', default: 'high' }])
   render(
     <SubstitutionsTab
       schoolId={1}
@@ -45,6 +47,14 @@ function renderTab({ timetables, timetable }) {
   )
 }
 
+// A Monday, the whole school.
+async function chooseDay() {
+  fireEvent.change(await screen.findByLabelText('Date'), { target: { value: '2026-10-26' } })
+  fireEvent.click(screen.getByRole('radio', { name: 'Whole school' }))
+}
+
+beforeEach(() => window.localStorage.clear())
+
 const BLOCK_TIMETABLE = {
   status: 'draft',
   entries: [entry(1, 1, 'Physics', 10, 'Block 1'), entry(2, 2, 'Accounts', 11, 'Block 1')],
@@ -53,6 +63,7 @@ const BLOCK_TIMETABLE = {
 describe('substitutions with elective blocks', () => {
   it('names the lesson and says only that group needs cover', async () => {
     renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
+    await chooseDay()
     fireEvent.click(await screen.findByLabelText('Mrs. Rao'))
     expect(await screen.findByText(/Period 1 • Physics • Absent: Mrs\. Rao/)).toBeInTheDocument()
     expect(screen.getByText('Block 1: only the Physics group')).toBeInTheDocument()
@@ -63,7 +74,7 @@ describe('substitutions with elective blocks', () => {
       timetables: [{ id: 3, status: 'draft' }, { id: 9, status: 'draft' }, { id: 5, status: 'failed' }],
       timetable: BLOCK_TIMETABLE,
     })
-    await screen.findByLabelText('Mrs. Rao')
+    await screen.findByLabelText('Date')
     expect(api.getTimetable).toHaveBeenCalledWith(9)
   })
 })
@@ -74,12 +85,14 @@ describe('choosing who is absent', () => {
 
   it('lists teachers alphabetically, titles ignored', async () => {
     renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
+    await chooseDay()
     await screen.findByLabelText('Mrs. Rao')
     expect(listed()).toEqual(['Mr. Khan', 'Mrs. Rao'])
   })
 
   it('narrows the list by search', async () => {
     renderTab({ timetables: [{ id: 3, status: 'draft' }], timetable: BLOCK_TIMETABLE })
+    await chooseDay()
     await screen.findByLabelText('Mrs. Rao')
     fireEvent.change(screen.getByLabelText('Search teachers'), { target: { value: 'rao' } })
     expect(listed()).toEqual(['Mrs. Rao'])

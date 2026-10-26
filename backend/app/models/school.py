@@ -8,7 +8,7 @@ schema assuming a fixed structure.
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, false, func
+    Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, false, func
 )
 from sqlalchemy.orm import relationship
 
@@ -37,6 +37,11 @@ class School(Base):
     # Grades not present in this list (e.g. a brand-new one added after
     # the last reorder) are shown after every listed grade.
     grade_order = Column(JSON, default=list)
+    # Which part of the school each grade is in - pre-primary, primary,
+    # middle, high - for arranging substitutions a block at a time. Only the
+    # school's own choices are stored ({grade label: part}); every other grade
+    # takes the default read from its name. See app/services/school_categories.py.
+    grade_categories = Column(JSON, nullable=True)
     # Grades whose school day is shorter than everyone else's - Grades 1 and 2
     # going home after period 6, say. A list of
     #   {"grades": ["Grade 1", "Grade 2"], "periods_per_day": 6,
@@ -608,6 +613,16 @@ class SubstitutionLog(Base):
     id = Column(Integer, primary_key=True)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     day_of_week = Column(Integer, nullable=False)  # 0 = Monday ... 6 = Sunday
+    # The day the cover is for - not when it was saved, which is often the
+    # day before. Null on records from before dates were kept.
+    date = Column(Date, nullable=True, index=True)
+    # The part of the school this was arranged for ("primary", ...), or null
+    # for the whole school. One record per date and part: saving again
+    # replaces it.
+    category = Column(String, nullable=True)
+    # Who was away: [{teacher_id, period_ids}] - period_ids null for the whole
+    # day, or the periods they were away for.
+    absences = Column(JSON, default=list)
     changes = Column(JSON, default=list)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

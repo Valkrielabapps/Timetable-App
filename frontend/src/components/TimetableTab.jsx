@@ -566,7 +566,7 @@ export default function TimetableTab({
       </div>
 
       {page === 'substitutions' ? (
-        <SubstitutionsTab schoolId={schoolId} classGroups={classGroups} teachers={teachers} />
+        <SubstitutionsTab schoolId={schoolId} classGroups={classGroups} teachers={teachers} readOnly={readOnly} />
       ) : (
         <>
       <div className="flex flex-wrap items-center justify-between gap-4">

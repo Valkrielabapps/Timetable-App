@@ -143,6 +143,12 @@ async function uploadFileOnly(path, file) {
   return res.json();
 }
 
+function summaryQuery(date, category) {
+  const q = new URLSearchParams({ date });
+  if (category) q.set("category", category);
+  return q.toString();
+}
+
 const get = (path) => request(path);
 const post = (path, body) => request(path, { method: "POST", body: JSON.stringify(body) });
 const put = (path, body) => request(path, { method: "PUT", body: JSON.stringify(body) });
@@ -405,4 +411,16 @@ export const api = {
   // Substitutions
   listSubstitutionLogs: (schoolId) => get(`/schools/${schoolId}/substitutions`),
   saveSubstitutionLog: (schoolId, data) => post(`/schools/${schoolId}/substitutions`, data),
+  // One date's cover - for a part of the school ("primary", ...) or, with no
+  // category, the whole school.
+  getSubstitutionSummary: (schoolId, date, category) =>
+    get(`/schools/${schoolId}/substitutions/summary?${summaryQuery(date, category)}`),
+  downloadSubstitutionSummaryPdf: (schoolId, date, category) =>
+    downloadFile(
+      `/schools/${schoolId}/substitutions/summary.pdf?${summaryQuery(date, category)}`,
+      `substitutions-${date}-${category || "whole-school"}.pdf`,
+    ),
+  // Which part of the school each grade belongs to (Settings).
+  getGradeCategories: (schoolId) => get(`/schools/${schoolId}/grade-categories`),
+  saveGradeCategories: (schoolId, categories) => put(`/schools/${schoolId}/grade-categories`, { categories }),
 };
