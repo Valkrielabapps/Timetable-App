@@ -223,6 +223,48 @@ describe('saved cover elsewhere and choices made', () => {
   })
 })
 
+describe('how loaded each substitute already is', () => {
+  // The hint beside each name in an open dropdown.
+  const hints = (picker) => {
+    fireEvent.click(picker)
+    const out = Object.fromEntries(screen.getAllByRole('option')
+      .filter((o) => o.children.length > 1)
+      .map((o) => [o.firstChild.textContent, o.lastChild.textContent]))
+    fireEvent.click(picker)
+    return out
+  }
+
+  it('shows their lessons that day and that week', async () => {
+    renderTab()
+    await choose('Whole school')
+    fireEvent.click(screen.getByLabelText('Mrs. Rao'))
+    await waitFor(() => expect(shown()).toEqual(['Ms. Iyer', 'Ms. Iyer']))
+    // Period 2: Mr. Khan teaches Grade 7 in period 1 and is free now.
+    expect(hints(pickers()[1])['Mr. Khan']).toBe('1 today · 1/week')
+    expect(hints(pickers()[1])['Dr. Sen']).toBe('0 today · 0/week')
+  })
+
+  it('counts the cover they are already down for that day', async () => {
+    renderTab({
+      logs: [{
+        id: 5, date: MONDAY, category: 'middle', day_of_week: 0, created_at: `${MONDAY}T08:00:00`,
+        absences: [{ teacher_id: 11, period_ids: null }],
+        changes: [{ period_id: 1, class_group_id: 200, absent_teacher_id: 11, substituting_teacher_id: 13 }],
+      }],
+    })
+    await choose('Primary')
+    fireEvent.click(screen.getByLabelText('Mrs. Rao'))
+    await waitFor(() => expect(shown()).toEqual(['Ms. Iyer', 'Ms. Iyer']))
+    // Picked for the other lesson here; saved for Grade 7 in middle.
+    expect(hints(pickers()[0])['Ms. Iyer']).toBe('0 today + 1 cover · 1/week')
+    expect(hints(pickers()[1])['Mr. Bose']).toBe('0 today + 1 cover · 1/week')
+    expect(screen.getAllByText('Already has 0 periods that day + 1 cover, 1 this week.')).toHaveLength(2)
+    pick(pickers()[0].getAttribute('aria-label'), 'Dr. Sen')
+    expect(screen.getByText('Already has 0 periods that day, 0 this week.')).toBeInTheDocument()
+    expect(screen.getByText('Already has 0 periods that day, 1 this week.')).toBeInTheDocument()
+  })
+})
+
 describe('saving', () => {
   const SUMMARY = {
     date: MONDAY, weekday: 'Monday', category: 'primary', category_label: 'Primary',

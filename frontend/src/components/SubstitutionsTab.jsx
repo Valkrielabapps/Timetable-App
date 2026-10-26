@@ -241,6 +241,40 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
     return counts
   }, [timetable])
 
+  // What each teacher already has on the chosen day: their own lessons, and
+  // the cover they're down for - saved for another part of the school, or
+  // picked here for another lesson. Shown beside each name when choosing a
+  // substitute, so nobody is loaded up without it being seen.
+  const lessonsToday = useMemo(() => {
+    const counts = new Map()
+    for (const e of timetable?.entries ?? []) {
+      if (e.teacher_id != null && periodById.get(e.period_id)?.day_of_week === weekday) {
+        counts.set(e.teacher_id, (counts.get(e.teacher_id) || 0) + 1)
+      }
+    }
+    return counts
+  }, [timetable, periodById, weekday])
+  const coverToday = (teacherId, forEntryId) => {
+    let n = 0
+    for (const key of savedElsewhere.taken) if (key.endsWith(`:${teacherId}`)) n += 1
+    for (const e of emptySlots) {
+      if (e.id !== forEntryId && substitutions[e.id] === String(teacherId)) n += 1
+    }
+    return n
+  }
+  const loadText = (teacherId, forEntryId) => {
+    const cover = coverToday(teacherId, forEntryId)
+    const today = lessonsToday.get(teacherId) || 0
+    return `${today} today${cover ? ` + ${cover} cover` : ''} · ${loadByTeacherId.get(teacherId) || 0}/week`
+  }
+  const loadSentence = (teacherId, forEntryId) => {
+    const cover = coverToday(teacherId, forEntryId)
+    const today = lessonsToday.get(teacherId) || 0
+    const week = loadByTeacherId.get(teacherId) || 0
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+    return `Already has ${plural(today, 'period')} that day${cover ? ` + ${cover} cover` : ''}, ${week} this week.`
+  }
+
   // Ranked substitute candidates for one lesson. Only teachers free at that
   // period count; excluded are:
   //   - anyone away at that period (here, or as saved for another part)
@@ -573,7 +607,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                     const pickIsSuggested = currentPick && suggested.some(t => String(t.id) === String(currentPick))
                     const part = categoryLabel(categoryOfSection.get(entry.class_group_id) ?? null)
                     const option = (group) => (t) => ({
-                      value: t.id, label: t.name, group, hint: `${loadByTeacherId.get(t.id) || 0} periods`,
+                      value: t.id, label: t.name, group, hint: loadText(t.id, entry.id),
                     })
 
                     return (
@@ -597,9 +631,10 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                           )}
                         </div>
                         <div className="min-w-[220px]">
-                          {/* Alphabetical within each group; each name shows its
-                              load. The auto-filled pick is the lightest-loaded
-                              suggestion. */}
+                          {/* Alphabetical within each group; each name shows how
+                              many periods they already have that day (lessons +
+                              cover) and that week. The auto-filled pick is the
+                              lightest-loaded suggestion. */}
                           <SearchableSelect
                             ariaLabel={`Substitute for ${entry.subject_name ?? 'this lesson'}, ${periodName(period)}, ${classGroup?.grade ?? ''} ${classGroup?.name ?? ''}`.trim()}
                             value={currentPick || null}
@@ -615,6 +650,11 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                             ]}
                             className="w-full"
                           />
+                          {currentPick && (
+                            <p className="mt-1 text-xs text-gray-600">
+                              {loadSentence(parseInt(currentPick), entry.id)}
+                            </p>
+                          )}
                           {currentPick ? (
                             <p className={`mt-1 text-xs ${pickIsSuggested ? 'text-emerald-600' : 'text-amber-600'}`}>
                               {pickIsSuggested

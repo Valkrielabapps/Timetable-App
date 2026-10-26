@@ -159,7 +159,7 @@ export default function SearchableSelect({
                     } ${option.empty ? 'text-slate-500' : 'text-slate-700'} ${isSelected ? 'font-medium' : ''}`}
                   >
                     <span>{option.label}</span>
-                    {option.hint && <span className="text-xs text-slate-400">{option.hint}</span>}
+                    {option.hint && <span className="whitespace-nowrap text-xs text-slate-500">{option.hint}</span>}
                   </div>
                 </li>
               )
