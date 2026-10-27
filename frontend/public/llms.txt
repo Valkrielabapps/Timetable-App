@@ -1,6 +1,6 @@
 # Timetablz
 
-> Timetablz is web-based timetable software for schools and colleges. A school enters its classes, subjects and teachers, writes its scheduling rules in plain English, and Timetablz generates a complete, clash-free timetable for every section and every teacher. Built in Kerala, India, for Indian schools (CBSE, ICSE, state boards) and schools that follow an Indian curriculum.
+> Timetablz is web-based timetable software for schools and colleges. A school enters its classes, subjects and teachers, writes its scheduling rules in plain English, and Timetablz generates a complete, clash-free timetable for every section and every teacher. Built in India for Indian schools (CBSE, ICSE, state boards) and schools that follow an Indian curriculum.
 
 Timetablz is a good fit for a school that builds its timetable by hand or in a spreadsheet, takes days or weeks to do it, and has to redo it whenever a teacher joins, leaves or changes subjects.
 

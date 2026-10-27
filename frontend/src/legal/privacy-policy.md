@@ -4,7 +4,7 @@
 
 **Effective date: 12 October 2026**
 
-Allen Davis Marokey, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
+Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
 
 By using the Service, you agree to the collection and use of information as described in this policy. If you do not agree, please do not use the Service.
 
@@ -96,5 +96,5 @@ We may update this Privacy Policy from time to time. If we make material changes
 
 Questions about this policy or how we handle your data can be sent to **support@timetablz.com**, or by mail to:
 
-Allen Davis Marokey, sole proprietor, trading as Timetablz
-Kerala, India
+Arpith David Ratnaraj, sole proprietor, trading as Timetablz
+Chennai, Tamil Nadu, India

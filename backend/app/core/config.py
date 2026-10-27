@@ -146,8 +146,8 @@ class Settings(BaseSettings):
     # (comma-separated) if that ever needs to change.
     platform_admin_emails: str = "valkyrielabapps@gmail.com"
     # Seller details printed on invoices (app/services/billing.py).
-    invoice_seller_name: str = "Allen Davis Marokey, trading as Timetablz"
-    invoice_seller_address: str = "Kerala, India"
+    invoice_seller_name: str = "Arpith David Ratnaraj, trading as Timetablz"
+    invoice_seller_address: str = "Chennai, Tamil Nadu, India"
     invoice_seller_email: str = "support@timetablz.com"
     # Leave unset until GST-registered; when set it's printed on invoices.
     invoice_seller_gstin: str | None = None

@@ -31,9 +31,9 @@ export const PAGE_META = {
     description: 'Schools that build their timetables with Timetablz, and what changed for them.',
   },
   about: {
-    title: 'About Timetablz | Timetable Software Made in Kerala, India',
+    title: 'About Timetablz | School Timetable Software Made in India',
     description:
-      'Timetablz is a small team in Kerala, India building timetable software for schools and colleges: automatic, clash-free timetables from rules written in plain English.',
+      'Timetablz is a small team in India building timetable software for schools and colleges: automatic, clash-free timetables from rules written in plain English.',
   },
   support: {
     title: 'Support and FAQ | Timetablz',
@@ -65,7 +65,7 @@ const ORGANIZATION = {
   url: `${SITE_URL}/`,
   logo: `${SITE_URL}/apple-touch-icon.png`,
   email: 'support@timetablz.com',
-  address: { '@type': 'PostalAddress', addressRegion: 'Kerala', addressCountry: 'IN' },
+  address: { '@type': 'PostalAddress', addressLocality: 'Chennai', addressRegion: 'Tamil Nadu', addressCountry: 'IN' },
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer support',

@@ -57,7 +57,7 @@ export default function SiteFooter() {
             <a href="mailto:support@timetablz.com" className="mt-4 block text-sm text-neutral-300 hover:text-white">
               support@timetablz.com
             </a>
-            <p className="mt-1 text-sm">Kerala, India</p>
+            <p className="mt-1 text-sm">Chennai, India</p>
           </div>
 
           {FOOTER_COLUMNS.map((col) => (

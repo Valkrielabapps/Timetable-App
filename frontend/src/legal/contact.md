@@ -10,8 +10,8 @@ Use this for questions, problems with your timetable, billing and refunds, or to
 
 ## Business details
 
-Allen Davis Marokey, sole proprietor, trading as Timetablz
-Kerala, India
+Arpith David Ratnaraj, sole proprietor, trading as Timetablz
+Chennai, Tamil Nadu, India
 Website: https://timetablz.com
 
 ## Related

@@ -2,7 +2,7 @@
 
 **Effective date: 12 October 2026**
 
-This policy applies to payments made for Timetablz, provided by Allen Davis Marokey, sole proprietor, trading as Timetablz ("**we**", "**us**"). It forms part of our Terms of Service.
+This policy applies to payments made for Timetablz, provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**"). It forms part of our Terms of Service.
 
 ## 1. What you pay for
 
@@ -33,5 +33,5 @@ Approved refunds are made to the original payment method (card, UPI or bank acco
 
 Questions about payments or refunds: **support@timetablz.com**
 
-Allen Davis Marokey, trading as Timetablz
-Kerala, India
+Arpith David Ratnaraj, trading as Timetablz
+Chennai, Tamil Nadu, India

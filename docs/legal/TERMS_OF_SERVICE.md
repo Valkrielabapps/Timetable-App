@@ -4,7 +4,7 @@
 
 **Effective date: 12 October 2026**
 
-These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Allen Davis Marokey, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
+These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
 
 ## 1. Who may use the Service
 
@@ -72,7 +72,7 @@ THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KI
 
 ## 14. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, Allen Davis Marokey, sole proprietor, trading as Timetablz SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, REVENUE, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, Arpith David Ratnaraj, sole proprietor, trading as Timetablz SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, REVENUE, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
 
 Nothing in these Terms limits liability that cannot be limited under applicable law.
 
@@ -86,11 +86,11 @@ We may update these Terms from time to time. If we make material changes, we wil
 
 ## 17. Governing law
 
-These Terms are governed by the laws of India, without regard to conflict-of-law principles. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of the courts of Kerala, India.
+These Terms are governed by the laws of India, without regard to conflict-of-law principles. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of the courts of Chennai, Tamil Nadu, India.
 
 ## 18. Contact us
 
 Questions about these Terms can be sent to **support@timetablz.com**, or by mail to:
 
-Allen Davis Marokey, sole proprietor, trading as Timetablz
-Kerala, India
+Arpith David Ratnaraj, sole proprietor, trading as Timetablz
+Chennai, Tamil Nadu, India
