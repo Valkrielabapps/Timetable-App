@@ -57,6 +57,11 @@ class School(Base):
     # deleting a version never cascades into the school row; a value pointing
     # at a version that no longer exists is treated as unset.
     current_timetable_id = Column(Integer, nullable=True)
+    # The tick-box rules on the Constraints page: a weekly and a daily cap on
+    # every teacher's periods, and spreading teachers' periods out. Only what
+    # the school has changed is stored; see app/services/standard_rules.py for
+    # the defaults and how each one is applied. Null = all defaults.
+    standard_rules = Column(JSON, nullable=True)
     # Descriptive details shown and edited in Settings > School profile:
     # board, affiliation/UDISE code, principal, contact details, address,
     # academic year start, etc. One JSON column rather than a dozen

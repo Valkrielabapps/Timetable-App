@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.constraint_ir import IRError, Run, Span, rule_from_dict
+from app.services import standard_rules as _std
 from app.services.constraint_ir_compiler import Atom, SchoolIndex, compile_rules
 from app.models.school import (
     ClassGroup,
@@ -129,6 +130,21 @@ _DEFAULT_HABITS: contextvars.ContextVar = contextvars.ContextVar("default_habits
 # counterexample, which is how two readings of one sentence are compared.
 # None in the app, where it changes nothing.
 _ADVERSARY: contextvars.ContextVar = contextvars.ContextVar("adversary", default=None)
+# The school's tick-box rules (app/services/standard_rules.py), set for the
+# length of one generate_school_timetable call so the diagnosis helpers it
+# calls read the same limits the model used. The default is "nothing ticked,
+# spreading on" - what a school that never opened the page gets.
+_STANDARD: contextvars.ContextVar = contextvars.ContextVar(
+    "standard_rules", default=_std.StandardRules(week_max=None, day_max=None, spread=True),
+)
+
+
+_DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _weekly_cap(teacher) -> int | None:
+    """A teacher's periods-a-week limit: their own, else the school's."""
+    return _STANDARD.get().weekly_cap_for(teacher)
 
 
 def _adversary_objective(model, atoms, index, rule, seed: int):
@@ -377,10 +393,17 @@ def _add_default_habits(
        subject the school has given a double-period rule, where two on one
        day is the point.
     2. Teachers aren't taught solid. Three periods back to back (within a
-       stretch between breaks) cost 1 each time. Skipped when the school has
-       its own rule about teachers' consecutive periods - theirs governs.
+       stretch between breaks) cost 1 each time, and - so a teacher's day is
+       spread out rather than bunched - two back to back cost 1 as well.
+       Skipped when the school has its own rule about teachers' consecutive
+       periods - theirs governs.
+    3. Each teacher's week is even: the gap between their busiest and their
+       lightest day costs 1 a period, so 5-5-5-5-4 beats 7-6-5-3-3.
 
-    Both are preferences: a school that needs two Maths on a day, or a teacher
+    2 and 3 are the "spread teachers' periods out" tick box on the
+    Constraints page, and are left out when the school unticks it.
+
+    All are preferences: a school that needs two Maths on a day, or a teacher
     in three periods running, still gets a timetable.
     """
     terms: list = []
@@ -427,20 +450,55 @@ def _add_default_habits(
         by_period = {pid: [occ] for (bid, pid), occ in block_occ.items() if bid == block.id}
         spread(f"b{block.id}", block.class_group_id, block.periods_per_week, by_period)
 
-    # 2. No teacher three periods running.
+    if not _STANDARD.get().spread:
+        return terms
+
+    # 2. No teacher three periods running, and not two when it can be helped.
     if not teacher_rule:
         for teacher in teachers:
             if teacher.id in capped_teachers:
                 continue
             for run in teaching_runs:
-                for i in range(len(run) - 2):
-                    window = [teacher_period_vars.get((teacher.id, p.id), []) for p in run[i:i + 3]]
-                    if not all(window):
-                        continue  # can't be busy in all three
-                    solid = model.NewBoolVar(f"habit_solid_t{teacher.id}_p{run[i].id}")
-                    model.Add(sum(v for vs in window for v in vs) - 2 <= solid)
-                    terms.append(solid)
+                for size in (3, 2):
+                    for i in range(len(run) - size + 1):
+                        window = [teacher_period_vars.get((teacher.id, p.id), []) for p in run[i:i + size]]
+                        if not all(window):
+                            continue  # can't be busy in all of them
+                        solid = model.NewBoolVar(f"habit_run{size}_t{teacher.id}_p{run[i].id}")
+                        model.Add(sum(v for vs in window for v in vs) - (size - 1) <= solid)
+                        terms.append(solid)
+
+    # 3. An even week for each teacher.
+    for teacher in teachers:
+        loads = []
+        for d, day_periods in sorted_periods_by_day.items():
+            day_vars = [v for p in day_periods for v in teacher_period_vars.get((teacher.id, p.id), [])]
+            if day_vars:
+                loads.append((d, day_vars))
+        if len(loads) < 2:
+            continue
+        top = max(len(vs) for _, vs in loads)
+        hi = model.NewIntVar(0, top, f"habit_dayhi_t{teacher.id}")
+        lo = model.NewIntVar(0, top, f"habit_daylo_t{teacher.id}")
+        for d, vs in loads:
+            model.Add(sum(vs) <= hi)
+            model.Add(sum(vs) >= lo)
+        gap = model.NewIntVar(0, top, f"habit_daygap_t{teacher.id}")
+        model.Add(gap >= hi - lo)
+        terms.append(gap)
     return terms
+
+
+def _add_day_caps(model, teachers, teacher_period_vars, sorted_periods_by_day) -> None:
+    """No teacher over the school's tick-box limit of periods in one day."""
+    day_max = _STANDARD.get().day_max
+    if day_max is None or "day_max" in _RELAX.get():
+        return
+    for teacher in teachers:
+        for day_periods in sorted_periods_by_day.values():
+            day_vars = [v for p in day_periods for v in teacher_period_vars.get((teacher.id, p.id), [])]
+            if len(day_vars) > day_max:
+                model.Add(sum(day_vars) <= day_max)
 
 
 def _at_most(model, penalties, expr, bound: int, constraint, name: str) -> None:
@@ -774,6 +832,16 @@ def _is_batched(req: SubjectRequirement, subjects_by_id: dict[int, "Subject"]) -
 
 
 def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResult:
+    """Solve a school's timetable under its tick-box rules - see
+    _generate_school_timetable for the model itself."""
+    token = _STANDARD.set(_std.for_school(db.get(School, school_id)))
+    try:
+        return _generate_school_timetable(db, school_id)
+    finally:
+        _STANDARD.reset(token)
+
+
+def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResult:
     """
     Build a CP-SAT model from a school's real data and solve it.
 
@@ -1649,13 +1717,28 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     # anything except unfreezing or changing the limit.
     for teacher_id, load in frozen_load.items():
         teacher = teachers_by_id.get(teacher_id)
-        if teacher is not None and teacher.max_periods_per_week is not None \
-                and load > teacher.max_periods_per_week:
+        cap = _weekly_cap(teacher) if teacher is not None else None
+        if cap is not None and load > cap:
             errors.append(
                 f"{teacher.name}'s lessons in frozen sections alone come to {load} periods a week, "
-                f"over their limit of {teacher.max_periods_per_week}. Unfreeze one of those sections "
+                f"over their limit of {cap}. Unfreeze one of those sections "
                 f"or raise the limit."
             )
+    day_max = _STANDARD.get().day_max
+    if day_max is not None:
+        frozen_day_load: dict[tuple[int, int], int] = {}
+        for e in frozen_entries:
+            day = periods_by_id[e.period_id].day_of_week
+            for teacher_id in {e.teacher_id, e.assistant_teacher_id} - {None}:
+                frozen_day_load[(teacher_id, day)] = frozen_day_load.get((teacher_id, day), 0) + 1
+        for (teacher_id, day), load in sorted(frozen_day_load.items()):
+            teacher = teachers_by_id.get(teacher_id)
+            if teacher is not None and load > day_max:
+                errors.append(
+                    f"{teacher.name}'s lessons in frozen sections alone come to {load} periods on "
+                    f"{_DAY_NAMES[day] if 0 <= day < len(_DAY_NAMES) else 'one day'}, over the limit of "
+                    f"{day_max} a day. Unfreeze one of those sections or raise the daily limit."
+                )
     if errors:
         return TimetableSolveResult(status="infeasible", errors=errors, warnings=warnings)
 
@@ -1671,10 +1754,15 @@ def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResu
     for _, group_vars in teacher_period_vars.items():
         model.AddAtMostOne(group_vars)
 
-    # Respect each teacher's max periods/week, if set.
+    # Respect each teacher's max periods/week: their own limit if set, else
+    # the school's tick-box limit.
     for teacher in teachers:
-        if teacher.max_periods_per_week is not None and teacher_total_vars[teacher.id] and "max_periods" not in _RELAX.get():
-            model.Add(sum(teacher_total_vars[teacher.id]) <= teacher.max_periods_per_week)
+        cap = _weekly_cap(teacher)
+        if cap is not None and teacher_total_vars[teacher.id] and "max_periods" not in _RELAX.get():
+            model.Add(sum(teacher_total_vars[teacher.id]) <= cap)
+
+    # The school's tick-box limit on any teacher's periods in one day.
+    _add_day_caps(model, teachers, teacher_period_vars, sorted_periods_by_day)
 
     # "max_consecutive_periods" Constraint rows: cap how many periods in a
     # row (same day, adjacent order) a subject can run for the scoped
@@ -2136,10 +2224,19 @@ def _diagnose_teacher_assignment(
     not together, the teachers who teach several of them).
     """
     lesson_ids = [p.id for p in periods if not p.is_break]
+    day_of = {p.id: p.day_of_week for p in periods}
 
     def capacity(t) -> int:
         free = sum(1 for pid in lesson_ids if pid not in set(t.unavailable_period_ids or []))
-        return min(t.max_periods_per_week, free) if t.max_periods_per_week else free
+        free_ids = [pid for pid in lesson_ids if pid not in set(t.unavailable_period_ids or [])]
+        day_max = _STANDARD.get().day_max
+        if day_max is not None and "day_max" not in _RELAX.get():
+            by_day: dict[int, int] = {}
+            for pid in free_ids:
+                by_day[day_of[pid]] = by_day.get(day_of[pid], 0) + 1
+            free = sum(min(n, day_max) for n in by_day.values())
+        cap = _weekly_cap(t) if "max_periods" not in _RELAX.get() else None
+        return min(cap, free) if cap else free
 
     strands = []  # (subject_id, class_group_id, periods, candidates, group) - group: strands that run at once
     for r in requirements:
@@ -2329,7 +2426,7 @@ def _diagnose_infeasibility(
         if not teacher:
             continue
         available = len(periods) - len(set(teacher.unavailable_period_ids or []))
-        cap = teacher.max_periods_per_week
+        cap = _weekly_cap(teacher)
         effective_cap = min(cap, available) if cap is not None else available
         if load > effective_cap:
             if cap is not None and cap <= available:
@@ -2482,8 +2579,11 @@ def _diagnose_constraint_conflicts(
     for group_vars in teacher_period_vars.values():
         model.AddAtMostOne(group_vars)
     for teacher in teachers:
-        if teacher.max_periods_per_week is not None and teacher_total_vars[teacher.id]:
-            model.Add(sum(teacher_total_vars[teacher.id]) <= teacher.max_periods_per_week)
+        cap = _weekly_cap(teacher)
+        if cap is not None and teacher_total_vars[teacher.id]:
+            model.Add(sum(teacher_total_vars[teacher.id]) <= cap)
+    _add_day_caps(model, teachers, teacher_period_vars,
+                  {day: sorted(dp, key=lambda p: p.order) for day, dp in periods_by_day.items()})
 
     req_by_class_subject = {(r.class_group_id, r.subject_id): r for r in non_batched}
     sorted_periods_by_day = {day: sorted(dp, key=lambda p: p.order) for day, dp in periods_by_day.items()}
@@ -2982,16 +3082,45 @@ def _diagnose_setup(db, school_id, attempt, all_ids, had_rules) -> list[str]:
                 *shown,
             ]
 
+    std = _std.for_school(db.get(School, school_id))
+    periods_by_id = {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()}
+
+    if std.day_max is not None:
+        loose = attempt(all_ids, frozenset({"day_max"}))
+        if loose is not None and loose.status in ("optimal", "feasible"):
+            busiest: dict = {}
+            for a in loose.assignments:
+                p = periods_by_id.get(a["period_id"])
+                if p is None or a.get("teacher_id") is None:
+                    continue
+                key = (a["teacher_id"], p.day_of_week)
+                busiest.setdefault(key, set()).add(p.id)
+            worst: dict = {}
+            for (tid, _day), ids in busiest.items():
+                worst[tid] = max(worst.get(tid, 0), len(ids))
+            over = [
+                f"{teachers[tid].name}: {n} periods on their busiest day"
+                for tid, n in sorted(worst.items(), key=lambda kv: teachers[kv[0]].name if kv[0] in teachers else "")
+                if tid in teachers and n > std.day_max
+            ]
+            return [
+                lead + f"It works only if some teachers teach more than {std.day_max} periods in a day - "
+                "the daily limit ticked on the Constraints page. Raise or untick that limit, or give "
+                "these teachers fewer sections:",
+                *(over or ["(the daily limit is tight across several teachers rather than one)"]),
+            ]
+
     uncapped = attempt(all_ids, frozenset({"max_periods"}))
     if uncapped is not None and uncapped.status in ("optimal", "feasible"):
         load: dict = {}
         for a in uncapped.assignments:
             load[a["teacher_id"]] = load.get(a["teacher_id"], 0) + 1
-        over = [
-            f"{t.name}: needs {load[t.id]}, limit {t.max_periods_per_week}"
-            for t in sorted(teachers.values(), key=lambda t: t.name)
-            if t.max_periods_per_week and load.get(t.id, 0) > t.max_periods_per_week
-        ]
+        over = []
+        for t in sorted(teachers.values(), key=lambda t: t.name):
+            cap = std.weekly_cap_for(t)
+            if cap and load.get(t.id, 0) > cap:
+                whose = "" if t.max_periods_per_week is not None else " (the school's weekly limit)"
+                over.append(f"{t.name}: needs {load[t.id]}, limit {cap}{whose}")
         return [
             lead + "It works only if some teachers go over their max periods/week. "
             "Raise these limits, or move some of their sections to another qualified teacher:",

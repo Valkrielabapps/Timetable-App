@@ -176,6 +176,7 @@ export const api = {
     put(`/schools/${schoolId}/grade-order`, { grade_order: gradeOrder }),
   // Shorter school days for some grades (Grades 1 and 2 home after period 6).
   updateGradeDayLimits: (schoolId, limits) => put(`/schools/${schoolId}/grade-day-limits`, { limits }),
+  updateStandardRules: (schoolId, rules) => put(`/schools/${schoolId}/standard-rules`, rules),
   updateSchoolInstitutionType: (schoolId, institutionType) =>
     put(`/schools/${schoolId}/institution-type`, { institution_type: institutionType }),
   updateSchoolName: (schoolId, name) => put(`/schools/${schoolId}/name`, { name }),

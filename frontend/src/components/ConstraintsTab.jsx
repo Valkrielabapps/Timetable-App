@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import ConstraintInterpretation from './ConstraintInterpretation.jsx'
+import StandardRules from './StandardRules.jsx'
 import SearchableSelect from './SearchableSelect'
 import { confirmDialog } from './confirmDialog'
 import { useTimetable, useTimetables } from '../hooks/useSchoolData'
@@ -69,7 +70,9 @@ const SCOPABLE_TYPES = new Set([
  * top, and a search box and filters over all of them. See
  * src/constraintGroups.js for how a rule is filed.
  */
-export default function ConstraintsTab({ schoolId, classGroups, constraints, onReload, readOnly = false }) {
+export default function ConstraintsTab({
+  schoolId, classGroups, constraints, onReload, readOnly = false, standardRules = null, onSaveStandardRules = null,
+}) {
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -348,10 +351,14 @@ export default function ConstraintsTab({ schoolId, classGroups, constraints, onR
           structured constraints.
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Built in, so you don&rsquo;t need to type them: each subject is spread across the week, and teachers
-          aren&rsquo;t given three periods in a row where it can be avoided. Any rule you add here comes first.
+          Built in, so you don&rsquo;t need to type it: each subject is spread across the week. Any rule you add
+          here comes first.
         </p>
       </div>
+
+      {onSaveStandardRules && (
+        <StandardRules rules={standardRules} onSave={onSaveStandardRules} readOnly={readOnly} />
+      )}
 
       {!readOnly && (
         <div className="flex flex-col gap-1.5">

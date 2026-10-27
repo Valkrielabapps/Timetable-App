@@ -26,6 +26,9 @@ class SchoolOut(BaseModel):
     # treats a missing/None value the same as an empty list.
     grade_order: list[str] | None = None
     grade_day_limits: list[dict] | None = None
+    # The tick-box rules, every one with its current setting (defaults
+    # filled in) - see app/services/standard_rules.py.
+    standard_rules: dict | None = None
     profile: dict | None = None
     # Paid plan ("pro") and when it lapses; both null on the Free plan.
     plan: str | None = None
@@ -47,6 +50,18 @@ class GradeDayLimit(BaseModel):
 
 class SchoolGradeDayLimitsUpdate(BaseModel):
     limits: list[GradeDayLimit]
+
+
+class StandardRuleSetting(BaseModel):
+    on: bool
+    value: int | None = None
+
+
+class SchoolStandardRulesUpdate(BaseModel):
+    """Any of the tick-box rules; ones left out keep their setting."""
+    teacher_week_max: StandardRuleSetting | None = None
+    teacher_day_max: StandardRuleSetting | None = None
+    teacher_spread: StandardRuleSetting | None = None
 
 
 class SchoolGradeOrderUpdate(BaseModel):

@@ -33,9 +33,10 @@ from app.schemas.school import (
     SchoolNameUpdate,
     SchoolOut,
     SchoolProfile,
+    SchoolStandardRulesUpdate,
 )
 from app.services.email_service import send_invite_email
-from app.services import plans
+from app.services import plans, standard_rules
 
 router = APIRouter(prefix="/api/schools", tags=["schools"])
 
@@ -45,6 +46,7 @@ def _school_out(school: School, role: str) -> SchoolOut:
         id=school.id, name=school.name, institution_type=school.institution_type,
         grade_order=school.grade_order, profile=school.profile, role=role,
         grade_day_limits=school.grade_day_limits,
+        standard_rules=standard_rules.merged(school.standard_rules),
         plan=school.plan, plan_valid_until=school.plan_valid_until,
     )
 
@@ -163,6 +165,30 @@ def update_grade_day_limits(
             "by_day": {str(d): n for d, n in sorted(rule.by_day.items())},
         })
     school.grade_day_limits = out or None
+    db.commit()
+    db.refresh(school)
+    return _school_out(school, role)
+
+
+@router.put("/{school_id}/standard-rules", response_model=SchoolOut)
+def update_standard_rules(
+    school_id: int, payload: SchoolStandardRulesUpdate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Tick or untick the standard rules on the Constraints page, or change
+    their numbers - see app/services/standard_rules.py."""
+    role = require_school_access(db, current_user, school_id, min_role="admin")
+    school = db.get(School, school_id)
+    current = standard_rules.merged(school.standard_rules)
+    for key, setting in payload.model_dump(exclude_none=True).items():
+        if key in standard_rules.LIMITS and setting.get("value") is not None:
+            lo, hi = standard_rules.LIMITS[key]
+            if not lo <= setting["value"] <= hi:
+                what = "a week" if key == "teacher_week_max" else "a day"
+                raise HTTPException(status_code=400, detail=f"Choose between {lo} and {hi} periods {what}.")
+            current[key]["value"] = setting["value"]
+        current[key]["on"] = setting["on"]
+    school.standard_rules = standard_rules.to_store(current)
     db.commit()
     db.refresh(school)
     return _school_out(school, role)
