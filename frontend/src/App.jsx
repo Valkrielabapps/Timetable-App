@@ -756,10 +756,10 @@ function App() {
   // Section 8-B while I'm looking at every teacher" confusion this avoids.
   const inSchoolWideDataEntry =
     tab === 'entry' && (dataEntrySubView === 'subjects' || dataEntrySubView === 'teachers' || dataEntrySubView === 'setup')
-  // Only a section's plan and the timetable are about one section; the
-  // Dashboard, Constraints, Calendar, Settings and Demo are about the whole
-  // school, so no section is shown as selected there.
-  const sectionScoped = (tab === 'entry' && !inSchoolWideDataEntry) || tab === 'timetable'
+  // Only a section's own plan is about one section. Every other page - the
+  // Dashboard, Constraints, the whole-school Timetable, Calendar, Settings,
+  // Demo - covers the whole school, so no section is shown as selected there.
+  const sectionScoped = tab === 'entry' && !inSchoolWideDataEntry
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
