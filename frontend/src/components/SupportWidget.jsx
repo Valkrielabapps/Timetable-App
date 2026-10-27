@@ -105,7 +105,7 @@ export default function SupportWidget({ schoolId }) {
                 external
                 onClick={() => {
                   setMenuOpen(false)
-                  window.open(`${window.location.pathname}?page=support`, '_blank', 'noopener,noreferrer')
+                  window.open('/support', '_blank', 'noopener,noreferrer')
                 }}
               />
               <MenuItem

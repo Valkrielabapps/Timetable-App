@@ -178,7 +178,7 @@ export default function BillingSection({ school, isAdmin }) {
             </button>
             <p className="mt-2 text-xs text-slate-400">
               Payments are processed securely by Cashfree. Need more than 60 sections or several schools?{' '}
-              <a className="underline" href="?page=contact">Contact us about Business</a>.
+              <a className="underline" href="/contact">Contact us about Business</a>.
             </p>
           </div>
         </form>

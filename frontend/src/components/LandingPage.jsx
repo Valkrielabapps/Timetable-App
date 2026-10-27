@@ -333,7 +333,7 @@ function Hero({ onGetStarted, signedIn }) {
           <span className="text-neutral-400">Already building timetables at</span>
           <span className="font-semibold uppercase tracking-wide text-white">Shishya Public School, Dehradun</span>
           <a
-            href="?page=customers"
+            href="/customers"
             className="inline-flex items-center gap-1.5 font-medium text-neutral-300 underline-offset-4 hover:text-white hover:underline"
           >
             Read their story
@@ -906,7 +906,7 @@ function WhyChoose() {
             rules in plain English, and get a clash-free timetable for every section and every teacher.
           </p>
           <a
-            href="?page=why"
+            href="/why-timetablz"
             className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-900 hover:text-neutral-600"
           >
             Why Timetablz
@@ -1195,7 +1195,7 @@ function ClosingCta({ onGetStarted, signedIn }) {
         </h2>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <a
-            href="?page=contact"
+            href="/contact"
             className="rounded-lg bg-neutral-900 px-7 py-3.5 text-[15px] font-semibold text-white hover:bg-neutral-700"
           >
             Book a demo

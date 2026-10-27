@@ -78,7 +78,7 @@ const fadeUp = {
 // on purpose since the real refund policy is still an open placeholder
 // in that document (see [FREE TRIAL / PILOT PERIOD] and Section 8) —
 // update this once that's decided.
-const BILLING_FAQS = [
+export const BILLING_FAQS = [
   {
     q: 'Does the price include GST?',
     a: 'The price shown is what you pay, in Indian Rupees. If GST becomes applicable to us, it will be shown separately at checkout and on your invoice.',

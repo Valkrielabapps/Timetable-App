@@ -12,11 +12,11 @@ Use this for questions, problems with your timetable, billing and refunds, or to
 
 Allen Davis Marokey, sole proprietor, trading as Timetablz
 Kerala, India
-Website: https://www.timetablz.com
+Website: https://timetablz.com
 
 ## Related
 
-- Plans and pricing: https://www.timetablz.com/?page=pricing
-- Refund and Cancellation Policy: https://www.timetablz.com/?page=refunds
-- Terms of Service: https://www.timetablz.com/?page=terms
-- Privacy Policy: https://www.timetablz.com/?page=privacy
+- Plans and pricing: https://timetablz.com/pricing
+- Refund and Cancellation Policy: https://timetablz.com/refunds
+- Terms of Service: https://timetablz.com/terms
+- Privacy Policy: https://timetablz.com/privacy

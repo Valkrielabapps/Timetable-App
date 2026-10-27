@@ -40,7 +40,7 @@ export default function TeamTab({ schoolId, members, invites, onReload }) {
     try {
       const invite = await api.createInvite(schoolId, email.trim(), role)
       setJustCreatedLink({
-        link: `${window.location.origin}${window.location.pathname}?invite=${invite.token}`,
+        link: `${window.location.origin}/?invite=${invite.token}`,
         email: invite.email,
         emailSent: invite.email_sent,
       })
@@ -141,7 +141,7 @@ export default function TeamTab({ schoolId, members, invites, onReload }) {
                 <button
                   onClick={() =>
                     setJustCreatedLink({
-                      link: `${window.location.origin}${window.location.pathname}?invite=${inv.token}`,
+                      link: `${window.location.origin}/?invite=${inv.token}`,
                       email: inv.email,
                       // Unknown here — this re-shows the link for an
                       // already-existing invite, not a freshly created

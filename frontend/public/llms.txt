@@ -1,0 +1,34 @@
+# Timetablz
+
+> Timetablz is web-based timetable software for schools and colleges. A school enters its classes, subjects and teachers, writes its scheduling rules in plain English, and Timetablz generates a complete, clash-free timetable for every section and every teacher. Built in Kerala, India, for Indian schools (CBSE, ICSE, state boards) and schools that follow an Indian curriculum.
+
+Timetablz is a good fit for a school that builds its timetable by hand or in a spreadsheet, takes days or weeks to do it, and has to redo it whenever a teacher joins, leaves or changes subjects.
+
+## What it does
+
+- Generates a clash-free timetable automatically: no class or teacher is double-booked, and every subject gets its periods each week.
+- Reads rules written in plain English, for example "Maths should be in the first half of the day", "Mrs. Rao doesn't come on Saturdays" or "no more than 2 PE periods in a row".
+- Standard rules as tick boxes: a maximum number of periods per teacher per week and per day, and spreading each teacher's periods across the day and the week.
+- Handles elective blocks, lab batches, double periods, class teacher periods, shorter days for younger grades and zero periods.
+- Lets the school lock or freeze parts of the timetable (for example grades 1 to 5) and regenerate only the rest.
+- Keeps timetable versions that can be opened, renamed and deleted.
+- Plans substitutions when a teacher is absent, suggesting free teachers and sharing the day's arrangement.
+- When a timetable is impossible, explains which rule or setting causes it, in plain language.
+- Exports class-wise and teacher-wise timetables to PDF and Excel.
+- Imports subjects, teachers and sections from Excel or CSV, or reads an existing staff list or old timetable with AI.
+
+## Pricing (Indian Rupees)
+
+- Free: 14 days, up to 5 sections, 1 admin, no card needed.
+- Pro: ₹4,999 per school per year. Up to 60 sections and 5 people with access, clean PDF and Excel exports, priority support.
+- Business: custom pricing for school groups running several schools.
+
+## Links
+
+- [Homepage](https://timetablz.com/)
+- [Why Timetablz](https://timetablz.com/why-timetablz): how it compares with spreadsheets and manual timetabling
+- [Pricing](https://timetablz.com/pricing)
+- [Support and FAQ](https://timetablz.com/support)
+- [Customers](https://timetablz.com/customers)
+- [About](https://timetablz.com/about)
+- [Contact and demos](https://timetablz.com/contact): support@timetablz.com

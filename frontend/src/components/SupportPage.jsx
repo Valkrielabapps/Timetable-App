@@ -15,7 +15,7 @@ import SiteFooter from './SiteFooter'
 
 const SUPPORT_EMAIL = 'support@timetablz.com'
 
-const FAQ_GROUPS = [
+export const FAQ_GROUPS = [
   {
     title: 'Getting started',
     items: [
@@ -232,7 +232,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
               <ContactCard
                 title="Payments and refunds"
                 action={
-                  <a href="?page=refunds" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
+                  <a href="/refunds" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
                     Refund and Cancellation Policy
                   </a>
                 }
@@ -243,7 +243,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
               <ContactCard
                 title="Larger schools"
                 action={
-                  <a href="?page=pricing" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
+                  <a href="/pricing" className="text-sm font-medium text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
                     See plans
                   </a>
                 }

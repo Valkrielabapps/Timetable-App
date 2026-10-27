@@ -17,14 +17,14 @@ import { getToken } from '../api'
  */
 
 export const NAV_LINKS = [
-  { id: 'why', label: 'Why Timetablz', href: '?page=why' },
-  { id: 'pricing', label: 'Pricing', href: '?page=pricing' },
-  { id: 'customers', label: 'Customers', href: '?page=customers' },
-  { id: 'about', label: 'About', href: '?page=about' },
-  { id: 'support', label: 'Support', href: '?page=support' },
+  { id: 'why', label: 'Why Timetablz', href: '/why-timetablz' },
+  { id: 'pricing', label: 'Pricing', href: '/pricing' },
+  { id: 'customers', label: 'Customers', href: '/customers' },
+  { id: 'about', label: 'About', href: '/about' },
+  { id: 'support', label: 'Support', href: '/support' },
 ]
 
-const go = (query) => window.location.assign(`${window.location.pathname}${query}`)
+const go = (query) => window.location.assign(`/${query}`)
 
 export default function SiteNav({ current = null, signedIn, onGetStarted, onSignIn }) {
   const isSignedIn = signedIn ?? Boolean(getToken())
@@ -43,7 +43,7 @@ export default function SiteNav({ current = null, signedIn, onGetStarted, onSign
     <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
       <div className="flex items-center px-6 py-4 md:px-10 xl:px-28">
         <div className="flex items-center gap-10">
-          <a href={window.location.pathname} className="whitespace-nowrap text-[19px] font-bold tracking-tight text-white">
+          <a href="/" className="whitespace-nowrap text-[19px] font-bold tracking-tight text-white">
             Timetablz
           </a>
           <nav aria-label="Site" className="hidden items-center gap-7 text-[15px] text-neutral-300 lg:flex">

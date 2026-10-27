@@ -17,8 +17,8 @@ const FOOTER_COLUMNS = [
     // instead of the removed in-page `#pricing` anchor.
     heading: 'Product',
     links: [
-      { label: 'Why Timetablz', href: '?page=why' },
-      { label: 'Pricing', href: '?page=pricing' },
+      { label: 'Why Timetablz', href: '/why-timetablz' },
+      { label: 'Pricing', href: '/pricing' },
     ],
   },
   {
@@ -28,18 +28,18 @@ const FOOTER_COLUMNS = [
     // that's settled.
     heading: 'Company',
     links: [
-      { label: 'About', href: '?page=about' },
-      { label: 'Customers', href: '?page=customers' },
-      { label: 'Support', href: '?page=support' },
+      { label: 'About', href: '/about' },
+      { label: 'Customers', href: '/customers' },
+      { label: 'Support', href: '/support' },
     ],
   },
   {
     heading: 'Legal',
     links: [
-      { label: 'Privacy policy', href: '?page=privacy' },
-      { label: 'Terms of service', href: '?page=terms' },
-      { label: 'Refunds and cancellations', href: '?page=refunds' },
-      { label: 'Contact us', href: '?page=contact' },
+      { label: 'Privacy policy', href: '/privacy' },
+      { label: 'Terms of service', href: '/terms' },
+      { label: 'Refunds and cancellations', href: '/refunds' },
+      { label: 'Contact us', href: '/contact' },
     ],
   },
 ]

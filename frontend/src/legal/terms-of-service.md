@@ -40,7 +40,7 @@ We may suspend or terminate accounts that violate these Terms.
 
 ## 6. Plans and pricing
 
-The Service is offered under the pricing plans described on our website at https://www.timetablz.com (Free; Pro at ₹4,999 per year; and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are shown in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
+The Service is offered under the pricing plans described on our website at https://timetablz.com (Free; Pro at ₹4,999 per year; and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are shown in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
 
 ## 7. Payment and billing
 
@@ -48,7 +48,7 @@ The Pro plan is paid in advance for one year at a time, through our payment proc
 
 ## 8. Refunds and cancellations
 
-You can cancel the Pro plan at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of your current year on a pro-rata basis: the amount paid, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and your school moves to the Free plan when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://www.timetablz.com/?page=refunds.
+You can cancel the Pro plan at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of your current year on a pro-rata basis: the amount paid, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and your school moves to the Free plan when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
 
 ## 9. Free trials and pilots
 

@@ -1,0 +1,13 @@
+# Timetablz - school timetable software. Public pages are open to every
+# search engine and AI assistant; the app itself (behind sign-in) and the API
+# have nothing to index.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+
+# AI assistants and AI search (GPTBot, OAI-SearchBot, ClaudeBot,
+# PerplexityBot, Google-Extended and the rest) are covered by the rule above:
+# welcome, so they can read and recommend Timetablz.
+
+Sitemap: https://timetablz.com/sitemap.xml

@@ -40,6 +40,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { useTimetables } from './hooks/useSchoolData'
 import { pickVersions } from './lib/versions'
+import { pageFromLocation } from './lib/sitePages'
 
 // Substitutions used to be its own tab here, but it's really a sibling
 // view of the generated schedule (same data — entries, periods, teachers
@@ -225,7 +226,7 @@ function App() {
   // `?page=privacy` / `?page=terms` with a plain <a>, which triggers a
   // real navigation (full reload) rather than a route change, so this
   // only needs to be read on initial mount, not watched afterwards.
-  const [legalPage] = useState(() => new URLSearchParams(window.location.search).get('page'))
+  const [legalPage] = useState(() => pageFromLocation(window.location))
 
   // On load, if a token is already stored, validate it via /auth/me instead
   // of bouncing straight to the login screen.
@@ -601,59 +602,59 @@ function App() {
     return (
       <PaymentStatusPage
         orderId={new URLSearchParams(window.location.search).get('order_id')}
-        onDone={() => window.location.assign(window.location.pathname)}
+        onDone={() => window.location.assign('/')}
       />
     )
   }
   if (legalPage === 'privacy') {
-    return <PrivacyPolicyPage onBack={() => window.location.assign(window.location.pathname)} />
+    return <PrivacyPolicyPage onBack={() => window.location.assign('/')} />
   }
   if (legalPage === 'refunds') {
-    return <RefundPolicyPage onBack={() => window.location.assign(window.location.pathname)} />
+    return <RefundPolicyPage onBack={() => window.location.assign('/')} />
   }
   if (legalPage === 'contact') {
-    return <ContactPage onBack={() => window.location.assign(window.location.pathname)} />
+    return <ContactPage onBack={() => window.location.assign('/')} />
   }
   if (legalPage === 'terms') {
-    return <TermsOfServicePage onBack={() => window.location.assign(window.location.pathname)} />
+    return <TermsOfServicePage onBack={() => window.location.assign('/')} />
   }
   if (legalPage === 'pricing') {
     return (
       <PricingPage
-        onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
+        onBack={() => window.location.assign('/')}
+        onGetStarted={() => window.location.assign('/?start=plans')}
       />
     )
   }
   if (legalPage === 'support') {
     return (
       <SupportPage
-        onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
+        onBack={() => window.location.assign('/')}
+        onGetStarted={() => window.location.assign('/?start=plans')}
       />
     )
   }
   if (legalPage === 'why') {
     return (
       <WhyTimetablzPage
-        onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
+        onBack={() => window.location.assign('/')}
+        onGetStarted={() => window.location.assign('/?start=plans')}
       />
     )
   }
   if (legalPage === 'about') {
     return (
       <AboutPage
-        onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
+        onBack={() => window.location.assign('/')}
+        onGetStarted={() => window.location.assign('/?start=plans')}
       />
     )
   }
   if (legalPage === 'customers') {
     return (
       <CustomersPage
-        onBack={() => window.location.assign(window.location.pathname)}
-        onGetStarted={() => window.location.assign(`${window.location.pathname}?start=plans`)}
+        onBack={() => window.location.assign('/')}
+        onGetStarted={() => window.location.assign('/?start=plans')}
       />
     )
   }
@@ -701,7 +702,7 @@ function App() {
           onSignIn={signIn}
           onChoose={(planId) => {
             if (planId === 'business') {
-              window.location.assign(`${window.location.pathname}?page=contact`)
+              window.location.assign('/contact')
               return
             }
             if (planId === 'pro') sessionStorage.setItem(PLAN_INTENT_KEY, 'pro')

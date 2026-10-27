@@ -30,6 +30,6 @@ describe('LandingPage for a signed-in visitor', () => {
   it('ends with a closing call to action above the footer', () => {
     render(<LandingPage onGetStarted={() => {}} onSignIn={() => {}} />)
     expect(screen.getByRole('heading', { name: /make the hardest timetable feel effortless/i })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Book a demo' })).toHaveAttribute('href', '?page=contact')
+    expect(screen.getByRole('link', { name: 'Book a demo' })).toHaveAttribute('href', '/contact')
   })
 })

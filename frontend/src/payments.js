@@ -15,7 +15,7 @@ export const CASHFREE_MODE = import.meta.env.VITE_CASHFREE_MODE === 'production'
 export const REDIRECT_TARGET = import.meta.env.VITE_CASHFREE_REDIRECT_TARGET === '_modal' ? '_modal' : '_self'
 
 export function paymentStatusUrl(orderId) {
-  return `${window.location.pathname}?page=payment-status&order_id=${encodeURIComponent(orderId)}`
+  return `/?page=payment-status&order_id=${encodeURIComponent(orderId)}`
 }
 
 let sdkPromise = null

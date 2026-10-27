@@ -14,7 +14,11 @@
 const TOKEN_KEY = "timetable_auth_token";
 
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null; // no storage (blocked, or the build-time prerender)
+  }
 }
 
 export function setToken(token) {
