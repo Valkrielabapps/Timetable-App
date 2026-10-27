@@ -293,10 +293,12 @@ function Hero({ onGetStarted, signedIn }) {
               changing width can never push "Instant timetables" onto an
               extra line — see the earlier version of this component for
               the layout-shift bug this avoids. */}
-          <h1
-            aria-label="Instant timetables for schools and colleges"
-            className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl"
-          >
+          {/* The heading's words are real text (sr-only) rather than an
+              aria-label, so search engines read "Instant timetables for
+              schools and colleges" as the page's H1; the animated version
+              beside it is for sighted visitors only. */}
+          <h1 className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl">
+            <span className="sr-only">Instant timetables for schools and colleges</span>
             <span aria-hidden="true">Instant timetables</span>
             <br />
             <span aria-hidden="true">for </span>
