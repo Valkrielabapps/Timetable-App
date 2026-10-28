@@ -7,6 +7,7 @@ const RESOURCES = {
   teachers: {
     label: 'Teachers',
     columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
+    note: 'A teacher who is already here keeps what they teach: the file adds its subjects and grades to theirs. Remove one on the teacher\u2019s own row.',
   },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
@@ -66,6 +67,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
         Upload a CSV or Excel file to add or update many at once instead of
         one at a time.
       </p>
+      {meta.note && <p className="mt-1 text-xs text-slate-500">{meta.note}</p>}
 
       <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-center gap-2">
         {/* The native file input renders as plain text in some browsers,

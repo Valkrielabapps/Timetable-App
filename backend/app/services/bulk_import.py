@@ -209,9 +209,14 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
 
     Grades: the grades a teacher may teach, separated by ';' or ','. Matched
     against the grades of the school's sections, loosely - "6", "Class 6" and
-    "Grade 6" are the same grade - and "6-8" is a range. An EMPTY cell means
-    every grade. With no grades column at all, a teacher's existing grades are
-    left as they are.
+    "Grade 6" are the same grade - and "6-8" is a range. For a NEW teacher an
+    empty cell means every grade.
+
+    A teacher already in the school is ADDED TO, never replaced: the file's
+    subjects and grades join the ones they have (a Class 9-12 sheet doesn't
+    drop what they teach in Classes 6-8), and an empty cell - email, max
+    periods, subjects or grades - leaves what is there. Removing a subject or
+    a grade is done on the Teachers page.
     """
     result = BulkImportResult()
     existing = {t.name.lower(): t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
@@ -281,12 +286,20 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
 
         match = existing.get(name.lower())
         if match:
-            match.email = email
-            match.max_periods_per_week = max_periods
+            if email:
+                match.email = email
+            if max_periods is not None:
+                match.max_periods_per_week = max_periods
             if qualified_ids:
-                match.qualified_subject_ids = qualified_ids
-            if qualified_grades is not None:
-                match.qualified_grades = qualified_grades
+                have = list(match.qualified_subject_ids or [])
+                match.qualified_subject_ids = have + [i for i in qualified_ids if i not in have]
+            # [] on an existing teacher means "every grade" already, so
+            # there is nothing to add to; an empty cell adds nothing.
+            current = list(match.qualified_grades or [])
+            if qualified_grades and current:
+                merged = set(current) | set(qualified_grades)
+                order = {g: n for n, g in enumerate(school_grades)}
+                match.qualified_grades = sorted(merged, key=lambda g: (order.get(g, len(order)), g))
             result.updated += 1
         else:
             teacher = Teacher(

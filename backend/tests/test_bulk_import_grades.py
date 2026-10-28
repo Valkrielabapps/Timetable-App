@@ -99,18 +99,26 @@ def test_a_school_without_graded_sections_is_told_to_add_them(orm_db):
     assert "add them first" in result.errors[0]
 
 
-def test_reimporting_updates_grades(orm_db):
+def test_reimporting_adds_grades(orm_db):
+    """A Class 7-8 sheet adds to what a teacher already teaches."""
     school = _school(orm_db)
     _import(orm_db, school, qualified_grades="Grade 6")
     result = _import(orm_db, school, qualified_grades="Grade 7; Grade 8")
     assert result.updated == 1
-    assert _grades_of(orm_db, school, "Mrs. Rao") == ["Grade 7", "Grade 8"]
+    assert _grades_of(orm_db, school, "Mrs. Rao") == ["Grade 6", "Grade 7", "Grade 8"]
 
 
-def test_reimporting_with_an_empty_cell_opens_every_grade(orm_db):
+def test_reimporting_with_an_empty_cell_leaves_grades(orm_db):
     school = _school(orm_db)
     _import(orm_db, school, qualified_grades="Grade 6")
     _import(orm_db, school, qualified_grades="")
+    assert _grades_of(orm_db, school, "Mrs. Rao") == ["Grade 6"]
+
+
+def test_a_teacher_for_every_grade_stays_that_way(orm_db):
+    school = _school(orm_db)
+    _import(orm_db, school, qualified_grades="")
+    _import(orm_db, school, qualified_grades="Grade 7")
     assert _grades_of(orm_db, school, "Mrs. Rao") == []
 
 

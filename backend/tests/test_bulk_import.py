@@ -120,3 +120,24 @@ def test_import_class_groups_upserts_by_grade_and_name(orm_db):
     groups = db.query(ClassGroup).filter(ClassGroup.school_id == school.id).all()
     assert len(groups) == 1
     assert groups[0].student_count == 35
+
+
+def test_reimporting_a_teacher_adds_subjects_and_keeps_details(orm_db):
+    """A second sheet (say Classes 9-12) adds to a teacher's subjects; it
+    never drops the ones from an earlier sheet, and empty cells change nothing."""
+    db = orm_db
+    school = _make_school(db)
+    maths = Subject(school_id=school.id, name="Maths")
+    physics = Subject(school_id=school.id, name="Physics")
+    db.add_all([maths, physics])
+    db.commit()
+
+    import_teachers(db, school.id, [{"name": "Aman", "email": "aman@school.edu",
+                                     "max_periods_per_week": "30", "qualified_subjects": "Physics"}])
+    result = import_teachers(db, school.id, [{"name": "Aman", "email": "", "max_periods_per_week": "",
+                                              "qualified_subjects": "Maths; Physics"}])
+    assert result.updated == 1
+    aman = db.query(Teacher).filter(Teacher.school_id == school.id).one()
+    assert aman.qualified_subject_ids == [physics.id, maths.id]
+    assert aman.email == "aman@school.edu"
+    assert aman.max_periods_per_week == 30
