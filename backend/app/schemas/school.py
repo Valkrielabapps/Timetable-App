@@ -55,6 +55,10 @@ class SchoolGradeDayLimitsUpdate(BaseModel):
 class StandardRuleSetting(BaseModel):
     on: bool
     value: int | None = None
+    # core_morning only: subject ids added to, or taken out of, the ones
+    # picked automatically from their names.
+    include: list[int] | None = None
+    exclude: list[int] | None = None
 
 
 class SchoolStandardRulesUpdate(BaseModel):
@@ -62,6 +66,7 @@ class SchoolStandardRulesUpdate(BaseModel):
     teacher_week_max: StandardRuleSetting | None = None
     teacher_day_max: StandardRuleSetting | None = None
     teacher_spread: StandardRuleSetting | None = None
+    core_morning: StandardRuleSetting | None = None
 
 
 class SchoolGradeOrderUpdate(BaseModel):

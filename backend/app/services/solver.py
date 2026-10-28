@@ -399,6 +399,8 @@ def _add_default_habits(
        periods - theirs governs.
     3. Each teacher's week is even: the gap between their busiest and their
        lightest day costs 1 a period, so 5-5-5-5-4 beats 7-6-5-3-3.
+    4. Demanding subjects (Maths, the sciences, Social Science) sit in the
+       first periods of the day - the "demanding subjects first" tick box.
 
     2 and 3 are the "spread teachers' periods out" tick box on the
     Constraints page, and are left out when the school unticks it.
@@ -449,6 +451,22 @@ def _add_default_habits(
     for block in blocks:
         by_period = {pid: [occ] for (bid, pid), occ in block_occ.items() if bid == block.id}
         spread(f"b{block.id}", block.class_group_id, block.periods_per_week, by_period)
+
+    # 4. Demanding subjects early in the day (the Constraints page tick box):
+    # each lesson of one after period N costs 1. Elective blocks count once
+    # per block, when any of their options is a demanding subject.
+    core_by = _STANDARD.get().core_by
+    if core_by is not None:
+        from app.services.timetable_structure import lesson_numbers
+        number = lesson_numbers([p for ps in sorted_periods_by_day.values() for p in ps])
+        late = {pid for pid, n in number.items() if n > core_by}
+        heavy = _STANDARD.get().demanding_ids(subjects_by_id.values())
+        if late and heavy:
+            for req in requirements:
+                if req.subject_id in heavy:
+                    terms.extend(v for pid in late for v in req_period_vars.get(req.id, {}).get(pid, []))
+            heavy_blocks = {o.block_id for o in option_reqs if o.subject_id in heavy}
+            terms.extend(occ for (bid, pid), occ in block_occ.items() if bid in heavy_blocks and pid in late)
 
     if not _STANDARD.get().spread:
         return terms

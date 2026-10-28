@@ -71,7 +71,7 @@ const SCOPABLE_TYPES = new Set([
  * src/constraintGroups.js for how a rule is filed.
  */
 export default function ConstraintsTab({
-  schoolId, classGroups, constraints, onReload, readOnly = false, standardRules = null, onSaveStandardRules = null,
+  schoolId, classGroups, constraints, onReload, readOnly = false, standardRules = null, onSaveStandardRules = null, subjects = [],
 }) {
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -357,7 +357,7 @@ export default function ConstraintsTab({
       </div>
 
       {onSaveStandardRules && (
-        <StandardRules rules={standardRules} onSave={onSaveStandardRules} readOnly={readOnly} />
+        <StandardRules rules={standardRules} onSave={onSaveStandardRules} readOnly={readOnly} subjects={subjects} />
       )}
 
       {!readOnly && (

@@ -991,6 +991,7 @@ function App() {
                     onReload={reloadConstraints}
                     readOnly={isViewer}
                     standardRules={selectedSchool?.standard_rules ?? null}
+                    subjects={subjects}
                     onSaveStandardRules={async (rules) => {
                       const updated = await api.updateStandardRules(selectedSchoolId, rules)
                       setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.access import get_membership_role, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, Period, School, SchoolInvite, SchoolMembership
+from app.models.school import ClassGroup, Period, School, SchoolInvite, SchoolMembership, Subject
 from app.models.user import User
 from app.schemas.membership import InviteCreate, InviteOut, MemberOut, MemberRoleUpdate
 from app.schemas.school import (
@@ -184,10 +184,17 @@ def update_standard_rules(
         if key in standard_rules.LIMITS and setting.get("value") is not None:
             lo, hi = standard_rules.LIMITS[key]
             if not lo <= setting["value"] <= hi:
-                what = "a week" if key == "teacher_week_max" else "a day"
-                raise HTTPException(status_code=400, detail=f"Choose between {lo} and {hi} periods {what}.")
+                what = {"teacher_week_max": "periods a week", "teacher_day_max": "periods a day"}.get(key, "periods")
+                raise HTTPException(status_code=400, detail=f"Choose between {lo} and {hi} {what}.")
             current[key]["value"] = setting["value"]
         current[key]["on"] = setting["on"]
+        for k in ("include", "exclude"):
+            if k in current[key] and setting.get(k) is not None:
+                ids = set(setting[k])
+                known = {i for (i,) in db.query(Subject.id).filter(Subject.school_id == school_id, Subject.id.in_(ids))}
+                if ids - known:
+                    raise HTTPException(status_code=400, detail="One of those subjects isn't in this school.")
+                current[key][k] = sorted(ids)
     school.standard_rules = standard_rules.to_store(current)
     db.commit()
     db.refresh(school)

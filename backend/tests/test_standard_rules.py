@@ -139,3 +139,63 @@ def test_a_teachers_day_avoids_back_to_back(db):  # noqa: F811
     _ok(result)
     orders = sorted(db.get(Period, a["period_id"]).order for a in result.assignments if a["teacher_id"] == rao.id)
     assert orders[1] - orders[0] > 1, orders
+
+
+# --- demanding subjects first ---------------------------------------------
+
+def test_demanding_subjects_are_recognised_by_name():
+    names = {"Maths": True, "Social Science": True, "SST": True, "Physics": True, "EVS": True,
+             "English": False, "PE": False, "Art": False, "Library": False, "Physics Lab": False}
+    for name, expected in names.items():
+        assert standard_rules.is_demanding(name) is expected, name
+
+
+def test_demanding_subjects_go_in_the_first_periods(db):  # noqa: F811
+    school = _school(db, days=2, per_day=6)
+    maths = _subject(db, school, "Maths")
+    sci = _subject(db, school, "Science")
+    pe = _subject(db, school, "PE")
+    art = _subject(db, school, "Art")
+    for name, sub in (("Rao", maths), ("Iyer", sci), ("Das", pe), ("Nair", art)):
+        _teacher(db, school, name, [sub.id])
+    a = _class_group(db, school)
+    for sub in (maths, sci, pe, art):
+        _require(db, a, sub, 3)
+    _tick(db, school, core_morning={"on": True, "value": 3}, teacher_spread={"on": False})
+
+    result = generate_school_timetable(db, school.id)
+    _ok(result)
+    late = [a for a in result.assignments if db.get(Period, a["period_id"]).order > 3]
+    assert {x["subject_id"] for x in late} <= {pe.id, art.id}, late
+
+
+def test_the_school_can_change_which_subjects_count(db):  # noqa: F811
+    school = _school(db, days=2, per_day=6)
+    maths = _subject(db, school, "Maths")
+    music = _subject(db, school, "Music")
+    _teacher(db, school, "Rao", [maths.id])
+    _teacher(db, school, "Das", [music.id])
+    a = _class_group(db, school)
+    _require(db, a, maths, 3)
+    _require(db, a, music, 3)
+    # Music counts, Maths doesn't: Music takes the early periods.
+    _tick(db, school, core_morning={"on": True, "value": 3, "include": [music.id], "exclude": [maths.id]},
+          teacher_spread={"on": False})
+
+    result = generate_school_timetable(db, school.id)
+    _ok(result)
+    assert all(db.get(Period, x["period_id"]).order <= 3 for x in result.assignments if x["subject_id"] == music.id)
+
+
+def test_core_morning_via_the_api(client):
+    _, h = signup(client)
+    sid = create_school(client, h)["id"]
+    url = f"/api/schools/{sid}/standard-rules"
+    shown = client.get(f"/api/schools/{sid}", headers=h).json()["standard_rules"]["core_morning"]
+    assert shown == {"on": True, "value": 5, "include": [], "exclude": []}
+
+    bad = client.put(url, headers=h, json={"core_morning": {"on": True, "exclude": [999999]}})
+    assert bad.status_code == 400
+
+    ok = client.put(url, headers=h, json={"core_morning": {"on": True, "value": 4}})
+    assert ok.json()["standard_rules"]["core_morning"]["value"] == 4
