@@ -71,6 +71,7 @@ from app.services.edit_command_parser import parse_edit_command_llm
 from app.services import plans, versions
 from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
 from app.services.student_combinations import TooManyCombinations, combinations_for
+from app.services.subject_freezing import frozen_lessons_index
 from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import _class_group_labels, generate_school_timetable, find_blocking_rules
 from app.services.timetable_structure import grade_off_period_ids, lesson_numbers, zero_period_ids_for
@@ -101,6 +102,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         ElectiveBlock.school_id == timetable.school_id
     ).all()}
 
+    frozen_subjects, frozen_blocks = frozen_lessons_index(db, timetable.school_id)
     entries = []
     for e in timetable.entries:
         period = periods[e.period_id]
@@ -125,6 +127,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
             "lab_batch": e.lab_batch,
             "elective_block_id": e.elective_block_id,
             "elective_block_name": block_names.get(e.elective_block_id),
+            "subject_frozen": _subject_frozen_name(e, frozen_subjects, frozen_blocks) is not None,
         })
 
     return TimetableOut(
@@ -694,6 +697,29 @@ def _check_lesson_slot(db: Session, period_id: int, class_group_id: int) -> None
             )
 
 
+def _subject_frozen_name(entry: TimetableEntry, by_subject: dict, by_block: dict) -> str | None:
+    """The frozen subject keeping this lesson fixed, if one is."""
+    return by_subject.get((entry.class_group_id, entry.subject_id)) or (
+        by_block.get((entry.class_group_id, entry.elective_block_id)) if entry.elective_block_id else None
+    )
+
+
+def _refuse_if_subject_frozen(db: Session, entries: list[TimetableEntry]) -> None:
+    """A frozen subject's lessons don't change until it is unfrozen - nor
+    anything moved with them, like the other lesson in a swap. See
+    app/services/subject_freezing.py."""
+    if not entries:
+        return
+    by_subject, by_block = frozen_lessons_index(db, entries[0].timetable.school_id)
+    for entry in entries:
+        name = _subject_frozen_name(entry, by_subject, by_block)
+        if name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} is frozen, so this lesson stays where it is. Unfreeze {name} to change it.",
+            )
+
+
 def _refuse_if_frozen(db: Session, class_group_id: int) -> None:
     """A frozen section's timetable doesn't change - by drag, lock, swap or the
     edit box - until it is unfrozen. See app/services/freezing.py."""
@@ -713,6 +739,7 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
     this logic. Callers are responsible for auth/status checks; this just
     validates the slot and applies the change."""
     _refuse_if_frozen(db, entry.class_group_id)
+    _refuse_if_subject_frozen(db, [entry])
     if "period_id" in data and entry.elective_block_id is not None \
             and data["period_id"] != entry.period_id:
         raise HTTPException(
@@ -798,6 +825,7 @@ def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry)
         )
     _refuse_if_frozen(db, entry.class_group_id)
     _refuse_if_frozen(db, other.class_group_id)
+    _refuse_if_subject_frozen(db, [entry, other])
     both_ids = {entry.id, other.id}
     _check_lesson_slot(db, other.period_id, entry.class_group_id)
     _check_lesson_slot(db, entry.period_id, other.class_group_id)
@@ -883,6 +911,7 @@ def move_slot(
     target = _slot_entries(db, timetable.id, payload.class_group_id, payload.to_period_id)
     if not source:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to move.")
+    _refuse_if_subject_frozen(db, source + target)
     _check_lesson_slot(db, payload.to_period_id, payload.class_group_id)
     if target:
         _check_lesson_slot(db, payload.from_period_id, payload.class_group_id)
@@ -930,6 +959,7 @@ def lock_slot(
     entries = _slot_entries(db, timetable.id, payload.class_group_id, payload.period_id)
     if not entries:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")
+    _refuse_if_subject_frozen(db, entries)
     if payload.locked and any(e.lab_batch is not None for e in entries):
         # The solver re-places every batch of a split lab on each regeneration
         # (see the lock handling in app/services/solver.py), so accepting the
@@ -980,6 +1010,7 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
         elective_block_name=(
             block.name if (block := db.get(ElectiveBlock, entry.elective_block_id)) else None
         ) if entry.elective_block_id else None,
+        subject_frozen=_subject_frozen_name(entry, *frozen_lessons_index(db, entry.timetable.school_id)) is not None,
     )
 
 

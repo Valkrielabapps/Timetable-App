@@ -81,9 +81,12 @@ def delete_version(db: Session, timetable: Timetable) -> None:
     """Delete one version and its lessons. Commits."""
     if timetable.status == "generating":
         raise VersionError("This version is still being generated. Wait for it to finish, then delete it.")
-    kept_from = frozen_sources(db, timetable.school_id).get(timetable.id, [])
+    from app.services import subject_freezing
+
+    kept_from = [_section(cg) for cg in frozen_sources(db, timetable.school_id).get(timetable.id, [])]
+    kept_from += subject_freezing.sources(db, timetable.school_id).get(timetable.id, [])
     if kept_from:
-        names = ", ".join(sorted(_section(cg) for cg in kept_from))
+        names = ", ".join(sorted(set(kept_from)))
         raise VersionError(
             f"{names} {'is' if len(kept_from) == 1 else 'are'} frozen from this version. "
             f"Unfreeze {'it' if len(kept_from) == 1 else 'them'} first, or freeze from another version."
@@ -122,6 +125,8 @@ def prune(db: Session, school_id: int) -> None:
     if current is not None:
         keep.add(current.id)
     keep.update(frozen_sources(db, school_id))
+    from app.services import subject_freezing
+    keep.update(subject_freezing.sources(db, school_id))
     doomed = [r.id for r in rows if r.status in ("draft", "failed") and r.id not in keep]
     if not doomed:
         return

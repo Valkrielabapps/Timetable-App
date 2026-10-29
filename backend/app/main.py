@@ -32,6 +32,7 @@ from app.routers import (
     schools,
     setup_extraction,
     solver,
+    subject_freezes,
     subjects,
     substitutions,
     support,
@@ -86,6 +87,7 @@ app.include_router(elective_blocks.router)
 app.include_router(constraints.router)
 app.include_router(timetables.router)
 app.include_router(solver.router)
+app.include_router(subject_freezes.router)
 app.include_router(substitutions.router)
 app.include_router(grade_categories.router)
 app.include_router(setup_extraction.router)

@@ -297,6 +297,36 @@ class ClassGroup(Base):
     )
 
 
+class SubjectFreeze(Base):
+    """One subject's lessons kept fixed - same periods, teachers and rooms -
+    through later generations, in the sections chosen, while everything else
+    is regenerated around them. See app/services/subject_freezing.py.
+
+    Unlike a frozen section, the sections themselves are still solved; only
+    this subject's lessons in them are pinned.
+    """
+    __tablename__ = "subject_freezes"
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True)
+    # How the sections were chosen, for showing it back: "school", "grades"
+    # (with `grades`) or "sections". The sections themselves are fixed when
+    # frozen - a section added later gets the subject placed normally.
+    scope = Column(String, nullable=False, default="school")
+    grades = Column(JSON, nullable=True)
+    class_group_ids = Column(JSON, nullable=False, default=list)
+    # For a subject taught in an elective block: "subject" keeps just this
+    # subject's lessons (and so the block's periods); "block" keeps every
+    # subject in the block too.
+    block_mode = Column(String, nullable=False, default="subject")
+    from_timetable_id = Column(Integer, nullable=False)
+    frozen_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    # Per section, what it looked like when frozen: {class_group_id: {...}} -
+    # periods a week, the pinned teacher, lessons kept, and the block if any.
+    snapshot = Column(JSON, nullable=False, default=dict)
+
+
 class SubjectRequirement(Base):
     """How many periods per week a given class group needs of a given subject.
 

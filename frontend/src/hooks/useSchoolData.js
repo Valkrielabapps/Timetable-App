@@ -291,6 +291,7 @@ export function useVersionActions(schoolId) {
     queryClient.invalidateQueries({ queryKey: keys.timetables(schoolId) })
     // Frozen status names the version each section is kept from.
     queryClient.invalidateQueries({ queryKey: ['frozenStatus', schoolId] })
+    queryClient.invalidateQueries({ queryKey: ['subjectFreezes', schoolId] })
   }
   const open = useMutation({ mutationFn: (id) => api.makeTimetableCurrent(id), onSuccess: refresh })
   const rename = useMutation({ mutationFn: ({ id, name }) => api.renameTimetable(id, name), onSuccess: refresh })
@@ -321,5 +322,39 @@ export function useSetFrozen(schoolId, timetableId) {
   return {
     setFrozen: (ids, frozen) => mutation.mutateAsync({ ids, frozen }),
     isSaving: mutation.isPending,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Frozen subjects
+// ---------------------------------------------------------------------------
+
+/**
+ * Every frozen subject - where, from which version, and whether it still
+ * matches the plan. Re-read with the timetable, like frozen sections.
+ */
+export function useSubjectFreezes(schoolId, timetableId) {
+  return useQuery({
+    queryKey: keys.subjectFreezes(schoolId, timetableId),
+    queryFn: () => api.listSubjectFreezes(schoolId),
+    enabled: schoolId != null,
+    staleTime: 0,
+  })
+}
+
+/** Freeze or unfreeze a subject. The timetable is re-read too: which of its
+ * lessons are frozen - and so can't be dragged or locked - has changed. */
+export function useSubjectFreezeActions(schoolId, timetableId) {
+  const queryClient = useQueryClient()
+  const done = (statuses) => {
+    queryClient.setQueryData(keys.subjectFreezes(schoolId, timetableId), statuses)
+    queryClient.invalidateQueries({ queryKey: keys.timetable(timetableId) })
+  }
+  const freeze = useMutation({ mutationFn: (body) => api.freezeSubject(schoolId, body), onSuccess: done })
+  const unfreeze = useMutation({ mutationFn: (id) => api.unfreezeSubject(schoolId, id), onSuccess: done })
+  return {
+    freeze: (body) => freeze.mutateAsync(body),
+    unfreeze: (id) => unfreeze.mutateAsync(id),
+    isSaving: freeze.isPending || unfreeze.isPending,
   }
 }

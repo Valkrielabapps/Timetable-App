@@ -96,12 +96,14 @@ export default function ScheduleGrid({
                 // honour locks on batched subjects (see solver.py), so offering
                 // one would promise something regenerating would not keep.
                 const isBatched = !isBlock && entries.length > 1
-                const lockable = entries.length > 0 && !isBatched
+                // Kept in place by a frozen subject: not dragged, not locked.
+                const subjectFrozen = entries.find((e) => e.subject_frozen)
+                const lockable = entries.length > 0 && !isBatched && !subjectFrozen
                 // Any rather than every: a lock set on one option through the
                 // edit box still pins the whole slot on the server, which
                 // refuses to move a slot with anything locked in it.
                 const locked = entries.some((e) => e.locked)
-                const canDrag = editable && entries.length > 0 && !locked
+                const canDrag = editable && entries.length > 0 && !locked && !subjectFrozen
                 // Locked/unlocked as a light background tint on the whole cell
                 // rather than an icon on the entry — red for locked, green for
                 // unlocked — so the state reads at a glance across the grid.
@@ -109,6 +111,8 @@ export default function ScheduleGrid({
                   ? locked
                     ? 'bg-red-50 hover:bg-red-100'
                     : 'bg-emerald-50 hover:bg-emerald-100'
+                  : subjectFrozen
+                  ? 'bg-sky-50'
                   : isBatched
                   ? 'hover:bg-slate-50'
                   : ''
@@ -118,7 +122,9 @@ export default function ScheduleGrid({
                 const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
                 const violationRing = broken.length ? 'ring-2 ring-inset ring-amber-400' : ''
                 const what = isBlock && entries.length > 1 ? 'the whole block' : isBatched ? 'every batch' : 'it'
-                const hint = !editable
+                const hint = subjectFrozen
+                  ? `${subjectFrozen.subject_name} is frozen, so this stays where it is`
+                  : !editable
                   ? locked
                     ? 'Locked in place'
                     : undefined
@@ -152,6 +158,9 @@ export default function ScheduleGrid({
                           editable ? (canDrag ? 'cursor-move' : lockable ? 'cursor-pointer' : '') : ''
                         }
                       >
+                        {subjectFrozen && (
+                          <div className="text-[11px] font-medium text-sky-700">❄ Frozen</div>
+                        )}
                         {entries.length === 1 ? (
                           <Lesson
                             entry={entries[0]}

@@ -27,6 +27,8 @@ vi.mock('../hooks/useSchoolData', () => ({
   useOptimisticSlotMove: () => hooks.optimisticSlotMove,
   useFrozenStatus: () => ({ data: [] }),
   useSetFrozen: () => ({ setFrozen: vi.fn(), isSaving: false }),
+  useSubjectFreezes: () => ({ data: [] }),
+  useSubjectFreezeActions: () => ({ freeze: vi.fn(), unfreeze: vi.fn(), isSaving: false }),
   useElectiveBlocks: () => ({ data: hooks.blocks }),
 }))
 

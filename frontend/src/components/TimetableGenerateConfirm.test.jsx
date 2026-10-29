@@ -18,6 +18,8 @@ vi.mock('../hooks/useSchoolData', () => ({
     { class_group_id: 2, frozen: true, frozen_from: 'Version 3' },
   ] }),
   useSetFrozen: () => ({ setFrozen: vi.fn(), isSaving: false }),
+  useSubjectFreezes: () => ({ data: [] }),
+  useSubjectFreezeActions: () => ({ freeze: vi.fn(), unfreeze: vi.fn(), isSaving: false }),
 }))
 
 const sections = [

@@ -45,6 +45,9 @@ class TimetableEntryOut(BaseModel):
     # block's name, and moving or locking acts on all of them together.
     elective_block_id: int | None = None
     elective_block_name: str | None = None
+    # Kept fixed by a frozen subject (app/services/subject_freezing.py):
+    # it can't be moved or changed until the subject is unfrozen.
+    subject_frozen: bool = False
 
 
 class SlotMove(BaseModel):

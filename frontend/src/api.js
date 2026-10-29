@@ -255,6 +255,12 @@ export const api = {
   getFrozenStatus: (schoolId) => get(`/class-groups/frozen-status?school_id=${schoolId}`),
   setFrozen: (schoolId, classGroupIds, frozen) =>
     post("/class-groups/freeze", { school_id: schoolId, class_group_ids: classGroupIds, frozen }),
+  // Frozen subjects: one subject's lessons kept in place in the sections
+  // chosen - see backend/app/services/subject_freezing.py.
+  listSubjectFreezes: (schoolId) => get(`/subject-freezes?school_id=${schoolId}`),
+  // body: { subject_id, scope: "school" | "grades" | "sections", grades?, class_group_ids?, block_mode }
+  freezeSubject: (schoolId, body) => post("/subject-freezes", { school_id: schoolId, ...body }),
+  unfreezeSubject: (schoolId, freezeId) => del(`/subject-freezes/${freezeId}?school_id=${schoolId}`),
   deleteClassGroup: (id) => del(`/class-groups/${id}`),
 
   // Subject requirements (nested under class groups)

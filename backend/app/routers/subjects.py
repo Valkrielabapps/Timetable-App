@@ -6,7 +6,7 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    ElectiveBlock, ElectiveOption, Subject, SubjectRequirement, TimetableEntry,
+    ElectiveBlock, ElectiveOption, Subject, SubjectFreeze, SubjectRequirement, TimetableEntry,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
@@ -70,6 +70,8 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
     # explicitly here closes that gap. See dedupe_orphaned_requirements.py
     # for a one-off cleanup of any orphans a pre-fix delete already left.
     db.query(SubjectRequirement).filter(SubjectRequirement.subject_id == subject_id).delete()
+    # A frozen subject that no longer exists has nothing to keep.
+    db.query(SubjectFreeze).filter(SubjectFreeze.subject_id == subject_id).delete()
     # Same orphan problem for block options, with a worse failure: a block
     # whose last option is gone would still reserve the section's periods for
     # nothing at all. Options go, and so does any block left empty by it. A

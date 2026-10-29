@@ -8,6 +8,8 @@ import {
   useElectiveBlocks,
   useFrozenStatus,
   useSetFrozen,
+  useSubjectFreezeActions,
+  useSubjectFreezes,
   useOptimisticSlotMove,
   useGenerateTimetable,
   useTimetable,
@@ -15,6 +17,7 @@ import {
 } from '../hooks/useSchoolData'
 import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
 import SubstitutionsTab from './SubstitutionsTab'
+import SubjectFreezePanel from './SubjectFreezePanel'
 import SearchableSelect from './SearchableSelect'
 import { sortByName, sortSections } from '../sorting'
 import GenerationFailedDialog from './GenerationFailedDialog'
@@ -210,6 +213,12 @@ export default function TimetableTab({
   const frozenById = new Map(frozenList.filter((f) => f.frozen).map((f) => [f.class_group_id, f]))
   const { setFrozen, isSaving: freezing } = useSetFrozen(schoolId, timetable?.id)
 
+  // Frozen subjects keep one subject's lessons in place in the sections
+  // chosen - see backend/app/services/subject_freezing.py.
+  const { data: subjectFreezes = [] } = useSubjectFreezes(schoolId, timetable?.id)
+  const subjectFreezing = useSubjectFreezeActions(schoolId, timetable?.id)
+  const [freezeTab, setFreezeTab] = useState('sections') // 'sections' | 'subjects'
+
   async function handleFreeze(ids, frozen) {
     setError(null)
     try {
@@ -223,7 +232,7 @@ export default function TimetableTab({
   // before it starts.
   const [confirmGenerate, setConfirmGenerate] = useState(false)
   async function handleGenerate() {
-    if (frozenById.size > 0 && !confirmGenerate) {
+    if ((frozenById.size > 0 || subjectFreezes.length > 0) && !confirmGenerate) {
       setConfirmGenerate(true)
       return
     }
@@ -311,6 +320,11 @@ export default function TimetableTab({
     }
     if (entriesFor(day, order, classGroupId).some((e) => e.locked)) {
       setError("That slot is locked. Unlock it before swapping something into it.")
+      return
+    }
+    const frozenThere = entriesFor(day, order, classGroupId).find((e) => e.subject_frozen)
+    if (frozenThere) {
+      setError(`${frozenThere.subject_name} is frozen, so that lesson stays where it is. Unfreeze it under Freezing > Subjects to move it.`)
       return
     }
     setError(null)
@@ -660,6 +674,7 @@ export default function TimetableTab({
         <GenerateConfirm
           sections={sections}
           frozenById={frozenById}
+          subjectFreezes={subjectFreezes}
           onCancel={() => setConfirmGenerate(false)}
           onConfirm={handleGenerate}
         />
@@ -876,7 +891,49 @@ export default function TimetableTab({
             // which is how a timetable is read on paper and how it gets
             // checked against itself.
             <div className="flex flex-col gap-8">
-              <FrozenSummary sections={sections} frozenById={frozenById} />
+              <section aria-label="Freezing" className="flex flex-col gap-3 rounded-md border border-sky-200 bg-sky-50/40 p-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <h3 className="text-sm font-semibold text-sky-900">❄ Freezing</h3>
+                  <div role="tablist" aria-label="Freeze by" className="flex gap-1">
+                    {[
+                      ['sections', 'Sections', frozenById.size],
+                      ['subjects', 'Subjects', subjectFreezes.length],
+                    ].map(([id, label, count]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={freezeTab === id}
+                        onClick={() => setFreezeTab(id)}
+                        className={`rounded-full px-3 py-0.5 text-sm ${
+                          freezeTab === id ? 'bg-sky-800 text-white' : 'text-sky-900 hover:bg-sky-100'
+                        }`}
+                      >
+                        {label}{count > 0 ? ` (${count})` : ''}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {freezeTab === 'sections' ? (
+                  frozenById.size > 0 ? (
+                    <FrozenSummary sections={sections} frozenById={frozenById} />
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      No sections are frozen.{!readOnly && ' Freeze one with the Freeze button beside its timetable, or a whole grade from its heading.'}
+                    </p>
+                  )
+                ) : (
+                  <SubjectFreezePanel
+                    freezes={subjectFreezes}
+                    entries={timetable.entries}
+                    sections={sections}
+                    canFreeze={!readOnly}
+                    busy={subjectFreezing.isSaving}
+                    onFreeze={subjectFreezing.freeze}
+                    onUnfreeze={subjectFreezing.unfreeze}
+                  />
+                )}
+              </section>
               {sections.map((cg, i) => (
                 <div key={cg.id} className="flex flex-col gap-3">
                 {cg.grade && cg.grade !== sections[i - 1]?.grade && (
@@ -990,24 +1047,37 @@ function summariseSections(sections, include) {
 }
 
 /** Before generating with sections frozen: what is kept, from which version, and what is built. */
-function GenerateConfirm({ sections, frozenById, onCancel, onConfirm }) {
+function GenerateConfirm({ sections, frozenById, subjectFreezes = [], onCancel, onConfirm }) {
   const kept = summariseSections(sections, (cg) => frozenById.has(cg.id))
   const built = summariseSections(sections, (cg) => !frozenById.has(cg.id))
   const sources = [...new Set([...frozenById.values()].map((f) => f.frozen_from).filter(Boolean))]
   const stale = [...frozenById.values()].filter((f) => f.stale_reason).length
+  const staleSubjects = subjectFreezes.filter((f) => f.stale_reasons.length > 0)
   return (
     <div role="dialog" aria-modal="true" aria-label="Generate a new version"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
         <h3 className="text-base font-semibold">Generate a new version?</h3>
         <dl className="mt-3 flex flex-col gap-2 text-sm">
-          <div>
-            <dt className="font-medium text-slate-900">Keeping, exactly as they are</dt>
-            <dd className="text-slate-700">
-              {kept.names.join(', ')} ({kept.count} section{kept.count === 1 ? '' : 's'}, frozen
-              {sources.length ? ` from ${sources.join(' and ')}` : ''})
-            </dd>
-          </div>
+          {kept.count > 0 && (
+            <div>
+              <dt className="font-medium text-slate-900">Keeping, exactly as they are</dt>
+              <dd className="text-slate-700">
+                {kept.names.join(', ')} ({kept.count} section{kept.count === 1 ? '' : 's'}, frozen
+                {sources.length ? ` from ${sources.join(' and ')}` : ''})
+              </dd>
+            </div>
+          )}
+          {subjectFreezes.length > 0 && (
+            <div>
+              <dt className="font-medium text-slate-900">Keeping these subjects&rsquo; lessons where they are</dt>
+              <dd className="text-slate-700">
+                {subjectFreezes
+                  .map((f) => `${f.subject} (${f.scope_label}${f.frozen_from ? `, from ${f.frozen_from}` : ''})`)
+                  .join('; ')}
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="font-medium text-slate-900">Building</dt>
             <dd className="text-slate-700">
@@ -1015,6 +1085,12 @@ function GenerateConfirm({ sections, frozenById, onCancel, onConfirm }) {
             </dd>
           </div>
         </dl>
+        {staleSubjects.length > 0 && (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-800">
+            {staleSubjects.map((f) => f.subject).join(', ')} changed since freezing, so generating will stop.
+            Unfreeze {staleSubjects.length === 1 ? 'it' : 'them'} first.
+          </p>
+        )}
         {stale > 0 && (
           <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {stale} frozen section{stale === 1 ? ' has' : 's have'} changed since freezing. They&rsquo;ll still be kept as

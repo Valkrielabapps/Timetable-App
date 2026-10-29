@@ -1217,6 +1217,29 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     errors = []
     # Rules that could not be applied — see TimetableSolveResult.warnings.
     warnings: list[str] = list(frozen_warnings)
+
+    # Frozen subjects: their lessons are pinned, through the same machinery
+    # as a locked lesson below, while the rest of each section is solved
+    # around them. A freeze that no longer matches the plan stops the
+    # generation rather than being quietly changed. See
+    # app/services/subject_freezing.py.
+    from app.services.subject_freezing import pinned_lessons
+    subject_pins = pinned_lessons(db, school_id)
+    if subject_pins.errors:
+        return TimetableSolveResult(status="infeasible", errors=subject_pins.errors, warnings=warnings)
+    warnings.extend(subject_pins.notes)
+    # What gets pinned: the admin's locks on the version on screen, and every
+    # frozen subject's lessons from the version it was frozen in. A freeze
+    # wins over a lock on the same lessons. Only locks are carried forward as
+    # locks; a frozen lesson stays frozen through the freeze, not a lock.
+    locked_entries = [
+        le for le in (previous_timetable.entries if previous_timetable else [])
+        if le.locked
+        and (le.class_group_id, le.subject_id) not in subject_pins.pairs
+        and (le.class_group_id, le.elective_block_id) not in subject_pins.blocks
+    ]
+    lock_ids = {le.id for le in locked_entries}
+    pinned_entries = locked_entries + subject_pins.entries
     model = cp_model.CpModel()
 
     # x[(requirement_id, teacher_id, period_id)] = this requirement's
@@ -1437,18 +1460,17 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # override, so - exactly as for an ordinary locked entry - the slot is
     # kept even if a placement rule or a teacher's availability has changed
     # since it was locked.
-    locked_block_slots: dict[tuple[int, int], dict[int, tuple[int, int | None]]] = {}
-    if previous_timetable:
-        option_by_block_subject = {(o.block_id, o.subject_id): o for o in option_reqs}
-        for le in previous_timetable.entries:
-            if not le.locked or le.elective_block_id is None:
-                continue
-            option = option_by_block_subject.get((le.elective_block_id, le.subject_id))
-            if option is None or le.period_id not in periods_by_id or le.teacher_id not in teachers_by_id:
-                continue  # the block, the option, the period or the teacher is gone
-            locked_block_slots.setdefault((le.elective_block_id, le.period_id), {})[option.option_id] = (
-                le.teacher_id, le.room_id,
-            )
+    locked_block_slots: dict[tuple[int, int], dict[int, tuple[int, int | None, bool]]] = {}
+    option_by_block_subject = {(o.block_id, o.subject_id): o for o in option_reqs}
+    for le in pinned_entries:
+        if le.elective_block_id is None:
+            continue
+        option = option_by_block_subject.get((le.elective_block_id, le.subject_id))
+        if option is None or le.period_id not in periods_by_id or le.teacher_id not in teachers_by_id:
+            continue  # the block, the option, the period or the teacher is gone
+        locked_block_slots.setdefault((le.elective_block_id, le.period_id), {})[option.option_id] = (
+            le.teacher_id, le.room_id, le.id in lock_ids,
+        )
 
     for block in blocks:
         opts = options_by_block[block.id]
@@ -1543,14 +1565,21 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             # teacher variables happened to be found.
             model.Add(occ == 1)
             option_subject = {o.option_id: o.subject_id for o in opts}
-            for option_id, (teacher_id, room_id) in by_option.items():
+            for option_id, (teacher_id, room_id, is_lock) in by_option.items():
                 choice = option_x.get((block.id, period_id, option_id), [])
                 var = next((v for t, v in choice if t == teacher_id), None)
                 if var is None:
+                    if not is_lock:
+                        subject = subjects_by_id.get(option_subject[option_id])
+                        warnings.append(
+                            f"A frozen {subject.name if subject else 'subject'} lesson in {block_label} kept its "
+                            f"period, but not its teacher, who can no longer teach it then."
+                        )
                     continue
                 model.Add(var == 1)
                 key = (block.class_group_id, option_subject[option_id], teacher_id, period_id)
-                locked_keys.add(key)
+                if is_lock:
+                    locked_keys.add(key)
                 locked_rooms[key] = room_id
 
     if unstaffed_labels:
@@ -1568,13 +1597,33 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # matching one here by its subject would treat a block option as a
     # standalone requirement it is not.
     req_by_class_subject = {(r.class_group_id, r.subject_id): r for r in requirements}
-    if previous_timetable:
-        for le in previous_timetable.entries:
-            if not le.locked or le.elective_block_id is not None:
+    if pinned_entries:
+        for le in pinned_entries:
+            if le.elective_block_id is not None:
                 continue
+            is_lock = le.id in lock_ids
             req = req_by_class_subject.get((le.class_group_id, le.subject_id))
             if not req:
                 continue  # the requirement this was locked against no longer exists
+            if _batch_count(req) > 1 and not is_lock:
+                # A frozen lab lesson: the session, and each batch's teacher.
+                if le.lab_batch is None or le.teacher_id not in teachers_by_id:
+                    continue
+                occ = batch_occ.get((req.id, le.period_id))
+                choice = batch_x.get((req.id, le.period_id, le.lab_batch - 1), [])
+                var = next((v for t, v in choice if t == le.teacher_id), None)
+                if occ is None or var is None:
+                    subject = subjects_by_id.get(le.subject_id)
+                    warnings.append(
+                        f"A frozen {subject.name if subject else ''} lab lesson for "
+                        f"{_class_group_label(class_groups_by_id.get(le.class_group_id))} could not be kept as it "
+                        f"was - its teacher can no longer take that batch then - and was placed again."
+                    )
+                    continue
+                model.Add(occ == 1)
+                model.Add(var == 1)
+                locked_rooms[(le.class_group_id, le.subject_id, le.teacher_id, le.period_id)] = le.room_id
+                continue
             if _batch_count(req) > 1:
                 # Known limitation: locking isn't supported for lab-batch
                 # subjects yet — honoring a lock here would need to pin
@@ -1590,7 +1639,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 if var is not None:
                     model.Add(var == 1)
                     result_key = (le.class_group_id, le.subject_id, None, le.period_id)
-                    locked_keys.add(result_key)
+                    if is_lock:
+                        locked_keys.add(result_key)
                     locked_rooms[result_key] = le.room_id
                 continue
             if le.teacher_id not in teachers_by_id:
@@ -1612,7 +1662,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 req_period_vars[req.id].setdefault(le.period_id, []).append(var)
             model.Add(x[key] == 1)
             result_key = (le.class_group_id, le.subject_id, le.teacher_id, le.period_id)
-            locked_keys.add(result_key)
+            if is_lock:
+                locked_keys.add(result_key)
             locked_rooms[result_key] = le.room_id
 
     # ------------------------------------------------------------------
