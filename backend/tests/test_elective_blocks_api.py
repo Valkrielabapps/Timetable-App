@@ -117,26 +117,25 @@ def test_the_same_subject_may_be_in_blocks_of_different_sections(client, school)
     assert _block(client, s, [s["physics"], s["accounts"]], cg=s["other_cg"]).status_code == 201
 
 
-def test_a_common_subject_cannot_also_be_a_block_option(client, school):
+def test_a_common_subject_can_also_be_a_block_option(client, school):
+    """English for everyone, plus an English option in a block for the students
+    who choose more of it: separate lessons at separate times."""
     s = school
     client.post(f"/api/class-groups/{s['cg']}/requirements", json={
         "class_group_id": s["cg"], "subject_id": s["physics"], "periods_per_week": 5,
     }, headers=s["headers"])
     r = _block(client, s, [s["physics"], s["accounts"]])
-    assert r.status_code == 400
-    assert "common subjects" in r.json()["detail"]
+    assert r.status_code == 201, r.text
 
 
-def test_a_block_option_cannot_then_be_added_as_a_common_subject(client, school):
-    """The same check from the other direction, so neither order of entry can
-    create the overlap."""
+def test_a_block_option_can_then_be_added_as_a_common_subject(client, school):
+    """The same from the other direction."""
     s = school
     _block(client, s, [s["physics"], s["accounts"]])
     r = client.post(f"/api/class-groups/{s['cg']}/requirements", json={
         "class_group_id": s["cg"], "subject_id": s["physics"], "periods_per_week": 5,
     }, headers=s["headers"])
-    assert r.status_code == 400
-    assert "Block 1" in r.json()["detail"]
+    assert r.status_code in (200, 201), r.text
 
 
 def test_a_common_subject_unrelated_to_any_block_is_still_accepted(client, school):
@@ -195,7 +194,7 @@ def test_an_edit_is_not_refused_for_clashing_with_its_own_options(client, school
     assert r.json()["periods_per_week"] == 4
 
 
-def test_an_edit_still_refuses_a_clash_with_a_common_subject(client, school):
+def test_an_edit_can_add_a_common_subject_as_an_option(client, school):
     s = school
     client.post(f"/api/class-groups/{s['cg']}/requirements",
                 json={"class_group_id": s["cg"], "subject_id": s["english"], "periods_per_week": 2},
@@ -204,7 +203,7 @@ def test_an_edit_still_refuses_a_clash_with_a_common_subject(client, school):
     r = client.put(f"/api/elective-blocks/{block['id']}", json={
         "options": [{"subject_id": s["chemistry"]}, {"subject_id": s["english"]}],
     }, headers=s["headers"])
-    assert r.status_code == 400
+    assert r.status_code == 200, r.text
 
 
 def test_periods_per_week_must_be_positive(client, school):

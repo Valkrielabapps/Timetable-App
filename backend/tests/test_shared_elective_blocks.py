@@ -359,21 +359,26 @@ def test_one_subject_per_section_alone_is_not_a_duplicate(api):
     assert r.status_code == 201, r.text
 
 
-def test_a_common_subject_of_a_joined_section_cannot_be_an_option(api):
+def test_a_common_subject_of_a_joined_section_can_be_an_option(api):
     c = api["client"]
     c.post(f"/api/class-groups/{api['b']}/requirements",
            json={"class_group_id": api["b"], "subject_id": api["s"]["Maths"], "periods_per_week": 2}, headers=api["headers"])
     r = _create(api, [{"subject_id": api["s"]["Maths"]}, {"subject_id": api["s"]["History"]}],
                 sections=[api["a"], api["b"]])
-    assert r.status_code == 400 and "common" in r.json()["detail"]
+    assert r.status_code == 201, r.text
 
 
-def test_a_joined_section_cannot_then_take_the_subject_as_common(api):
+def test_a_joined_section_can_then_take_the_subject_as_common_and_both_are_scheduled(api):
     assert _create(api, [{"subject_id": api["s"]["Maths"]}, {"subject_id": api["s"]["History"]}],
                    sections=[api["a"], api["b"]]).status_code == 201
     r = api["client"].post(f"/api/class-groups/{api['b']}/requirements",
                            json={"class_group_id": api["b"], "subject_id": api["s"]["Maths"], "periods_per_week": 2}, headers=api["headers"])
-    assert r.status_code == 400
+    assert r.status_code in (200, 201), r.text
+    t = _generate(api)
+    maths_b = [e for e in t["entries"] if e["class_group_id"] == api["b"] and e["subject_id"] == api["s"]["Maths"]]
+    # Two periods of common Maths, plus the block's Maths group.
+    assert len([e for e in maths_b if not e["elective_block_id"]]) == 2
+    assert len([e for e in maths_b if e["elective_block_id"]]) == 2
 
 
 def test_a_subject_can_be_in_two_blocks_a_section_shares_and_both_are_scheduled(api):

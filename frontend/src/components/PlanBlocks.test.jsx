@@ -91,12 +91,13 @@ describe("a section's plan with elective blocks", () => {
     expect(screen.getAllByText('Elective block').length).toBeGreaterThan(0)
   })
 
-  it('will not make a block option a subject everyone takes', () => {
+  it('can also make a block option a subject everyone takes, saying where else it is', () => {
+    // English for everyone plus an English option in a block are separate lessons.
     renderPlan()
     fireEvent.click(screen.getByText('Edit subjects'))
     const physics = screen.getByText('Physics').closest('label')
-    expect(within(physics).getByRole('checkbox')).toBeDisabled()
-    expect(physics).toHaveTextContent('(Block 1)')
+    expect(within(physics).getByRole('checkbox')).toBeEnabled()
+    expect(physics).toHaveTextContent('also in Block 1')
   })
 
   it("still offers subjects that are only in another section's block", () => {

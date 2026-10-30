@@ -1317,20 +1317,17 @@ function SectionSubjectPicker({
           return (
             <label
               key={s.id}
-              title={inBlock ? `An option in ${inBlock}. Edit the block to change it` : undefined}
-              className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
-                inBlock ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer hover:bg-slate-50'
-              }`}
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50"
             >
               <input
                 type="checkbox"
                 checked={selectedSubjectIds.includes(s.id)}
-                disabled={readOnly || !!inBlock}
+                disabled={readOnly}
                 onChange={(e) => onToggleSubject(s.id, e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300 text-slate-900"
               />
               {s.name}
-              {inBlock && <span className="text-xs">({inBlock})</span>}
+              {inBlock && <span className="text-xs text-slate-400">also in {inBlock}</span>}
             </label>
           )
         })}

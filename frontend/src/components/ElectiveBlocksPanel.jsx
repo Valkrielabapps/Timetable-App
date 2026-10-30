@@ -105,10 +105,12 @@ export default function ElectiveBlocksPanel({
     }
   }
 
-  // A subject everyone in a section already takes can't also be an option
-  // there. One in another block stays on offer - Maths / Economics and Maths /
-  // History are two Maths classes at different times - and is just labelled.
-  const unavailableFor = (blockId, sectionIds) => {
+  // Every subject stays on offer. One a section already takes - as a common
+  // subject, or in another block - is labelled with where else it is:
+  // English for everyone plus an English option in a block, or Maths /
+  // Economics and Maths / History, are separate lessons at their own times.
+  const unavailableFor = () => new Set()
+  const commonFor = (sectionIds) => {
     const out = new Set()
     for (const id of sectionIds) {
       const common = id === classGroupId ? commonSubjectIds : commonSubjectIdsBySection[id] ?? []
@@ -136,6 +138,7 @@ export default function ElectiveBlocksPanel({
     qualifiedFor,
     unavailableFor,
     otherBlocksFor,
+    commonFor,
     onSave: handleSave,
     onCancel: () => setEditing(null),
   }
@@ -282,7 +285,7 @@ const newKey = () => `g${(nextKey += 1)}`
 
 function BlockForm({
   blockId, homeId, initial, subjects, classGroups, sectionLabel, qualifiedFor, unavailableFor,
-  otherBlocksFor = () => new Map(), onSave, onCancel,
+  otherBlocksFor = () => new Map(), commonFor = () => new Set(), onSave, onCancel,
 }) {
   const [name, setName] = useState(initial.name)
   const [periodsPerWeek, setPeriodsPerWeek] = useState(String(initial.periodsPerWeek))
@@ -295,6 +298,7 @@ function BlockForm({
   const shared = sectionIds.length > 1
   const unavailable = unavailableFor(blockId, sectionIds)
   const inOtherBlocks = otherBlocksFor(blockId, sectionIds)
+  const commonHere = commonFor(sectionIds)
   const chosen = new Set(groups.map((g) => g.subjectId))
   const offered = sortByName(subjects.filter((s) => !s._pending && (!unavailable.has(s.id) || chosen.has(s.id))))
   const homeGrade = classGroups.find((cg) => cg.id === homeId)?.grade
@@ -454,7 +458,7 @@ function BlockForm({
         </div>
         {offered.length === 0 ? (
           <p className="text-sm text-slate-400">
-            Every subject is already a common subject of these sections.
+            No subjects yet. Add them on the Subjects page.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
@@ -467,8 +471,13 @@ function BlockForm({
                   className="h-4 w-4 rounded border-slate-300 text-slate-900"
                 />
                 {s.name}
-                {inOtherBlocks.has(s.id) && (
-                  <span className="text-xs text-slate-400">also in {inOtherBlocks.get(s.id).join(', ')}</span>
+                {(commonHere.has(s.id) || inOtherBlocks.has(s.id)) && (
+                  <span className="text-xs text-slate-400">
+                    also {[
+                      commonHere.has(s.id) ? 'a common subject' : null,
+                      inOtherBlocks.has(s.id) ? `in ${inOtherBlocks.get(s.id).join(', ')}` : null,
+                    ].filter(Boolean).join(', ')}
+                  </span>
                 )}
               </label>
             ))}

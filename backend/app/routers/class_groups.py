@@ -24,7 +24,7 @@ from app.schemas.class_group import (
 from app.services.bulk_import import TEMPLATES, import_class_groups, parse_rows
 from app.services import plans
 from app.services.freezing import FreezeError, set_frozen, staleness
-from app.services.elective_sections import blocks_for_sections, option_subjects_by_section
+from app.services.elective_sections import blocks_for_sections
 
 router = APIRouter(prefix="/api/class-groups", tags=["class groups"])
 
@@ -212,20 +212,6 @@ def add_requirement(
         raise HTTPException(status_code=404, detail="Class group not found")
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
 
-    # The other half of the check in app/routers/elective_blocks.py: a subject
-    # is either common to the whole section or an option in one of its blocks,
-    # never both. Both would schedule it twice and quietly inflate the
-    # section's real periods per week.
-    in_block = option_subjects_by_section(db, [class_group_id])[class_group_id].get(payload.subject_id)
-    if in_block:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"This subject is already an option in {in_block} for this section. "
-                f"A subject can be common to everyone or an option in a block, not both."
-            ),
-        )
-
     # Upsert on (class_group_id, subject_id) rather than blind-insert: a
     # class group should only have one requirement per subject, and a
     # duplicate here (e.g. from a client-side race — two "create" calls in
@@ -325,11 +311,6 @@ def copy_requirements(
         (r.class_group_id, r.subject_id): r
         for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(target_ids)).all()
     }
-    in_blocks = {
-        (cg_id, subject_id)
-        for cg_id, subjects in option_subjects_by_section(db, target_ids).items()
-        for subject_id in subjects
-    }
     labels = {t.id: (f"{t.grade} - {t.name}" if t.grade else t.name) for t in targets}
     wanted_subjects = {r.subject_id for r in source_rows} | {o.subject_id for b in source_blocks for o in b.options}
     subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_(wanted_subjects)).all()}
@@ -342,9 +323,6 @@ def copy_requirements(
     for target in targets:
         for row in source_rows:
             key = (target.id, row.subject_id)
-            if key in in_blocks:
-                skipped.append(f"{subject_names.get(row.subject_id, 'A subject')} in {labels[target.id]} (it's an elective option there)")
-                continue
             if key in existing:
                 existing[key].periods_per_week = row.periods_per_week
                 updated += 1
@@ -355,10 +333,6 @@ def copy_requirements(
 
     blocks_created = blocks_updated = 0
     if source_blocks:
-        common = {
-            (r.class_group_id, r.subject_id)
-            for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(target_ids)).all()
-        }
         target_blocks: dict[int, list[ElectiveBlock]] = {}
         for b in blocks_for_sections(db, target_ids):
             for sid in b.section_ids:
@@ -370,12 +344,6 @@ def copy_requirements(
             for src in source_blocks:
                 option_ids = [o.subject_id for o in src.options]
                 same = next((b for b in mine if len(b.section_ids) == 1 and b.name.strip().lower() == src.name.strip().lower()), None)
-                clash = next((sid for sid in option_ids if (target.id, sid) in common), None)
-                if clash is not None:
-                    skipped.append(
-                        f"{src.name} in {labels[target.id]} ({subject_names.get(clash, 'a subject')} is a common subject there)"
-                    )
-                    continue
                 if same is not None:
                     kept = {(o.subject_id, o.label): o.preferred_teacher_id for o in same.options}
                     same.periods_per_week = src.periods_per_week

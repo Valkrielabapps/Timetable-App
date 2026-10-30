@@ -15,14 +15,12 @@ tends to surface much later as an infeasible timetable with no visible cause:
 
   - the same subject twice for one section, unless it is deliberately split
     into named groups
-  - a subject that is both a block option and one of the section's common
-    subjects (a normal SubjectRequirement)
 
 and one more that is about coverage: every section in the block must have at
 least one group its students go to, or the section would sit idle.
 
-The requirement side refuses the common-subject case too, in
-app/routers/class_groups.py, so neither order of entry can create it.
+A subject can be in several blocks of a section, and also be one of its
+common subjects: each is its own lessons, at its own times.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -145,25 +143,9 @@ def _validate_block(
                     ),
                 )
 
-    subjects_for = {sid: {o.subject_id for o, g in zip(options, groups) if sid in g} for sid in section_ids}
-    common = (
-        db.query(SubjectRequirement)
-        .filter(
-            SubjectRequirement.class_group_id.in_(section_ids),
-            SubjectRequirement.subject_id.in_(subject_ids),
-        )
-        .all()
-    )
-    for r in common:
-        if r.subject_id in subjects_for[r.class_group_id]:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{subjects[r.subject_id].name} is already one of {labels[r.class_group_id]}'s common "
-                    f"subjects. A subject can be common to everyone or an option in a block, not both - "
-                    f"remove it from the common subjects first."
-                ),
-            )
+    # A subject may also be one of a section's common subjects: English for
+    # everyone, plus an English option in a block for the students who choose
+    # more of it. The block's periods are its own, on top of the common ones.
 
     # A subject may be in two blocks of one section: Maths / Economics for
     # some students and Maths / History for others are two Maths classes at

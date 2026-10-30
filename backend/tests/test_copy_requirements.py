@@ -127,7 +127,8 @@ def test_a_same_named_block_is_updated_and_keeps_its_teachers(client):
     assert by_subject[french["id"]]["preferred_teacher_id"] == claire["id"]
 
 
-def test_a_block_that_would_clash_is_skipped_and_reported(client):
+def test_a_block_is_copied_even_where_an_option_is_a_common_subject(client):
+    """Maths common in B and Maths / French as a block are separate lessons."""
     h, sid, (a, b, *_), (maths, *_rest) = _setup(client)
     french = _subject(client, h, sid, "French")
     _block(client, h, sid, a, "Options", [maths, french])
@@ -135,9 +136,7 @@ def test_a_block_that_would_clash_is_skipped_and_reported(client):
 
     r = client.post(f"/api/class-groups/{a['id']}/requirements/copy", headers=h, json={"target_ids": [b["id"]]})
     assert r.status_code == 200, r.text
-    assert r.json()["blocks_created"] == 0
-    assert any("Options" in s and "Maths" in s for s in r.json()["skipped"])
-    assert _blocks(client, h, sid, b) == []
+    assert r.json()["blocks_created"] == 1
 
 
 def test_blocks_can_be_left_out(client):
