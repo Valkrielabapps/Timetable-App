@@ -15,7 +15,6 @@ tends to surface much later as an infeasible timetable with no visible cause:
 
   - the same subject twice for one section, unless it is deliberately split
     into named groups
-  - a subject in two blocks of the same section
   - a subject that is both a block option and one of the section's common
     subjects (a normal SubjectRequirement)
 
@@ -39,7 +38,6 @@ from app.models.user import User
 from app.schemas.elective_block import (
     ElectiveBlockCreate, ElectiveBlockOut, ElectiveBlockUpdate, ElectiveOptionIn,
 )
-from app.services.elective_sections import blocks_for_sections
 
 router = APIRouter(prefix="/api/elective-blocks", tags=["elective-blocks"])
 
@@ -167,19 +165,10 @@ def _validate_block(
                 ),
             )
 
-    for other in blocks_for_sections(db, section_ids):
-        if block_id is not None and other.id == block_id:
-            continue
-        for option in other.options:
-            for sid in option.group_section_ids:
-                if sid in subjects_for and option.subject_id in subjects_for[sid]:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            f"{subjects[option.subject_id].name} is already an option for "
-                            f"{labels[sid]} in {other.name}. A subject can only be in one block per section."
-                        ),
-                    )
+    # A subject may be in two blocks of one section: Maths / Economics for
+    # some students and Maths / History for others are two Maths classes at
+    # different times, each student in at most one of them. Each block takes
+    # its own periods, so nothing is counted twice.
 
     teacher_ids = [o.preferred_teacher_id for o in options if o.preferred_teacher_id is not None]
     if teacher_ids:

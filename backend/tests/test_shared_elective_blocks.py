@@ -376,12 +376,16 @@ def test_a_joined_section_cannot_then_take_the_subject_as_common(api):
     assert r.status_code == 400
 
 
-def test_a_subject_cannot_be_in_two_blocks_a_section_shares(api):
+def test_a_subject_can_be_in_two_blocks_a_section_shares_and_both_are_scheduled(api):
+    """Maths / History and Maths / CS: 9 B is in both, at different times."""
     assert _create(api, [{"subject_id": api["s"]["Maths"]}, {"subject_id": api["s"]["History"]}],
-                   sections=[api["a"], api["b"]]).status_code == 201
+                   sections=[api["a"], api["b"]], ppw=1).status_code == 201
     r = _create(api, [{"subject_id": api["s"]["Maths"]}, {"subject_id": api["s"]["CS"]}],
-                home=api["b"], sections=[api["b"], api["c"]], name="Block 2")
-    assert r.status_code == 400 and "already an option" in r.json()["detail"]
+                home=api["b"], sections=[api["b"], api["c"]], name="Block 2", ppw=1)
+    assert r.status_code == 201, r.text
+    t = _generate(api)
+    b_blocks = {e["elective_block_id"]: e["period_id"] for e in t["entries"] if e["class_group_id"] == api["b"] and e["elective_block_id"]}
+    assert len(b_blocks) == 2 and len(set(b_blocks.values())) == 2
 
 
 def test_one_teacher_on_two_groups_is_refused(api):

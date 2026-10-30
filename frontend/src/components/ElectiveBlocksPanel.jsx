@@ -105,18 +105,25 @@ export default function ElectiveBlocksPanel({
     }
   }
 
-  // A subject a section already takes - as a common subject, or in another of
-  // its blocks - can't be offered again to that section.
+  // A subject everyone in a section already takes can't also be an option
+  // there. One in another block stays on offer - Maths / Economics and Maths /
+  // History are two Maths classes at different times - and is just labelled.
   const unavailableFor = (blockId, sectionIds) => {
     const out = new Set()
     for (const id of sectionIds) {
       const common = id === classGroupId ? commonSubjectIds : commonSubjectIdsBySection[id] ?? []
       for (const s of common) out.add(s)
     }
+    return out
+  }
+  const otherBlocksFor = (blockId, sectionIds) => {
+    const out = new Map()
     for (const b of allBlocks ?? blocks) {
       if (b.id === blockId) continue
       for (const o of b.options) {
-        if (groupSectionIds(b, o).some((id) => sectionIds.includes(id))) out.add(o.subject_id)
+        if (groupSectionIds(b, o).some((id) => sectionIds.includes(id))) {
+          out.set(o.subject_id, [...new Set([...(out.get(o.subject_id) ?? []), b.name])])
+        }
       }
     }
     return out
@@ -128,6 +135,7 @@ export default function ElectiveBlocksPanel({
     sectionLabel,
     qualifiedFor,
     unavailableFor,
+    otherBlocksFor,
     onSave: handleSave,
     onCancel: () => setEditing(null),
   }
@@ -273,7 +281,8 @@ let nextKey = 0
 const newKey = () => `g${(nextKey += 1)}`
 
 function BlockForm({
-  blockId, homeId, initial, subjects, classGroups, sectionLabel, qualifiedFor, unavailableFor, onSave, onCancel,
+  blockId, homeId, initial, subjects, classGroups, sectionLabel, qualifiedFor, unavailableFor,
+  otherBlocksFor = () => new Map(), onSave, onCancel,
 }) {
   const [name, setName] = useState(initial.name)
   const [periodsPerWeek, setPeriodsPerWeek] = useState(String(initial.periodsPerWeek))
@@ -285,6 +294,7 @@ function BlockForm({
 
   const shared = sectionIds.length > 1
   const unavailable = unavailableFor(blockId, sectionIds)
+  const inOtherBlocks = otherBlocksFor(blockId, sectionIds)
   const chosen = new Set(groups.map((g) => g.subjectId))
   const offered = sortByName(subjects.filter((s) => !s._pending && (!unavailable.has(s.id) || chosen.has(s.id))))
   const homeGrade = classGroups.find((cg) => cg.id === homeId)?.grade
@@ -444,7 +454,7 @@ function BlockForm({
         </div>
         {offered.length === 0 ? (
           <p className="text-sm text-slate-400">
-            Every subject is already taken by these sections or another block.
+            Every subject is already a common subject of these sections.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 md:grid-cols-3">
@@ -457,6 +467,9 @@ function BlockForm({
                   className="h-4 w-4 rounded border-slate-300 text-slate-900"
                 />
                 {s.name}
+                {inOtherBlocks.has(s.id) && (
+                  <span className="text-xs text-slate-400">also in {inOtherBlocks.get(s.id).join(', ')}</span>
+                )}
               </label>
             ))}
           </div>

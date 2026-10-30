@@ -295,3 +295,14 @@ describe('a block shared with other sections', () => {
     expect(screen.getByText('(B only)')).toBeTruthy()
   })
 })
+
+describe('a subject already in another block', () => {
+  it('is still offered for a second block, marked with where else it is', () => {
+    renderPanel({ blocks: [BLOCK] })
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    // Physics is in Block 1; Maths / Economics and Maths / History style
+    // blocks need it offered again.
+    expect(within(form()).getByLabelText(/Physics/)).toBeTruthy()
+    expect(within(form()).getAllByText('also in Block 1').length).toBe(2)
+  })
+})

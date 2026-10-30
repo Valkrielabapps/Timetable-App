@@ -101,12 +101,13 @@ def test_the_same_subject_cannot_appear_twice_in_one_block(client, school):
     assert "Physics" in r.json()["detail"]
 
 
-def test_a_subject_cannot_be_in_two_blocks_of_one_section(client, school):
+def test_a_subject_may_be_in_two_blocks_of_one_section(client, school):
+    """Maths / Economics for some students and Maths / History for others: two
+    Maths classes at different times, each student in at most one of them."""
     s = school
     assert _block(client, s, [s["physics"], s["accounts"]]).status_code == 201
     r = _block(client, s, [s["physics"], s["history"]], name="Block 2")
-    assert r.status_code == 400
-    assert "Physics" in r.json()["detail"] and "Block 1" in r.json()["detail"]
+    assert r.status_code == 201, r.text
 
 
 def test_the_same_subject_may_be_in_blocks_of_different_sections(client, school):
@@ -194,12 +195,14 @@ def test_an_edit_is_not_refused_for_clashing_with_its_own_options(client, school
     assert r.json()["periods_per_week"] == 4
 
 
-def test_an_edit_still_refuses_a_clash_with_another_block(client, school):
+def test_an_edit_still_refuses_a_clash_with_a_common_subject(client, school):
     s = school
-    _block(client, s, [s["physics"], s["accounts"]])
-    second = _block(client, s, [s["chemistry"], s["history"]], name="Block 2").json()
-    r = client.put(f"/api/elective-blocks/{second['id']}", json={
-        "options": [{"subject_id": s["chemistry"]}, {"subject_id": s["physics"]}],
+    client.post(f"/api/class-groups/{s['cg']}/requirements",
+                json={"class_group_id": s["cg"], "subject_id": s["english"], "periods_per_week": 2},
+                headers=s["headers"])
+    block = _block(client, s, [s["chemistry"], s["history"]], name="Block 2").json()
+    r = client.put(f"/api/elective-blocks/{block['id']}", json={
+        "options": [{"subject_id": s["chemistry"]}, {"subject_id": s["english"]}],
     }, headers=s["headers"])
     assert r.status_code == 400
 

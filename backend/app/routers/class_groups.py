@@ -376,16 +376,6 @@ def copy_requirements(
                         f"{src.name} in {labels[target.id]} ({subject_names.get(clash, 'a subject')} is a common subject there)"
                     )
                     continue
-                elsewhere = next(
-                    ((b, sid) for b in mine if b is not same for o in b.options for sid in [o.subject_id] if sid in option_ids),
-                    None,
-                )
-                if elsewhere is not None:
-                    other, sid = elsewhere
-                    skipped.append(
-                        f"{src.name} in {labels[target.id]} ({subject_names.get(sid, 'a subject')} is already in {other.name} there)"
-                    )
-                    continue
                 if same is not None:
                     kept = {(o.subject_id, o.label): o.preferred_teacher_id for o in same.options}
                     same.periods_per_week = src.periods_per_week
