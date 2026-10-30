@@ -417,7 +417,9 @@ export default function DataEntryTab({
       periodsPerWeek,
       qualifiedTeachers,
       preferredTeacherId: requirement?.preferred_teacher_id ?? null,
-      allowedTeacherIds: requirement?.allowed_teacher_ids ?? [],
+      // A shortlist can still name a teacher who has since been deleted; they
+      // aren't shown, and the solver ignores them too.
+      allowedTeacherIds: (requirement?.allowed_teacher_ids ?? []).filter((id) => teachers.some((t) => t.id === id)),
       assistantTeacherId: requirement?.assistant_teacher_id ?? null,
       valid: periodsPerWeek > 0 && qualifiedTeachers.length > 0,
     }

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, ElectiveOption, SubjectRequirement, Teacher
+from app.models.school import ClassGroup, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.teacher import TeacherCreate, TeacherOut, TeacherUpdate
@@ -73,6 +73,30 @@ def delete_teacher(teacher_id: int, db: Session = Depends(get_db), current_user:
     # when foreign keys are switched on - doing it here doesn't depend on that.
     db.query(ClassGroup).filter(ClassGroup.class_teacher_id == teacher_id).update(
         {ClassGroup.class_teacher_id: None}
+    )
+    db.query(SubjectRequirement).filter(SubjectRequirement.assistant_teacher_id == teacher_id).update(
+        {SubjectRequirement.assistant_teacher_id: None}
+    )
+    # A shortlist ("Priya or Joseph") naming them would otherwise show an
+    # "Unknown teacher" on the plan. One name left is a pin to that teacher.
+    sections = db.query(ClassGroup.id).filter(ClassGroup.school_id == teacher.school_id)
+    for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(sections)).all():
+        if r.allowed_teacher_ids and teacher_id in r.allowed_teacher_ids:
+            left = [t for t in r.allowed_teacher_ids if t != teacher_id]
+            if len(left) >= 2:
+                r.allowed_teacher_ids = left
+            else:
+                r.allowed_teacher_ids = None
+                if left and r.preferred_teacher_id is None:
+                    r.preferred_teacher_id = left[0]
+    # Their lessons in generated timetables stay, as "No teacher yet" - on
+    # Postgres the foreign key otherwise refuses to delete a teacher who was
+    # ever timetabled.
+    db.query(TimetableEntry).filter(TimetableEntry.teacher_id == teacher_id).update(
+        {TimetableEntry.teacher_id: None}, synchronize_session=False,
+    )
+    db.query(TimetableEntry).filter(TimetableEntry.assistant_teacher_id == teacher_id).update(
+        {TimetableEntry.assistant_teacher_id: None}, synchronize_session=False,
     )
     db.delete(teacher)
     db.commit()

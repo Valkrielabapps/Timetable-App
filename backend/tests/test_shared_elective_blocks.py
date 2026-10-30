@@ -578,3 +578,28 @@ def test_copying_a_section_adds_the_targets_to_its_shared_blocks(api):
     r = c.post(f"/api/class-groups/{api['a']}/requirements/copy",
                json={"target_ids": [api["c"]]}, headers=api["headers"])
     assert r.json()["blocks_joined"] == 0
+
+
+def test_deleting_a_teacher_takes_them_off_shortlists_and_timetables(api):
+    """A shortlist naming a deleted teacher showed "Unknown teacher" on the
+    plan, and a teacher who was ever timetabled couldn't be deleted on
+    Postgres at all."""
+    from app.core.database import SessionLocal
+    from app.models.school import SubjectRequirement
+
+    c = api["client"]
+    t = api["t"]
+    r = c.post(f"/api/class-groups/{api['a']}/requirements", json={
+        "class_group_id": api["a"], "subject_id": api["s"]["Maths"], "periods_per_week": 2,
+        "allowed_teacher_ids": [t["Mr. Maths"], t["Mrs. Maths"]],
+    }, headers=api["headers"])
+    assert r.status_code in (200, 201), r.text
+    _generate(api)
+    assert c.delete(f"/api/teachers/{t['Mr. Maths']}", headers=api["headers"]).status_code == 204
+    db = SessionLocal()
+    try:
+        req = db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id == api["a"]).one()
+        assert not req.allowed_teacher_ids
+        assert req.preferred_teacher_id == t["Mrs. Maths"]
+    finally:
+        db.close()
