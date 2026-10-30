@@ -113,7 +113,13 @@ def _simultaneous(a, b) -> bool:
     separate lessons. They happen at the same moment by construction, so a
     rule about two lessons being too close, or sharing a day, is not about
     them. Mirrors the compiler, which skips the same pairs."""
-    return a.class_group_id == b.class_group_id and a.period_id == b.period_id
+    if a.period_id != b.period_id:
+        return False
+    # Or one group of a block taught to several sections: an entry per
+    # section, one teacher, one lesson.
+    return a.class_group_id == b.class_group_id or (
+        a.teacher_id is not None and a.teacher_id == b.teacher_id
+    )
 
 
 def _count_in(group: list[Placement], resolved: dict, form: Count,

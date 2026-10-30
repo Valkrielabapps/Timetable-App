@@ -81,9 +81,10 @@ describe('adding a block', () => {
         class_group_id: 100,
         name: 'Block 1',
         periods_per_week: 6,
+        section_ids: [100],
         options: [
-          { subject_id: 1, preferred_teacher_id: 13 },
-          { subject_id: 2, preferred_teacher_id: null },
+          { subject_id: 1, preferred_teacher_id: 13, label: null, class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: null },
         ],
       }),
     )
@@ -178,9 +179,10 @@ describe('an existing block', () => {
       expect(mutations.update).toHaveBeenCalledWith(7, {
         name: 'Block 1',
         periods_per_week: 6,
+        section_ids: [100],
         options: [
-          { subject_id: 1, preferred_teacher_id: 13 },
-          { subject_id: 5, preferred_teacher_id: null },
+          { subject_id: 1, preferred_teacher_id: 13, label: null, class_group_ids: null },
+          { subject_id: 5, preferred_teacher_id: null, label: null, class_group_ids: null },
         ],
       }),
     )
@@ -205,5 +207,91 @@ describe('an existing block', () => {
     expect(screen.queryByText('Edit')).toBeNull()
     expect(screen.queryByText('Delete')).toBeNull()
     expect(screen.queryByText('+ Add elective block')).toBeNull()
+  })
+})
+
+describe('a block shared with other sections', () => {
+  const SECTIONS = [
+    { id: 100, grade: 'Grade 11', name: 'A' },
+    { id: 101, grade: 'Grade 11', name: 'B' },
+    { id: 200, grade: 'Grade 12', name: 'A' },
+  ]
+
+  beforeEach(() => {
+    mutations = { create: vi.fn(() => Promise.resolve()), update: vi.fn(() => Promise.resolve()), delete: vi.fn() }
+  })
+
+  it('pools another section into every class, and can keep one class for one section', async () => {
+    renderPanel({ classGroups: SECTIONS })
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    fireEvent.click(screen.getByText('+ Share with other sections'))
+    check('Grade 11 B')
+    check('Physics')
+    check('Accounts')
+    // Accounts only for 11 A's students.
+    const accounts = within(form()).getByRole('group', { name: 'Students in Accounts' })
+    fireEvent.click(within(accounts).getByText('Grade 11 B'))
+    fireEvent.click(screen.getByText('Save block'))
+    await waitFor(() =>
+      expect(mutations.create).toHaveBeenCalledWith(expect.objectContaining({
+        section_ids: [100, 101],
+        options: [
+          { subject_id: 1, preferred_teacher_id: null, label: null, class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: [100] },
+        ],
+      })),
+    )
+  })
+
+  it('one subject alone is a combined class once sections are shared', async () => {
+    renderPanel({ classGroups: SECTIONS })
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    fireEvent.click(screen.getByText('+ Share with other sections'))
+    check('Grade 11 B')
+    check('Physics')
+    fireEvent.click(screen.getByText('Save block'))
+    await waitFor(() => expect(mutations.create).toHaveBeenCalled())
+  })
+
+  it('splits a subject into two named groups taught at once', async () => {
+    renderPanel({ classGroups: SECTIONS })
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    check('Physics')
+    check('Accounts')
+    fireEvent.click(within(form()).getAllByText('Split into another group')[0])
+    fireEvent.click(screen.getByText('Save block'))
+    await waitFor(() =>
+      expect(mutations.create).toHaveBeenCalledWith(expect.objectContaining({
+        options: [
+          { subject_id: 1, preferred_teacher_id: null, label: 'Group 1', class_group_ids: null },
+          { subject_id: 1, preferred_teacher_id: null, label: 'Group 2', class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: null },
+        ],
+      })),
+    )
+  })
+
+  it('refuses to leave a section with no class to go to', async () => {
+    renderPanel({ classGroups: SECTIONS })
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    fireEvent.click(screen.getByText('+ Share with other sections'))
+    check('Grade 11 B')
+    check('Physics')
+    fireEvent.click(within(within(form()).getByRole('group', { name: 'Students in Physics' })).getByText('Grade 11 B'))
+    fireEvent.click(screen.getByText('Save block'))
+    expect(await screen.findByText(/No subject in this block is for Grade 11 B/)).toBeTruthy()
+    expect(mutations.create).not.toHaveBeenCalled()
+  })
+
+  it('says which sections share a saved block', () => {
+    renderPanel({
+      classGroups: SECTIONS,
+      blocks: [{ ...BLOCK, section_ids: [100, 101], options: [
+        { id: 70, subject_id: 1, preferred_teacher_id: 13, class_group_ids: null },
+        { id: 71, subject_id: 2, preferred_teacher_id: null, class_group_ids: [101], label: 'B only' },
+      ] }],
+    })
+    expect(screen.getByText('Shared: Grade 11 A, Grade 11 B')).toBeTruthy()
+    expect(screen.getByText('(B only)')).toBeTruthy()
   })
 })

@@ -376,9 +376,23 @@ function DayGrid({ weekday, date, view, entries, periods, teachers, classGroups,
         if (e.assistant_teacher_id && !known.has(e.assistant_teacher_id)) known.set(e.assistant_teacher_id, e.assistant_teacher_name)
       }
       cols = [...known].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+      // A class pooled from several sections is one lesson in its teacher's
+      // column, naming every section, not one per section.
+      const pooled = new Map()
+      for (const e of allEntries) {
+        if (e.elective_option_id == null || e.teacher_id == null) continue
+        const key = `${e.period_id}:${e.elective_option_id}:${e.teacher_id}`
+        if (!pooled.has(key)) pooled.set(key, [])
+        pooled.get(key).push(e)
+      }
       place = (e) => {
+        const group = e.elective_option_id != null && e.teacher_id != null
+          ? pooled.get(`${e.period_id}:${e.elective_option_id}:${e.teacher_id}`) ?? [e]
+          : [e]
+        if (group[0].id !== e.id) return []
+        const sections = group.map((x) => x.class_group_name).join(', ')
         // A lesson with no teacher yet has no teacher column to sit in.
-        const out = e.teacher_id == null ? [] : [[e.teacher_id, { primary: `${e.subject_name}`, secondary: [e.class_group_name, e.room_name].filter(Boolean).join(' · ') }]]
+        const out = e.teacher_id == null ? [] : [[e.teacher_id, { primary: `${e.subject_name}`, secondary: [sections, e.room_name].filter(Boolean).join(' · ') }]]
         if (e.assistant_teacher_id) {
           out.push([e.assistant_teacher_id, { primary: e.subject_name, secondary: `${e.class_group_name} · assisting` }])
         }

@@ -9,7 +9,7 @@ Timetablz is a good fit for a school that builds its timetable by hand or in a s
 - Generates a clash-free timetable automatically: no class or teacher is double-booked, and every subject gets its periods each week.
 - Reads rules written in plain English, for example "Maths should be in the first half of the day", "Mrs. Rao doesn't come on Saturdays" or "no more than 2 PE periods in a row".
 - Standard rules as tick boxes: a maximum number of periods per teacher per week and per day, spreading each teacher's periods across the day and the week, and scheduling demanding subjects (Maths, Science, Social Science) in the first periods of the day.
-- Handles elective blocks, lab batches, double periods, class teacher periods, shorter days for younger grades and zero periods.
+- Handles elective blocks, including blocks shared across sections (Grade 9 A and B pooling students into one Maths class and one History class, a subject split into two groups, or sections of different grades sharing a language period), lab batches, double periods, class teacher periods, shorter days for younger grades and zero periods.
 - Lets the school lock or freeze parts of the timetable (for example grades 1 to 5) and regenerate only the rest.
 - Keeps timetable versions that can be opened, renamed and deleted.
 - Plans substitutions when a teacher is absent, suggesting free teachers and sharing the day's arrangement.

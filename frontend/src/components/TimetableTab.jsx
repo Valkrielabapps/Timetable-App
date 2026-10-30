@@ -20,6 +20,7 @@ import SubstitutionsTab from './SubstitutionsTab'
 import SubjectFreezePanel from './SubjectFreezePanel'
 import SearchableSelect from './SearchableSelect'
 import { sortByName, sortSections } from '../sorting'
+import { teacherLessons } from '../electiveSections'
 import GenerationFailedDialog from './GenerationFailedDialog'
 import { useEntitlements } from '../hooks/useEntitlements'
 
@@ -374,11 +375,12 @@ export default function TimetableTab({
     // Includes slots where this teacher is only the *assistant*, not the
     // main teacher — their own timetable should show both, not just the
     // classes they lead solo.
-    return timetable.entries.filter(
+    // A class pooled from several sections is one lesson for its teacher.
+    return teacherLessons(timetable.entries.filter(
       (e) =>
         e.period_id === period.id &&
         (e.teacher_id === selectedTeacherId || e.assistant_teacher_id === selectedTeacherId)
-    )
+    ))
   }
 
   const classGroupName = (id) => classGroups.find((c) => c.id === id)?.name
@@ -986,7 +988,7 @@ export default function TimetableTab({
               onDrop={() => {}}
               onToggleLock={() => {}}
               secondaryLine={(e) =>
-                `${classGroupLabel(e.class_group_id)}${
+                `${(e.class_group_ids ?? [e.class_group_id]).map(classGroupLabel).join(', ')}${
                   isSelectedTeacherAssisting(e) ? ' (Assisting)' : ''
                 }`
               }

@@ -93,9 +93,20 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
 
     entries_by_class_period = defaultdict(list)
     entries_by_teacher_period = defaultdict(list)
+    # A block group taught to several sections is one entry per section but one
+    # lesson for its teacher: their grid shows it once, naming every section.
+    group_first: dict[tuple, object] = {}
+    group_sections: dict[int, list[int]] = {}
     for e in timetable.entries:
         entries_by_class_period[(e.class_group_id, e.period_id)].append(e)
         if e.teacher_id is not None:
+            key = (e.teacher_id, e.period_id, e.elective_option_id) if e.elective_option_id else None
+            if key is not None and key in group_first:
+                group_sections[group_first[key].id].append(e.class_group_id)
+                continue
+            if key is not None:
+                group_first[key] = e
+                group_sections[e.id] = [e.class_group_id]
             entries_by_teacher_period[(e.teacher_id, e.period_id)].append(e)
 
     return {
@@ -114,6 +125,7 @@ def _load_grid_data(db: Session, timetable: Timetable) -> dict:
         "zero_grades": zero_grades,
         "entries_by_class_period": entries_by_class_period,
         "entries_by_teacher_period": entries_by_teacher_period,
+        "group_sections": group_sections,
     }
 
 
@@ -179,8 +191,17 @@ def _cell_text(entry, data: dict, mode: str) -> str:
     if mode == "section":
         teacher = data["teachers_by_id"].get(entry.teacher_id)
         return f"{subject_name}\n({teacher.name if teacher else 'No teacher yet'}){room_suffix}"
-    cg = data["class_groups_by_id"].get(entry.class_group_id)
-    return f"{subject_name}\n({_class_group_label(cg) if cg else '?'}){room_suffix}"
+    return f"{subject_name}\n({_sections_label(entry, data)}){room_suffix}"
+
+
+def _sections_label(entry, data: dict) -> str:
+    """The section a teacher's lesson is with - or every section, for a block
+    group drawn from several."""
+    ids = data.get("group_sections", {}).get(entry.id) or [entry.class_group_id]
+    labels = [
+        _class_group_label(cg) for cg in (data["class_groups_by_id"].get(i) for i in ids) if cg
+    ]
+    return ", ".join(labels) or "?"
 
 
 def _grid_rows(data: dict, entries_index: dict, entry_key_prefix, mode: str) -> list[list[str]]:
@@ -515,8 +536,7 @@ def _pdf_cells(data: dict, entries_index: dict, key, mode: str) -> list[dict]:
                         who = data["teachers_by_id"].get(e.teacher_id)
                         who = who.name if who else ("No teacher yet" if e.teacher_id is None else "")
                     else:
-                        cg = data["class_groups_by_id"].get(e.class_group_id)
-                        who = _class_group_label(cg) if cg else ""
+                        who = _sections_label(e, data)
                     room = data["rooms_by_id"].get(e.room_id) if e.room_id else None
                     lessons.append((subject.name if subject else "?", who, room.name if room else ""))
                 if mode == "section" and entries and entries[0].elective_block_id is not None and len(entries) > 1:

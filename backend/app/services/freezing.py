@@ -20,9 +20,10 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models.school import ClassGroup, Timetable, TimetableEntry
+from app.services.elective_sections import blocks_for_sections
 
 
 class FreezeError(ValueError):
@@ -47,9 +48,21 @@ def plan_signature(cg: ClassGroup) -> str:
         ),
         "blocks": sorted(
             (b.periods_per_week, sorted((o.subject_id, o.preferred_teacher_id) for o in b.options))
-            for b in cg.elective_blocks
+            for b in cg.elective_blocks if len(b.section_ids) == 1
         ),
     }
+    # Blocks shared with other sections, made here or joined: who else is in
+    # them and which group each subject is changes this section's timetable too.
+    session = object_session(cg)
+    shared = [b for b in blocks_for_sections(session, [cg.id]) if len(b.section_ids) > 1] if session else []
+    if shared:
+        plan["shared_blocks"] = sorted(
+            (b.periods_per_week, sorted(b.section_ids), sorted(
+                (o.subject_id, o.preferred_teacher_id, o.label or "", sorted(o.group_section_ids))
+                for o in b.options
+            ))
+            for b in shared
+        )
     return hashlib.sha1(json.dumps(plan, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 

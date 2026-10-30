@@ -38,11 +38,17 @@ class Combination:
     choices: tuple[tuple[int, int], ...]
     # "Physics + Chemistry + Maths", for a title or a sheet name.
     label: str
+    # The group chosen in each block, in block order - what tells "Maths
+    # group 1" from "Maths group 2" when a subject is split.
+    option_ids: tuple[int, ...] = ()
 
     def keeps(self, entry) -> bool:
         """Whether this student is in the lesson an entry describes."""
         if entry.elective_block_id is None:
             return True
+        option_id = getattr(entry, "elective_option_id", None)
+        if option_id is not None and self.option_ids:
+            return option_id in self.option_ids
         return (entry.elective_block_id, entry.subject_id) in self.choices
 
 
@@ -52,36 +58,39 @@ def combinations_for(db: Session, class_group_id: int) -> list[Combination]:
     Empty when the section has no blocks: its timetable is already the only
     one, and there is nothing to choose between.
     """
-    blocks = (
-        db.query(ElectiveBlock)
-        .filter(ElectiveBlock.class_group_id == class_group_id)
-        .order_by(ElectiveBlock.id)
-        .all()
-    )
-    blocks = [b for b in blocks if b.options]
-    if not blocks:
+    from app.services.elective_sections import blocks_for_sections, options_for_section
+
+    per_block_options = [
+        (b, sorted(options_for_section(b, class_group_id), key=lambda o: o.id))
+        for b in blocks_for_sections(db, [class_group_id])
+    ]
+    per_block_options = [(b, opts) for b, opts in per_block_options if opts]
+    if not per_block_options:
         return []
 
     total = 1
-    for b in blocks:
-        total *= len(b.options)
+    for _b, opts in per_block_options:
+        total *= len(opts)
     if total > MAX_COMBINATIONS:
         raise TooManyCombinations(
             f"This section's blocks allow {total} different combinations, which is more than "
             f"can sensibly be printed ({MAX_COMBINATIONS}). Check the blocks for a mistake."
         )
 
-    subject_ids = {o.subject_id for b in blocks for o in b.options}
+    subject_ids = {o.subject_id for _b, opts in per_block_options for o in opts}
     names = {
         s.id: s.name for s in db.query(Subject).filter(Subject.id.in_(subject_ids)).all()
     }
-    per_block = [
-        [(b.id, o.subject_id) for o in sorted(b.options, key=lambda o: o.id)] for b in blocks
-    ]
+
+    def name(o) -> str:
+        base = names.get(o.subject_id, "?")
+        return f"{base} ({o.label})" if o.label else base
+
     return [
         Combination(
-            choices=tuple(picked),
-            label=" + ".join(names.get(subject_id, "?") for _, subject_id in picked),
+            choices=tuple((o.block_id, o.subject_id) for o in picked),
+            label=" + ".join(name(o) for o in picked),
+            option_ids=tuple(o.id for o in picked),
         )
-        for picked in product(*per_block)
+        for picked in product(*(opts for _b, opts in per_block_options))
     ]

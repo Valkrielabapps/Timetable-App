@@ -1,3 +1,4 @@
+import { groupSectionIds } from '../electiveSections'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkImportPanel from './BulkImportPanel'
@@ -96,7 +97,7 @@ export default function SubjectsSection({
     for (const o of b.options) {
       const st = stat(o.subject_id)
       st.periods += b.periods_per_week || 0
-      st.sections.add(b.class_group_id)
+      for (const id of groupSectionIds(b, o)) st.sections.add(id)
     }
   }
   for (const t of teachers) {

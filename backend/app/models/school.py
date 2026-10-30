@@ -363,8 +363,7 @@ class SubjectRequirement(Base):
 
 
 class ElectiveBlock(Base):
-    """A set of subjects one section studies at the same time, each student
-    taking exactly one of them.
+    """A set of subjects studied at the same time, each student taking one.
 
     The usual shape for Grades 11 and 12: a section has common subjects that
     everyone takes (English, as normal SubjectRequirements) and then blocks
@@ -373,14 +372,22 @@ class ElectiveBlock(Base):
     a block is decided by the school before timetabling starts - it is what
     determines which subject combinations a student can take at all.
 
+    A block can span several sections (`section_ids`): Grade 9 A and B both
+    break up for the Maths / History period, and everyone choosing Maths, from
+    either section, goes to one Maths class. Each option is a teaching group
+    (see ElectiveOption) with its own teacher, drawn from some or all of the
+    block's sections - so the same structure covers one section splitting up,
+    two sections pooling their students, a big option split into two groups,
+    a subject one section takes on its own while another pools, and sections
+    of different grades sharing a language period.
+
     Scheduled as one slot with several simultaneous lessons: when the block
-    meets, the section is occupied once and every option needs its own
-    teacher at that moment. Every option therefore gets the block's
+    meets, every one of its sections is occupied once and every group needs
+    its own teacher at that moment. Every option therefore gets the block's
     periods_per_week - they run together, so they cannot differ.
 
-    Scoped to one section. Blocks that span a whole grade (students leaving
-    their section to join a subject) are deliberately not modelled: they
-    would need a timetable entry owned by several sections at once.
+    `class_group_id` is the section the block was created in; the others are
+    in `linked_sections`.
     """
     __tablename__ = "elective_blocks"
 
@@ -395,15 +402,42 @@ class ElectiveBlock(Base):
         "ElectiveOption", back_populates="block", cascade="all, delete-orphan",
         order_by="ElectiveOption.id",
     )
+    linked_sections = relationship(
+        "ClassGroup", secondary="elective_block_sections", order_by="ClassGroup.id",
+    )
+
+    @property
+    def section_ids(self) -> list[int]:
+        """Every section in the block: the one it was made in first."""
+        return [self.class_group_id] + [
+            cg.id for cg in self.linked_sections if cg.id != self.class_group_id
+        ]
+
+
+class ElectiveBlockSection(Base):
+    """A further section taking part in an ElectiveBlock, besides its own."""
+    __tablename__ = "elective_block_sections"
+
+    block_id = Column(Integer, ForeignKey("elective_blocks.id", ondelete="CASCADE"), primary_key=True)
+    class_group_id = Column(Integer, ForeignKey("class_groups.id", ondelete="CASCADE"), primary_key=True)
 
 
 class ElectiveOption(Base):
-    """One subject a student can choose within an ElectiveBlock.
+    """One teaching group in an ElectiveBlock: a subject, the sections its
+    students come from, and (optionally) who teaches it.
 
-    Unique per (block, subject). A subject also may not appear in two blocks
-    of the same section, or as both a block option and a normal requirement
-    for it - the API refuses both, because either would schedule the subject
-    twice and silently inflate the section's real periods per week.
+    `class_group_ids` None means every section of the block - the common case,
+    and what every option was before blocks could span sections. A subset is a
+    group only some sections' students attend: Computer Science taught to 9 A
+    on its own while 9 A and 9 B pool for French.
+
+    A subject may appear more than once in a block when it is split into
+    groups (Maths group 1 and Maths group 2, each with a teacher); `label`
+    tells them apart. What the API refuses is a subject that would be taught
+    twice to the same students outside a block's own groups: a subject in two
+    blocks of the same section, or both a block option and a normal
+    requirement for it - either would silently inflate the section's real
+    periods per week.
     """
     __tablename__ = "elective_options"
 
@@ -414,10 +448,20 @@ class ElectiveOption(Base):
     # option to one teacher instead of letting the solver pick among the
     # qualified ones.
     preferred_teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
-
-    __table_args__ = (UniqueConstraint("block_id", "subject_id"),)
+    class_group_ids = Column(JSON, nullable=True)
+    label = Column(String, nullable=True)
 
     block = relationship("ElectiveBlock", back_populates="options")
+
+    @property
+    def group_section_ids(self) -> list[int]:
+        """The sections whose students are in this group - the block's, in the
+        block's order, limited to the ones chosen."""
+        sections = self.block.section_ids if self.block else []
+        if not self.class_group_ids:
+            return sections
+        wanted = set(self.class_group_ids)
+        return [cg for cg in sections if cg in wanted]
 
 
 class Constraint(Base):
@@ -556,6 +600,13 @@ class TimetableEntry(Base):
     # rows, it just stops knowing they were a block.
     elective_block_id = Column(
         Integer, ForeignKey("elective_blocks.id", ondelete="SET NULL"), nullable=True
+    )
+    # Which group of the block. A group drawn from several sections has one
+    # entry per section, all with the same teacher, room and period - one
+    # lesson, seen from each section's timetable. A teacher's timetable shows
+    # it once.
+    elective_option_id = Column(
+        Integer, ForeignKey("elective_options.id", ondelete="SET NULL"), nullable=True
     )
 
     timetable = relationship("Timetable", back_populates="entries")

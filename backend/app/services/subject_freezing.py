@@ -30,9 +30,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models.school import ClassGroup, Subject, SubjectFreeze, Teacher, Timetable, TimetableEntry
+from app.services.elective_sections import blocks_for_sections, options_for_section
 from app.services.freezing import FreezeError, section_label
 from app.services.naming import name_sort_key
 
@@ -45,8 +46,12 @@ def _plan(cg: ClassGroup, subject_id: int) -> dict | None:
     for r in cg.requirements:
         if r.subject_id == subject_id:
             return {"periods": r.periods_per_week, "teacher": r.preferred_teacher_id, "block_id": None}
-    for b in cg.elective_blocks:
-        for o in b.options:
+    # Blocks the section joins count too, but only the groups its own students
+    # are in.
+    session = object_session(cg)
+    blocks = blocks_for_sections(session, [cg.id]) if session is not None else list(cg.elective_blocks)
+    for b in blocks:
+        for o in options_for_section(b, cg.id):
             if o.subject_id == subject_id:
                 return {
                     "periods": b.periods_per_week, "teacher": o.preferred_teacher_id, "block_id": b.id,

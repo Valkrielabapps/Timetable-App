@@ -7,7 +7,7 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    School, ClassGroup, ElectiveBlock, ElectiveOption, Subject, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
+    School, ClassGroup, ElectiveBlock, ElectiveBlockSection, ElectiveOption, Subject, SubjectRequirement, Teacher, TimetableEntry, ZeroPeriod,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
@@ -24,6 +24,7 @@ from app.schemas.class_group import (
 from app.services.bulk_import import TEMPLATES, import_class_groups, parse_rows
 from app.services import plans
 from app.services.freezing import FreezeError, set_frozen, staleness
+from app.services.elective_sections import blocks_for_sections, option_subjects_by_section
 
 router = APIRouter(prefix="/api/class-groups", tags=["class groups"])
 
@@ -161,8 +162,31 @@ def delete_class_group(class_group_id: int, db: Session = Depends(get_db), curre
     # gap, the same fix already applied to delete_subject in subjects.py
     # for the equivalent bug.
     db.query(TimetableEntry).filter(TimetableEntry.class_group_id == class_group_id).delete()
+    _leave_shared_blocks(db, class_group)
     db.delete(class_group)
     db.commit()
+
+
+def _leave_shared_blocks(db: Session, class_group: ClassGroup) -> None:
+    """Take a section out of every block it shares with others before it is
+    deleted. A block it was made in moves to the next of its sections rather
+    than disappearing for all of them; a group drawn only from it goes."""
+    for block in blocks_for_sections(db, [class_group.id]):
+        others = [sid for sid in block.section_ids if sid != class_group.id]
+        if not others:
+            continue  # its own block, deleted with it
+        if block.class_group_id == class_group.id:
+            block.class_group_id = others[0]
+        block.linked_sections = [cg for cg in block.linked_sections if cg.id not in (class_group.id, block.class_group_id)]
+        for option in list(block.options):
+            if option.class_group_ids:
+                kept = [i for i in option.class_group_ids if i != class_group.id]
+                if kept:
+                    option.class_group_ids = kept
+                else:
+                    block.options.remove(option)
+    db.query(ElectiveBlockSection).filter(ElectiveBlockSection.class_group_id == class_group.id).delete()
+    db.flush()
 
 
 # --- Subject requirements: "this class group needs N periods/week of subject X" ---
@@ -192,20 +216,12 @@ def add_requirement(
     # is either common to the whole section or an option in one of its blocks,
     # never both. Both would schedule it twice and quietly inflate the
     # section's real periods per week.
-    in_block = (
-        db.query(ElectiveBlock)
-        .join(ElectiveOption, ElectiveOption.block_id == ElectiveBlock.id)
-        .filter(
-            ElectiveBlock.class_group_id == class_group_id,
-            ElectiveOption.subject_id == payload.subject_id,
-        )
-        .first()
-    )
+    in_block = option_subjects_by_section(db, [class_group_id])[class_group_id].get(payload.subject_id)
     if in_block:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"This subject is already an option in {in_block.name} for this section. "
+                f"This subject is already an option in {in_block} for this section. "
                 f"A subject can be common to everyone or an option in a block, not both."
             ),
         )
@@ -296,6 +312,11 @@ def copy_requirements(
     )
     if payload.block_ids is not None:
         source_blocks = [b for b in source_blocks if b.id in set(payload.block_ids)]
+    # A block shared with other sections is one block, not a pattern to stamp
+    # on each section: copying it would teach its groups twice. Sections join
+    # it from the block itself instead.
+    shared_blocks = [b for b in source_blocks if len(b.section_ids) > 1]
+    source_blocks = [b for b in source_blocks if len(b.section_ids) == 1]
     if not source_rows and not source_blocks:
         raise HTTPException(status_code=400, detail="Nothing to copy: set some periods/week in this section first.")
 
@@ -306,17 +327,18 @@ def copy_requirements(
     }
     in_blocks = {
         (cg_id, subject_id)
-        for cg_id, subject_id in db.query(ElectiveBlock.class_group_id, ElectiveOption.subject_id)
-        .join(ElectiveOption, ElectiveOption.block_id == ElectiveBlock.id)
-        .filter(ElectiveBlock.class_group_id.in_(target_ids))
-        .all()
+        for cg_id, subjects in option_subjects_by_section(db, target_ids).items()
+        for subject_id in subjects
     }
     labels = {t.id: (f"{t.grade} - {t.name}" if t.grade else t.name) for t in targets}
     wanted_subjects = {r.subject_id for r in source_rows} | {o.subject_id for b in source_blocks for o in b.options}
     subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_(wanted_subjects)).all()}
 
     created = updated = 0
-    skipped: list[str] = []
+    skipped: list[str] = [
+        f"{b.name} (it is shared between sections - add sections to it from the block instead)"
+        for b in shared_blocks
+    ]
     for target in targets:
         for row in source_rows:
             key = (target.id, row.subject_id)
@@ -338,14 +360,16 @@ def copy_requirements(
             for r in db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id.in_(target_ids)).all()
         }
         target_blocks: dict[int, list[ElectiveBlock]] = {}
-        for b in db.query(ElectiveBlock).filter(ElectiveBlock.class_group_id.in_(target_ids)).all():
-            target_blocks.setdefault(b.class_group_id, []).append(b)
+        for b in blocks_for_sections(db, target_ids):
+            for sid in b.section_ids:
+                if sid in set(target_ids):
+                    target_blocks.setdefault(sid, []).append(b)
 
         for target in targets:
             mine = target_blocks.setdefault(target.id, [])
             for src in source_blocks:
                 option_ids = [o.subject_id for o in src.options]
-                same = next((b for b in mine if b.name.strip().lower() == src.name.strip().lower()), None)
+                same = next((b for b in mine if len(b.section_ids) == 1 and b.name.strip().lower() == src.name.strip().lower()), None)
                 clash = next((sid for sid in option_ids if (target.id, sid) in common), None)
                 if clash is not None:
                     skipped.append(
@@ -363,19 +387,23 @@ def copy_requirements(
                     )
                     continue
                 if same is not None:
-                    kept = {o.subject_id: o.preferred_teacher_id for o in same.options}
+                    kept = {(o.subject_id, o.label): o.preferred_teacher_id for o in same.options}
                     same.periods_per_week = src.periods_per_week
                     # Cleared and flushed before re-adding, for the same
                     # unique-constraint reason as update_block.
                     same.options.clear()
                     db.flush()
-                    same.options = [ElectiveOption(subject_id=sid, preferred_teacher_id=kept.get(sid)) for sid in option_ids]
+                    same.options = [
+                        ElectiveOption(subject_id=o.subject_id, label=o.label,
+                                       preferred_teacher_id=kept.get((o.subject_id, o.label)))
+                        for o in src.options
+                    ]
                     blocks_updated += 1
                 else:
                     block = ElectiveBlock(
                         school_id=source.school_id, class_group_id=target.id, name=src.name,
                         periods_per_week=src.periods_per_week,
-                        options=[ElectiveOption(subject_id=sid) for sid in option_ids],
+                        options=[ElectiveOption(subject_id=o.subject_id, label=o.label) for o in src.options],
                     )
                     db.add(block)
                     mine.append(block)

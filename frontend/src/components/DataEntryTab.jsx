@@ -12,6 +12,7 @@ import {
   useRooms,
 } from '../hooks/useSchoolData'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
+import { inBlock, optionsFor } from '../electiveSections'
 import SearchableSelect from './SearchableSelect'
 import { rankMatches, sortByName, sortSections } from '../sorting'
 import { DEFAULT_STRUCTURE } from '../timetableStructure'
@@ -117,7 +118,8 @@ export default function DataEntryTab({
   // Elective blocks live in React Query rather than App.jsx's lifted state -
   // like rooms, they are newer than that arrangement.
   const { data: allElectiveBlocks = [] } = useElectiveBlocks(schoolId)
-  const electiveBlocks = allElectiveBlocks.filter((b) => b.class_group_id === activeSectionId)
+  // A section's blocks include ones made in another section that it joins.
+  const electiveBlocks = allElectiveBlocks.filter((b) => inBlock(b, activeSectionId))
   const blockMutations = useElectiveBlockMutations(schoolId)
 
   // Full refresh — kept for the less-frequent call sites (bulk import,
@@ -619,7 +621,15 @@ export default function DataEntryTab({
                 classGroupId={activeSectionId}
                 sectionGrade={activeSectionGrade}
                 blocks={electiveBlocks}
+                classGroups={classGroups}
                 commonSubjectIds={requirements.map((r) => r.subject_id)}
+                commonSubjectIdsBySection={Object.fromEntries(
+                  classGroups.map((cg) => [
+                    cg.id,
+                    allRequirements.filter((r) => r.class_group_id === cg.id).map((r) => r.subject_id),
+                  ]),
+                )}
+                allBlocks={allElectiveBlocks}
                 subjects={subjects}
                 teachers={teachers}
                 mutations={blockMutations}
@@ -803,7 +813,7 @@ function PlanSection({
   // can't also be one everybody takes - the server refuses it - so the picker
   // says where it is instead of offering it.
   const blockOfSubject = new Map(
-    electiveBlocks.flatMap((b) => b.options.map((o) => [o.subject_id, b.name])),
+    electiveBlocks.flatMap((b) => optionsFor(b, activeSectionId).map((o) => [o.subject_id, b.name])),
   )
   // Ticked blocks still in this section (a stale id from another section
   // doesn't count).

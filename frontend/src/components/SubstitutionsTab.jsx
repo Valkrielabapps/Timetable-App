@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { api } from '../api'
 import SearchableSelect from './SearchableSelect'
 import SubstitutionSummary from './SubstitutionSummary'
+import { teacherLessons } from '../electiveSections'
 import { compareNames, loadChoice, rankMatches, saveChoice } from '../sorting'
 import {
   CATEGORIES, WHOLE_SCHOOL, categoryLabel, formatDate, todayIso, weekdayOf,
@@ -107,7 +108,8 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
   // The chosen day's lessons in the chosen part, in period order.
   const dayLessons = useMemo(() => {
     if (!timetable || weekday == null || !category) return []
-    return timetable.entries
+    // A class taught to several sections at once is one lesson to cover.
+    return teacherLessons(timetable.entries)
       .filter(e => e.teacher_id != null && periodById.get(e.period_id)?.day_of_week === weekday && inScope(e))
       .sort((a, b) => (periodById.get(a.period_id)?.order ?? 0) - (periodById.get(b.period_id)?.order ?? 0))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -234,7 +236,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
   const loadByTeacherId = useMemo(() => {
     const counts = new Map()
     if (timetable) {
-      for (const e of timetable.entries) {
+      for (const e of teacherLessons(timetable.entries)) {
         counts.set(e.teacher_id, (counts.get(e.teacher_id) || 0) + 1)
       }
     }
@@ -247,7 +249,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
   // substitute, so nobody is loaded up without it being seen.
   const lessonsToday = useMemo(() => {
     const counts = new Map()
-    for (const e of timetable?.entries ?? []) {
+    for (const e of teacherLessons(timetable?.entries ?? [])) {
       if (e.teacher_id != null && periodById.get(e.period_id)?.day_of_week === weekday) {
         counts.set(e.teacher_id, (counts.get(e.teacher_id) || 0) + 1)
       }
@@ -364,15 +366,16 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
   }
 
   const saveSubstitutions = async () => {
-    const changes = emptySlots.map(entry => {
+    // One cover for a class several sections share: saved for each of them.
+    const changes = emptySlots.flatMap(entry => {
       const pick = substitutions[entry.id]
-      return {
+      return (entry.class_group_ids ?? [entry.class_group_id]).map(classGroupId => ({
         period_id: entry.period_id,
         absent_teacher_id: entry.teacher_id,
         substituting_teacher_id: pick ? parseInt(pick) : null,
-        class_group_id: entry.class_group_id,
+        class_group_id: classGroupId,
         subject_id: entry.subject_id,
-      }
+      }))
     })
     setSaving(true)
     try {
@@ -618,7 +621,13 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                         }`}
                       >
                         <div>
-                          <div className="font-semibold text-gray-900">{classGroup?.grade} {classGroup?.name}</div>
+                          <div className="font-semibold text-gray-900">
+                            {(entry.class_group_ids ?? [entry.class_group_id])
+                              .map(id => classGroups.find(c => c.id === id))
+                              .filter(Boolean)
+                              .map(c => `${c.grade ?? ''} ${c.name}`.trim())
+                              .join(' + ')}
+                          </div>
                           <div className="text-sm text-gray-600">
                             {periodName(period)} • {entry.subject_name} • Absent: {absentTeacher?.name}
                           </div>

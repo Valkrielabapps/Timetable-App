@@ -80,6 +80,11 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
     affected_blocks = {
         o.block_id for o in db.query(ElectiveOption).filter(ElectiveOption.subject_id == subject_id).all()
     }
+    option_ids = [o.id for o in db.query(ElectiveOption).filter(ElectiveOption.subject_id == subject_id).all()]
+    if option_ids:
+        db.query(TimetableEntry).filter(TimetableEntry.elective_option_id.in_(option_ids)).update(
+            {TimetableEntry.elective_option_id: None}, synchronize_session=False,
+        )
     db.query(ElectiveOption).filter(ElectiveOption.subject_id == subject_id).delete()
     for block_id in affected_blocks:
         remaining = db.query(ElectiveOption).filter(ElectiveOption.block_id == block_id).count()

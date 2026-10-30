@@ -563,6 +563,10 @@ class _OptionReq:
     block_id: int
     option_id: int
     assistant_teacher_id: int | None = None
+    # The group's first section stands for it wherever teachers are counted;
+    # the others are the same lesson seen from their own section.
+    primary: bool = True
+    group_section_ids: tuple[int, ...] = ()
 
 
 def _can_staff_all(free: dict[int, list[int]]) -> bool:
@@ -646,7 +650,7 @@ def _block_atoms(block_occ, option_x, option_reqs, periods_by_id) -> list[Atom]:
     compiler counts a shared variable once. Each teacher choice is a
     teacher-side atom, exactly like a lab batch's.
     """
-    by_option = {o.option_id: o for o in option_reqs}
+    by_option = {o.option_id: o for o in option_reqs if o.primary}
     options_of_block: dict[int, list] = {}
     for o in option_reqs:
         options_of_block.setdefault(o.block_id, []).append(o)
@@ -685,6 +689,7 @@ def _frozen_assignment(e: "TimetableEntry") -> dict:
         "period_id": e.period_id,
         "batch": e.lab_batch,
         "elective_block_id": e.elective_block_id,
+        "elective_option_id": e.elective_option_id,
         "assistant_teacher_id": e.assistant_teacher_id,
         "room_id": e.room_id,
         "frozen": True,
@@ -1023,6 +1028,9 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     frozen_warnings: list[str] = []
     frozen_entries: list[TimetableEntry] = []
     frozen_ids = {cg.id for cg in class_groups if cg.frozen}
+    class_groups_by_id_early = {cg.id: cg for cg in class_groups}
+    # Shared blocks kept as they are because one of their sections is frozen.
+    held_block_ids: set[int] = set()
     if frozen_ids:
         lesson_period_ids = {p.id for p in periods}
         teacher_ids = {tid for (tid,) in db.query(Teacher.id).filter(Teacher.school_id == school_id)}
@@ -1051,6 +1059,25 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 dropped[e.class_group_id] = dropped.get(e.class_group_id, 0) + 1
                 continue
             frozen_entries.append(e)
+        # A block shared with a frozen section can't move without moving that
+        # section's lessons, so it stays where it is for every section in it:
+        # the others keep their copy of it as fixed facts too, and are placed
+        # around it like everything else.
+        held_entries: dict[int, tuple[set[int], list[TimetableEntry]]] = {}
+        for b in db.query(ElectiveBlock).filter(ElectiveBlock.school_id == school_id).all():
+            members = set(b.section_ids)
+            frozen_here = members & frozen_ids
+            if len(members) < 2 or not frozen_here or members <= frozen_ids:
+                continue
+            src = frozen_source(db, class_groups_by_id_early[min(frozen_here)])
+            if src is None:
+                continue
+            held_entries[b.id] = (frozen_here, [
+                e for e in src.entries
+                if e.elective_block_id == b.id and e.class_group_id in members - frozen_ids
+                and e.period_id in lesson_period_ids
+                and (e.teacher_id is None or e.teacher_id in teacher_ids)
+            ])
         kept = {e.class_group_id for e in frozen_entries}
         for cg in class_groups:
             if cg.id in frozen_ids and cg.id not in kept:
@@ -1066,6 +1093,10 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                     f"exists, and {'was' if n == 1 else 'were'} left out."
                 )
         frozen_ids = kept
+        for block_id, (frozen_members, entries) in held_entries.items():
+            if frozen_members & kept:
+                held_block_ids.add(block_id)
+                frozen_entries.extend(entries)
 
     requirements: list[SubjectRequirement] = []
     for cg in class_groups:
@@ -1080,18 +1111,43 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # needing a block-aware copy. What makes a block a block is handled in its
     # own section further down: one shared "does the block meet here"
     # variable per period, which every option's teacher choice is tied to.
+    #
+    # A block can span several sections, and each option is a group drawn from
+    # some of them. Every (option, section) pair gets its own wrapper - so a
+    # rule about 9 B's Maths sees 9 B's students in the Maths group - but they
+    # share everything that makes the group one lesson: one "the block meets"
+    # variable, one teacher choice. The first section's wrapper is the
+    # group's `primary`, and is the one that stands for the group wherever
+    # teachers are counted.
+    known_sections = {cg.id for cg in class_groups}
+
+    def _block_sections(b: ElectiveBlock) -> list[int]:
+        return [sid for sid in b.section_ids if sid in known_sections]
+
     all_blocks: list[ElectiveBlock] = [
-        b for cg in class_groups if cg.id not in frozen_ids for b in cg.elective_blocks
+        b for b in db.query(ElectiveBlock).filter(ElectiveBlock.school_id == school_id).order_by(ElectiveBlock.id).all()
+        if b.id not in held_block_ids and _block_sections(b)
+        and not any(sid in frozen_ids for sid in _block_sections(b))
     ]
     blocks = [b for b in all_blocks if b.options]
-    option_reqs: list[_OptionReq] = [
-        _OptionReq(
-            id=-o.id, class_group_id=b.class_group_id, subject_id=o.subject_id,
-            periods_per_week=b.periods_per_week, preferred_teacher_id=o.preferred_teacher_id,
-            block_id=b.id, option_id=o.id,
-        )
-        for b in blocks for o in b.options
-    ]
+    option_reqs: list[_OptionReq] = []
+    shadow_id = 0
+    for b in blocks:
+        block_sections = _block_sections(b)
+        for o in b.options:
+            group = [sid for sid in o.group_section_ids if sid in block_sections]
+            for i, sid in enumerate(group):
+                if i == 0:
+                    rid = -o.id
+                else:
+                    shadow_id += 1
+                    rid = -(10**12 + shadow_id)
+                option_reqs.append(_OptionReq(
+                    id=rid, class_group_id=sid, subject_id=o.subject_id,
+                    periods_per_week=b.periods_per_week, preferred_teacher_id=o.preferred_teacher_id,
+                    block_id=b.id, option_id=o.id, primary=i == 0, group_section_ids=tuple(group),
+                ))
+    primary_options = [o for o in option_reqs if o.primary]
 
     if not requirements and not blocks:
         if frozen_entries:
@@ -1444,8 +1500,13 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     block_occ: dict[tuple[int, int], cp_model.IntVar] = {}
     teacherless_options_by_block: dict[int, list[_OptionReq]] = {}
     options_by_block: dict[int, list[_OptionReq]] = {b.id: [] for b in blocks}
+    members_by_block: dict[int, list[_OptionReq]] = {b.id: [] for b in blocks}
+    members_by_option: dict[int, list[_OptionReq]] = {}
     for o in option_reqs:
-        options_by_block[o.block_id].append(o)
+        members_by_block[o.block_id].append(o)
+        members_by_option.setdefault(o.option_id, []).append(o)
+        if o.primary:
+            options_by_block[o.block_id].append(o)
 
     for b in all_blocks:
         if not b.options:
@@ -1461,11 +1522,22 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # kept even if a placement rule or a teacher's availability has changed
     # since it was locked.
     locked_block_slots: dict[tuple[int, int], dict[int, tuple[int, int | None, bool]]] = {}
-    option_by_block_subject = {(o.block_id, o.subject_id): o for o in option_reqs}
+    # Found by the entry's group when it has one; an entry from before groups
+    # existed, or whose group was since replaced, by its subject in its
+    # section - when that names exactly one group.
+    option_by_id = {o.option_id: o for o in primary_options}
+    by_block_subject_section: dict[tuple[int, int, int], list[_OptionReq]] = {}
+    for o in option_reqs:
+        by_block_subject_section.setdefault((o.block_id, o.subject_id, o.class_group_id), []).append(o)
     for le in pinned_entries:
         if le.elective_block_id is None:
             continue
-        option = option_by_block_subject.get((le.elective_block_id, le.subject_id))
+        option = option_by_id.get(le.elective_option_id) if le.elective_option_id else None
+        if option is not None and option.block_id != le.elective_block_id:
+            option = None
+        if option is None:
+            found = by_block_subject_section.get((le.elective_block_id, le.subject_id, le.class_group_id), [])
+            option = option_by_id.get(found[0].option_id) if len(found) == 1 else None
         if option is None or le.period_id not in periods_by_id or le.teacher_id not in teachers_by_id:
             continue  # the block, the option, the period or the teacher is gone
         locked_block_slots.setdefault((le.elective_block_id, le.period_id), {})[option.option_id] = (
@@ -1474,19 +1546,28 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
 
     for block in blocks:
         opts = options_by_block[block.id]
-        cg = class_groups_by_id.get(block.class_group_id)
-        block_label = f"{block.name} for {_class_group_label(cg) if cg else 'a section'}"
+        members = members_by_block[block.id]
+        block_sections = _block_sections(block)
+        block_label = f"{block.name} for " + ", ".join(
+            _class_group_label(class_groups_by_id[sid]) for sid in block_sections
+        )
 
         candidates: dict[int, list[int]] = {}
         for o in opts:
-            candidates[o.id] = _candidate_teacher_ids(o, teachers, teachers_by_id, class_groups_by_id)
+            # A group drawn from several sections needs a teacher who may
+            # teach every one of them.
+            allowed = None
+            for m in members_by_option[o.option_id]:
+                ids = _candidate_teacher_ids(m, teachers, teachers_by_id, class_groups_by_id)
+                allowed = ids if allowed is None else [t for t in allowed if t in set(ids)]
+            candidates[o.id] = allowed or []
             candidate_ids_by_req[o.id] = candidates[o.id]
             if not candidates[o.id]:
                 subject = subjects_by_id.get(o.subject_id)
                 unstaffed_labels.append(f"{subject.name if subject else 'a subject'} in {block_label}")
         # Options nobody can teach yet run with the block, without a teacher;
         # only the others need staffing at the same moment.
-        teacherless_opts = [o for o in opts if not candidates[o.id]]
+        teacherless_opts = [m for o in opts if not candidates[o.id] for m in members_by_option[o.option_id]]
         staffed_opts = [o for o in opts if candidates[o.id]]
         if teacherless_opts:
             teacherless_options_by_block[block.id] = teacherless_opts
@@ -1503,7 +1584,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             if not locked_here and not all(
                 period.id not in req_restricted_periods.get(o.id, set())
                 and (req_required_periods.get(o.id) is None or period.id in req_required_periods[o.id])
-                for o in opts
+                for o in members
             ):
                 continue
             free: dict[int, list[int]] = {}
@@ -1532,11 +1613,14 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             occ = model.NewBoolVar(f"occ_b{block.id}_p{period.id}")
             block_occ[(block.id, period.id)] = occ
             block_vars.append(occ)
-            class_group_period_vars.setdefault((block.class_group_id, period.id), []).append(occ)
-            for o in opts:
+            # Every section in the block is taken up by it, once.
+            for sid in block_sections:
+                class_group_period_vars.setdefault((sid, period.id), []).append(occ)
+            for m in members:
                 # The option is present wherever the block is, which is what
                 # lets the legacy per-requirement rules read it.
-                req_period_vars[o.id].setdefault(period.id, []).append(occ)
+                req_period_vars[m.id].setdefault(period.id, []).append(occ)
+            for o in opts:
                 if not candidates[o.id]:
                     continue  # no teacher yet: present, but books nobody
                 choice = []
@@ -1577,10 +1661,11 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                         )
                     continue
                 model.Add(var == 1)
-                key = (block.class_group_id, option_subject[option_id], teacher_id, period_id)
-                if is_lock:
-                    locked_keys.add(key)
-                locked_rooms[key] = room_id
+                for m in members_by_option.get(option_id, []):
+                    key = (m.class_group_id, option_subject[option_id], teacher_id, period_id)
+                    if is_lock:
+                        locked_keys.add(key)
+                    locked_rooms[key] = room_id
 
     if unstaffed_labels:
         shown = ", ".join(unstaffed_labels[:6])
@@ -1752,6 +1837,9 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     frozen_atoms: list[Atom] = []
     frozen_slot_vars: dict[tuple[int, int], cp_model.IntVar] = {}
     frozen_load: dict[int, int] = {}
+    # A group taught to several sections is one lesson for its teacher, kept
+    # as one entry per section - so a teacher is busy once per period here.
+    frozen_teacher_busy: set[tuple[int, int]] = set()
     for e in frozen_entries:
         period = periods_by_id[e.period_id]
         fixed = model.NewBoolVar(f"frozen_e{e.id}")
@@ -1760,6 +1848,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         if e.assistant_teacher_id and e.assistant_teacher_id != e.teacher_id \
                 and e.assistant_teacher_id in teachers_by_id:
             busy.append(e.assistant_teacher_id)
+        busy = [t for t in busy if (t, e.period_id) not in frozen_teacher_busy]
+        frozen_teacher_busy.update((t, e.period_id) for t in busy)
         for teacher_id in busy:
             teacher_period_vars.setdefault((teacher_id, e.period_id), []).append(fixed)
             teacher_total_vars.setdefault(teacher_id, []).append(fixed)
@@ -1796,9 +1886,13 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     day_max = _STANDARD.get().day_max
     if day_max is not None:
         frozen_day_load: dict[tuple[int, int], int] = {}
+        counted: set[tuple[int, int]] = set()
         for e in frozen_entries:
             day = periods_by_id[e.period_id].day_of_week
             for teacher_id in {e.teacher_id, e.assistant_teacher_id} - {None}:
+                if (teacher_id, e.period_id) in counted:
+                    continue
+                counted.add((teacher_id, e.period_id))
                 frozen_day_load[(teacher_id, day)] = frozen_day_load.get((teacher_id, day), 0) + 1
         for (teacher_id, day), load in sorted(frozen_day_load.items()):
             teacher = teachers_by_id.get(teacher_id)
@@ -2192,20 +2286,22 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                     break
         # Block options, one entry each, tagged with their block so the grid can
         # show them as one slot and dragging can move them together.
-        option_by_id = {o.option_id: o for o in option_reqs}
+        # A group drawn from several sections is one entry per section, all with
+        # the same teacher - the same lesson on each section's timetable.
         for (block_id, period_id, option_id), choice in option_x.items():
             for teacher_id, var in choice:
                 if solver.Value(var):
-                    o = option_by_id[option_id]
-                    assignments.append(
-                        {
-                            "class_group_id": o.class_group_id,
-                            "subject_id": o.subject_id,
-                            "teacher_id": teacher_id,
-                            "period_id": period_id,
-                            "elective_block_id": block_id,
-                        }
-                    )
+                    for m in members_by_option[option_id]:
+                        assignments.append(
+                            {
+                                "class_group_id": m.class_group_id,
+                                "subject_id": m.subject_id,
+                                "teacher_id": teacher_id,
+                                "period_id": period_id,
+                                "elective_block_id": block_id,
+                                "elective_option_id": option_id,
+                            }
+                        )
                     break
         for (req_id, period_id), var in no_teacher.items():
             if solver.Value(var):
@@ -2220,6 +2316,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                     assignments.append({
                         "class_group_id": o.class_group_id, "subject_id": o.subject_id,
                         "teacher_id": None, "period_id": period_id, "elective_block_id": block_id,
+                        "elective_option_id": o.option_id,
                     })
         # Frozen lessons go out exactly as they came in, room and lock included.
         for e in frozen_entries:
@@ -2235,7 +2332,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             requirements, teachers_by_id, periods,
             req_restricted_periods, req_required_periods, candidate_ids_by_req,
             subjects_by_id, class_groups_by_id,
-            blocks=blocks, option_reqs=option_reqs,
+            blocks=blocks, option_reqs=primary_options,
+            block_sections={b.id: _block_sections(b) for b in blocks},
             unavailable_by_cg=zero_period_ids_by_class_group,
         )
         # Whole sections have to be shared out between teachers now that a
@@ -2243,7 +2341,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         # and invisible to the period-counting checks above.
         if not errors:
             errors = errors + _diagnose_teacher_assignment(
-                requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
+                requirements, primary_options, candidate_ids_by_req, teachers_by_id, periods,
                 subjects_by_id, class_groups_by_id, _batch_count,
             )
         # Only reachable for a *proven* infeasibility (not "unknown", a
@@ -2402,6 +2500,7 @@ def _diagnose_infeasibility(
     blocks: list | None = None,
     option_reqs: list | None = None,
     unavailable_by_cg: dict[int, set[int]] | None = None,
+    block_sections: dict[int, list[int]] | None = None,
 ) -> list[str]:
     """
     Best-effort explanation for why the solve came back infeasible (or
@@ -2441,7 +2540,8 @@ def _diagnose_infeasibility(
         demand_by_cg[req.class_group_id] = demand_by_cg.get(req.class_group_id, 0) + req.periods_per_week
     # A block occupies its section once, however many options it has.
     for block in blocks or []:
-        demand_by_cg[block.class_group_id] = demand_by_cg.get(block.class_group_id, 0) + block.periods_per_week
+        for sid in (block_sections or {}).get(block.id, [block.class_group_id]):
+            demand_by_cg[sid] = demand_by_cg.get(sid, 0) + block.periods_per_week
     lesson_ids = {p.id for p in periods}
     for cg_id, demand in demand_by_cg.items():
         # A grade with a shorter day, or a zero period of its own, has fewer
@@ -2867,16 +2967,40 @@ def _assign_rooms(
     # get a room". Solved directly (augmenting paths) rather than as one
     # school-wide CP-SAT model, which took its full 15-second limit on a
     # school with labs and gave nothing a matching doesn't.
+    # A group taught to several sections is one lesson in one room: its
+    # entries (one per section) are matched as a unit and all get that room,
+    # which has to fit the largest of the sections.
+    units: dict[tuple, list[int]] = {}
+    for idx, a in enumerate(assignments):
+        if a.get("elective_option_id") is not None:
+            units.setdefault(("g", a["elective_option_id"], a["period_id"]), []).append(idx)
+        else:
+            units[("a", idx)] = [idx]
+    copies_of = {members[0]: members[1:] for members in units.values()}
+    for members in units.values():
+        fixed = next((assignments[i]["room_id"] for i in members if assignments[i]["room_id"] is not None), None)
+        if fixed is not None:
+            for i in members:
+                assignments[i]["room_id"] = fixed
+
     eligible_by_period: dict[int, list[tuple[int, list[int]]]] = {}
     for idx, a in enumerate(assignments):
+        if idx not in copies_of:
+            continue  # matched together with its group's first entry
         key = (a["class_group_id"], a["subject_id"], a["teacher_id"], a["period_id"])
-        if key in locked_rooms:
+        if key in locked_rooms or any(
+            (assignments[i]["class_group_id"], assignments[i]["subject_id"], assignments[i]["teacher_id"],
+             assignments[i]["period_id"]) in locked_rooms for i in copies_of[idx]
+        ):
             continue  # already fixed above; not part of this pass
 
         subject = subjects_by_id.get(a["subject_id"])
-        class_group = class_groups_by_id.get(a["class_group_id"])
         required_type = subject.required_room_type if subject else None
-        student_count = class_group.student_count if class_group else None
+        counts = [
+            class_groups_by_id[assignments[i]["class_group_id"]].student_count
+            for i in [idx, *copies_of[idx]] if assignments[i]["class_group_id"] in class_groups_by_id
+        ]
+        student_count = max((c for c in counts if c), default=None)
 
         eligible = [
             r.id for r in rooms
@@ -2907,7 +3031,8 @@ def _assign_rooms(
         for idx, options in entries:
             place(idx, options, set())
         for room_id, idx in room_holder.items():
-            assignments[idx]["room_id"] = room_id
+            for i in [idx, *copies_of.get(idx, [])]:
+                assignments[i]["room_id"] = room_id
 
 
 def solve_example() -> SolveResult:

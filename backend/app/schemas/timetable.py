@@ -48,6 +48,13 @@ class TimetableEntryOut(BaseModel):
     # Kept fixed by a frozen subject (app/services/subject_freezing.py):
     # it can't be moved or changed until the subject is unfrozen.
     subject_frozen: bool = False
+    # Which group of the block, and - for a group drawn from several
+    # sections - the other sections in the same lesson. Their entries share
+    # this entry's teacher, room and period.
+    elective_option_id: int | None = None
+    elective_option_label: str | None = None
+    shared_with_ids: list[int] = []
+    shared_with_names: list[str] = []
 
 
 class SlotMove(BaseModel):

@@ -212,6 +212,9 @@ function Lesson({ entry, secondaryLine, showAssistant, blockName = null }) {
     <>
       <div className="break-words text-base font-medium">
         {entry.subject_name}
+        {entry.elective_option_label && (
+          <span className="ml-1 text-xs font-normal text-slate-400">{entry.elective_option_label}</span>
+        )}
         {entry.lab_batch && (
           <span className="ml-1 text-xs font-normal text-slate-400">Batch {entry.lab_batch}</span>
         )}
@@ -221,6 +224,10 @@ function Lesson({ entry, secondaryLine, showAssistant, blockName = null }) {
         {blockName && <span className="ml-1 text-xs font-normal text-slate-400">{blockName}</span>}
       </div>
       <div className="break-words text-sm text-slate-600">{secondaryLine(entry)}</div>
+      {/* A class pooled from several sections, seen from one of them. */}
+      {entry.shared_with_names?.length > 0 && !entry.class_group_ids && (
+        <div className="text-[13px] text-violet-700">with {entry.shared_with_names.join(', ')}</div>
+      )}
       {showAssistant && entry.assistant_teacher_name && (
         <div className="text-[13px] text-slate-500">Asst: {entry.assistant_teacher_name}</div>
       )}

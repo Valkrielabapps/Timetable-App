@@ -43,6 +43,7 @@ from app.models.school import (
     ClassGroup,
     Constraint,
     ElectiveBlock,
+    ElectiveOption,
     Period,
     Room,
     Subject,
@@ -79,6 +80,49 @@ from app.services.timetable_structure import grade_off_period_ids, lesson_number
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
 
 
+def _group_key(e) -> tuple | None:
+    """Entries that are one lesson: the same group of a block, at one time."""
+    if e.elective_option_id is None:
+        return None
+    return (e.timetable_id, e.period_id, e.elective_option_id)
+
+
+def _group_sections(entries) -> dict[tuple, list[int]]:
+    out: dict[tuple, list[int]] = {}
+    for e in entries:
+        key = _group_key(e)
+        if key is not None:
+            out.setdefault(key, []).append(e.class_group_id)
+    return out
+
+
+def _shared_with(e, group_sections: dict, class_groups: dict) -> dict:
+    key = _group_key(e)
+    others = [cid for cid in group_sections.get(key, []) if cid != e.class_group_id] if key else []
+    names = []
+    for cid in others:
+        cg = class_groups.get(cid)
+        if cg is not None:
+            names.append(f"{cg.grade} {cg.name}" if cg.grade else cg.name)
+    return {"shared_with_ids": others, "shared_with_names": names}
+
+
+def _group_copies(db: Session, entry: TimetableEntry) -> list[TimetableEntry]:
+    """The other sections' entries for the same lesson as this one."""
+    if entry.elective_option_id is None:
+        return []
+    return (
+        db.query(TimetableEntry)
+        .filter(
+            TimetableEntry.timetable_id == entry.timetable_id,
+            TimetableEntry.period_id == entry.period_id,
+            TimetableEntry.elective_option_id == entry.elective_option_id,
+            TimetableEntry.id != entry.id,
+        )
+        .all()
+    )
+
+
 def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
     """Attach human-readable names to each entry, since the DB only stores
     foreign keys. Done here (not in the DB model) to keep the model layer
@@ -101,6 +145,10 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
     block_names = {b.id: b.name for b in db.query(ElectiveBlock).filter(
         ElectiveBlock.school_id == timetable.school_id
     ).all()}
+    option_labels = {o.id: o.label for o in db.query(ElectiveOption).join(
+        ElectiveBlock, ElectiveOption.block_id == ElectiveBlock.id
+    ).filter(ElectiveBlock.school_id == timetable.school_id).all()}
+    group_sections = _group_sections(timetable.entries)
 
     frozen_subjects, frozen_blocks = frozen_lessons_index(db, timetable.school_id)
     entries = []
@@ -128,6 +176,9 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
             "elective_block_id": e.elective_block_id,
             "elective_block_name": block_names.get(e.elective_block_id),
             "subject_frozen": _subject_frozen_name(e, frozen_subjects, frozen_blocks) is not None,
+            "elective_option_id": e.elective_option_id,
+            "elective_option_label": option_labels.get(e.elective_option_id),
+            **_shared_with(e, group_sections, class_groups),
         })
 
     return TimetableOut(
@@ -334,6 +385,7 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
                     room_id=a.get("room_id"),
                     lab_batch=a.get("batch"),
                     elective_block_id=a.get("elective_block_id"),
+                    elective_option_id=a.get("elective_option_id"),
                     # Carries a lock forward from the previous timetable if
                     # this entry landed on the exact same (class group,
                     # subject, teacher, period) that was locked before —
@@ -751,6 +803,11 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
         )
     if "period_id" in data and data["period_id"] != entry.period_id:
         _check_lesson_slot(db, data["period_id"], entry.class_group_id)
+    # A group taught to several sections is one lesson: its teacher, room and
+    # lock are the same in every section, so a change to one is a change to all.
+    copies = _group_copies(db, entry)
+    for c in copies:
+        _refuse_if_frozen(db, c.class_group_id)
     if "period_id" in data or "teacher_id" in data or "room_id" in data:
         new_period_id = data.get("period_id", entry.period_id)
         new_teacher_id = data.get("teacher_id", entry.teacher_id)
@@ -758,12 +815,15 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
         _check_slot_conflict(
             db, entry.timetable_id, entry.class_group_id,
             new_period_id, new_teacher_id, new_room_id,
-            exclude_entry_ids={entry.id},
+            exclude_entry_ids={entry.id, *(c.id for c in copies)},
             check_class_group=new_period_id != entry.period_id,
         )
 
     for field, value in data.items():
         setattr(entry, field, value)
+        if field in ("teacher_id", "room_id", "locked"):
+            for c in copies:
+                setattr(c, field, value)
     db.commit()
     db.refresh(entry)
 
@@ -873,6 +933,30 @@ def _slot_entries(db: Session, timetable_id: int, class_group_id: int, period_id
     )
 
 
+def _sections_moving_together(db: Session, timetable_id: int, class_group_id: int, *period_ids: int) -> list[int]:
+    """The sections whose slots in these periods have to move as one: this
+    one, plus every section sharing a block with it in either period - and,
+    in turn, the sections those share a block with there."""
+    sections = [class_group_id]
+    i = 0
+    while i < len(sections):
+        sid = sections[i]
+        i += 1
+        for period_id in period_ids:
+            block_ids = {e.elective_block_id for e in _slot_entries(db, timetable_id, sid, period_id)
+                         if e.elective_block_id is not None}
+            if not block_ids:
+                continue
+            for (other,) in db.query(TimetableEntry.class_group_id).filter(
+                TimetableEntry.timetable_id == timetable_id,
+                TimetableEntry.period_id == period_id,
+                TimetableEntry.elective_block_id.in_(block_ids),
+            ).distinct():
+                if other not in sections:
+                    sections.append(other)
+    return sections
+
+
 @router.post("/{timetable_id}/move-slot", response_model=EntryUpdateOut)
 def move_slot(
     timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
@@ -907,14 +991,23 @@ def move_slot(
                 detail=f"Nothing can be scheduled in {_NO_LESSONS_IN.get(period.kind, 'a break')}.",
             )
 
-    source = _slot_entries(db, timetable.id, payload.class_group_id, payload.from_period_id)
-    target = _slot_entries(db, timetable.id, payload.class_group_id, payload.to_period_id)
+    # A block shared with other sections moves for all of them, and whatever
+    # those sections have in the target period comes back the other way.
+    sections = _sections_moving_together(
+        db, timetable.id, payload.class_group_id, payload.from_period_id, payload.to_period_id,
+    )
+    source = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.from_period_id)]
+    target = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.to_period_id)]
     if not source:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to move.")
     _refuse_if_subject_frozen(db, source + target)
-    _check_lesson_slot(db, payload.to_period_id, payload.class_group_id)
-    if target:
-        _check_lesson_slot(db, payload.from_period_id, payload.class_group_id)
+    for sid in sections:
+        if sid != payload.class_group_id:
+            _refuse_if_frozen(db, sid)
+        if any(e.class_group_id == sid for e in source):
+            _check_lesson_slot(db, payload.to_period_id, sid)
+        if any(e.class_group_id == sid for e in target):
+            _check_lesson_slot(db, payload.from_period_id, sid)
     if any(e.locked for e in source + target):
         raise HTTPException(
             status_code=400,
@@ -956,7 +1049,8 @@ def lock_slot(
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
     _refuse_if_frozen(db, payload.class_group_id)
-    entries = _slot_entries(db, timetable.id, payload.class_group_id, payload.period_id)
+    sections = _sections_moving_together(db, timetable.id, payload.class_group_id, payload.period_id)
+    entries = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.period_id)]
     if not entries:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")
     _refuse_if_subject_frozen(db, entries)
@@ -1011,6 +1105,17 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
             block.name if (block := db.get(ElectiveBlock, entry.elective_block_id)) else None
         ) if entry.elective_block_id else None,
         subject_frozen=_subject_frozen_name(entry, *frozen_lessons_index(db, entry.timetable.school_id)) is not None,
+        elective_option_id=entry.elective_option_id,
+        elective_option_label=(
+            option.label if (option := db.get(ElectiveOption, entry.elective_option_id)) else None
+        ) if entry.elective_option_id else None,
+        **_shared_with(
+            entry,
+            _group_sections([entry, *_group_copies(db, entry)]),
+            {cg.id: cg for cg in db.query(ClassGroup).filter(
+                ClassGroup.id.in_([c.class_group_id for c in _group_copies(db, entry)])
+            ).all()},
+        ),
     )
 
 
