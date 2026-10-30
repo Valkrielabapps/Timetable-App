@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { confirmDialog } from './confirmDialog'
 import SearchableSelect from './SearchableSelect'
 import { sortByName, sortSections } from '../sorting'
@@ -42,10 +42,24 @@ export default function ElectiveBlocksPanel({
   teachers,
   mutations,
   readOnly,
+  // { id, n } from "Edit block" on the plan table: open that block's editor
+  // here and bring it into view. `n` makes asking again for the same block
+  // count as a new request.
+  editRequest = null,
 }) {
   // null | 'new' | a block id
   const [editing, setEditing] = useState(null)
   const [error, setError] = useState(null)
+  const panelRef = useRef(null)
+
+  useEffect(() => {
+    if (!editRequest || readOnly) return
+    setError(null)
+    setEditing(editRequest.id)
+    // After the editor renders, so it is what scrolls into view.
+    const t = setTimeout(() => panelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 0)
+    return () => clearTimeout(t)
+  }, [editRequest, readOnly])
 
   const subjectName = (id) => subjects.find((s) => s.id === id)?.name ?? 'Deleted subject'
   const teacherName = (id) => teachers.find((t) => t.id === id)?.name
@@ -144,7 +158,7 @@ export default function ElectiveBlocksPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-200 pt-5">
+    <div ref={panelRef} className="flex flex-col gap-3 border-t border-slate-200 pt-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-base font-medium">Elective blocks</h4>

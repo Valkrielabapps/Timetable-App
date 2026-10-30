@@ -110,6 +110,8 @@ export default function DataEntryTab({
   // Elective blocks ticked in the same table, for copying with the subjects.
   const [selectedBlockIds, setSelectedBlockIds] = useState([])
   const [copyTargetIds, setCopyTargetIds] = useState([])
+  // "Edit" on a block's row in the plan table opens it in the blocks panel below.
+  const [blockEditRequest, setBlockEditRequest] = useState(null)
   const [copyPickerOpen, setCopyPickerOpen] = useState(false)
   const [copyingPeriods, setCopyingPeriods] = useState(false)
   const [settingUpPeriods, setSettingUpPeriods] = useState(false)
@@ -603,6 +605,7 @@ export default function DataEntryTab({
           copyingPeriods={copyingPeriods}
           onGoToSubjects={() => onSubViewChange('subjects')}
           electiveBlocks={electiveBlocks}
+          onEditBlock={(id) => setBlockEditRequest((r) => ({ id, n: (r?.n ?? 0) + 1 }))}
           classTeacherPicker={
             activeSection && (
               <ClassTeacherPicker
@@ -634,6 +637,7 @@ export default function DataEntryTab({
                 teachers={teachers}
                 mutations={blockMutations}
                 readOnly={readOnly}
+                editRequest={blockEditRequest}
               />
             )
           }
@@ -753,6 +757,7 @@ function PlanSection({
   copyingPeriods,
   onGoToSubjects,
   electiveBlocks = [],
+  onEditBlock = () => {},
   classTeacherPicker = null,
   electiveBlocksPanel = null,
   readOnly,
@@ -1089,7 +1094,19 @@ function PlanSection({
               <td className="py-2 pr-2 text-xs text-slate-500" colSpan={2}>
                 {block.options.length} options at the same time, each with its own teacher
               </td>
-              <td className="py-2 pr-2 text-xs text-slate-500">Edit below</td>
+              <td className="py-2 pr-2 text-xs">
+                {readOnly ? (
+                  <span className="text-slate-500">Set in the blocks below</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onEditBlock(block.id)}
+                    className="font-medium text-violet-700 hover:text-violet-900 hover:underline"
+                  >
+                    Edit block
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
           <tr className="bg-slate-50 text-slate-600">

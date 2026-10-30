@@ -65,6 +65,15 @@ function renderPlan(blocks = BLOCKS) {
 }
 
 describe("a section's plan with elective blocks", () => {
+  it('"Edit block" on a block\'s row opens its editor below', () => {
+    Element.prototype.scrollIntoView = vi.fn()
+    renderPlan()
+    expect(screen.queryByRole('form', { name: 'Elective block' })).toBeNull()
+    fireEvent.click(screen.getByText('Edit block'))
+    const form = screen.getByRole('form', { name: 'Elective block' })
+    expect(within(form).getByDisplayValue('Block 1')).toBeInTheDocument()
+  })
+
   it('counts each block once towards the week', () => {
     // English 5 + Block 1's 6. Not 5 + 6 + 6 for two options, and not the
     // other section's block.
