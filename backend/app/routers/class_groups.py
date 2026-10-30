@@ -293,17 +293,17 @@ def copy_requirements(
         query = query.filter(SubjectRequirement.subject_id.in_(payload.subject_ids))
     source_rows = [r for r in query.all() if r.periods_per_week and r.periods_per_week > 0]
     source_blocks = (
-        db.query(ElectiveBlock).filter(ElectiveBlock.class_group_id == class_group_id).order_by(ElectiveBlock.id).all()
-        if payload.include_blocks else []
+        blocks_for_sections(db, [class_group_id]) if payload.include_blocks else []
     )
     if payload.block_ids is not None:
         source_blocks = [b for b in source_blocks if b.id in set(payload.block_ids)]
-    # A block shared with other sections is one block, not a pattern to stamp
-    # on each section: copying it would teach its groups twice. Sections join
-    # it from the block itself instead.
+    # A block shared with other sections is one set of classes, not a pattern
+    # to stamp on each section - a copy would teach its groups twice. So the
+    # target sections join it instead: their students go to the same classes,
+    # in the same groups as this section's.
     shared_blocks = [b for b in source_blocks if len(b.section_ids) > 1]
     source_blocks = [b for b in source_blocks if len(b.section_ids) == 1]
-    if not source_rows and not source_blocks:
+    if not source_rows and not source_blocks and not shared_blocks:
         raise HTTPException(status_code=400, detail="Nothing to copy: set some periods/week in this section first.")
 
     target_ids = [t.id for t in targets]
@@ -316,10 +316,20 @@ def copy_requirements(
     subject_names = {s.id: s.name for s in db.query(Subject).filter(Subject.id.in_(wanted_subjects)).all()}
 
     created = updated = 0
-    skipped: list[str] = [
-        f"{b.name} (it is shared between sections - add sections to it from the block instead)"
-        for b in shared_blocks
-    ]
+    skipped: list[str] = []
+    blocks_joined = 0
+    for block in shared_blocks:
+        joining = [t for t in targets if t.id not in block.section_ids]
+        if not joining:
+            continue
+        block.linked_sections = [*block.linked_sections, *joining]
+        # A group this section's students are in gains the new sections too;
+        # a group for every section already includes them.
+        for option in block.options:
+            if option.class_group_ids and class_group_id in option.class_group_ids:
+                option.class_group_ids = [*option.class_group_ids, *(t.id for t in joining)]
+        blocks_joined += 1
+    db.flush()
     for target in targets:
         for row in source_rows:
             key = (target.id, row.subject_id)
@@ -372,6 +382,7 @@ def copy_requirements(
     return {
         "created": created, "updated": updated, "skipped": skipped, "sections": len(targets),
         "blocks_created": blocks_created, "blocks_updated": blocks_updated,
+        "blocks_joined": blocks_joined,
     }
 
 

@@ -552,3 +552,29 @@ def test_a_subject_that_was_scheduled_can_still_be_deleted(api):
     assert r.status_code in (200, 204), r.text
     t2 = c.get(f"/api/timetables/{t['id']}", headers=api["headers"]).json()
     assert not any(e["subject_id"] == api["s"]["English"] for e in t2["entries"])
+
+
+def test_copying_a_section_adds_the_targets_to_its_shared_blocks(api):
+    """Copy 9 A's plan to 9 C: 9 C's students join the shared classes, in the
+    same groups as 9 A's - no second set of classes, nothing skipped."""
+    c = api["client"]
+    block = _create(api, [
+        {"subject_id": api["s"]["Maths"]},
+        {"subject_id": api["s"]["CS"], "class_group_ids": [api["a"]]},
+        {"subject_id": api["s"]["History"], "class_group_ids": [api["b"]]},
+    ], sections=[api["a"], api["b"]]).json()
+    r = c.post(f"/api/class-groups/{api['a']}/requirements/copy",
+               json={"target_ids": [api["c"]]}, headers=api["headers"])
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"] == [] and r.json()["blocks_joined"] == 1
+    blocks = c.get(f"/api/elective-blocks?school_id={api['sid']}", headers=api["headers"]).json()
+    assert len(blocks) == 1 and blocks[0]["id"] == block["id"]
+    assert blocks[0]["section_ids"] == [api["a"], api["b"], api["c"]]
+    groups = {o["subject_id"]: o["class_group_ids"] for o in blocks[0]["options"]}
+    assert groups[api["s"]["Maths"]] is None                       # everyone, now 9 C too
+    assert groups[api["s"]["CS"]] == [api["a"], api["c"]]           # like 9 A
+    assert groups[api["s"]["History"]] == [api["b"]]                # 9 A isn't in it
+    # Copying again changes nothing.
+    r = c.post(f"/api/class-groups/{api['a']}/requirements/copy",
+               json={"target_ids": [api["c"]]}, headers=api["headers"])
+    assert r.json()["blocks_joined"] == 0
