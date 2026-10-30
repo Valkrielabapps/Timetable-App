@@ -70,6 +70,11 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
     # explicitly here closes that gap. See dedupe_orphaned_requirements.py
     # for a one-off cleanup of any orphans a pre-fix delete already left.
     db.query(SubjectRequirement).filter(SubjectRequirement.subject_id == subject_id).delete()
+    # Timetable entries reference the subject too, with no cascade. On
+    # Postgres a subject that was ever scheduled could not be deleted at all -
+    # the foreign key refused it and the request came back as a 500. Its
+    # lessons go with it, as a deleted section's do.
+    db.query(TimetableEntry).filter(TimetableEntry.subject_id == subject_id).delete(synchronize_session=False)
     # A frozen subject that no longer exists has nothing to keep.
     db.query(SubjectFreeze).filter(SubjectFreeze.subject_id == subject_id).delete()
     # Same orphan problem for block options, with a worse failure: a block

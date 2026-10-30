@@ -528,3 +528,18 @@ def test_a_joined_sections_students_choose_only_from_their_own_groups(db):
     assert labels_b == ["History", "Maths (Group 1)", "Maths (Group 2)"]
     labels_a = sorted(c.label for c in combinations_for(db, s.sections["Grade 9 A"].id))
     assert labels_a == ["CS", "Maths (Group 1)", "Maths (Group 2)"]
+
+
+def test_a_subject_that_was_scheduled_can_still_be_deleted(api):
+    """Its timetable entries reference it; on Postgres the foreign key refused
+    the delete outright (a 500) until they were removed with it."""
+    c = api["client"]
+    c.post(f"/api/class-groups/{api['a']}/requirements",
+           json={"class_group_id": api["a"], "subject_id": api["s"]["English"], "periods_per_week": 2},
+           headers=api["headers"])
+    t = _generate(api)
+    assert any(e["subject_id"] == api["s"]["English"] for e in t["entries"])
+    r = c.delete(f"/api/subjects/{api['s']['English']}", headers=api["headers"])
+    assert r.status_code in (200, 204), r.text
+    t2 = c.get(f"/api/timetables/{t['id']}", headers=api["headers"]).json()
+    assert not any(e["subject_id"] == api["s"]["English"] for e in t2["entries"])
