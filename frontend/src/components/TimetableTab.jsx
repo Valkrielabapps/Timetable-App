@@ -1304,6 +1304,7 @@ function SectionTimetable({
         }
         // Frozen means nothing moves it - not a drag, not a lock.
         editable={editable && !combination && !frozen}
+        sectionFrozen={!!frozen}
         secondaryLine={(e) => e.teacher_name ?? 'No teacher yet'}
         showAssistant
         showBlockName={!combination}

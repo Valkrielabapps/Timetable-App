@@ -55,6 +55,9 @@ export default function ScheduleGrid({
   // here - a break, the class teacher period, a zero period - or null. Such a
   // slot shows its text and takes no drops.
   specialCell = () => null,
+  // The whole section is frozen: nothing in it moves or unlocks until it is
+  // unfrozen, so its slots show neither red nor green.
+  sectionFrozen = false,
 }) {
   return (
     <div className="overflow-x-auto rounded-md border border-slate-200">
@@ -107,7 +110,9 @@ export default function ScheduleGrid({
                 // Locked/unlocked as a light background tint on the whole cell
                 // rather than an icon on the entry — red for locked, green for
                 // unlocked — so the state reads at a glance across the grid.
-                const lockTint = lockable
+                const lockTint = sectionFrozen
+                  ? 'bg-slate-50'
+                  : lockable
                   ? locked
                     ? 'bg-red-50 hover:bg-red-100'
                     : 'bg-emerald-50 hover:bg-emerald-100'
@@ -122,7 +127,9 @@ export default function ScheduleGrid({
                 const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
                 const violationRing = broken.length ? 'ring-2 ring-inset ring-amber-400' : ''
                 const what = isBlock && entries.length > 1 ? 'the whole block' : isBatched ? 'every batch' : 'it'
-                const hint = subjectFrozen
+                const hint = sectionFrozen
+                  ? 'This section is frozen, so nothing here moves or unlocks. Unfreeze it to change it.'
+                  : subjectFrozen
                   ? `${subjectFrozen.subject_name} is frozen, so this stays where it is`
                   : !editable
                   ? locked

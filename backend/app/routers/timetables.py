@@ -1083,7 +1083,11 @@ def lock_slot(
     timetable = _editable_timetable(db, timetable_id, current_user)
     _refuse_if_frozen(db, payload.class_group_id)
     sections = _sections_moving_together(db, timetable.id, payload.class_group_id, payload.period_id)
-    entries = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.period_id)]
+    # A frozen section sharing the block is kept as it is either way; its own
+    # copies aren't touched.
+    frozen_ids = {cg.id for cg in db.query(ClassGroup).filter(ClassGroup.id.in_(sections), ClassGroup.frozen.is_(True))}
+    entries = [e for sid in sections if sid not in frozen_ids or sid == payload.class_group_id
+               for e in _slot_entries(db, timetable.id, sid, payload.period_id)]
     if not entries:
         raise HTTPException(status_code=400, detail="There's nothing in that slot to lock.")
     _refuse_if_subject_frozen(db, entries)

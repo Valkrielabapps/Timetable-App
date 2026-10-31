@@ -44,6 +44,19 @@ function renderGrid(overrides = {}) {
 }
 
 describe('ScheduleGrid', () => {
+  it('a frozen section shows no red or green and says why nothing unlocks', () => {
+    const props = renderGrid({
+      editable: false,
+      sectionFrozen: true,
+      entriesAt: (d, o) => (d === 0 && o === 0 ? [{ ...ENTRY, locked: true }] : []),
+    })
+    const cell = screen.getByText('Hindi').closest('td')
+    expect(cell.className).not.toMatch(/bg-red-50|bg-emerald-50/)
+    expect(screen.getByTitle(/This section is frozen/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Hindi'))
+    expect(props.onToggleLock).not.toHaveBeenCalled()
+  })
+
   it('labels rows from one even though periods are stored from zero', () => {
     renderGrid()
     // The database numbers periods from zero and every layer a person sees is
