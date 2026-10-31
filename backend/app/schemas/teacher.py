@@ -1,10 +1,10 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TeacherCreate(BaseModel):
     school_id: int
-    name: str
-    email: str | None = None
+    name: str = Field(max_length=100)
+    email: str | None = Field(default=None, max_length=200)
     qualified_subject_ids: list[int] = []
     # Empty = teaches every grade (no restriction) — see the model's
     # docstring for why this is the default rather than "qualifies for
@@ -16,8 +16,8 @@ class TeacherCreate(BaseModel):
 
 
 class TeacherUpdate(BaseModel):
-    name: str | None = None
-    email: str | None = None
+    name: str | None = Field(default=None, max_length=100)
+    email: str | None = Field(default=None, max_length=200)
     qualified_subject_ids: list[int] | None = None
     qualified_grades: list[str] | None = None
     unavailable_period_ids: list[int] | None = None

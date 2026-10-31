@@ -1,11 +1,11 @@
-fastapi==0.115.0
+fastapi==0.162.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.9
 pydantic==2.11.7
 pydantic-settings==2.5.2
 ortools==9.11.4210
-python-dotenv==1.0.1
+python-dotenv==1.2.4
 alembic==1.13.3
 pytest==8.3.3
 httpx==0.27.2
@@ -13,8 +13,10 @@ passlib==1.7.4
 # Pinned below 4.1: passlib 1.7.4's bcrypt backend self-test crashes against
 # bcrypt>=4.1 (a known upstream incompatibility, not project-specific).
 bcrypt==4.0.1
-python-jose[cryptography]==3.3.0
-python-multipart==0.0.9
+# Signs login tokens (app/core/auth.py). Replaced python-jose, which is
+# unmaintained and has published security advisories.
+pyjwt==2.15.1
+python-multipart==0.0.32
 email-validator==2.2.0
 anthropic==0.69.0
 # Error tracking. Inert unless SENTRY_DSN is set (see app/core/observability.py),
@@ -24,7 +26,7 @@ sentry-sdk[fastapi]==2.69.2
 # process - fine for one backend instance, needs Redis beyond that.
 slowapi==0.1.10
 google-auth==2.35.0
-requests==2.32.3
+requests==2.34.2
 openpyxl==3.1.5
 reportlab==4.2.5
 cashfree-pg==6.0.1

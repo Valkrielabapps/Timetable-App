@@ -113,6 +113,20 @@ def signup(client, email="a@a.com", password="password123", name="A"):
     return body["user"], {"Authorization": f"Bearer {body['access_token']}"}
 
 
+def verify_email(email):
+    """Mark an account's email as proven, as signing in with Google or
+    opening an invite would."""
+    from app.core.database import SessionLocal
+    from app.models.user import User
+
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.email == email).update({User.email_verified: True})
+        db.commit()
+    finally:
+        db.close()
+
+
 def create_school(client, headers, name="Test School", institution_type=None):
     r = client.post("/api/schools", json={"name": name, "institution_type": institution_type}, headers=headers)
     assert r.status_code == 201, r.text

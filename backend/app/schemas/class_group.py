@@ -1,18 +1,18 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ClassGroupCreate(BaseModel):
     school_id: int
-    grade: str | None = None
-    name: str
+    grade: str | None = Field(default=None, max_length=60)
+    name: str = Field(max_length=60)
     student_count: int | None = None
 
 
 class ClassGroupUpdate(BaseModel):
-    grade: str | None = None
-    name: str | None = None
+    grade: str | None = Field(default=None, max_length=60)
+    name: str | None = Field(default=None, max_length=60)
     student_count: int | None = None
     # Sent as null to clear it.
     class_teacher_id: int | None = None

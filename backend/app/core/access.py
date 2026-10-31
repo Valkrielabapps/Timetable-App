@@ -95,3 +95,25 @@ def require_school_access(
         if school is not None and plans.is_locked(school):
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=plans.LOCKED_MESSAGE)
     return role
+
+
+def require_in_school(db: Session, model, ids, school_id: int, what: str) -> None:
+    """Every id given must be a row of this school's.
+
+    Checking that the user may act on a school isn't enough on its own when
+    the request also names other rows - a teacher for a lesson, a subject for
+    a section. Without this, an admin of one school could point their own
+    records at another school's teacher and read that teacher's name back in
+    the response. Raises 404 (not 403), so an id from another school looks
+    exactly like one that doesn't exist.
+
+    `ids` may be one id, a list, or None; Nones are skipped.
+    """
+    if ids is None:
+        return
+    wanted = {i for i in (ids if isinstance(ids, (list, tuple, set)) else [ids]) if i is not None}
+    if not wanted:
+        return
+    found = {i for (i,) in db.query(model.id).filter(model.id.in_(wanted), model.school_id == school_id)}
+    if found != wanted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{what} not found")

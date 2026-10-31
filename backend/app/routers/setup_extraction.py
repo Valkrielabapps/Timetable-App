@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
+from app.services.uploads import read_upload
 from app.core.access import require_school_access
 from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
@@ -40,7 +41,7 @@ async def extract_setup(
     # request, not a sentence. Deliberately low: a school sets itself up
     # once, so a legitimate admin never approaches this.
     check_quota(f"llm-extract:{current_user.id}", limit=10, window_seconds=3600)
-    content = await file.read()
+    content = await read_upload(file)
     try:
         rows = read_spreadsheet_rows(file.filename, content)
         # Counted only once the file is readable, so a wrong file type

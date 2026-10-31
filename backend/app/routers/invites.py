@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import limiter
 from app.core.auth import create_access_token, hash_password, verify_password
+from app.schemas.auth import check_new_password
 from app.core.database import get_db
 from app.models.school import School, SchoolInvite, SchoolMembership
 from app.models.user import User
@@ -71,6 +72,10 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
     else:
         if not payload.name or not payload.password:
             raise HTTPException(status_code=400, detail="name and password are required to create your account.")
+        try:
+            check_new_password(payload.password)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         user = User(email=invite.email, hashed_password=hash_password(payload.password), name=payload.name)
         db.add(user)
         db.commit()
@@ -89,5 +94,9 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
     invite.status = "accepted"
     db.commit()
 
-    token_str = create_access_token(user.id)
+    # The invite went to this address, so whoever opened it owns it.
+    if not user.email_verified:
+        user.email_verified = True
+        db.commit()
+    token_str = create_access_token(user)
     return TokenResponse(access_token=token_str, user=user)

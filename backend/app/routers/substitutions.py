@@ -28,10 +28,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from app.core.access import require_school_access
+from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, School, SubstitutionLog
+from app.models.school import ClassGroup, Period, School, Subject, SubstitutionLog, Teacher
 from app.models.user import User
 from app.schemas.substitutions import SubstitutionLogCreate, SubstitutionLogOut, SubstitutionSummaryOut
 from app.services.school_categories import CATEGORY_KEYS, category_of
@@ -73,6 +73,15 @@ def create_substitution(
     and part of the school."""
     require_school_access(db, current_user, school_id, min_role="admin")
     _check_category(data.category)
+    teacher_ids = [a.teacher_id for a in data.absences]
+    period_ids = [p for a in data.absences for p in (a.period_ids or [])]
+    for c in data.changes:
+        teacher_ids += [c.absent_teacher_id, c.substituting_teacher_id]
+        period_ids.append(c.period_id)
+    require_in_school(db, Teacher, teacher_ids, school_id, "Teacher")
+    require_in_school(db, Period, period_ids, school_id, "Period")
+    require_in_school(db, ClassGroup, [c.class_group_id for c in data.changes], school_id, "Section")
+    require_in_school(db, Subject, [c.subject_id for c in data.changes], school_id, "Subject")
     school = db.get(School, school_id)
     overrides = school.grade_categories or {}
     grades = {

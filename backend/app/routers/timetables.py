@@ -26,6 +26,7 @@ real task queue; the job-row-plus-polling API shape wouldn't need to
 change.
 """
 from datetime import datetime, timedelta, timezone
+import os
 import threading
 from dataclasses import replace
 
@@ -34,7 +35,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.access import require_school_access
+from app.core.access import require_in_school, require_school_access
 from app.core.rate_limit import check_quota
 from app.core.auth import get_current_user
 from app.core.database import SessionLocal, get_db
@@ -336,6 +337,13 @@ def _prune_old_timetables(db: Session, school_id: int) -> None:
     versions.prune(db, school_id)
 
 
+# How many generations solve at once across the whole server. Each one uses
+# several CPU cores for up to a minute or more, so without a cap a handful
+# started together - by accident or on purpose - would starve every other
+# school's requests. The rest wait their turn.
+_GENERATION_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CONCURRENT_GENERATIONS", "3"))))
+
+
 def _run_generation_job(timetable_id: int, school_id: int) -> None:
     """
     Runs on a background thread — must open its own DB session rather
@@ -343,6 +351,11 @@ def _run_generation_job(timetable_id: int, school_id: int) -> None:
     and the request's session is closed once the response is sent anyway,
     which happens well before this function finishes).
     """
+    with _GENERATION_SLOTS:
+        _generate(timetable_id, school_id)
+
+
+def _generate(timetable_id: int, school_id: int) -> None:
     db = SessionLocal()
     try:
         result = generate_school_timetable(db, school_id)
@@ -482,6 +495,15 @@ def generate_timetable(school_id: int, db: Session = Depends(get_db), current_us
     """Kicks off generation and returns immediately with status=generating.
     Poll GET /api/timetables/{id} for the result."""
     require_school_access(db, current_user, school_id, min_role="admin")
+    # One at a time per school. A run whose thread died is marked failed
+    # first, so a restart mid-generation never leaves a school locked out.
+    for running in db.query(Timetable).filter(Timetable.school_id == school_id, Timetable.status == "generating"):
+        _reap_if_dead(db, running)
+        if running.status == "generating":
+            raise HTTPException(
+                status_code=409,
+                detail="A timetable is already being generated for this school. Wait for it to finish.",
+            )
     timetable = Timetable(school_id=school_id, status="generating",
                           version_number=versions.next_version_number(db, school_id))
     db.add(timetable)
@@ -792,6 +814,12 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
     validates the slot and applies the change."""
     _refuse_if_frozen(db, entry.class_group_id)
     _refuse_if_subject_frozen(db, [entry])
+    # The new teacher, room and period must be this school's own - see
+    # require_in_school. Shared by the edit box, so it is checked here once.
+    school_id = entry.timetable.school_id
+    require_in_school(db, Teacher, data.get("teacher_id"), school_id, "Teacher")
+    require_in_school(db, Room, data.get("room_id"), school_id, "Room")
+    require_in_school(db, Period, data.get("period_id"), school_id, "Period")
     if "period_id" in data and entry.elective_block_id is not None \
             and data["period_id"] != entry.period_id:
         raise HTTPException(
@@ -1079,11 +1107,18 @@ def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
     lookups as _to_timetable_out but for one entry — used by the PATCH
     endpoint so it doesn't have to rebuild the whole timetable's entry
     list just to return the one row that changed."""
-    class_group = db.get(ClassGroup, entry.class_group_id)
-    subject = db.get(Subject, entry.subject_id)
-    teacher = db.get(Teacher, entry.teacher_id) if entry.teacher_id is not None else None
-    period = db.get(Period, entry.period_id)
-    room = db.get(Room, entry.room_id) if entry.room_id else None
+    school_id = entry.timetable.school_id
+
+    def own(model, row_id):
+        # Only this school's rows are named, whatever the entry points at.
+        row = db.get(model, row_id) if row_id is not None else None
+        return row if row is not None and row.school_id == school_id else None
+
+    class_group = own(ClassGroup, entry.class_group_id)
+    subject = own(Subject, entry.subject_id)
+    teacher = own(Teacher, entry.teacher_id)
+    period = own(Period, entry.period_id)
+    room = own(Room, entry.room_id)
     return TimetableEntryOut(
         id=entry.id,
         class_group_id=entry.class_group_id,

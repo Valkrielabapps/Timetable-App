@@ -8,7 +8,7 @@ import pytest
 
 from app.core.config import settings
 from app.services import cashfree_service
-from tests.conftest import create_school, signup
+from tests.conftest import verify_email, create_school, signup
 
 ADMIN = "staff@timetablz.com"
 
@@ -18,6 +18,7 @@ def staff(client, monkeypatch):
     monkeypatch.setattr(settings, "platform_admin_emails", ADMIN)
     monkeypatch.setattr(settings, "plan_limits_enabled", True)
     _, h = signup(client, email=ADMIN)
+    verify_email(ADMIN)
     return h
 
 

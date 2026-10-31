@@ -43,7 +43,13 @@ async function toError(res) {
   try {
     const body = await res.json();
     if (body.detail) {
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      // FastAPI's validation errors are a list; each carries a sentence
+      // ("Value error, Use at least 8 characters...") worth showing as is.
+      detail = typeof body.detail === "string"
+        ? body.detail
+        : Array.isArray(body.detail) && body.detail.every((d) => typeof d?.msg === "string")
+          ? body.detail.map((d) => d.msg.replace(/^Value error, /, "")).join(" ")
+          : JSON.stringify(body.detail);
     }
   } catch {
     // response wasn't JSON; fall back to statusText

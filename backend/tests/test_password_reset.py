@@ -11,7 +11,27 @@ from unittest.mock import patch
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.user import PasswordResetToken, User
+import pytest
+
+from app.core.auth import hash_token
 from tests.conftest import signup
+
+# The link each address was emailed: the database keeps only its hash.
+_SENT: dict[str, str] = {}
+
+
+@pytest.fixture(autouse=True)
+def _capture_reset_emails(monkeypatch):
+    from app.routers import auth
+
+    _SENT.clear()
+    real = auth.send_password_reset_email
+
+    def record(to_email, reset_token):
+        _SENT[to_email] = reset_token
+        return real(to_email=to_email, reset_token=reset_token)
+
+    monkeypatch.setattr(auth, "send_password_reset_email", record)
 
 
 def _get_reset_token_for(email):
@@ -24,7 +44,7 @@ def _get_reset_token_for(email):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
-        return (
+        row = (
             db.query(PasswordResetToken)
             .filter(PasswordResetToken.user_id == user.id)
             .order_by(PasswordResetToken.id.desc())
@@ -32,6 +52,11 @@ def _get_reset_token_for(email):
         )
     finally:
         db.close()
+    if row is not None:
+        # Stored hashed, never as the emailed token itself.
+        assert row.token == hash_token(_SENT[email]) != _SENT[email]
+        row.token = _SENT[email]  # detached: changes nothing in the database
+    return row
 
 
 def _expire_token(token_row):

@@ -87,10 +87,15 @@ def send_invite_email(
     error, since email is optional infrastructure)."""
     invite_link = f"{settings.frontend_base_url}/?invite={invite_token}"
     role_label = "admin" if role == "admin" else "viewer"
+    # Both names are typed by whoever sends the invite, to an address of
+    # their choosing, from our sender: unescaped, a "school" named with a
+    # link would turn this into a phishing email that really comes from us.
+    inviter = _html.escape(_one_line(inviter_name, 100))
+    school = _html.escape(_one_line(school_name, 120))
 
     html = f"""
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <p>{inviter_name} invited you to join <strong>{school_name}</strong>
+      <p>{inviter} invited you to join <strong>{school}</strong>
       on Timetable App as {'an' if role_label == 'admin' else 'a'} {role_label}.</p>
       <p>
         <a href="{invite_link}"
@@ -107,10 +112,17 @@ def send_invite_email(
 
     return _send(
         to_email=to_email,
-        subject=f"You've been invited to {school_name}",
+        subject=f"You've been invited to {_one_line(school_name, 80)} on Timetablz",
         html=html,
         log_context="invite email",
     )
+
+
+def _one_line(text: str | None, limit: int) -> str:
+    """Typed text made safe for a subject line or a sentence: one line, and
+    not so long it can carry a whole message of its own."""
+    flat = " ".join((text or "").split())
+    return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
 def send_password_reset_email(to_email: str, reset_token: str) -> bool:

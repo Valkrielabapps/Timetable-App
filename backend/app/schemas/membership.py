@@ -1,7 +1,7 @@
 """Pydantic schemas for school membership and invites — see
 app/models/school.py (SchoolMembership, SchoolInvite) and
 app/routers/schools.py / app/routers/invites.py."""
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class MemberOut(BaseModel):
@@ -28,7 +28,7 @@ class InviteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: str
+    email: str = Field(max_length=200)
     role: str
     status: str
     # Safe to include here (unlike anywhere public) because every endpoint
@@ -66,5 +66,5 @@ class AcceptInviteRequest(BaseModel):
     existing account's password, so accepting an invite link alone is
     never enough to log into someone else's existing account."""
 
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=100)
     password: str

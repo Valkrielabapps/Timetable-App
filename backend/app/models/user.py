@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, false
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -20,6 +20,17 @@ class User(Base):
     hashed_password = Column(String, nullable=True)  # null once Google-only signup exists
     name = Column(String, nullable=True)
     google_sub = Column(String, unique=True, nullable=True)
+    # Whether the person has shown they own this email: signed in with Google
+    # (which verifies it), opened an invite sent to it, or reset the password
+    # through a link sent to it. A plain signup proves nothing - anyone can
+    # type anyone's address - so it starts unverified. See google_login for
+    # why it matters.
+    email_verified = Column(Boolean, nullable=False, default=False, server_default=false())
+    # Stamped into every login token. Raising it signs the account out
+    # everywhere: tokens carrying an older number are refused. Raised when the
+    # password changes, and when a Google sign-in takes over an account whose
+    # password was set by someone who never proved they own the email.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     schools = relationship("School", back_populates="owner")
 
@@ -29,7 +40,9 @@ class User(Base):
         from app.core.config import settings
 
         allowed = {e.strip().lower() for e in (settings.platform_admin_emails or "").split(",") if e.strip()}
-        return bool(self.email) and self.email.lower() in allowed
+        # Verified only: otherwise whoever signs up first with an admin address
+        # that has no account yet would get the admin page.
+        return bool(self.email) and self.email.lower() in allowed and bool(self.email_verified)
 
 
 class PasswordResetToken(Base):
@@ -53,6 +66,8 @@ class PasswordResetToken(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # SHA-256 of the token in the emailed link, never the token itself, so a
+    # copy of the database can't be used to reset anyone's password.
     token = Column(String, nullable=False, unique=True, index=True)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, nullable=False, default=False)

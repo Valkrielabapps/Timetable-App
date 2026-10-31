@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SchoolCreate(BaseModel):
-    name: str
+    name: str = Field(max_length=120)
     # "school" or "college", chosen in the create-school modal. Not
     # validated against a strict enum here — the frontend only ever sends
     # one of the two, and treating anything else as "school" (see
@@ -80,7 +80,7 @@ class SchoolInstitutionTypeUpdate(BaseModel):
 
 
 class SchoolNameUpdate(BaseModel):
-    name: str
+    name: str = Field(max_length=120)
 
 
 class SchoolProfile(BaseModel):

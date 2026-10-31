@@ -17,7 +17,9 @@ from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import check_quota, limiter
-from app.core.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.core.auth import (
+    create_access_token, get_current_user, hash_password, hash_token, sign_out_everywhere, verify_password,
+)
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import PasswordResetToken, User
@@ -54,7 +56,7 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return TokenResponse(access_token=token, user=user)
 
 
@@ -68,7 +70,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return TokenResponse(access_token=token, user=user)
 
 
@@ -112,14 +114,29 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
     if not user:
         user = db.query(User).filter(User.email == email).first()
         if user:
+            if not user.email_verified and user.hashed_password:
+                # Someone signed up with this address and a password but never
+                # proved it was theirs - possibly not its owner, setting a
+                # trap: once the real owner signed in with Google, the
+                # password would still let them in. Google has just proved
+                # who owns the address, so the password goes and every
+                # session made with it ends. The owner can set a password
+                # again with "Forgot password".
+                user.hashed_password = None
+                sign_out_everywhere(user)
+                logger.warning("Google sign-in took over unverified account %s; its password was cleared", user.id)
             user.google_sub = google_sub
         else:
             user = User(email=email, name=name, google_sub=google_sub)
             db.add(user)
+        user.email_verified = True
         db.commit()
         db.refresh(user)
+    elif not user.email_verified:
+        user.email_verified = True
+        db.commit()
 
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return TokenResponse(access_token=token, user=user)
 
 
@@ -173,14 +190,14 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
 
     user = db.query(User).filter(User.email == payload.email).first()
     if user:
-        token = PasswordResetToken(
+        raw = secrets.token_urlsafe(32)
+        db.add(PasswordResetToken(
             user_id=user.id,
-            token=secrets.token_urlsafe(32),
+            token=hash_token(raw),
             expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.password_reset_expire_minutes),
-        )
-        db.add(token)
+        ))
         db.commit()
-        send_password_reset_email(to_email=user.email, reset_token=token.token)
+        send_password_reset_email(to_email=user.email, reset_token=raw)
     return {"detail": "If an account with that email exists, we've sent a password reset link."}
 
 
@@ -201,7 +218,7 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
     on a separate login screen right after setting it would be friction
     with no real security benefit.
     """
-    reset_token = db.query(PasswordResetToken).filter(PasswordResetToken.token == payload.token).first()
+    reset_token = db.query(PasswordResetToken).filter(PasswordResetToken.token == hash_token(payload.token)).first()
     now = datetime.now(timezone.utc)
     if (
         not reset_token
@@ -215,8 +232,16 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
         raise HTTPException(status_code=400, detail="This password reset link is invalid or has expired.")
 
     user.hashed_password = hash_password(payload.new_password)
+    # The link arrived at this address, so they own it.
+    user.email_verified = True
+    # Whoever had the old password - or a stolen session - is signed out.
+    sign_out_everywhere(user)
+    # This link and every other one still open for the account.
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False)
+    ).update({PasswordResetToken.used: True}, synchronize_session=False)
     reset_token.used = True
     db.commit()
 
-    token = create_access_token(user.id)
+    token = create_access_token(user)
     return TokenResponse(access_token=token, user=user)

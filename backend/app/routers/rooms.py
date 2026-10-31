@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.services.uploads import read_upload
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
@@ -81,7 +82,7 @@ async def bulk_import_rooms(
     """Upload a CSV or .xlsx of rooms (columns: name, capacity, room_type)
     instead of adding them one at a time. See app/services/bulk_import.py."""
     require_school_access(db, current_user, school_id, min_role="admin")
-    content = await file.read()
+    content = await read_upload(file)
     try:
         rows = parse_rows(file.filename, content)
     except ValueError as exc:

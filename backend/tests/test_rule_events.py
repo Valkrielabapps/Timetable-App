@@ -7,7 +7,7 @@ from app.core.database import SessionLocal
 from app.models.school import RuleReadEvent
 from app.services import rule_events
 from app.services.llm_ir_parser import IRParse, Unclear
-from tests.conftest import create_school, signup
+from tests.conftest import verify_email, create_school, signup
 from tests.test_ir_endpoints import RAO_DAILY_CAP, _stub, _understood
 
 ADMIN = "staff@timetablz.com"
@@ -26,6 +26,7 @@ def school(client):
 def staff(client, monkeypatch):
     monkeypatch.setattr(settings, "platform_admin_emails", ADMIN)
     _, h = signup(client, email=ADMIN)
+    verify_email(ADMIN)
     return h
 
 

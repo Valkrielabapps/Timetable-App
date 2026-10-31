@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.access import get_membership_role, require_school_access
 from app.core.auth import get_current_user
+from app.core.rate_limit import check_quota
 from app.core.database import get_db
 from app.models.school import ClassGroup, Period, School, SchoolInvite, SchoolMembership, Subject
 from app.models.user import User
@@ -351,6 +352,11 @@ def create_invite(
     require_school_access(db, current_user, school_id, min_role="admin")
     if payload.role not in ("admin", "viewer"):
         raise HTTPException(status_code=400, detail="role must be 'admin' or 'viewer'")
+    # Each invite is an email from our sender to an address someone typed, so
+    # it is capped like any other way of sending mail: a school adds a few
+    # colleagues, not hundreds.
+    check_quota(f"invite:{current_user.id}", limit=20, window_seconds=3600)
+    check_quota(f"invite-school:{school_id}", limit=50, window_seconds=86400)
     plans.require_member_capacity(db, db.get(School, school_id))
     existing_pending = (
         db.query(SchoolInvite)

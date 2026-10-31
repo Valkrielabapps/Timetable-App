@@ -51,6 +51,8 @@ import logging
 
 import openpyxl
 
+from app.services.uploads import capped, check_xlsx
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -145,11 +147,12 @@ def read_spreadsheet_rows(filename: str, content: bytes) -> list[list[str]]:
     lower_name = filename.lower()
     if lower_name.endswith(".csv"):
         text = content.decode("utf-8-sig")
-        rows = list(csv.reader(io.StringIO(text)))
+        rows = capped(csv.reader(io.StringIO(text)))
     elif lower_name.endswith(".xlsx"):
+        check_xlsx(content)
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         ws = wb.active
-        rows = [[("" if c is None else str(c)) for c in row] for row in ws.iter_rows(values_only=True)]
+        rows = [[("" if c is None else str(c)) for c in row] for row in capped(ws.iter_rows(values_only=True))]
     else:
         raise ValueError(
             "Unsupported file type — upload a .csv or .xlsx file. "

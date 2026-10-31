@@ -431,6 +431,15 @@ def _excel(grids, school_name: str = "", free_plan: bool = False, branded: bool 
     if not wb.sheetnames:
         wb.create_sheet("Timetable").append(["This timetable has no entries yet."])
 
+    # openpyxl writes any text starting with "=" as a formula. Nothing here is
+    # meant to be one, and a teacher or subject named "=HYPERLINK(...)" would
+    # otherwise run when the file is opened - so every cell stays plain text.
+    for sheet in wb.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                if cell.data_type == "f":
+                    cell.data_type = "s"
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

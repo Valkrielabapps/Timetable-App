@@ -3,7 +3,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.access import require_school_access
+from app.services.uploads import read_upload
+from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
@@ -211,6 +212,9 @@ def add_requirement(
     if not class_group:
         raise HTTPException(status_code=404, detail="Class group not found")
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
+    require_in_school(db, Subject, payload.subject_id, class_group.school_id, "Subject")
+    require_in_school(db, Teacher, [payload.preferred_teacher_id, payload.assistant_teacher_id],
+                      class_group.school_id, "Teacher")
 
     # Upsert on (class_group_id, subject_id) rather than blind-insert: a
     # class group should only have one requirement per subject, and a
@@ -410,6 +414,8 @@ def update_requirement(
     class_group = db.get(ClassGroup, requirement.class_group_id)
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
     changes = payload.model_dump(exclude_unset=True)
+    require_in_school(db, Teacher, [changes.get("preferred_teacher_id"), changes.get("assistant_teacher_id")],
+                      class_group.school_id, "Teacher")
     if "allowed_teacher_ids" in changes:
         # Only this school's teachers, once each; fewer than two is no
         # shortlist at all (one is a fixed teacher, set as preferred).
@@ -466,7 +472,7 @@ async def bulk_import_class_groups(
     actually takes.
     """
     require_school_access(db, current_user, school_id, min_role="admin")
-    content = await file.read()
+    content = await read_upload(file)
     try:
         rows = parse_rows(file.filename, content)
     except ValueError as exc:

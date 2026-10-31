@@ -1,15 +1,15 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RoomCreate(BaseModel):
     school_id: int
-    name: str
+    name: str = Field(max_length=100)
     capacity: int | None = None
     room_type: str | None = None
 
 
 class RoomUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=100)
     capacity: int | None = None
     room_type: str | None = None
 

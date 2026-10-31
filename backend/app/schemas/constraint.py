@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConstraintCreate(BaseModel):
@@ -9,7 +9,7 @@ class ConstraintCreate(BaseModel):
     parameters: dict[str, Any] = {}
     is_hard: bool = True
     weight: int = 1
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
 
 
 class ConstraintUpdate(BaseModel):
@@ -17,7 +17,7 @@ class ConstraintUpdate(BaseModel):
     parameters: dict[str, Any] | None = None
     is_hard: bool | None = None
     weight: int | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
 
 
 class ConstraintAbout(BaseModel):
@@ -65,7 +65,7 @@ class ConstraintOut(BaseModel):
 
 class ConstraintParseRequest(BaseModel):
     school_id: int
-    text: str
+    text: str = Field(max_length=2000)
 
 
 class ConstraintBatchParseRequest(BaseModel):
@@ -74,7 +74,7 @@ class ConstraintBatchParseRequest(BaseModel):
     paragraph naming multiple rules) instead of exactly one."""
 
     school_id: int
-    text: str
+    text: str = Field(max_length=20000)
 
 
 class ConstraintReparseRequest(BaseModel):
@@ -83,7 +83,7 @@ class ConstraintReparseRequest(BaseModel):
     Lets an admin fix a typo or reword a rule without losing its identity
     (and without a stray delete+recreate in the UI's list ordering)."""
 
-    text: str
+    text: str = Field(max_length=2000)
 
 
 class ConstraintParseResponse(BaseModel):
@@ -101,7 +101,7 @@ class ConstraintParseResponse(BaseModel):
 
 class ConstraintInterpretRequest(BaseModel):
     school_id: int
-    text: str
+    text: str = Field(max_length=2000)
 
 
 class ConstraintInterpretResponse(BaseModel):

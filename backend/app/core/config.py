@@ -20,7 +20,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     app_name: str = "Timetable Generator API"
-    debug: bool = True
+    # Off unless set: debug mode answers a server error with its traceback,
+    # and turns on the interactive API docs (/docs). Local development sets
+    # DEBUG=true in .env (see .env.example); production leaves it unset.
+    debug: bool = False
 
     # JWT signing secret. MUST be overridden (via .env) for anything beyond
     # local development — this default is intentionally not secret.

@@ -5,11 +5,13 @@ Kept separate from app/routers/auth.py so the actual crypto/token logic can
 be unit tested or swapped (e.g. adding Google sign-in) without touching the
 HTTP layer.
 """
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -33,10 +35,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(user_id: int) -> str:
+def hash_token(token: str) -> str:
+    """How one-time link tokens (password reset) are stored."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_access_token(user: User) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": str(user_id), "exp": expire}
+    payload = {"sub": str(user.id), "exp": expire, "ver": user.token_version or 0}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def sign_out_everywhere(user: User) -> None:
+    """Refuse every login token issued so far. The caller commits."""
+    user.token_version = (user.token_version or 0) + 1
 
 
 def get_current_user(
@@ -52,10 +64,12 @@ def get_current_user(
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         user_id = int(payload.get("sub"))
+        # Tokens from before versions existed carry none: they count as 0.
+        version = int(payload.get("ver", 0))
     except (JWTError, TypeError, ValueError):
         raise unauthorized
 
     user = db.get(User, user_id)
-    if not user:
+    if not user or version != (user.token_version or 0):
         raise unauthorized
     return user

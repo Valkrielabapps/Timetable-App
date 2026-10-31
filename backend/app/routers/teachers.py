@@ -2,10 +2,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.access import require_school_access
+from app.services.uploads import read_upload
+from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
-from app.models.school import ClassGroup, ElectiveOption, SubjectRequirement, Teacher, TimetableEntry
+from app.models.school import (
+    ClassGroup, ElectiveOption, Period, Subject, SubjectRequirement, Teacher, TimetableEntry,
+)
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.teacher import TeacherCreate, TeacherOut, TeacherUpdate
@@ -17,6 +20,8 @@ router = APIRouter(prefix="/api/teachers", tags=["teachers"])
 @router.post("", response_model=TeacherOut, status_code=201)
 def create_teacher(payload: TeacherCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_school_access(db, current_user, payload.school_id, min_role="admin")
+    require_in_school(db, Subject, payload.qualified_subject_ids, payload.school_id, "Subject")
+    require_in_school(db, Period, payload.unavailable_period_ids, payload.school_id, "Period")
     teacher = Teacher(**payload.model_dump())
     db.add(teacher)
     db.commit()
@@ -45,7 +50,10 @@ def update_teacher(teacher_id: int, payload: TeacherUpdate, db: Session = Depend
     if not teacher:
         raise HTTPException(status_code=404, detail="Teacher not found")
     require_school_access(db, current_user, teacher.school_id, min_role="admin")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    require_in_school(db, Subject, changes.get("qualified_subject_ids"), teacher.school_id, "Subject")
+    require_in_school(db, Period, changes.get("unavailable_period_ids"), teacher.school_id, "Period")
+    for field, value in changes.items():
         setattr(teacher, field, value)
     db.commit()
     db.refresh(teacher)
@@ -127,7 +135,7 @@ async def bulk_import_teachers(
     subject name (the teacher still gets created, with a warning).
     """
     require_school_access(db, current_user, school_id, min_role="admin")
-    content = await file.read()
+    content = await read_upload(file)
     try:
         rows = parse_rows(file.filename, content)
     except ValueError as exc:

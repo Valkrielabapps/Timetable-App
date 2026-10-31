@@ -58,7 +58,27 @@ from app.routers import (
 init_sentry()
 log_llm_availability()
 
-app = FastAPI(title=settings.app_name, debug=settings.debug)
+# The interactive docs list every endpoint and its inputs - handy locally,
+# a map for anyone probing the live API. Only served in debug mode.
+app = FastAPI(
+    title=settings.app_name,
+    debug=settings.debug,
+    docs_url="/docs" if settings.debug else None,
+    redoc_url="/redoc" if settings.debug else None,
+    openapi_url="/openapi.json" if settings.debug else None,
+)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Headers every API response carries. The API only ever answers with
+    JSON or a file download, so nothing it returns should be sniffed as
+    something else, framed, or leak the URL it came from."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
 # slowapi reads the limiter off app.state; the middleware is what makes the
 # @limiter.limit decorators in the routers take effect.
