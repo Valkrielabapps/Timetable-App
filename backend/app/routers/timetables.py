@@ -437,6 +437,11 @@ def _generate(timetable_id: int, school_id: int) -> None:
                 # No direct cause found: switch rules off one at a time to find
                 # which ones are to blame, so the message can name them.
                 result.errors = find_blocking_rules(db, school_id)
+            # Frozen sections as the cause is said last, once the rules have
+            # been checked: a rule that frozen lessons can't meet is the
+            # likelier fix, and naming it is more useful.
+            if result.frozen_hint and not any("frozen" in e for e in result.errors):
+                result.errors = [*result.errors, result.frozen_hint]
             if result.errors:
                 timetable.error_message = "\n".join(result.errors)
                 # Best-effort — see explain_infeasibility's docstring for

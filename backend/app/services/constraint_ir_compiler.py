@@ -63,6 +63,12 @@ class Atom:
     order: int
     occupies_class: bool = True
     occupies_teacher: bool = True
+    # A lesson already decided - a frozen section's - that the solver can't
+    # move. It still counts wherever it shares a group with lessons that can
+    # move (a teacher's day, say), but a group made only of these is left
+    # alone: a rule can't change it, and holding it to the rule would only
+    # make the timetable impossible.
+    fixed: bool = False
 
 
 @dataclass
@@ -231,12 +237,19 @@ _SCOPE_KEY = {
 }
 
 
-def _group(atoms: list[Atom], scope: tuple[str, ...]) -> dict[tuple, list[Atom]]:
-    """Partition atoms by the scope's grouping key. Empty scope = one group."""
+def _group(atoms: list[Atom], scope: tuple[str, ...], movable_only: bool = False) -> dict[tuple, list[Atom]]:
+    """Partition atoms by the scope's grouping key. Empty scope = one group.
+
+    `movable_only` leaves out groups made entirely of fixed lessons (frozen
+    sections). Used where each group is its own constraint; a rule added
+    after a section was frozen would otherwise make every generation fail
+    on lessons nobody can change."""
     groups: dict[tuple, list[Atom]] = {}
     for atom in atoms:
         key = tuple(_SCOPE_KEY[dim](atom) for dim in scope)
         groups.setdefault(key, []).append(atom)
+    if movable_only:
+        groups = {k: g for k, g in groups.items() if not all(a.fixed for a in g)}
     return groups
 
 
@@ -370,7 +383,7 @@ def _count(model, penalties, atoms, form: Count, index, weight, tag: str) -> Non
     if not members:
         return
 
-    for key, group in _group(members, form.scope).items():
+    for key, group in _group(members, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
 
         expr, present = _count_expr(model, group, resolved, form, name)
@@ -450,7 +463,7 @@ def _balance(model, penalties, atoms, form: Balance, index, weight, tag: str) ->
     if len(all_buckets) < 2:
         return  # nothing to be uneven between
 
-    for key, group in _group(members, form.scope).items():
+    for key, group in _group(members, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
         by_bucket: dict[tuple, list] = {b: [] for b in all_buckets}
         for atom in group:
@@ -487,7 +500,7 @@ def _span(model, penalties, atoms, form: Span, index, weight, tag: str) -> None:
     if not members:
         return
 
-    for key, group in _group(members, form.scope).items():
+    for key, group in _group(members, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
         by_order: dict[int, list] = {}
         for atom in group:
@@ -643,7 +656,7 @@ def _run(model, penalties, atoms, form: Run, index, weight, tag: str) -> None:
     if not members:
         return
 
-    for key, group in _group(members, form.scope).items():
+    for key, group in _group(members, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
         if form.blocks is not None:
             # Counting blocks replaces "every lesson in a block" - see
@@ -710,7 +723,7 @@ def _adjacency_days(model, penalties, pool, form: Adjacency, first, second, inde
     pairs. Same selector on both sides is the common case - "PE shouldn't be on
     two days in a row" - and comes out as used[Mon] + used[Tue] <= 1."""
     pairs = _day_neighbours(index, form.min_gap)
-    for key, group in _group(pool, form.scope).items():
+    for key, group in _group(pool, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
 
         def used(sel, side):
@@ -743,7 +756,7 @@ def _adjacency(model, penalties, atoms, form: Adjacency, index, weight, tag: str
         _adjacency_days(model, penalties, pool, form, first, second, index, weight, tag)
         return
 
-    for key, group in _group(pool, form.scope).items():
+    for key, group in _group(pool, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
         firsts = [a for a in group if _matches(a, first)]
         seconds = [a for a in group if _matches(a, second)]
@@ -809,7 +822,7 @@ def _bucket(model, penalties, atoms, form: Bucket, index, weight, tag: str) -> N
     second = _resolve(form.second, index)
     pool = _pool(atoms, _side(form.scope, form.first))
 
-    for key, group in _group(pool, form.scope).items():
+    for key, group in _group(pool, form.scope, movable_only=True).items():
         name = f"ir_{tag}_{'_'.join(str(k) for k in key)}"
         firsts = [a for a in group if _matches(a, first)]
         seconds = [a for a in group if _matches(a, second)]

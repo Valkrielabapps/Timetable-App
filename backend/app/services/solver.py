@@ -65,6 +65,9 @@ class TimetableSolveResult:
     # TimetableEntry rows locked=True again, so a lock "sticks" across
     # regenerations instead of needing to be re-applied by hand each time.
     locked_keys: set[tuple[int, int, int, int]] = field(default_factory=set)
+    # When frozen sections may be what leaves no room: said after the rules
+    # have been checked, not instead of checking them (see the router).
+    frozen_hint: str | None = None
     # Rules that did not make it into the model, with a reason - a rule naming
     # a teacher who has since left, or one stored in a shape that no longer
     # validates. Distinct from `errors`: the timetable was still produced, so
@@ -1840,10 +1843,14 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # A group taught to several sections is one lesson for its teacher, kept
     # as one entry per section - so a teacher is busy once per period here.
     frozen_teacher_busy: set[tuple[int, int]] = set()
+    # Variables that stand for frozen lessons, so a rule window made of
+    # nothing else can be left alone (see Atom.fixed).
+    frozen_var_indexes: set[int] = set()
     for e in frozen_entries:
         period = periods_by_id[e.period_id]
         fixed = model.NewBoolVar(f"frozen_e{e.id}")
         model.Add(fixed == 1)
+        frozen_var_indexes.add(fixed.Index())
         busy = [e.teacher_id] if e.teacher_id is not None else []
         if e.assistant_teacher_id and e.assistant_teacher_id != e.teacher_id \
                 and e.assistant_teacher_id in teachers_by_id:
@@ -1863,13 +1870,13 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         frozen_atoms.append(Atom(
             var=slot, requirement_id=tag, class_group_id=e.class_group_id, subject_id=e.subject_id,
             teacher_id=None, period_id=e.period_id, day_of_week=period.day_of_week,
-            order=period.order, occupies_class=True, occupies_teacher=False,
+            order=period.order, occupies_class=True, occupies_teacher=False, fixed=True,
         ))
         if e.teacher_id is not None:
             frozen_atoms.append(Atom(
                 var=fixed, requirement_id=tag, class_group_id=e.class_group_id, subject_id=e.subject_id,
                 teacher_id=e.teacher_id, period_id=e.period_id, day_of_week=period.day_of_week,
-                order=period.order, occupies_class=False, occupies_teacher=True,
+                order=period.order, occupies_class=False, occupies_teacher=True, fixed=True,
             ))
     # Said plainly rather than left to the general diagnosis: frozen lessons
     # can't move, so a teacher they already overload can't be fixed by
@@ -1961,7 +1968,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                     window_vars = [
                         v for wp in window for v in teacher_period_vars.get((teacher_id, wp.id), [])
                     ]
-                    if window_vars:
+                    if window_vars and not all(v.Index() in frozen_var_indexes for v in window_vars):
                         _at_most(
                             model, penalties, sum(window_vars), max_consecutive, c,
                             f"over_consec_t{teacher_id}_c{c.id}_s{start}",
@@ -2363,7 +2370,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             # The diagnosis above looks only at what was being placed. Frozen
             # lessons are fixed underneath it, and are often the real reason a
             # teacher has no room left - which only unfreezing can change.
-            n = len({e.class_group_id for e in frozen_entries})
+            n = len(frozen_ids) or len({e.class_group_id for e in frozen_entries})
             needed: dict[int, int] = {}
             for r in [*requirements, *primary_options]:
                 for t in set(candidate_ids_by_req.get(r.id) or []):
@@ -2377,10 +2384,18 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 who = " The teachers with the most fixed lessons who are also needed elsewhere: " + ", ".join(
                     f"{teachers_by_id[t].name} ({len(frozen_busy_by_teacher[t])} periods fixed)" for t in pinned
                 ) + "."
-            errors.append(
+            frozen_hint = (
                 f"{n} frozen section{'' if n == 1 else 's'} kept {'its' if n == 1 else 'their'} "
                 f"lessons where they were, and the rest can't be fitted around them.{who} Unfreeze a "
                 f"section that shares those teachers, or give them fewer periods elsewhere."
+            )
+            # A specific cause above is the answer; this only adds context.
+            if errors:
+                errors.append(frozen_hint)
+                frozen_hint = None
+            return TimetableSolveResult(
+                status=status_name, assignments=assignments, locked_keys=locked_keys,
+                errors=errors, warnings=warnings, frozen_hint=frozen_hint,
             )
 
     return TimetableSolveResult(

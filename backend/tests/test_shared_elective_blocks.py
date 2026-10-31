@@ -654,3 +654,32 @@ def test_a_teacher_filled_by_frozen_sections_is_named(api):
     assert result.status == "infeasible"
     text = " ".join(result.errors)
     assert "Mr. English" in text and "frozen" in text, result.errors
+
+
+def test_a_rule_added_after_freezing_doesnt_fail_on_the_frozen_lessons(api):
+    """9 A is frozen with Mr. Maths teaching three periods running. A rule
+    added afterwards - no more than two in a row for him - can't change 9 A,
+    and used to make every generation fail. It now applies to what can move."""
+    from app.core.database import SessionLocal
+    from app.models.school import Constraint
+    from app.services.solver import generate_school_timetable
+
+    c = api["client"]
+    c.post(f"/api/class-groups/{api['a']}/requirements", json={
+        "class_group_id": api["a"], "subject_id": api["s"]["Maths"], "periods_per_week": 6,
+        "preferred_teacher_id": api["t"]["Mr. Maths"]}, headers=api["headers"])
+    c.post(f"/api/class-groups/{api['b']}/requirements", json={
+        "class_group_id": api["b"], "subject_id": api["s"]["English"], "periods_per_week": 2}, headers=api["headers"])
+    _generate(api)
+    assert c.post("/api/class-groups/freeze", json={"school_id": api["sid"], "class_group_ids": [api["a"]],
+                                                    "frozen": True}, headers=api["headers"]).status_code == 200
+    db = SessionLocal()
+    try:
+        db.add(Constraint(school_id=api["sid"], type="max_consecutive_periods", is_hard=True,
+                          parameters={"teacher_id": api["t"]["Mr. Maths"], "max_consecutive": 2},
+                          description="Mr. Maths teaches at most 2 periods in a row"))
+        db.commit()
+        result = generate_school_timetable(db, api["sid"])
+    finally:
+        db.close()
+    assert result.status in ("optimal", "feasible"), result.errors
