@@ -146,7 +146,11 @@ export default function ScheduleGrid({
                     title={broken.length ? broken.map((v) => v.description).join('\n') : undefined}
                     className={`border border-slate-200 px-3 py-2 transition-colors ${
                       editable ? 'align-top' : ''
-                    } ${lockTint} ${violationRing}`}
+                    } ${editable && lockable ? 'cursor-pointer' : ''} ${lockTint} ${violationRing}`}
+                    // The whole coloured cell toggles the lock, not just the
+                    // words in it - clicking the empty part of a red cell used
+                    // to do nothing at all.
+                    onClick={editable && lockable ? () => onToggleLock(entries) : undefined}
                     onDragOver={editable && period ? (e) => e.preventDefault() : undefined}
                     onDrop={editable && period ? () => onDrop(d, order) : undefined}
                   >
@@ -159,7 +163,6 @@ export default function ScheduleGrid({
                         draggable={canDrag}
                         onDragStart={canDrag ? () => onDragStart(d, order, entries) : undefined}
                         onDragEnd={onDragEnd}
-                        onClick={editable && lockable ? () => onToggleLock(entries) : undefined}
                         title={hint}
                         className={
                           editable ? (canDrag ? 'cursor-move' : lockable ? 'cursor-pointer' : '') : ''

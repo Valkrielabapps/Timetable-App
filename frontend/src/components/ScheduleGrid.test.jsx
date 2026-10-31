@@ -44,6 +44,12 @@ function renderGrid(overrides = {}) {
 }
 
 describe('ScheduleGrid', () => {
+  it('clicking anywhere in a coloured cell toggles its lock, not only on the words', () => {
+    const props = renderGrid({ entriesAt: (d, o) => (d === 0 && o === 0 ? [{ ...ENTRY, locked: true }] : []) })
+    fireEvent.click(screen.getByText('Hindi').closest('td'))
+    expect(props.onToggleLock).toHaveBeenCalledTimes(1)
+  })
+
   it('a frozen section shows no red or green and says why nothing unlocks', () => {
     const props = renderGrid({
       editable: false,

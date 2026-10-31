@@ -760,7 +760,15 @@ export default function TimetableTab({
         </motion.div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {/* Pinned to the bottom of the screen: a lock or a move refused in a
+          section far down the page used to be reported up here, out of
+          sight, and the click looked like it had done nothing. */}
+      {error && (
+        <div className="fixed bottom-6 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg bg-red-700 px-4 py-3 text-sm text-white shadow-lg">
+          <p>{error}</p>
+          <button onClick={() => setError(null)} className="flex-none font-medium underline">Dismiss</button>
+        </div>
+      )}
 
       {failed && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
