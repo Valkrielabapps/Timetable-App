@@ -90,6 +90,13 @@ class Settings(BaseSettings):
     # the backend endpoint returns a clear error if this is missing.
     google_client_id: str | None = None
 
+    # Sales outreach (app/services/outreach.py) sends from a Gmail mailbox
+    # through Google's HTTPS API - Railway blocks SMTP. A "Web application"
+    # OAuth client in Google Cloud, with this redirect URI added to it.
+    outreach_google_client_id: str | None = None
+    outreach_google_client_secret: str | None = None
+    outreach_google_redirect_uri: str = "https://timetablz.com/api/admin/outreach/gmail/callback"
+
     # Used by app/services/email_service.py to actually send invite emails
     # via Resend's HTTP API (https://resend.com). If unset, invite creation
     # silently skips sending — the invite is still created and its link is
@@ -160,6 +167,8 @@ class Settings(BaseSettings):
         "anthropic_api_key",
         "sentry_dsn",
         "google_client_id",
+        "outreach_google_client_id",
+        "outreach_google_client_secret",
         "resend_api_key",
         "cashfree_app_id",
         "cashfree_secret_key",

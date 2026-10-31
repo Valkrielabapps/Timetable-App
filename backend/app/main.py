@@ -16,7 +16,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.observability import init_sentry, log_llm_availability
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
-from app.models import payment, school, user  # noqa: F401 - registers mappers before first request
+from app.models import outreach as outreach_models, payment, school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     admin,
     auth,
@@ -25,6 +25,7 @@ from app.routers import (
     elective_blocks,
     grade_categories,
     invites,
+    outreach,
     payments,
     plans,
     periods,
@@ -115,6 +116,23 @@ app.include_router(support.router)
 app.include_router(payments.router)
 app.include_router(plans.router)
 app.include_router(admin.router)
+app.include_router(outreach.router)
+
+
+@app.on_event("startup")
+def _start_outreach_sender():
+    """The sales outreach sender (app/services/outreach.py) runs in the
+    background while the server is up. It sends nothing until a mailbox is
+    connected and sending is switched on in the admin page. Not started under
+    the test suite, which drives it directly."""
+    import sys
+
+    if "pytest" in sys.modules:
+        return
+    from app.core.database import SessionLocal
+    from app.services.outreach import start_scheduler
+
+    start_scheduler(SessionLocal)
 
 
 @app.get("/health")

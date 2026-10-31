@@ -3,6 +3,7 @@ import { api, getToken, setToken } from '../api'
 import AuthPage from './AuthPage'
 import AdminTab from './AdminTab'
 import AdminRuleEvents from './AdminRuleEvents'
+import AdminOutreach from './AdminOutreach'
 
 /**
  * timetablz.com/admin - the Valkyrie Labs console. A page of its own, outside
@@ -16,7 +17,14 @@ import AdminRuleEvents from './AdminRuleEvents'
 export default function AdminPage() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
-  const [view, setView] = useState('dashboard')
+  // Back from connecting Gmail: Google returns to /admin?outreach=...
+  const outreachReturn = new URLSearchParams(window.location.search).get('outreach')
+  const [view, setView] = useState(outreachReturn ? 'outreach' : 'dashboard')
+  const outreachNotice = {
+    gmail_connected: 'Gmail connected. Sending stays off until you switch it on.',
+    gmail_cancelled: 'Connecting Gmail was cancelled.',
+    gmail_failed: 'Gmail could not be connected. Try again.',
+  }[outreachReturn] ?? null
 
   useEffect(() => {
     async function check() {
@@ -83,6 +91,7 @@ export default function AdminPage() {
             {[
               ['dashboard', 'Dashboard'],
               ['accounts', 'Accounts'],
+              ['outreach', 'Outreach'],
               ['rules', 'Rule reading'],
             ].map(([id, label]) => (
               <button
@@ -104,7 +113,9 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">{view === 'dashboard' ? <Dashboard /> : view === 'rules' ? <AdminRuleEvents /> : <Accounts />}</main>
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {view === 'dashboard' ? <Dashboard /> : view === 'rules' ? <AdminRuleEvents /> : view === 'outreach' ? <AdminOutreach notice={outreachNotice} /> : <Accounts />}
+      </main>
     </div>
   )
 }
