@@ -458,6 +458,33 @@ def test_moving_a_shared_block_moves_it_for_every_section(api):
         assert {e["period_id"] for e in t2["entries"] if e["class_group_id"] == cg and e["elective_block_id"]} == {to}
 
 
+def test_a_move_refused_for_a_lock_names_the_locked_slot(api):
+    from app.core.database import SessionLocal
+    from app.models.school import TimetableEntry
+
+    c = api["client"]
+    _create(api, [{"subject_id": api["s"]["Maths"]}, {"subject_id": api["s"]["History"]}],
+            sections=[api["a"], api["b"]], ppw=1)
+    t = _generate(api)
+    block_entry = next(e for e in t["entries"] if e["class_group_id"] == api["a"] and e["elective_block_id"])
+    # Only the other section's copy is locked - nothing red on this screen.
+    db = SessionLocal()
+    try:
+        for e in db.query(TimetableEntry).filter_by(timetable_id=t["id"], class_group_id=api["b"],
+                                                    period_id=block_entry["period_id"]):
+            e.locked = True
+        db.commit()
+    finally:
+        db.close()
+    periods = [p["id"] for p in c.get(f"/api/periods?school_id={api['sid']}", headers=api["headers"]).json()]
+    to = next(p for p in periods if p != block_entry["period_id"])
+    r = c.post(f"/api/timetables/{t['id']}/move-slot", json={
+        "class_group_id": api["a"], "from_period_id": block_entry["period_id"], "to_period_id": to,
+    }, headers=api["headers"])
+    assert r.status_code == 400
+    assert "Grade 9 B" in r.json()["detail"] and "Grade 9 A" not in r.json()["detail"]
+
+
 def test_changing_a_pooled_groups_teacher_changes_it_in_every_section(api):
     c = api["client"]
     _create(api, [{"subject_id": api["s"]["Maths"], "preferred_teacher_id": api["t"]["Mr. Maths"]},

@@ -990,6 +990,33 @@ def _sections_moving_together(db: Session, timetable_id: int, class_group_id: in
     return sections
 
 
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _locked_slots_message(db: Session, entries: list[TimetableEntry]) -> str:
+    """'Grade 12 B, Tuesday Period 3 (Physics) is locked ...' - one item per
+    locked slot, so the person knows which cell to click."""
+    slots: dict[tuple[int, int], list[str]] = {}
+    for e in entries:
+        names = slots.setdefault((e.class_group_id, e.period_id), [])
+        subject = db.get(Subject, e.subject_id)
+        if subject and subject.name not in names:
+            names.append(subject.name)
+    parts = []
+    for (cg_id, period_id), subjects in slots.items():
+        cg = db.get(ClassGroup, cg_id)
+        period = db.get(Period, period_id)
+        day = _WEEKDAYS[period.day_of_week] if period and 0 <= period.day_of_week < 7 else ""
+        where = f"{day} {period.label}".strip() if period else "a period"
+        name = (f"{cg.grade} {cg.name}" if cg.grade else cg.name) if cg else "another section"
+        parts.append(f"{name}, {where} ({', '.join(subjects)})")
+    many = len(parts) > 1
+    return (
+        f"Can't move this: {'; '.join(parts)} {'are' if many else 'is'} locked. "
+        f"Click the red slot{'s' if many else ''} there to unlock, then move again."
+    )
+
+
 @router.post("/{timetable_id}/move-slot", response_model=EntryUpdateOut)
 def move_slot(
     timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
@@ -1041,11 +1068,11 @@ def move_slot(
             _check_lesson_slot(db, payload.to_period_id, sid)
         if any(e.class_group_id == sid for e in target):
             _check_lesson_slot(db, payload.from_period_id, sid)
-    if any(e.locked for e in source + target):
-        raise HTTPException(
-            status_code=400,
-            detail="One of these slots is locked. Unlock it before moving it.",
-        )
+    locked = [e for e in source + target if e.locked]
+    if locked:
+        # Name the slot: with a shared block, the locked one is often in the
+        # other section, which isn't on the screen the drag started from.
+        raise HTTPException(status_code=400, detail=_locked_slots_message(db, locked))
 
     moving_ids = {e.id for e in source + target}
     for entry in source:
