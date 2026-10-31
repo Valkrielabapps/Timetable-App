@@ -2228,9 +2228,12 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # Cheap and decisive: if whole sections can't be shared out between the
     # teachers at all, no timetable exists - say so in a second rather than
     # after the full search budget.
+    frozen_busy_by_teacher: dict[int, set[int]] = {}
+    for teacher_id, period_id in frozen_teacher_busy:
+        frozen_busy_by_teacher.setdefault(teacher_id, set()).add(period_id)
     staffing = [] if _RELAX.get() else _diagnose_teacher_assignment(
-        requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
-        subjects_by_id, class_groups_by_id, _batch_count,
+        requirements, primary_options, candidate_ids_by_req, teachers_by_id, periods,
+        subjects_by_id, class_groups_by_id, _batch_count, frozen_busy=frozen_busy_by_teacher,
     )
     if staffing:
         return TimetableSolveResult(
@@ -2342,7 +2345,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         if not errors:
             errors = errors + _diagnose_teacher_assignment(
                 requirements, primary_options, candidate_ids_by_req, teachers_by_id, periods,
-                subjects_by_id, class_groups_by_id, _batch_count,
+                subjects_by_id, class_groups_by_id, _batch_count, frozen_busy=frozen_busy_by_teacher,
             )
         # Only reachable for a *proven* infeasibility (not "unknown", a
         # timeout) — SufficientAssumptionsForInfeasibility() needs CP-SAT to
@@ -2361,10 +2364,23 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             # lessons are fixed underneath it, and are often the real reason a
             # teacher has no room left - which only unfreezing can change.
             n = len({e.class_group_id for e in frozen_entries})
+            needed: dict[int, int] = {}
+            for r in [*requirements, *primary_options]:
+                for t in set(candidate_ids_by_req.get(r.id) or []):
+                    needed[t] = needed.get(t, 0) + 1
+            pinned = sorted(
+                (t for t in frozen_busy_by_teacher if t in needed and t in teachers_by_id),
+                key=lambda t: -len(frozen_busy_by_teacher[t]),
+            )[:4]
+            who = ""
+            if pinned:
+                who = " The teachers with the most fixed lessons who are also needed elsewhere: " + ", ".join(
+                    f"{teachers_by_id[t].name} ({len(frozen_busy_by_teacher[t])} periods fixed)" for t in pinned
+                ) + "."
             errors.append(
                 f"{n} frozen section{'' if n == 1 else 's'} kept {'its' if n == 1 else 'their'} "
-                f"lessons where they were. If a teacher they share with the rest is what's out of "
-                f"room, unfreezing {'it' if n == 1 else 'one'} lets those lessons move."
+                f"lessons where they were, and the rest can't be fitted around them.{who} Unfreeze a "
+                f"section that shares those teachers, or give them fewer periods elsewhere."
             )
 
     return TimetableSolveResult(
@@ -2375,7 +2391,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
 
 def _diagnose_teacher_assignment(
     requirements, option_reqs, candidate_ids_by_req, teachers_by_id, periods,
-    subjects_by_id, class_groups_by_id, batch_count,
+    subjects_by_id, class_groups_by_id, batch_count, frozen_busy=None,
 ) -> list[str]:
     """Can every section be given ONE teacher per subject at all?
 
@@ -2392,18 +2408,34 @@ def _diagnose_teacher_assignment(
     """
     lesson_ids = [p.id for p in periods if not p.is_break]
     day_of = {p.id: p.day_of_week for p in periods}
+    # Lessons in frozen sections are already fixed: those periods, and that
+    # much of the teacher's week, are spoken for.
+    frozen_busy = frozen_busy or {}
 
     def capacity(t) -> int:
-        free = sum(1 for pid in lesson_ids if pid not in set(t.unavailable_period_ids or []))
-        free_ids = [pid for pid in lesson_ids if pid not in set(t.unavailable_period_ids or [])]
+        taken = frozen_busy.get(t.id, set())
+        free_ids = [pid for pid in lesson_ids
+                    if pid not in set(t.unavailable_period_ids or []) and pid not in taken]
+        free = len(free_ids)
         day_max = _STANDARD.get().day_max
         if day_max is not None and "day_max" not in _RELAX.get():
             by_day: dict[int, int] = {}
             for pid in free_ids:
                 by_day[day_of[pid]] = by_day.get(day_of[pid], 0) + 1
-            free = sum(min(n, day_max) for n in by_day.values())
+            taken_by_day: dict[int, int] = {}
+            for pid in taken:
+                if pid in day_of:
+                    taken_by_day[day_of[pid]] = taken_by_day.get(day_of[pid], 0) + 1
+            free = sum(max(0, min(n, day_max - taken_by_day.get(d, 0))) for d, n in by_day.items())
         cap = _weekly_cap(t) if "max_periods" not in _RELAX.get() else None
-        return min(cap, free) if cap else free
+        if cap:
+            cap = max(0, cap - len(taken))
+            return min(cap, free)
+        return free
+
+    def frozen_note(t) -> str:
+        n = len(frozen_busy.get(t.id, ()))
+        return f", after {n} in frozen sections" if n else ""
 
     strands = []  # (subject_id, class_group_id, periods, candidates, group) - group: strands that run at once
     for r in requirements:
@@ -2460,7 +2492,11 @@ def _diagnose_teacher_assignment(
         need = sum(st[2] for st in mine)
         teacher_ids = sorted({t for st in mine for t in st[3]}, key=lambda t: teachers_by_id[t].name)
         sections = ", ".join(f"{label(st[1])} ({st[2]})" for st in mine)
-        staff = ", ".join(f"{teachers_by_id[t].name} (up to {capacity(teachers_by_id[t])})" for t in teacher_ids)
+        staff = ", ".join(
+            f"{teachers_by_id[t].name} (up to {capacity(teachers_by_id[t])}"
+            f"{' more' + frozen_note(teachers_by_id[t]) if frozen_note(teachers_by_id[t]) else ''})"
+            for t in teacher_ids
+        )
         messages.append(
             f"{name} can't be shared out: each section keeps one {name} teacher all week, and the "
             f"sections need {need} periods in total - {sections} - but the qualified teachers, "
@@ -2478,7 +2514,8 @@ def _diagnose_teacher_assignment(
             shared.setdefault(t, set()).add(st[0])
     busy = [t for t, subs in shared.items() if len(subs) > 1]
     names = ", ".join(
-        f"{teachers_by_id[t].name} ({' and '.join(sorted(subjects_by_id[x].name for x in shared[t] if x in subjects_by_id))})"
+        f"{teachers_by_id[t].name} ({' and '.join(sorted(subjects_by_id[x].name for x in shared[t] if x in subjects_by_id))}"
+        f"{frozen_note(teachers_by_id[t])})"
         for t in sorted(busy, key=lambda t: teachers_by_id[t].name)[:6]
     )
     return [

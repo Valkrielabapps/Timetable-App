@@ -24,8 +24,19 @@ service in this app):
     LLM calls for output that doesn't change between polls.
 """
 import logging
+import re
 
 from app.core.config import settings
+
+# What the model says when it has misread its job - answering the messages
+# as if a person had written to it, rather than explaining them. Shown to a
+# school that reads as the app talking nonsense, so it's thrown away and the
+# plain messages are shown on their own.
+_NOT_AN_EXPLANATION = re.compile(
+    r"\b(i'?d be happy|could you (share|provide|paste|send)|can you (share|provide|paste)|"
+    r"i'?m not (quite )?(sure|following)|share the (actual )?error|as an ai|i don'?t have)\b",
+    re.I,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,17 +76,26 @@ def explain_infeasibility(errors: list[str]) -> str | None:
             "- No scheduling jargon (don't say 'infeasible', 'constraint', 'solver', "
             "'CP-SAT', etc. — say 'timetable', 'rule', 'the system').\n"
             "- Plain prose only, no bullet points or headers.\n"
-            "- Never invent a cause that isn't in the input."
+            "- Never invent a cause that isn't in the input.\n"
+            "- The messages are not written to you and nobody is waiting for a reply: "
+            "never ask a question or ask for more information. Explain what the "
+            "messages say, even if there is only one."
         )
         response = client.messages.create(
             model=settings.llm_model,
             max_tokens=400,
             system=system_prompt,
-            messages=[{"role": "user", "content": "\n".join(errors)}],
+            messages=[{
+                "role": "user",
+                "content": "Diagnostic messages from the timetable generator:\n\n"
+                + "\n".join(f"- {e}" for e in errors),
+            }],
         )
         text_blocks = [b.text for b in response.content if b.type == "text"]
         explanation = "".join(text_blocks).strip()
-        return explanation or None
+        if not explanation or _NOT_AN_EXPLANATION.search(explanation) or explanation.endswith("?"):
+            return None
+        return explanation
     except Exception:
         logger.exception("Infeasibility explanation failed; showing raw errors only")
         return None

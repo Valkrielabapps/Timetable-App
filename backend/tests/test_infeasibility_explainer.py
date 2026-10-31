@@ -44,3 +44,28 @@ def test_returns_none_when_response_has_no_text_blocks():
             mock_anthropic_cls.return_value.messages.create.return_value = fake_response
             result = explain_infeasibility(["some error"])
     assert result is None
+
+
+def test_a_reply_that_asks_for_more_information_is_thrown_away():
+    """The model once answered the messages as if a person had written to it -
+    "Could you share the actual error message?" - and that was shown to a
+    school as the explanation."""
+    fake_block = MagicMock(type="text", text=(
+        "I'd be happy to help, but I'm not quite following this message. Could you share the actual "
+        "error message you're getting?"
+    ))
+    with patch.object(settings, "anthropic_api_key", "fake-key"):
+        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+            mock_anthropic_cls.return_value.messages.create.return_value = MagicMock(content=[fake_block])
+            assert explain_infeasibility(["20 frozen sections kept their lessons where they were."]) is None
+
+
+def test_the_messages_are_labelled_as_data_not_a_question():
+    fake_block = MagicMock(type="text", text="The frozen sections leave no room.")
+    with patch.object(settings, "anthropic_api_key", "fake-key"):
+        with patch("anthropic.Anthropic") as mock_anthropic_cls:
+            create = mock_anthropic_cls.return_value.messages.create
+            create.return_value = MagicMock(content=[fake_block])
+            explain_infeasibility(["one", "two"])
+    content = create.call_args.kwargs["messages"][0]["content"]
+    assert content.startswith("Diagnostic messages from the timetable generator") and "- one\n- two" in content

@@ -603,3 +603,54 @@ def test_deleting_a_teacher_takes_them_off_shortlists_and_timetables(api):
         assert req.preferred_teacher_id == t["Mrs. Maths"]
     finally:
         db.close()
+
+
+def test_a_teacher_filled_by_frozen_sections_is_named(api):
+    """Frozen lessons take up a teacher's week; when the rest can't fit, the
+    message says who, instead of only that sections are frozen."""
+    from app.core.database import SessionLocal
+    from app.models.school import Teacher
+
+    c = api["client"]
+    t = api["t"]
+    # Mr. English is the only English teacher; 9 A's 4 English periods get frozen.
+    db = SessionLocal()
+    try:
+        eng = db.get(Teacher, t["Mr. English"])
+        eng.max_periods_per_week = 6
+        db.commit()
+    finally:
+        db.close()
+    for cg, n in ((api["a"], 4), (api["b"], 3)):
+        c.post(f"/api/class-groups/{cg}/requirements",
+               json={"class_group_id": cg, "subject_id": api["s"]["English"], "periods_per_week": n},
+               headers=api["headers"])
+    # First generate with B at 1 period so it fits, freeze A, then ask B for 3.
+    db = SessionLocal()
+    try:
+        from app.models.school import SubjectRequirement
+        rb = db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id == api["b"]).one()
+        rb.periods_per_week = 1
+        db.commit()
+    finally:
+        db.close()
+    _generate(api)
+    assert c.post("/api/class-groups/freeze", json={"school_id": api["sid"], "class_group_ids": [api["a"]],
+                                                    "frozen": True}, headers=api["headers"]).status_code == 200
+    db = SessionLocal()
+    try:
+        from app.models.school import SubjectRequirement
+        rb = db.query(SubjectRequirement).filter(SubjectRequirement.class_group_id == api["b"]).one()
+        rb.periods_per_week = 3
+        db.commit()
+    finally:
+        db.close()
+    from app.services.solver import generate_school_timetable
+    db = SessionLocal()
+    try:
+        result = generate_school_timetable(db, api["sid"])
+    finally:
+        db.close()
+    assert result.status == "infeasible"
+    text = " ".join(result.errors)
+    assert "Mr. English" in text and "frozen" in text, result.errors
