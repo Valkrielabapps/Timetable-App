@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.core.config import settings
+from app.core.config import check_production_secrets, settings
 from app.core.observability import init_sentry, log_llm_availability
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.models import outreach as outreach_models, payment, problems as problem_models, school, user  # noqa: F401 - registers mappers before first request
@@ -58,6 +58,8 @@ from app.routers import (
 # still reported. No-op unless SENTRY_DSN is set.
 init_sentry()
 log_llm_availability()
+# Before anything is served: a forgeable signing secret stops the start.
+check_production_secrets(settings)
 
 # The interactive docs list every endpoint and its inputs - handy locally,
 # a map for anyone probing the live API. Only served in debug mode.

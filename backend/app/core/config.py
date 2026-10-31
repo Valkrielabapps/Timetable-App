@@ -205,4 +205,26 @@ class Settings(BaseSettings):
         return value
 
 
+# Signing secrets that are public - the default above and the one in
+# .env.example - so tokens signed with them can be forged by anyone.
+_PUBLIC_SECRETS = {"dev-only-secret-change-me", "change-me-to-a-long-random-string"}
+
+
+def check_production_secrets(config: "Settings") -> None:
+    """Refuse to run against a real database with a guessable JWT secret.
+
+    With the default secret anyone could sign a login as any user, and
+    nothing would look wrong - so this stops the server from starting
+    instead of letting it run open. SQLite means a laptop or the test
+    suite, where the default is fine.
+    """
+    if config.database_url.startswith("sqlite"):
+        return
+    if config.jwt_secret in _PUBLIC_SECRETS or len(config.jwt_secret) < 32:
+        raise RuntimeError(
+            "JWT_SECRET is unset, a public default, or shorter than 32 characters. Set it to a long "
+            "random string (see docs/DEPLOYMENT.md) - with the current value anyone could forge a login."
+        )
+
+
 settings = Settings()

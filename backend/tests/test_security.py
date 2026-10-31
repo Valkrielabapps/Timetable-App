@@ -458,3 +458,21 @@ def test_text_fields_have_limits(client):
     assert client.put(f"/api/schools/{sid}/name", json={"name": "Sunrise"}, headers=h).status_code == 200
     r = client.post("/api/auth/signup", json={"email": "x@a.com", "password": "password123", "name": "N" * 101})
     assert r.status_code == 422
+
+
+@pytest.mark.parametrize("secret,ok", [
+    ("dev-only-secret-change-me", False),
+    ("change-me-to-a-long-random-string", False),
+    ("short-but-random", False),
+    ("x7Kq2v9LmP4rT8wZ1nB6cF3hJ5sD0gYa", True),
+])
+def test_a_real_database_needs_a_real_signing_secret(secret, ok):
+    from app.core.config import check_production_secrets
+    config = Settings(_env_file=None, database_url="postgresql://u:p@db/x", jwt_secret=secret)
+    if ok:
+        check_production_secrets(config)
+    else:
+        with pytest.raises(RuntimeError, match="JWT_SECRET"):
+            check_production_secrets(config)
+    # A laptop or the test suite on SQLite is fine with the default.
+    check_production_secrets(Settings(_env_file=None, database_url="sqlite:///x.db"))
