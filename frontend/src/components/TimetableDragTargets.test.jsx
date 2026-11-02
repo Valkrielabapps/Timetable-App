@@ -6,6 +6,8 @@ import TimetableTab from './TimetableTab'
 const api = vi.hoisted(() => ({
   moveSlot: vi.fn(),
   moveTargets: vi.fn(),
+  suggestMove: vi.fn(),
+  moveChain: vi.fn(),
   lockSlot: vi.fn(),
 }))
 vi.mock('../api', () => ({ api }))
@@ -55,6 +57,8 @@ const cellAt = (order) => screen.getByText('Grade 11 · A').closest('section').q
 beforeEach(() => {
   api.moveSlot.mockReset()
   api.moveTargets.mockReset().mockResolvedValue(TARGETS)
+  api.suggestMove.mockReset().mockResolvedValue({ status: 'blocked', reason: 'Verma teaches Grade 11 B then', suggestions: [] })
+  api.moveChain.mockReset()
   hooks.timetable = TIMETABLE
   render(<TimetableTab schoolId={1} classGroup={CG} classGroups={[CG]} teachers={[]} periods={PERIODS} constraints={[]} />)
 })
@@ -84,7 +88,29 @@ describe('dragging a lesson', () => {
     await pickUp()
     fireEvent.drop(cellAt(3))
     expect(api.moveSlot).not.toHaveBeenCalled()
-    expect(await screen.findByText(/Can't move it there: Verma teaches Grade 11 B then/)).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: 'Blocked move' })
+    expect(dialog).toHaveTextContent('Can’t move it there: Verma teaches Grade 11 B then.')
+    expect(await within(dialog).findByText(/No small set of moves makes room/)).toBeInTheDocument()
+  })
+
+  it('offers moves that make room, and makes them all at once', async () => {
+    const steps = [
+      { class_group_id: 101, from_period_id: 4, to_period_id: 2, text: "Move Grade 11 B's Maths from Mon P4 to Mon P2" },
+      { class_group_id: 100, from_period_id: 1, to_period_id: 4, text: "Move Grade 11 A's English from Mon P1 to Mon P4" },
+    ]
+    api.suggestMove.mockResolvedValue({
+      status: 'blocked', reason: 'Verma teaches Grade 11 B then',
+      suggestions: [{ status: 'ok', summary: '…', warnings: [], steps }],
+    })
+    api.moveChain.mockResolvedValue({ entries: [], violations: [] })
+    await pickUp()
+    fireEvent.drop(cellAt(3))
+    expect(api.suggestMove).toHaveBeenCalledWith(1, 100, 1, 4)
+    const dialog = await screen.findByRole('dialog', { name: 'Blocked move' })
+    expect(await within(dialog).findByText("Move Grade 11 B's Maths from Mon P4 to Mon P2")).toBeInTheDocument()
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'Make these 2 moves' })) })
+    expect(api.moveChain).toHaveBeenCalledWith(1, steps)
+    expect(screen.queryByRole('dialog', { name: 'Blocked move' })).not.toBeInTheDocument()
   })
 
   it('moves onto amber and green as before', async () => {

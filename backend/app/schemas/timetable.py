@@ -72,6 +72,12 @@ class SlotMove(BaseModel):
     to_period_id: int
 
 
+class SlotMoveChain(BaseModel):
+    """Several slot moves made in order, all or nothing - a suggested fix."""
+
+    steps: list[SlotMove]
+
+
 class SlotTargets(BaseModel):
     """A slot picked up to drag: where could it go?"""
 

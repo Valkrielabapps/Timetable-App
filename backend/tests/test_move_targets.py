@@ -137,3 +137,125 @@ def test_viewers_cant_ask(client, world):
     r = client.post(f"/api/timetables/{w['tt']}/move-targets",
                     json={"class_group_id": w["a"], "from_period_id": w["p"][1]}, headers=other)
     assert r.status_code in (403, 404)
+
+
+# ---------------------------------------------------------------------------
+# Suggesting a fix for a blocked move, and applying it
+
+
+def suggest(client, headers, w, section, frm, to):
+    r = client.post(f"/api/timetables/{w['tt']}/suggest-move",
+                    json={"class_group_id": section, "from_period_id": frm, "to_period_id": to}, headers=headers)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def chain(client, headers, w, steps):
+    return client.post(f"/api/timetables/{w['tt']}/move-chain", json={"steps": [
+        {k: s[k] for k in ("class_group_id", "from_period_id", "to_period_id")} for s in steps]}, headers=headers)
+
+
+def periods_of(w):
+    db = SessionLocal()
+    try:
+        return {e.id: e.period_id for e in db.query(TimetableEntry).filter_by(timetable_id=w["tt"])}
+    finally:
+        db.close()
+
+
+def test_a_blocked_move_comes_with_a_way_to_make_room(client, world):
+    w, headers = world
+    p = w["p"]
+    r = suggest(client, headers, w, w["a"], p[1], p[2])  # English onto P3, where Verma teaches 11 B
+    assert r["status"] == "blocked" and r["reason"] == "Verma teaches Grade 11 B then"
+    best = r["suggestions"][0]
+    assert len(best["steps"]) == 2 and best["status"] == "ok"
+    first = best["steps"][0]
+    assert first["class_group_id"] == w["b"] and first["from_period_id"] == p[2]
+    assert best["summary"].startswith("Verma teaches Grade 11 B then. Move Grade 11 B's Maths from Mon P3 to ")
+    assert best["summary"].endswith(" as well?")
+    assert best["steps"][-1]["text"] == "Move Grade 11 A's English from Mon P2 to Mon P3"
+    # Nothing moved yet.
+    before = periods_of(w)
+    assert periods_of(w) == before
+
+    r = chain(client, headers, w, best["steps"])
+    assert r.status_code == 200, r.text
+    after = periods_of(w)
+    assert after[w["english"]] == p[2]
+
+
+def test_a_move_that_is_fine_needs_no_suggestion(client, world):
+    w, headers = world
+    r = suggest(client, headers, w, w["a"], w["p"][1], w["p"][3])
+    assert r["status"] == "ok" and r["suggestions"] == []
+
+
+def test_a_lock_in_the_way_has_no_suggestion(client, world):
+    w, headers = world
+    p = w["p"]
+    client.post(f"/api/timetables/{w['tt']}/lock-slot",
+                json={"class_group_id": w["a"], "period_id": p[0], "locked": True}, headers=headers)
+    r = suggest(client, headers, w, w["a"], p[1], p[0])
+    assert r["status"] == "blocked" and r["suggestions"] == []
+
+
+def test_a_chain_is_all_or_nothing(client, world):
+    w, headers = world
+    p = w["p"]
+    before = periods_of(w)
+    r = chain(client, headers, w, [
+        {"class_group_id": w["a"], "from_period_id": p[1], "to_period_id": p[3]},   # fine
+        {"class_group_id": w["a"], "from_period_id": p[3], "to_period_id": p[2]},   # Verma is in 11 B
+    ])
+    assert r.status_code == 400 and r.json()["detail"].startswith("Move 2 of 2 can't be made:")
+    assert periods_of(w) == before
+
+
+def test_three_moves_when_the_lesson_in_the_way_is_stuck_too(client):
+    """11 A's English (Verma, P1) wants P3, where Verma teaches 11 B. Every
+    other period of 11 B is full, and each lesson that would swap back into
+    P3 has a teacher busy in P3 elsewhere - so 11 B's Maths can only move once
+    one of those is moved first."""
+    _, headers = signup(client)
+    sid = create_school(client, headers)["id"]
+    db = SessionLocal()
+    try:
+        periods = [Period(school_id=sid, day_of_week=0, order=o) for o in range(4)]
+        names = ("English", "Maths", "Art", "Hindi", "PE", "Music")
+        subjects = {n: Subject(school_id=sid, name=n) for n in names}
+        teachers = {n: Teacher(school_id=sid, name=n, qualified_subject_ids=[])
+                    for n in ("Verma", "Das", "Rao", "Nair", "Iyer")}
+        cg = {x: ClassGroup(school_id=sid, grade="Grade 11", name=x) for x in "ABCDE"}
+        db.add_all([*periods, *subjects.values(), *teachers.values(), *cg.values()])
+        db.commit()
+        tt = Timetable(school_id=sid, status="draft", solver_status="optimal")
+        db.add(tt)
+        db.commit()
+
+        def entry(c, subject, teacher, period):
+            e = TimetableEntry(timetable_id=tt.id, class_group_id=cg[c].id, subject_id=subjects[subject].id,
+                               teacher_id=teachers[teacher].id, period_id=periods[period].id)
+            db.add(e)
+            return e
+
+        english = entry("A", "English", "Verma", 0)
+        entry("B", "Art", "Das", 0)
+        entry("B", "Hindi", "Rao", 1)
+        entry("B", "Maths", "Verma", 2)
+        entry("B", "PE", "Nair", 3)
+        entry("C", "Art", "Das", 2)     # Das busy in P3
+        entry("D", "Hindi", "Rao", 2)   # Rao busy in P3
+        entry("E", "PE", "Nair", 2)     # Nair busy in P3
+        db.commit()
+        w = {"tt": tt.id}
+        a, p, english_id = cg["A"].id, [x.id for x in periods], english.id
+    finally:
+        db.close()
+
+    r = suggest(client, headers, w, a, p[0], p[2])
+    assert r["status"] == "blocked" and r["suggestions"], r
+    best = r["suggestions"][0]
+    assert len(best["steps"]) == 3
+    assert chain(client, headers, w, best["steps"]).status_code == 200
+    assert periods_of(w)[english_id] == p[2]

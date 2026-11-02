@@ -389,6 +389,22 @@ export const api = {
       class_group_id: classGroupId,
       from_period_id: fromPeriodId,
     }),
+  // A blocked move: ways to make room for it by moving what's in the way
+  // first. See suggest_move / move_chain in backend/app/routers/timetables.py.
+  suggestMove: (timetableId, classGroupId, fromPeriodId, toPeriodId) =>
+    post(`/timetables/${timetableId}/suggest-move`, {
+      class_group_id: classGroupId,
+      from_period_id: fromPeriodId,
+      to_period_id: toPeriodId,
+    }),
+  moveChain: (timetableId, steps) =>
+    post(`/timetables/${timetableId}/move-chain`, {
+      steps: steps.map((s) => ({
+        class_group_id: s.class_group_id,
+        from_period_id: s.from_period_id,
+        to_period_id: s.to_period_id,
+      })),
+    }),
   moveSlot: (timetableId, classGroupId, fromPeriodId, toPeriodId) =>
     post(`/timetables/${timetableId}/move-slot`, {
       class_group_id: classGroupId,

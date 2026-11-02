@@ -58,6 +58,7 @@ from app.schemas.timetable import (
     EntryUpdateOut,
     SlotLock,
     SlotMove,
+    SlotMoveChain,
     SlotTargets,
     TimetableSummaryOut,
     EditCommandRequest,
@@ -1033,27 +1034,10 @@ def _locked_slots_message(db: Session, entries: list[TimetableEntry]) -> str:
     )
 
 
-@router.post("/{timetable_id}/move-slot", response_model=EntryUpdateOut)
-def move_slot(
-    timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Move everything in one section's period to another, swapping with
-    whatever is already there.
-
-    The drag unit is the slot, not the entry. A slot can hold several entries
-    - an elective block has one per option, a split lab one per batch - and
-    they always move together: moving one alone would leave a block's options
-    in different periods, which is no longer a block. Handling every case as
-    "exchange two slots" covers a single lesson moving into an empty cell, two
-    lessons swapping, and a block swapping with a lesson or with another block,
-    with one set of checks.
-
-    All-or-nothing. Every teacher and room arriving in a period is checked
-    against everything already there that is not itself moving; if any one
-    would double-book, nothing moves.
-    """
-    timetable = _editable_timetable(db, timetable_id, current_user)
+def _apply_slot_move(db: Session, timetable: Timetable, payload: SlotMove) -> list[TimetableEntry]:
+    """The checks and the change behind move-slot, without committing, so
+    move-chain can make several in one all-or-nothing transaction. Raises a
+    400 naming the problem if the move isn't allowed."""
     _refuse_if_frozen(db, payload.class_group_id)
     if payload.from_period_id == payload.to_period_id:
         raise HTTPException(status_code=400, detail="That's the same period.")
@@ -1102,12 +1086,38 @@ def move_slot(
         entry.period_id = payload.to_period_id
     for entry in target:
         entry.period_id = payload.from_period_id
+    db.flush()
+    return source + target
+
+
+@router.post("/{timetable_id}/move-slot", response_model=EntryUpdateOut)
+def move_slot(
+    timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Move everything in one section's period to another, swapping with
+    whatever is already there.
+
+    The drag unit is the slot, not the entry. A slot can hold several entries
+    - an elective block has one per option, a split lab one per batch - and
+    they always move together: moving one alone would leave a block's options
+    in different periods, which is no longer a block. Handling every case as
+    "exchange two slots" covers a single lesson moving into an empty cell, two
+    lessons swapping, and a block swapping with a lesson or with another block,
+    with one set of checks.
+
+    All-or-nothing. Every teacher and room arriving in a period is checked
+    against everything already there that is not itself moving; if any one
+    would double-book, nothing moves.
+    """
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    moved = _apply_slot_move(db, timetable, payload)
     db.commit()
-    for entry in source + target:
+    for entry in moved:
         db.refresh(entry)
 
     return EntryUpdateOut(
-        entries=[_entry_out(db, e) for e in source + target],
+        entries=[_entry_out(db, e) for e in moved],
         violations=_violations_after_edit(db, timetable),
     )
 
@@ -1154,6 +1164,16 @@ def lock_slot(
     )
 
 
+def _board(db: Session, timetable: Timetable):
+    from app.services.slot_board import Board
+    school_id = timetable.school_id
+    cgs = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
+    subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
+    teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()}
+    return Board(db, timetable, rules=_rule_setup(db, timetable, cgs, subjects, teachers, periods))
+
+
 @router.post("/{timetable_id}/move-targets")
 def move_targets(
     timetable_id: int, payload: SlotTargets, db: Session = Depends(get_db),
@@ -1167,142 +1187,82 @@ def move_targets(
                    unavailability) would be broken
         blocked  - it would refuse, with the reason ("Vivek teaches 11 A then")
 
-    The same checks as move_slot, run in memory over the timetable for every
-    target at once instead of one request per cell, and nothing is saved.
+    The same checks as move_slot, run in memory (app/services/slot_board.py)
+    for every target at once, and nothing is saved.
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
-    school_id = timetable.school_id
-    sid0, src = payload.class_group_id, payload.from_period_id
-    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()}
-    if src not in periods:
+    board = _board(db, timetable)
+    src = payload.from_period_id
+    if src not in board.periods:
         raise HTTPException(status_code=404, detail="Period not found")
-    cgs = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
-    subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
-    teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
-    rooms = {r.id: r for r in db.query(Room).filter(Room.school_id == school_id).all()}
-    entries = list(timetable.entries)
-
-    at: dict[tuple[int, int], list[TimetableEntry]] = {}
-    by_period: dict[int, list[TimetableEntry]] = {}
-    for e in entries:
-        at.setdefault((e.class_group_id, e.period_id), []).append(e)
-        by_period.setdefault(e.period_id, []).append(e)
-
-    def label(cid) -> str:
-        cg = cgs.get(cid)
-        return (f"{cg.grade} {cg.name}" if cg.grade else cg.name) if cg else "another section"
-
-    def subj(e) -> str:
-        s = subjects.get(e.subject_id)
-        return s.name if s else "a lesson"
-
-    by_subject, by_block = frozen_lessons_index(db, school_id)
-    school = db.get(School, school_id)
-    off_by_grade = grade_off_period_ids(list(periods.values()), school.grade_day_limits if school else None)
-    zero_cache: dict = {}
-
-    def no_lesson_reason(period_id: int, cid: int) -> str | None:
-        cg = cgs.get(cid)
-        grade = cg.grade if cg else None
-        if grade not in zero_cache:
-            zero_cache[grade] = zero_period_ids_for(db, school_id, grade)
-        if period_id in zero_cache[grade]:
-            return f"That's {grade or label(cid)}'s zero period"
-        if grade and period_id in off_by_grade.get(grade, set()):
-            return f"{grade}'s day is over by then"
-        return None
-
-    def together(t: int) -> list[int]:
-        sections = [sid0]
-        i = 0
-        while i < len(sections):
-            sid = sections[i]
-            i += 1
-            for pid in (src, t):
-                blocks = {e.elective_block_id for e in at.get((sid, pid), []) if e.elective_block_id is not None}
-                if not blocks:
-                    continue
-                for o in by_period.get(pid, []):
-                    if o.elective_block_id in blocks and o.class_group_id not in sections:
-                        sections.append(o.class_group_id)
-        return sections
-
-    setup = _rule_setup(db, timetable, cgs, subjects, teachers, periods)
-    base: set = set()
-    if setup:
-        rules, index = setup
-        base = {(v.constraint_id, v.detail) for v in check_rules(_placements(entries, periods), rules, index)
-                if v.strength == "required"}
-
-    def judge(t: int) -> tuple[str, str | None]:
-        sections = together(t)
-        source = [e for sid in sections for e in at.get((sid, src), [])]
-        target = [e for sid in sections for e in at.get((sid, t), [])]
-        if not source:
-            return "blocked", "There's nothing in that slot to move"
-        for sid in sections:
-            cg = cgs.get(sid)
-            if cg is not None and cg.frozen:
-                return "blocked", (f"{label(sid)} is frozen" + ("" if sid == sid0 else " and shares this lesson"))
-        for e in source + target:
-            name = _subject_frozen_name(e, by_subject, by_block)
-            if name:
-                return "blocked", f"{name} is frozen"
-        for sid in sections:
-            if any(e.class_group_id == sid for e in source):
-                why = no_lesson_reason(t, sid)
-                if why:
-                    return "blocked", why + ("" if sid == sid0 else f" for {label(sid)}")
-            if any(e.class_group_id == sid for e in target):
-                why = no_lesson_reason(src, sid)
-                if why:
-                    return "blocked", f"What's there can't come back: {why[0].lower() + why[1:]}"
-        if any(e.locked for e in source):
-            return "blocked", "This slot is locked. Click it to unlock it first"
-        locked = [e for e in target if e.locked]
-        if locked:
-            e = locked[0]
-            where = "" if e.class_group_id == sid0 else f" in {label(e.class_group_id)}"
-            return "blocked", f"{subj(e)}{where} is locked there"
-        moving = {e.id for e in source + target}
-        for movers, dest in ((source, t), (target, src)):
-            others = [o for o in by_period.get(dest, []) if o.id not in moving]
-            for e in movers:
-                for o in others:
-                    if e.teacher_id is not None and o.teacher_id == e.teacher_id:
-                        tname = teachers[e.teacher_id].name if e.teacher_id in teachers else "The teacher"
-                        if dest == t:
-                            return "blocked", f"{tname} teaches {label(o.class_group_id)} then"
-                        return "blocked", (f"{subj(e)} would move back to the starting period, where "
-                                           f"{tname} teaches {label(o.class_group_id)}")
-                    if e.room_id is not None and o.room_id == e.room_id:
-                        rname = rooms[e.room_id].name if e.room_id in rooms else "The room"
-                        return "blocked", f"{rname} is in use by {label(o.class_group_id)} then"
-        warnings = []
-        for movers, dest in ((source, t), (target, src)):
-            for e in movers:
-                tch = teachers.get(e.teacher_id)
-                if tch and dest in set(tch.unavailable_period_ids or []):
-                    warnings.append(f"{tch.name} is marked unavailable then")
-        if setup:
-            moved = {e.id: t for e in source} | {e.id: src for e in target}
-            after = [v for v in check_rules(_placements(entries, periods, moved), rules, index)
-                     if v.strength == "required" and (v.constraint_id, v.detail) not in base]
-            for v in after:
-                text = f"Breaks \u201c{v.description}\u201d"
-                if text not in warnings:
-                    warnings.append(text)
-        if warnings:
-            return "warn", "; ".join(dict.fromkeys(warnings))
-        return "ok", None
-
     out = []
-    for p in periods.values():
+    for p in board.periods.values():
         if p.is_break or p.id == src:
             continue
-        status, reason = judge(p.id)
-        out.append({"period_id": p.id, "status": status, "reason": reason})
+        v = board.judge(payload.class_group_id, src, p.id)
+        out.append({"period_id": p.id, "status": v.status, "reason": v.reason})
     return {"from_period_id": src, "targets": out}
+
+
+@router.post("/{timetable_id}/suggest-move")
+def suggest_move(
+    timetable_id: int, payload: SlotMove, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """A blocked move, made possible: "Physics can't go to Tue P3 because
+    Vivek teaches 11 A then. Move 11 A's Physics from Tue P3 to Wed P2 as
+    well?" Tries moving the lesson in the way (and the one in its way) to
+    every other period, up to three moves in all. Nothing is saved - apply
+    one with move-chain."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    board = _board(db, timetable)
+    if payload.from_period_id not in board.periods or payload.to_period_id not in board.periods:
+        raise HTTPException(status_code=404, detail="Period not found")
+    verdict, suggestions = board.suggest(payload.class_group_id, payload.from_period_id, payload.to_period_id)
+    return {
+        "status": verdict.status,
+        "reason": verdict.reason,
+        "suggestions": [
+            {
+                "status": s.status, "summary": s.summary, "warnings": s.warnings,
+                "steps": [{"class_group_id": st.class_group_id, "from_period_id": st.from_period_id,
+                           "to_period_id": st.to_period_id, "text": st.text} for st in s.steps],
+            }
+            for s in suggestions
+        ],
+    }
+
+
+@router.post("/{timetable_id}/move-chain", response_model=EntryUpdateOut)
+def move_chain(
+    timetable_id: int, payload: SlotMoveChain, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Several slot moves in order, all or nothing - a suggested fix applied.
+    Each is checked exactly as move-slot checks it, against the board as the
+    moves before it left it; if any is refused, none happen."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    if not payload.steps:
+        raise HTTPException(status_code=400, detail="Nothing to move.")
+    touched: dict[int, TimetableEntry] = {}
+    try:
+        for n, step in enumerate(payload.steps, start=1):
+            try:
+                for e in _apply_slot_move(db, timetable, step):
+                    touched[e.id] = e
+            except HTTPException as exc:
+                prefix = f"Move {n} of {len(payload.steps)} can't be made: " if len(payload.steps) > 1 else ""
+                raise HTTPException(status_code=exc.status_code, detail=f"{prefix}{exc.detail}") from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    db.commit()
+    for e in touched.values():
+        db.refresh(e)
+    return EntryUpdateOut(
+        entries=[_entry_out(db, e) for e in touched.values()],
+        violations=_violations_after_edit(db, timetable),
+    )
 
 
 def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:

@@ -162,6 +162,36 @@ export default function TimetableTab({
       // No colours, and the drop is checked by the server as before.
     }
   }
+  // A move that can't be made as asked, and ways to make room for it:
+  // { reason, suggestions: null while looking | [] | [{ summary, steps, ... }] }
+  const [moveFix, setMoveFix] = useState(null)
+  const [applyingFix, setApplyingFix] = useState(false)
+  async function offerFix(classGroupId, fromPeriodId, toPeriodId, reason, message = null) {
+    setError(null)
+    if (!api.suggestMove) {
+      setError(message ?? `Can't move it there: ${reason}.`)
+      return
+    }
+    setMoveFix({ reason, suggestions: null })
+    try {
+      const res = await api.suggestMove(timetable.id, classGroupId, fromPeriodId, toPeriodId)
+      setMoveFix({ reason: res.reason ?? reason, suggestions: res.suggestions ?? [] })
+    } catch {
+      setMoveFix({ reason, suggestions: [] })
+    }
+  }
+  async function applyFix(suggestion) {
+    setApplyingFix(true)
+    try {
+      applyEntryUpdates(await api.moveChain(timetable.id, suggestion.steps))
+      setMoveFix(null)
+    } catch (err) {
+      setMoveFix(null)
+      setError(err.message)
+    } finally {
+      setApplyingFix(false)
+    }
+  }
   function endDrag() {
     dragToken.current += 1
     setDragSource(null)
@@ -376,7 +406,7 @@ export default function TimetableTab({
       ? known.byPeriod.get(targetPeriod.id)
       : null
     if (verdict?.status === 'blocked') {
-      setError(`Can't move it there: ${verdict.reason}.`)
+      offerFix(classGroupId, source.period.id, targetPeriod.id, verdict.reason)
       return
     }
     setError(null)
@@ -399,7 +429,9 @@ export default function TimetableTab({
       )
     } catch (err) {
       rollback()
-      setError(err.message)
+      // Refused after all (the colours weren't in yet, or something changed):
+      // look for a way to make room, as for a red cell.
+      offerFix(classGroupId, source.period.id, targetPeriod.id, err.message.replace(/\.$/, ''), err.message)
     }
   }
 
@@ -844,6 +876,47 @@ export default function TimetableTab({
           ) : (
             <span>Checking where it can go…</span>
           )}
+        </div>
+      )}
+
+      {moveFix && (
+        <div
+          role="dialog"
+          aria-label="Blocked move"
+          className="fixed bottom-6 left-1/2 z-50 flex w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2 rounded-lg bg-white p-4 text-sm shadow-xl ring-1 ring-slate-200"
+        >
+          <p className="font-medium text-red-800">Can&rsquo;t move it there: {moveFix.reason}.</p>
+          {moveFix.suggestions === null ? (
+            <p className="text-slate-500">Looking for a way to make room…</p>
+          ) : moveFix.suggestions.length === 0 ? (
+            <p className="text-slate-600">No small set of moves makes room for it. Try another period.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {moveFix.suggestions.map((sug, i) => (
+                <li key={i} className="rounded-md border border-slate-200 p-2.5">
+                  <ol className="list-decimal pl-5 text-slate-800">
+                    {sug.steps.map((st, j) => (
+                      <li key={j}>{st.text}</li>
+                    ))}
+                  </ol>
+                  {sug.warnings?.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-700">Allowed, but: {sug.warnings.join('; ')}</p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={applyingFix}
+                    onClick={() => applyFix(sug)}
+                    className="mt-2 rounded bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {applyingFix ? 'Moving…' : `Make ${sug.steps.length === 1 ? 'this move' : `these ${sug.steps.length} moves`}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button type="button" onClick={() => setMoveFix(null)} className="self-end text-xs font-medium text-slate-600 underline">
+            Dismiss
+          </button>
         </div>
       )}
 
