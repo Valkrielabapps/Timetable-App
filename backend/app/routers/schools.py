@@ -120,6 +120,15 @@ def update_grade_order(
     return _school_out(school, role)
 
 
+@router.get("/{school_id}/setup-check")
+def setup_check(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Problems that will stop a timetable, found without running the
+    solver - see app/services/setup_check.py. Shown above Generate."""
+    require_school_access(db, current_user, school_id)
+    from app.services.setup_check import check_setup
+    return check_setup(db, school_id)
+
+
 @router.put("/{school_id}/grade-day-limits", response_model=SchoolOut)
 def update_grade_day_limits(
     school_id: int, payload: SchoolGradeDayLimitsUpdate,

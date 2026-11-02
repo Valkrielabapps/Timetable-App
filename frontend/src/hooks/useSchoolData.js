@@ -303,6 +303,16 @@ export function useVersionActions(schoolId) {
   }
 }
 
+/** The setup check above Generate - see components/SetupCheckPanel.jsx. */
+export function useSetupCheck(schoolId) {
+  return useQuery({
+    queryKey: ['setupCheck', schoolId],
+    queryFn: () => api.setupCheck(schoolId),
+    enabled: schoolId != null,
+    staleTime: 0,
+  })
+}
+
 export function useFrozenStatus(schoolId, timetableId) {
   return useQuery({
     queryKey: keys.frozenStatus(schoolId, timetableId),

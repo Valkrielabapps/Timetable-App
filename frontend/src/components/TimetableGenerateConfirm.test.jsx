@@ -7,6 +7,7 @@ vi.mock('../api', () => ({ api: {} }))
 vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: undefined }) }))
 const generate = vi.fn(() => Promise.resolve())
 vi.mock('../hooks/useSchoolData', () => ({
+  useSetupCheck: () => ({ data: null, isLoading: false }),
   useTimetables: () => ({ data: [{ id: 1, status: 'draft', version_number: 3, is_current: true }] }),
   useTimetable: (id) => ({ data: id ? { id: 1, status: 'draft', version_number: 3, entries: [], violations: [] } : null }),
   useGenerateTimetable: () => ({ generate, isGenerating: false }),

@@ -72,6 +72,8 @@ const SCOPABLE_TYPES = new Set([
  */
 export default function ConstraintsTab({
   schoolId, classGroups, constraints, onReload, readOnly = false, standardRules = null, onSaveStandardRules = null, subjects = [],
+  // A setup-check Fix button pointing at one rule (App.jsx handleFix).
+  focusRuleId = null, focusKey = null,
 }) {
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -129,7 +131,17 @@ export default function ConstraintsTab({
   // A short list reads fine opened up; a long one is a wall again unless its
   // groups start closed. Searching or filtering opens everything, since the
   // point is then to see what matched.
-  const openByDefault = filtersActive(filters) || constraints.length <= 12
+  const [focusedId, setFocusedId] = useState(null)
+  useEffect(() => {
+    if (focusRuleId == null) return
+    setFocusedId(focusRuleId)
+    setOpenOverrides({})
+    requestAnimationFrame(() =>
+      document.getElementById(`rule-row-${focusRuleId}`)?.scrollIntoView?.({ block: 'center' }),
+    )
+  }, [focusRuleId, focusKey])
+  // Everything opens while a rule is being pointed at, so its row is there.
+  const openByDefault = focusedId != null || filtersActive(filters) || constraints.length <= 12
   const isOpen = (key) => openOverrides[key] ?? openByDefault
   const toggle = (key) => setOpenOverrides((prev) => ({ ...prev, [key]: !isOpen(key) }))
 
@@ -159,6 +171,7 @@ export default function ConstraintsTab({
         onToggleSelected={() => toggleSelected(c.id)}
         pending={pendingIds.has(c.id)}
         partlyMet={partlyMetIds.has(c.id)}
+        focused={focusedId === c.id}
       />
     )
   }
@@ -695,6 +708,7 @@ function ConstraintRow({
   onToggleSelected = () => {},
   pending = false,
   partlyMet = false,
+  focused = false,
 }) {
   const [editText, setEditText] = useState(c.description || '')
   const [selectedIds, setSelectedIds] = useState(c.parameters?.class_group_ids || [])
@@ -725,7 +739,10 @@ function ConstraintRow({
   }
 
   return (
-    <li className={`px-3 py-2.5 ${selecting && selected ? 'bg-red-50/60' : ''}`}>
+    <li
+      id={focused ? `rule-row-${c.id}` : undefined}
+      className={`px-3 py-2.5 ${selecting && selected ? 'bg-red-50/60' : ''} ${focused ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''}`}
+    >
       <div className="flex items-start justify-between gap-3">
         {selecting && (
           <input

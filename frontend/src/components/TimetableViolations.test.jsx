@@ -10,6 +10,7 @@ vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: und
 // so the hooks are what have to be stubbed.
 const mockTimetable = vi.fn()
 vi.mock('../hooks/useSchoolData', () => ({
+  useSetupCheck: () => ({ data: null, isLoading: false }),
   useTimetables: () => ({ data: [{ id: 1, status: 'draft' }] }),
   useTimetable: () => ({ data: mockTimetable() }),
   useGenerateTimetable: () => ({ generate: vi.fn(), isGenerating: false }),

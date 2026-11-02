@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
@@ -92,7 +92,7 @@ function teacherWorkload(teacherId, allRequirements, subjects, classGroups, elec
   return { rows, total }
 }
 
-export default function TeachersSection({ schoolId, teachers, subjects, classGroups, allRequirements, onTeachersChanged, readOnly }) {
+export default function TeachersSection({ schoolId, teachers, subjects, classGroups, allRequirements, onTeachersChanged, readOnly, focusTeacher = null }) {
   const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
   const realLoad = useRealLoad(schoolId)
   const [search, setSearch] = useState('')
@@ -111,6 +111,18 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
   // grades, assistant eligibility) is already directly editable inline;
   // this covers the basic fields that weren't yet.
   const [editingTeacherId, setEditingTeacherId] = useState(null)
+  // A setup-check Fix button pointing at one teacher: narrow the list to
+  // them and mark their card, so the change to make is the first thing seen.
+  const [highlightId, setHighlightId] = useState(null)
+  useEffect(() => {
+    if (!focusTeacher) return
+    const t = teachers.find((x) => x.id === focusTeacher.id)
+    if (!t) return
+    setSearch(t.name)
+    setHighlightId(t.id)
+    requestAnimationFrame(() => document.getElementById(`teacher-row-${t.id}`)?.scrollIntoView?.({ block: 'center' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTeacher])
 
   const allGrades = distinctGrades(classGroups)
 
@@ -349,7 +361,11 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
             )
           }
           return (
-            <div key={teacher.id} className="group flex flex-col gap-2 p-3">
+            <div
+              key={teacher.id}
+              id={`teacher-row-${teacher.id}`}
+              className={`group flex flex-col gap-2 p-3 ${highlightId === teacher.id ? 'bg-amber-50 ring-2 ring-inset ring-amber-300' : ''}`}
+            >
             <div className="flex flex-wrap items-center gap-3">
               <div className="w-40 flex-none">
                 <div className="flex items-center gap-1">

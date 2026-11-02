@@ -12,6 +12,7 @@ import {
   useSubjectFreezes,
   useOptimisticSlotMove,
   useGenerateTimetable,
+  useSetupCheck,
   useTimetable,
   useTimetables,
 } from '../hooks/useSchoolData'
@@ -22,6 +23,7 @@ import SearchableSelect from './SearchableSelect'
 import { sortByName, sortSections } from '../sorting'
 import { teacherLessons } from '../electiveSections'
 import GenerationFailedDialog from './GenerationFailedDialog'
+import SetupCheckPanel from './SetupCheckPanel'
 import { useEntitlements } from '../hooks/useEntitlements'
 
 // Where the sidebar scrolls to. Derived from the id rather than passed around,
@@ -114,6 +116,9 @@ export default function TimetableTab({
   constraints = [],
   readOnly = false,
   onOpenConstraints,
+  // Opens what a setup-check problem points at: { type, id, ... } - see
+  // SetupCheckPanel and App.jsx's handleFix.
+  onFix,
 }) {
   // Constraints saved on the Constraints tab that the solver doesn't
   // actually apply — most commonly the "scheduling_rule" catch-all for
@@ -232,7 +237,17 @@ export default function TimetableTab({
   // With sections frozen, say what Generate will keep and what it will build
   // before it starts.
   const [confirmGenerate, setConfirmGenerate] = useState(false)
-  async function handleGenerate() {
+  // Problems the setup check is sure will stop generation: Generate asks
+  // first, since the answer is already known.
+  const { data: setupCheck, isLoading: checkingSetup } = useSetupCheck(schoolId)
+  const setupErrors = setupCheck?.errors ?? []
+  const [checkBlocked, setCheckBlocked] = useState(false)
+  async function handleGenerate(skipCheck = false) {
+    if (!skipCheck && setupErrors.length > 0) {
+      setCheckBlocked(true)
+      return
+    }
+    setCheckBlocked(false)
     if ((frozenById.size > 0 || subjectFreezes.length > 0) && !confirmGenerate) {
       setConfirmGenerate(true)
       return
@@ -603,7 +618,7 @@ export default function TimetableTab({
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={isGenerating}
             className="flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
@@ -611,6 +626,25 @@ export default function TimetableTab({
           </motion.button>
         )}
       </div>
+
+      <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} />
+
+      {checkBlocked && (
+        <div role="alertdialog" aria-label="Setup problems" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-white px-3 py-2.5 text-sm">
+          <span className="text-red-900">
+            {setupErrors.length === 1 ? 'The problem above' : `The ${setupErrors.length} problems above`} will stop the
+            timetable. Fix {setupErrors.length === 1 ? 'it' : 'them'} first, or generate anyway to get the full diagnosis.
+          </span>
+          <span className="flex gap-2">
+            <button type="button" onClick={() => setCheckBlocked(false)} className="rounded border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="button" onClick={() => handleGenerate(true)} className="rounded bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">
+              Generate anyway
+            </button>
+          </span>
+        </div>
+      )}
 
       <div className="h-px bg-slate-200" />
 
@@ -678,7 +712,7 @@ export default function TimetableTab({
           frozenById={frozenById}
           subjectFreezes={subjectFreezes}
           onCancel={() => setConfirmGenerate(false)}
-          onConfirm={handleGenerate}
+          onConfirm={() => handleGenerate(true)}
         />
       )}
 

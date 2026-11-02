@@ -78,6 +78,8 @@ function App() {
   const [selectedSchoolId, setSelectedSchoolId] = useState(null)
   const [classGroups, setClassGroups] = useState([])
   const [selectedClassGroupId, setSelectedClassGroupId] = useState(null)
+  // What a setup-check Fix button asked to open - see handleFix.
+  const [focus, setFocus] = useState(null)
   const [teachers, setTeachers] = useState([])
   // Subjects/periods/rooms — lifted up here (alongside classGroups/
   // teachers, which already lived here) rather than kept local to
@@ -748,6 +750,41 @@ function App() {
     }
   }
 
+  // A setup-check problem's Fix button (SetupCheckPanel on the Timetable
+  // page): open the exact thing it's about. `focus` is read by the page that
+  // opens - the teachers list finds that teacher, a section's plan opens that
+  // block, the Constraints page that rule. `n` makes a second click on the
+  // same Fix count as new. (The state itself is declared with the others at
+  // the top, before any early return.)
+  function handleFix(fix) {
+    // Pages act on it as they open; cleared afterwards so coming back to
+    // the page later doesn't point at it again.
+    const next = (kind) => {
+      setFocus((f) => ({ kind, id: fix.id, n: (f?.n ?? 0) + 1 }))
+      setTimeout(() => setFocus((f) => (f ? { ...f, kind: null } : f)), 800)
+    }
+    if (fix.type === 'section' && fix.id != null) {
+      setFocus(null)
+      handleOpenSection(fix.id, 'plan')
+    } else if (fix.type === 'block') {
+      next('block')
+      handleOpenSection(fix.class_group_id, 'plan')
+    } else if (fix.type === 'teacher') {
+      next('teacher')
+      handleNavigate('entry', 'teachers')
+    } else if (fix.type === 'teachers') {
+      setFocus(null)
+      handleNavigate('entry', 'teachers')
+    } else if (fix.type === 'rule') {
+      next('rule')
+      setTab('constraints')
+    } else {
+      // rooms, periods: both on Setup
+      setFocus(null)
+      handleNavigate('entry', 'setup')
+    }
+  }
+
   // Data Entry has two distinct modes: school-wide (Subjects/Teachers/
   // Setup, each reached via its own sidebar item, no section implied) and
   // section-scoped (a section's plan, reached by clicking that section in
@@ -981,6 +1018,7 @@ function App() {
                     readOnly={isViewer}
                     subView={dataEntrySubView}
                     onSubViewChange={setDataEntrySubView}
+                    focus={focus}
                   />
                 )}
                 {tab === 'constraints' && (
@@ -992,6 +1030,8 @@ function App() {
                     readOnly={isViewer}
                     standardRules={selectedSchool?.standard_rules ?? null}
                     subjects={subjects}
+                    focusRuleId={focus?.kind === 'rule' ? focus.id : null}
+                    focusKey={focus?.n}
                     onSaveStandardRules={async (rules) => {
                       const updated = await api.updateStandardRules(selectedSchoolId, rules)
                       setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
@@ -1010,6 +1050,7 @@ function App() {
                       constraints={constraints}
                       readOnly={isViewer}
                       onOpenConstraints={() => setTab('constraints')}
+                      onFix={handleFix}
                     />
                   ) : (
                     <p className="text-sm text-slate-500">

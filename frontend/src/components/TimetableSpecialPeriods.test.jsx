@@ -10,6 +10,7 @@ vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: und
 
 const hooks = vi.hoisted(() => ({ timetable: null }))
 vi.mock('../hooks/useSchoolData', () => ({
+  useSetupCheck: () => ({ data: null, isLoading: false }),
   useTimetables: () => ({ data: [{ id: 1, status: 'draft' }] }),
   useTimetable: () => ({ data: hooks.timetable }),
   useGenerateTimetable: () => ({ generate: vi.fn(), isGenerating: false }),

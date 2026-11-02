@@ -103,6 +103,8 @@ export default function DataEntryTab({
   readOnly = false,
   subView,
   onSubViewChange,
+  // From a setup-check Fix button (App.jsx handleFix): { kind, id, n }.
+  focus = null,
 }) {
   const [activeSectionId, setActiveSectionId] = useState(classGroupId)
   const [error, setError] = useState(null)
@@ -112,6 +114,9 @@ export default function DataEntryTab({
   const [copyTargetIds, setCopyTargetIds] = useState([])
   // "Edit" on a block's row in the plan table opens it in the blocks panel below.
   const [blockEditRequest, setBlockEditRequest] = useState(null)
+  useEffect(() => {
+    if (focus?.kind === 'block') setBlockEditRequest({ id: focus.id, n: `fix-${focus.n}` })
+  }, [focus])
   const [copyPickerOpen, setCopyPickerOpen] = useState(false)
   const [copyingPeriods, setCopyingPeriods] = useState(false)
   const [settingUpPeriods, setSettingUpPeriods] = useState(false)
@@ -556,6 +561,7 @@ export default function DataEntryTab({
           allRequirements={allRequirements}
           onTeachersChanged={teachersApi}
           readOnly={readOnly}
+          focusTeacher={focus?.kind === 'teacher' ? focus : null}
         />
       )}
 
