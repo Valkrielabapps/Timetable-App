@@ -104,8 +104,15 @@ class OutreachSettings(Base):
     follow_up_days = Column(JSON, nullable=True)
     # Sending only happens when this is on - off until someone turns it on.
     sending_enabled = Column(Boolean, nullable=False, default=False)
-    # Gmail connection (OAuth). The refresh token is the mailbox's key.
+    # The connected mailbox (OAuth). The refresh token is the mailbox's key.
+    # The column names are from when Gmail was the only option; they hold
+    # whichever provider `mailbox_provider` says.
     gmail_address = Column(String, nullable=True)
     gmail_refresh_token = Column(Text, nullable=True)
+    mailbox_provider = Column(String, nullable=True)  # "gmail" | "zoho"
+    # Zoho only: the account the API addresses, and its mail API host
+    # (mail.zoho.in, mail.zoho.com, ... - whichever data centre it lives in).
+    zoho_account_id = Column(String, nullable=True)
+    zoho_api_domain = Column(String, nullable=True)
     last_reply_check_at = Column(DateTime(timezone=True), nullable=True)
     first_sent_at = Column(DateTime(timezone=True), nullable=True)

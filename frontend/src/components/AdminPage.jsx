@@ -21,9 +21,9 @@ export default function AdminPage() {
   const outreachReturn = new URLSearchParams(window.location.search).get('outreach')
   const [view, setView] = useState(outreachReturn ? 'outreach' : 'dashboard')
   const outreachNotice = {
-    gmail_connected: 'Gmail connected. Sending stays off until you switch it on.',
-    gmail_cancelled: 'Connecting Gmail was cancelled.',
-    gmail_failed: 'Gmail could not be connected. Try again.',
+    gmail_connected: 'Mailbox connected. Sending stays off until you switch it on.',
+    gmail_cancelled: 'Connecting the mailbox was cancelled.',
+    gmail_failed: 'The mailbox could not be connected. Try again.',
   }[outreachReturn] ?? null
 
   useEffect(() => {

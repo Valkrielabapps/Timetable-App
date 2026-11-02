@@ -19,15 +19,18 @@ admins only - see app/services/outreach.py for how it works.
     PUT    /api/admin/outreach/settings
     GET    /api/admin/outreach/gmail/connect     where to send the browser
     GET    /api/admin/outreach/gmail/callback    Google sends it back here
-    POST   /api/admin/outreach/gmail/disconnect
+    POST   /api/admin/outreach/gmail/disconnect   (disconnects either mailbox)
+    GET    /api/admin/outreach/zoho/connect      the same for a Zoho Mail mailbox
+    GET    /api/admin/outreach/zoho/callback
     POST   /api/admin/outreach/send-test         one email to the mailbox itself
     POST   /api/admin/outreach/check-replies     look for replies now
 """
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
+import httpx
 import jwt
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
@@ -66,6 +69,16 @@ def _message_out(m: OutreachMessage, school: OutreachSchool | None = None) -> di
     }
 
 
+def _mailbox_out(row) -> dict:
+    return {
+        "mailbox": row.gmail_address,
+        "mailbox_connected": bool(row.gmail_refresh_token),
+        "mailbox_provider": (row.mailbox_provider or "gmail") if row.gmail_refresh_token else None,
+        "gmail_configured": svc.gmail_configured(),
+        "zoho_configured": svc.zoho_configured(),
+    }
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -97,9 +110,7 @@ def overview(db: Session = Depends(get_db), admin: User = Depends(require_platfo
         "daily_limit_set": row.daily_limit,
         "sending_enabled": row.sending_enabled,
         "in_send_window": svc.in_send_window(),
-        "mailbox": row.gmail_address,
-        "mailbox_connected": bool(row.gmail_refresh_token),
-        "gmail_configured": svc.gmail_configured(),
+        **_mailbox_out(row),
         "job": svc.JOB,
     }
 
@@ -309,8 +320,7 @@ def _settings_out(row) -> dict:
     return {
         "sender_name": row.sender_name, "signature": row.signature, "templates": svc.templates_of(row),
         "daily_limit": row.daily_limit, "follow_up_days": row.follow_up_days or svc.DEFAULT_FOLLOW_UPS,
-        "sending_enabled": row.sending_enabled, "mailbox": row.gmail_address,
-        "mailbox_connected": bool(row.gmail_refresh_token), "gmail_configured": svc.gmail_configured(),
+        "sending_enabled": row.sending_enabled, **_mailbox_out(row),
         "hard_daily_cap": svc.HARD_DAILY_CAP, "effective_daily_limit": svc.effective_daily_limit(row),
     }
 
@@ -356,8 +366,8 @@ def put_settings(payload: SettingsIn, db: Session = Depends(get_db), admin: User
     return _settings_out(row)
 
 
-def _state_token(user: User) -> str:
-    return jwt.encode({"sub": str(user.id), "purpose": "outreach_gmail",
+def _state_token(user: User, purpose: str = "outreach_gmail") -> str:
+    return jwt.encode({"sub": str(user.id), "purpose": purpose,
                        "exp": datetime.now(timezone.utc) + timedelta(minutes=15)},
                       app_settings.jwt_secret, algorithm="HS256")
 
@@ -401,6 +411,44 @@ def gmail_callback(code: str | None = None, state: str | None = None, error: str
     row = svc.get_settings(db)
     row.gmail_refresh_token = result["refresh_token"]
     row.gmail_address = result["address"]
+    row.mailbox_provider = "gmail"
+    row.zoho_account_id = row.zoho_api_domain = None
+    db.commit()
+    return RedirectResponse("/admin?outreach=gmail_connected")
+
+
+@router.get("/zoho/connect")
+def zoho_connect(admin: User = Depends(require_platform_admin)):
+    if not svc.zoho_configured():
+        raise HTTPException(status_code=400, detail=(
+            "Zoho isn't set up on the server yet: add OUTREACH_ZOHO_CLIENT_ID and "
+            "OUTREACH_ZOHO_CLIENT_SECRET in Railway."))
+    return {"url": svc.zoho_auth_url(_state_token(admin, "outreach_zoho"))}
+
+
+@router.get("/zoho/callback")
+def zoho_callback(code: str | None = None, state: str | None = None, error: str | None = None,
+                  accounts_server: str | None = Query(default=None, alias="accounts-server"),
+                  db: Session = Depends(get_db)):
+    if error or not code or not state:
+        return RedirectResponse("/admin?outreach=gmail_cancelled")
+    try:
+        claims = jwt.decode(state, app_settings.jwt_secret, algorithms=["HS256"])
+        user = db.get(User, int(claims["sub"]))
+        if claims.get("purpose") != "outreach_zoho" or user is None or not user.is_platform_admin:
+            raise ValueError
+    except Exception:  # noqa: BLE001
+        return RedirectResponse("/admin?outreach=gmail_failed")
+    try:
+        result = svc.exchange_zoho_code(code, accounts_server)
+    except (svc.MailboxError, httpx.HTTPError, ValueError, KeyError):
+        return RedirectResponse("/admin?outreach=gmail_failed")
+    row = svc.get_settings(db)
+    row.gmail_refresh_token = result["refresh_token"]
+    row.gmail_address = result["address"]
+    row.mailbox_provider = "zoho"
+    row.zoho_account_id = result["account_id"]
+    row.zoho_api_domain = result["api_domain"]
     db.commit()
     return RedirectResponse("/admin?outreach=gmail_connected")
 
@@ -410,6 +458,7 @@ def gmail_disconnect(db: Session = Depends(get_db), admin: User = Depends(requir
     row = svc.get_settings(db)
     row.gmail_refresh_token = None
     row.gmail_address = None
+    row.mailbox_provider = row.zoho_account_id = row.zoho_api_domain = None
     row.sending_enabled = False
     db.commit()
     return _settings_out(row)

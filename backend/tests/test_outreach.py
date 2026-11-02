@@ -318,3 +318,121 @@ def test_closing_a_school_by_hand_stops_its_emails(client, staff, mailbox):
         assert {m.status for m in db.query(OutreachMessage).filter(OutreachMessage.school_id == sid)} == {"cancelled"}
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Zoho Mail
+
+
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body, self.text = status, body, str(body)
+
+    def json(self):
+        return self._body
+
+
+class FakeZoho:
+    """Stands in for Zoho's token and Mail API endpoints."""
+
+    def __init__(self):
+        self.calls = []
+        self.search_results = {}
+        self.reply_fails = False
+
+    def post(self, url, data=None, timeout=None):
+        self.calls.append(("POST", url, data))
+        return _Resp(200, {"access_token": "at", "refresh_token": "rt", "expires_in": 3600})
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(("GET", url, None))
+        return _Resp(200, {"data": [{"accountId": 555, "primaryEmailAddress": "arpith@timetablz.com"}]})
+
+    def request(self, method, url, headers=None, timeout=None, json=None, params=None):
+        self.calls.append((method, url, json or params))
+        assert headers["Authorization"] == "Zoho-oauthtoken at"
+        if method == "POST" and url.rstrip("/").split("/")[-1] != "messages":
+            if self.reply_fails:
+                return _Resp(404, {"status": {"code": 404}})
+            return _Resp(200, {"data": {"messageId": "222"}})
+        if method == "POST":
+            return _Resp(200, {"data": {"messageId": "111"}})
+        return _Resp(200, {"data": self.search_results.get(params["searchKey"].split("::")[0], [])})
+
+
+@pytest.fixture
+def zoho(monkeypatch):
+    fake = FakeZoho()
+    monkeypatch.setattr(svc.httpx, "post", fake.post)
+    monkeypatch.setattr(svc.httpx, "get", fake.get)
+    monkeypatch.setattr(svc.httpx, "request", fake.request)
+    monkeypatch.setattr(settings, "outreach_zoho_client_id", "cid")
+    monkeypatch.setattr(settings, "outreach_zoho_client_secret", "secret")
+    return fake
+
+
+def test_zoho_sends_the_first_email_then_follow_ups_as_replies_to_it(zoho):
+    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    first = box.send(to="office@sunrise.in", subject="Hello", body="Dear Sir", from_name="Arpith")
+    method, url, body = zoho.calls[-1]
+    assert url == "https://mail.zoho.in/api/accounts/555/messages"
+    assert body["fromAddress"] == "arpith@timetablz.com" and body["mailFormat"] == "plaintext"
+    assert zoho.calls[0][1] == "https://accounts.zoho.in/oauth/v2/token"
+    assert first["id"] == "111" and first["thread_id"].startswith("office@sunrise.in|")
+
+    follow = box.send(to="office@sunrise.in", subject="Re: Hello", body="Following up", from_name="Arpith",
+                      thread_id=first["thread_id"], in_reply_to=first["rfc_message_id"])
+    method, url, body = zoho.calls[-1]
+    assert url.endswith("/messages/111") and body["action"] == "reply"
+    assert follow["thread_id"] == first["thread_id"] and follow["rfc_message_id"] == "111"
+
+
+def test_zoho_sends_a_follow_up_fresh_if_the_first_email_cant_be_replied_to(zoho):
+    zoho.reply_fails = True
+    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    box.send(to="a@b.in", subject="Re: Hi", body="x", from_name="A", thread_id="a@b.in|02-Nov-2026",
+             in_reply_to="111")
+    assert zoho.calls[-1][1].endswith("/accounts/555/messages")
+
+
+def test_zoho_finds_replies_and_bounces_by_searching_the_inbox(zoho, client, staff):
+    zoho.search_results["sender:office@sunrise.in"] = [
+        {"fromAddress": "office@sunrise.in", "summary": "Please call us next week"}]
+    zoho.search_results["sender:mailer-daemon"] = []
+    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    found = box.thread_replies("office@sunrise.in|02-Nov-2026")
+    assert found == [{"from": "office@sunrise.in", "snippet": "Please call us next week"}]
+    keys = [c[2]["searchKey"] for c in zoho.calls if c[0] == "GET" and isinstance(c[2], dict)]
+    assert "sender:office@sunrise.in::fromDate:02-Nov-2026" in keys
+    assert any(k.startswith("sender:mailer-daemon::entire:office@sunrise.in") for k in keys)
+
+
+def test_connecting_zoho_stores_the_mailbox_and_sends_through_it(client, staff, zoho):
+    r = client.get("/api/admin/outreach/zoho/connect", headers=staff)
+    assert r.status_code == 200, r.text
+    url = r.json()["url"]
+    assert url.startswith("https://accounts.zoho.in/oauth/v2/auth?") and "ZohoMail.messages.ALL" in url.replace("%2C", ",")
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+    r = client.get("/api/admin/outreach/zoho/callback",
+                   params={"code": "c", "state": state, "accounts-server": "https://accounts.zoho.in"},
+                   follow_redirects=False)
+    assert r.status_code in (302, 307) and "gmail_connected" in r.headers["location"]
+    ov = client.get("/api/admin/outreach/overview", headers=staff).json()
+    assert ov["mailbox"] == "arpith@timetablz.com" and ov["mailbox_provider"] == "zoho"
+    db = SessionLocal()
+    try:
+        assert isinstance(svc.provider_for(svc.get_settings(db)), svc.ZohoProvider)
+    finally:
+        db.close()
+
+
+def test_a_zoho_callback_from_a_strange_server_is_refused(client, staff, zoho):
+    url = client.get("/api/admin/outreach/zoho/connect", headers=staff).json()["url"]
+    from urllib.parse import parse_qs, urlparse
+    state = parse_qs(urlparse(url).query)["state"][0]
+    r = client.get("/api/admin/outreach/zoho/callback",
+                   params={"code": "c", "state": state, "accounts-server": "https://evil.example.com"},
+                   follow_redirects=False)
+    assert "gmail_failed" in r.headers["location"]
+    assert client.get("/api/admin/outreach/overview", headers=staff).json()["mailbox_connected"] is False

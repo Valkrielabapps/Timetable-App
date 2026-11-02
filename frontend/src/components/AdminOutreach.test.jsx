@@ -14,6 +14,7 @@ const o = {
   saveSettings: vi.fn(),
   settings: vi.fn(),
   connectGmail: vi.fn(),
+  connectZoho: vi.fn(),
   cancel: vi.fn(),
   importWorkbook: vi.fn(),
 }
@@ -55,6 +56,16 @@ describe('admin outreach', () => {
     expect(screen.getByRole('switch', { name: 'Sending on' })).not.toBeChecked()
     fireEvent.click(screen.getByRole('switch', { name: 'Sending on' }))
     await waitFor(() => expect(o.saveSettings).toHaveBeenCalledWith({ sending_enabled: true }))
+  })
+
+  it('offers to connect Zoho Mail when it is set up on the server', async () => {
+    o.overview.mockResolvedValue({ ...OVERVIEW, mailbox: null, mailbox_connected: false, gmail_configured: false, zoho_configured: true })
+    o.connectZoho.mockRejectedValue(new Error('nope'))
+    render(<AdminOutreach />)
+    expect(await screen.findByRole('button', { name: 'Connect Zoho Mail' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Connect Gmail' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Zoho Mail' }))
+    await waitFor(() => expect(o.connectZoho).toHaveBeenCalled())
   })
 
   it('lists schools with who to write to, and drafts for the selected ones', async () => {

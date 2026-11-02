@@ -246,6 +246,7 @@ export const api = {
       settings: () => get('/admin/outreach/settings'),
       saveSettings: (data) => request('/admin/outreach/settings', { method: 'PUT', body: JSON.stringify(data) }),
       connectGmail: () => get('/admin/outreach/gmail/connect'),
+      connectZoho: () => get('/admin/outreach/zoho/connect'),
       disconnectGmail: () => post('/admin/outreach/gmail/disconnect', {}),
       sendTest: () => post('/admin/outreach/send-test', {}),
       checkReplies: () => post('/admin/outreach/check-replies', {}),

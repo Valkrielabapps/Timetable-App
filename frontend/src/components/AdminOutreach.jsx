@@ -8,7 +8,7 @@ import { confirmDialog } from './confirmDialog'
  * The school list (imported from the outreach workbook), who to write to at
  * each school, the emails drafted for them, and everything sent and
  * received. Emails are only ever sent once approved here, from the connected
- * Gmail mailbox, a few at a time inside school hours - see
+ * Zoho Mail or Gmail mailbox, a few at a time inside school hours - see
  * backend/app/services/outreach.py.
  */
 
@@ -104,10 +104,10 @@ function SendingBar({ overview, onChange, onError }) {
   const [busy, setBusy] = useState(false)
   if (!overview) return null
 
-  async function connect() {
+  async function connect(provider) {
     onError(null)
     try {
-      const { url } = await api.admin.outreach.connectGmail()
+      const { url } = await (provider === 'zoho' ? api.admin.outreach.connectZoho() : api.admin.outreach.connectGmail())
       window.location.assign(url)
     } catch (e) {
       onError(e.message)
@@ -133,10 +133,19 @@ function SendingBar({ overview, onChange, onError }) {
         <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Mailbox</div>
         {overview.mailbox_connected ? (
           <div className="font-medium">{overview.mailbox}</div>
-        ) : overview.gmail_configured ? (
-          <button onClick={connect} className="mt-0.5 rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">
-            Connect Gmail
-          </button>
+        ) : overview.gmail_configured || overview.zoho_configured ? (
+          <div className="mt-0.5 flex gap-2">
+            {overview.zoho_configured && (
+              <button onClick={() => connect('zoho')} className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">
+                Connect Zoho Mail
+              </button>
+            )}
+            {overview.gmail_configured && (
+              <button onClick={() => connect('gmail')} className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">
+                Connect Gmail
+              </button>
+            )}
+          </div>
         ) : (
           <div className="text-amber-700">Not set up on the server yet (see Settings)</div>
         )}
@@ -787,20 +796,20 @@ function Settings({ onChange }) {
         <h3 className="font-medium">Mailbox</h3>
         {form.mailbox_connected ? (
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <span>Sending from <span className="font-medium">{form.mailbox}</span></span>
+            <span>Sending from <span className="font-medium">{form.mailbox}</span>{form.mailbox_provider === 'zoho' ? ' (Zoho Mail)' : form.mailbox_provider === 'gmail' ? ' (Gmail)' : ''}</span>
             <button type="button" onClick={() => run(() => api.admin.outreach.sendTest(), (r) => `Test email sent to ${r.sent_to}.`)}
                     className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50">Send me a test email</button>
             <button type="button" onClick={() => run(() => api.admin.outreach.checkReplies(), (r) => `Checked: ${r.replied} replied, ${r.opted_out} opted out, ${r.bounced} bounced.`)}
                     className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-50">Check replies now</button>
             <button type="button" onClick={disconnect} className="text-xs font-medium text-red-700 hover:underline">Disconnect</button>
           </div>
-        ) : form.gmail_configured ? (
-          <p className="mt-1 text-slate-600">Not connected. Use Connect Gmail at the top of this page.</p>
+        ) : form.gmail_configured || form.zoho_configured ? (
+          <p className="mt-1 text-slate-600">Not connected. Use the Connect button at the top of this page.</p>
         ) : (
           <div className="mt-1 text-slate-600">
-            <p>Gmail isn&rsquo;t set up on the server yet. In Google Cloud, create an OAuth client (Web application) with this redirect URI:</p>
-            <code className="mt-1 block rounded bg-slate-100 px-2 py-1 text-xs">https://timetablz.com/api/admin/outreach/gmail/callback</code>
-            <p className="mt-1">then add OUTREACH_GOOGLE_CLIENT_ID and OUTREACH_GOOGLE_CLIENT_SECRET in Railway.</p>
+            <p>No mailbox is set up on the server yet. For Zoho Mail, create a Server-based Application at api-console.zoho.in with this redirect URI:</p>
+            <code className="mt-1 block rounded bg-slate-100 px-2 py-1 text-xs">https://timetablz.com/api/admin/outreach/zoho/callback</code>
+            <p className="mt-1">then add OUTREACH_ZOHO_CLIENT_ID and OUTREACH_ZOHO_CLIENT_SECRET in Railway.</p>
           </div>
         )}
         <p className="mt-3 text-xs text-slate-500">

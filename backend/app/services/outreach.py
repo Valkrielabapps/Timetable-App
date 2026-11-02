@@ -654,11 +654,151 @@ class GmailProvider:
         return out
 
 
+# ---------------------------------------------------------------------------
+# Zoho Mail
+# ---------------------------------------------------------------------------
+#
+# Zoho's Mail REST API (https://www.zoho.com/mail/help/api/) over HTTPS, the
+# same way as Gmail. Two differences shape the code:
+#   - A follow-up goes out with Zoho's "reply" action on the first email's
+#     message id, which keeps it in the same thread for the school.
+#   - There is no "give me this thread" call, so replies are found by
+#     searching the inbox for mail from the school's address since the first
+#     email, and bounces by searching mailer-daemon mail that names it. The
+#     "thread id" stored on a sent message is that search: "address|date".
+
+ZOHO_SCOPES = "ZohoMail.messages.ALL,ZohoMail.accounts.READ"
+
+
+def _zoho_accounts_for(api_domain: str | None) -> str:
+    """mail.zoho.in -> https://accounts.zoho.in: tokens are refreshed at the
+    data centre the mailbox lives in."""
+    if api_domain and "mail.zoho." in api_domain:
+        return "https://accounts.zoho." + api_domain.split("mail.zoho.", 1)[1].strip("/")
+    return app_settings.outreach_zoho_accounts_url.rstrip("/")
+
+
+def _zoho_mail_for(accounts_url: str) -> str:
+    """https://accounts.zoho.in -> mail.zoho.in"""
+    host = accounts_url.split("//", 1)[-1].strip("/")
+    return host.replace("accounts.", "mail.", 1) if host.startswith("accounts.") else "mail.zoho.in"
+
+
+class ZohoProvider:
+    def __init__(self, refresh_token: str, address: str | None, account_id: str, api_domain: str):
+        self.refresh_token = refresh_token
+        self.address = address
+        self.account_id = account_id
+        self.api_domain = api_domain
+        self._token = None
+        self._expires = 0.0
+
+    def _access(self) -> str:
+        if self._token and time.time() < self._expires - 60:
+            return self._token
+        r = httpx.post(f"{_zoho_accounts_for(self.api_domain)}/oauth/v2/token", data={
+            "client_id": app_settings.outreach_zoho_client_id,
+            "client_secret": app_settings.outreach_zoho_client_secret,
+            "refresh_token": self.refresh_token,
+            "grant_type": "refresh_token",
+        }, timeout=20)
+        body = r.json() if r.status_code == 200 else {}
+        if not body.get("access_token"):
+            raise MailboxError(f"Zoho sign-in failed ({r.status_code}). Connect the mailbox again.")
+        self._token = body["access_token"]
+        self._expires = time.time() + int(body.get("expires_in", 3000))
+        return self._token
+
+    def _api(self, method: str, path: str, **kw):
+        r = httpx.request(method, f"https://{self.api_domain}/api/accounts/{self.account_id}/{path}",
+                          headers={"Authorization": f"Zoho-oauthtoken {self._access()}"}, timeout=30, **kw)
+        if r.status_code >= 400:
+            raise MailboxError(f"Zoho said {r.status_code}: {r.text[:300]}")
+        return r.json().get("data")
+
+    def send(self, to: str, subject: str, body: str, from_name: str,
+             thread_id: str | None = None, in_reply_to: str | None = None) -> dict:
+        payload = {"fromAddress": self.address, "toAddress": to, "subject": subject,
+                   "content": body, "mailFormat": "plaintext"}
+        data = None
+        original = in_reply_to  # for Zoho, the first email's Zoho message id
+        if original:
+            try:
+                data = self._api("POST", f"messages/{original}", json={**payload, "action": "reply"})
+            except MailboxError:
+                data = None  # the first email is gone from Sent - send it as a new email
+        if data is None:
+            data = self._api("POST", "messages", json=payload)
+        data = data or {}
+        message_id = str(data.get("messageId") or "") or None
+        key = thread_id or f"{to}|{_now().astimezone(IST):%d-%b-%Y}"
+        # Follow-ups reply to the first email, so that's the id they need.
+        return {"id": message_id, "thread_id": key, "rfc_message_id": original or message_id}
+
+    def _search(self, key: str) -> list[dict]:
+        return self._api("GET", "messages/search", params={"searchKey": key, "limit": 20}) or []
+
+    def thread_replies(self, thread_id: str) -> list[dict]:
+        address, _, since = thread_id.partition("|")
+        since = f"::fromDate:{since}" if since else ""
+        out = []
+        for m in self._search(f"sender:{address}{since}"):
+            out.append({"from": m.get("fromAddress") or m.get("sender") or "",
+                        "snippet": html.unescape(m.get("summary") or m.get("subject") or "")})
+        for m in self._search(f"sender:mailer-daemon::entire:{address}{since}"):
+            out.append({"from": m.get("fromAddress") or "mailer-daemon", "snippet": m.get("summary") or ""})
+        return out
+
+
+def zoho_configured() -> bool:
+    return bool(app_settings.outreach_zoho_client_id and app_settings.outreach_zoho_client_secret)
+
+
+def zoho_auth_url(state: str) -> str:
+    from urllib.parse import urlencode
+    return f"{app_settings.outreach_zoho_accounts_url.rstrip('/')}/oauth/v2/auth?" + urlencode({
+        "scope": ZOHO_SCOPES, "client_id": app_settings.outreach_zoho_client_id,
+        "response_type": "code", "access_type": "offline", "prompt": "consent",
+        "redirect_uri": app_settings.outreach_zoho_redirect_uri, "state": state,
+    })
+
+
+def exchange_zoho_code(code: str, accounts_server: str | None = None) -> dict:
+    """Finish connecting a Zoho mailbox: refresh token, address, account id
+    and the mail API host of its data centre."""
+    accounts = (accounts_server or app_settings.outreach_zoho_accounts_url).rstrip("/")
+    if not re.fullmatch(r"https://accounts\.zoho\.[a-z.]+", accounts):
+        raise MailboxError("Zoho sent the sign-in back from an unexpected address.")
+    r = httpx.post(f"{accounts}/oauth/v2/token", data={
+        "code": code,
+        "client_id": app_settings.outreach_zoho_client_id,
+        "client_secret": app_settings.outreach_zoho_client_secret,
+        "redirect_uri": app_settings.outreach_zoho_redirect_uri,
+        "grant_type": "authorization_code",
+    }, timeout=20)
+    tokens = r.json() if r.status_code == 200 else {}
+    if not tokens.get("access_token"):
+        raise MailboxError(f"Zoho refused the connection ({tokens.get('error') or r.status_code}).")
+    if not tokens.get("refresh_token"):
+        raise MailboxError("Zoho didn't return a long-lived token. Connect again.")
+    api_domain = _zoho_mail_for(accounts)
+    acc = httpx.get(f"https://{api_domain}/api/accounts",
+                    headers={"Authorization": f"Zoho-oauthtoken {tokens['access_token']}"}, timeout=20)
+    accounts_list = (acc.json().get("data") or []) if acc.status_code == 200 else []
+    if not accounts_list:
+        raise MailboxError("Connected to Zoho, but couldn't find a mail account on it.")
+    a = accounts_list[0]
+    address = a.get("primaryEmailAddress") or a.get("mailboxAddress") or (
+        (a.get("emailAddress") or [{}])[0].get("mailId") if isinstance(a.get("emailAddress"), list) else None)
+    return {"refresh_token": tokens["refresh_token"], "address": address,
+            "account_id": str(a.get("accountId")), "api_domain": api_domain}
+
+
 _PROVIDER_OVERRIDE = None
 
 
 def set_provider(provider) -> None:
-    """For tests: send through this object instead of Gmail."""
+    """For tests: send through this object instead of a real mailbox."""
     global _PROVIDER_OVERRIDE
     _PROVIDER_OVERRIDE = provider
 
@@ -668,6 +808,8 @@ def provider_for(row: OutreachSettings):
         return _PROVIDER_OVERRIDE
     if not row.gmail_refresh_token:
         return None
+    if row.mailbox_provider == "zoho":
+        return ZohoProvider(row.gmail_refresh_token, row.gmail_address, row.zoho_account_id, row.zoho_api_domain)
     return GmailProvider(row.gmail_refresh_token, row.gmail_address)
 
 

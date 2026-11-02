@@ -96,6 +96,13 @@ class Settings(BaseSettings):
     outreach_google_client_id: str | None = None
     outreach_google_client_secret: str | None = None
     outreach_google_redirect_uri: str = "https://timetablz.com/api/admin/outreach/gmail/callback"
+    # Or from a Zoho Mail mailbox, through Zoho's Mail REST API: a
+    # "Server-based Application" client at api-console.zoho.in (or .com for
+    # accounts outside India) with this redirect URI.
+    outreach_zoho_client_id: str | None = None
+    outreach_zoho_client_secret: str | None = None
+    outreach_zoho_accounts_url: str = "https://accounts.zoho.in"
+    outreach_zoho_redirect_uri: str = "https://timetablz.com/api/admin/outreach/zoho/callback"
 
     # Used by app/services/email_service.py to actually send invite emails
     # via Resend's HTTP API (https://resend.com). If unset, invite creation
@@ -169,6 +176,8 @@ class Settings(BaseSettings):
         "google_client_id",
         "outreach_google_client_id",
         "outreach_google_client_secret",
+        "outreach_zoho_client_id",
+        "outreach_zoho_client_secret",
         "resend_api_key",
         "cashfree_app_id",
         "cashfree_secret_key",
