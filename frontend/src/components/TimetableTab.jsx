@@ -24,6 +24,7 @@ import { sortByName, sortSections } from '../sorting'
 import { teacherLessons } from '../electiveSections'
 import GenerationFailedDialog from './GenerationFailedDialog'
 import SetupCheckPanel from './SetupCheckPanel'
+import SendToSupport from './SendToSupport'
 import { useEntitlements } from '../hooks/useEntitlements'
 
 // Where the sidebar scrolls to. Derived from the id rather than passed around,
@@ -695,7 +696,7 @@ export default function TimetableTab({
         )}
       </div>
 
-      <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} />
+      <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} schoolId={schoolId} />
 
       {checkBlocked && (
         <div role="alertdialog" aria-label="Setup problems" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-white px-3 py-2.5 text-sm">
@@ -914,9 +915,20 @@ export default function TimetableTab({
               ))}
             </ul>
           )}
-          <button type="button" onClick={() => setMoveFix(null)} className="self-end text-xs font-medium text-slate-600 underline">
-            Dismiss
-          </button>
+          <div className="flex items-end justify-between gap-3">
+            {moveFix.suggestions?.length === 0 ? (
+              <SendToSupport
+                schoolId={schoolId}
+                compact
+                context={{ where: 'a move that couldn’t be made', timetable_id: timetable?.id, reason: moveFix.reason }}
+              />
+            ) : (
+              <span />
+            )}
+            <button type="button" onClick={() => setMoveFix(null)} className="flex-none text-xs font-medium text-slate-600 underline">
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
 
@@ -954,6 +966,8 @@ export default function TimetableTab({
           setFailureOpen(false)
         }}
         onOpenConstraints={onOpenConstraints}
+        schoolId={schoolId}
+        timetableId={failedRun?.id ?? null}
       />
 
       {solved && (

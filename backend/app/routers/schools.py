@@ -17,6 +17,7 @@ see docs/ARCHITECTURE.md for the full writeup.
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.access import get_membership_role, require_school_access
@@ -125,8 +126,62 @@ def setup_check(school_id: int, db: Session = Depends(get_db), current_user: Use
     """Problems that will stop a timetable, found without running the
     solver - see app/services/setup_check.py. Shown above Generate."""
     require_school_access(db, current_user, school_id)
+    from app.services import problem_log
     from app.services.setup_check import check_setup
-    return check_setup(db, school_id)
+    result = check_setup(db, school_id)
+    # Each certain blocker once a day, for the admin page's Problems list.
+    for issue in result["errors"]:
+        problem_log.record("setup_error", issue["message"], school_id=school_id, user_id=current_user.id,
+                           detail={"check": issue["kind"], "fix": issue.get("fix")})
+    return result
+
+
+class SupportSnapshotIn(BaseModel):
+    message: str = Field(default="", max_length=3000)
+    # What the school was looking at: {"where": "generation_failed", ...}.
+    context: dict = Field(default_factory=dict)
+
+
+@router.post("/{school_id}/support-snapshot", status_code=201)
+def send_to_support(
+    school_id: int, payload: SupportSnapshotIn,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """"Send to Timetablz support": the school's whole setup as it is now,
+    with what they were looking at and anything they typed, saved for the
+    admin page - and the support inbox told, so someone looks."""
+    require_school_access(db, current_user, school_id)
+    check_quota(f"support-snapshot:{current_user.id}", limit=10, window_seconds=3600)
+    from app.core.config import settings as app_settings
+    from app.services import problem_log
+    from app.services.email_service import send_support_ticket
+    school = db.get(School, school_id)
+    context = {k: v for k, v in (payload.context or {}).items() if isinstance(k, str)}
+    message = payload.message.strip()
+    where = str(context.get("where") or "the timetable page")
+    summary = message.splitlines()[0][:200] if message else f"Sent from {where}"
+    event_id = problem_log.record(
+        "support_request", summary, school_id=school_id, user_id=current_user.id,
+        timetable_id=context.get("timetable_id") if isinstance(context.get("timetable_id"), int) else None,
+        detail={"message": message, "context": context, "email": current_user.email},
+        with_snapshot=True,
+    )
+    if event_id is None:
+        raise HTTPException(status_code=503, detail=f"Couldn't send it right now. Please email {app_settings.support_email}.")
+    # Best-effort: the snapshot is saved either way, and the admin page lists it.
+    lines = [f"A school sent its setup from {where}. Problem #{event_id} on the admin page (Problems).", ""]
+    if message:
+        lines += [message, ""]
+    for k in ("reason", "reasons"):
+        v = context.get(k)
+        if v:
+            lines.append(f"{k.capitalize()}: {v if isinstance(v, str) else '; '.join(map(str, v))}")
+    send_support_ticket(
+        from_email=current_user.email, from_name=current_user.name,
+        school_name=school.name if school else None, category="problem",
+        subject=f"Setup sent from {where} (#{event_id})", message="\n".join(lines),
+    )
+    return {"id": event_id}
 
 
 @router.put("/{school_id}/grade-day-limits", response_model=SchoolOut)

@@ -489,6 +489,8 @@ def _generate(timetable_id: int, school_id: int) -> None:
                 )
 
         db.commit()
+        if timetable.status == "failed":
+            _log_failed_generation(timetable, school_id)
         # After the result is safely committed, and never allowed to undo it:
         # housekeeping failing is not a reason to report a generation as failed.
         try:
@@ -508,8 +510,22 @@ def _generate(timetable_id: int, school_id: int) -> None:
             timetable.status = "failed"
             timetable.error_message = f"Internal error during generation: {exc}"
             db.commit()
+            _log_failed_generation(timetable, school_id)
     finally:
         db.close()
+
+
+def _log_failed_generation(timetable: Timetable, school_id: int) -> None:
+    """For the admin page's Problems list (app/services/problem_log.py),
+    with the school's setup as it was, so the failure can be reproduced."""
+    from app.services import problem_log
+    lines = [l for l in (timetable.error_message or "").split("\n") if l.strip()]
+    problem_log.record(
+        "generation_failed", lines[0] if lines else "Generation failed",
+        school_id=school_id, timetable_id=timetable.id, with_snapshot=True,
+        detail={"reasons": lines, "solver_status": timetable.solver_status,
+                "explanation": timetable.error_explanation},
+    )
 
 
 @router.post("/generate", response_model=TimetableOut, status_code=201)
@@ -1219,6 +1235,16 @@ def suggest_move(
     if payload.from_period_id not in board.periods or payload.to_period_id not in board.periods:
         raise HTTPException(status_code=404, detail="Period not found")
     verdict, suggestions = board.suggest(payload.class_group_id, payload.from_period_id, payload.to_period_id)
+    if verdict.status == "blocked":
+        from app.services import problem_log
+        problem_log.record(
+            "move_blocked", verdict.reason, school_id=timetable.school_id, user_id=current_user.id,
+            timetable_id=timetable.id,
+            detail={"section": board.label(payload.class_group_id),
+                    "from": board.when(payload.from_period_id), "to": board.when(payload.to_period_id),
+                    "lesson": board.slot_name(payload.class_group_id, payload.from_period_id),
+                    "fixes_found": len(suggestions)},
+        )
     return {
         "status": verdict.status,
         "reason": verdict.reason,

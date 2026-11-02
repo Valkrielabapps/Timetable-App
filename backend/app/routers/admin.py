@@ -12,6 +12,9 @@ not for school admins.
     GET    /api/admin/stats                       dashboard totals
     GET    /api/admin/rule-events                 rules the parser struggled with
     PATCH  /api/admin/rule-events/{id}            file one into what needs fixing
+    GET    /api/admin/problems                    where schools get stuck
+    PATCH  /api/admin/problems/{id}               mark one fixed / the school's setup / won't fix
+    GET    /api/admin/problems/{id}/snapshot      the school's setup when it happened
 
 Granting a plan and issuing the invoice go through app/services/billing.py,
 the same functions a Cashfree payment uses.
@@ -384,3 +387,104 @@ def rule_event_triage(
     row.triage = payload.triage
     db.commit()
     return {"id": row.id, "triage": row.triage}
+
+
+# ---------------------------------------------------------------------------
+# Where schools get stuck (see app/services/problem_log.py)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/problems")
+def problems_list(
+    kind: str | None = None,
+    status: str | None = "open",
+    school_id: int | None = None,
+    q: str | None = None,
+    days: int = 30,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_platform_admin),
+):
+    """Failed generations, blocked moves, setup problems and support
+    requests, newest first, with totals and the most common ones - the
+    product fixes worth making are the ones many schools hit."""
+    from app.models.problems import ProblemEvent
+
+    since = datetime.now(timezone.utc) - timedelta(days=max(1, min(days, 365)))
+    base = db.query(ProblemEvent).filter(ProblemEvent.created_at >= since)
+    counts = dict(
+        db.query(ProblemEvent.kind, func.count(ProblemEvent.id))
+        .filter(ProblemEvent.created_at >= since, ProblemEvent.status == "open")
+        .group_by(ProblemEvent.kind).all()
+    )
+    query = base
+    if kind:
+        query = query.filter(ProblemEvent.kind == kind)
+    if status and status != "all":
+        query = query.filter(ProblemEvent.status == status)
+    if school_id:
+        query = query.filter(ProblemEvent.school_id == school_id)
+    if q:
+        query = query.filter(ProblemEvent.summary.ilike(f"%{q.strip()}%"))
+    rows = query.order_by(ProblemEvent.id.desc()).limit(300).all()
+    names = {s.id: s.name for s in db.query(School).filter(School.id.in_({r.school_id for r in rows if r.school_id})).all()}
+
+    # The same words across schools: what to fix first. Numbers and names
+    # differ between schools, so the check kind is the grouping for setup
+    # problems and the summary otherwise.
+    common: dict[tuple[str, str], set] = {}
+    for r in base.filter(ProblemEvent.status == "open").all():
+        label = (r.detail or {}).get("check") if r.kind == "setup_error" else r.summary[:120]
+        common.setdefault((r.kind, label or r.summary[:120]), set()).add(r.school_id)
+    top = sorted(common.items(), key=lambda kv: -len(kv[1]))[:8]
+    return {
+        "counts": counts,
+        "common": [{"kind": k, "label": label, "schools": len(s)} for (k, label), s in top],
+        "problems": [
+            {
+                "id": r.id, "created_at": r.created_at.isoformat() if r.created_at else None,
+                "kind": r.kind, "summary": r.summary, "detail": r.detail or {},
+                "school_id": r.school_id, "school_name": names.get(r.school_id),
+                "timetable_id": r.timetable_id, "has_snapshot": r.snapshot is not None,
+                "status": r.status, "note": r.note,
+            }
+            for r in rows
+        ],
+    }
+
+
+class _ProblemIn(BaseModel):
+    status: str | None = Field(default=None, pattern="^(open|fixed|wont_fix|school_setup)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@router.patch("/problems/{problem_id}")
+def problem_update(
+    problem_id: int, payload: _ProblemIn,
+    db: Session = Depends(get_db), admin: User = Depends(require_platform_admin),
+):
+    from app.models.problems import ProblemEvent
+
+    row = db.get(ProblemEvent, problem_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("status"):
+        row.status = data["status"]
+    if "note" in data:
+        row.note = data["note"]
+    db.commit()
+    return {"id": row.id, "status": row.status, "note": row.note}
+
+
+@router.get("/problems/{problem_id}/snapshot")
+def problem_snapshot(problem_id: int, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)):
+    """The school's setup when this happened, as a JSON file."""
+    from fastapi.responses import JSONResponse
+
+    from app.models.problems import ProblemEvent
+
+    row = db.get(ProblemEvent, problem_id)
+    if row is None or row.snapshot is None:
+        raise HTTPException(status_code=404, detail="No snapshot for this one")
+    return JSONResponse(row.snapshot, headers={
+        "Content-Disposition": f'attachment; filename="problem-{row.id}-school-{row.school_id}.json"'})

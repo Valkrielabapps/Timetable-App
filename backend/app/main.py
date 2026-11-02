@@ -16,7 +16,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.core.config import settings
 from app.core.observability import init_sentry, log_llm_availability
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
-from app.models import outreach as outreach_models, payment, school, user  # noqa: F401 - registers mappers before first request
+from app.models import outreach as outreach_models, payment, problems as problem_models, school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     admin,
     auth,

@@ -188,6 +188,10 @@ export const api = {
   updateGradeDayLimits: (schoolId, limits) => put(`/schools/${schoolId}/grade-day-limits`, { limits }),
   // Problems that will stop a timetable, found without running the solver.
   setupCheck: (schoolId) => get(`/schools/${schoolId}/setup-check`),
+  // "Send to Timetablz support": the school's setup, with what they were
+  // looking at, saved for the Timetablz admin page.
+  sendToSupport: (schoolId, message, context = {}) =>
+    post(`/schools/${schoolId}/support-snapshot`, { message, context }),
   updateStandardRules: (schoolId, rules) => put(`/schools/${schoolId}/standard-rules`, rules),
   updateSchoolInstitutionType: (schoolId, institutionType) =>
     put(`/schools/${schoolId}/institution-type`, { institution_type: institutionType }),
@@ -222,6 +226,13 @@ export const api = {
       return get(`/admin/rule-events${qs ? `?${qs}` : ''}`)
     },
     triageRuleEvent: (id, triage) => request(`/admin/rule-events/${id}`, { method: 'PATCH', body: JSON.stringify({ triage }) }),
+    // Where schools get stuck (backend app/services/problem_log.py).
+    problems: (params = {}) => {
+      const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
+      return get(`/admin/problems${qs ? `?${qs}` : ''}`)
+    },
+    updateProblem: (id, data) => request(`/admin/problems/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    downloadProblemSnapshot: (p) => downloadFile(`/admin/problems/${p.id}/snapshot`, `problem-${p.id}-school-${p.school_id}.json`),
     // Sales outreach (backend app/routers/outreach.py).
     outreach: {
       overview: () => get('/admin/outreach/overview'),

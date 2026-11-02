@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import SendToSupport from './SendToSupport'
 
 /**
  * The setup check above Generate (backend/app/services/setup_check.py):
@@ -13,7 +14,7 @@ import { useState } from 'react'
  */
 const SHOWN = 5
 
-export default function SetupCheckPanel({ check, loading, onFix, readOnly = false }) {
+export default function SetupCheckPanel({ check, loading, onFix, readOnly = false, schoolId = null }) {
   const [showAll, setShowAll] = useState(false)
   if (loading) {
     return <p className="text-xs text-slate-400">Checking the setup…</p>
@@ -65,6 +66,15 @@ export default function SetupCheckPanel({ check, loading, onFix, readOnly = fals
           </li>
         ))}
       </ul>
+      {errors.length > 0 && (
+        <div className="mt-2">
+          <SendToSupport
+            schoolId={schoolId}
+            compact
+            context={{ where: 'the setup check', reasons: errors.map((e) => e.message) }}
+          />
+        </div>
+      )}
       {items.length > SHOWN && (
         <button
           type="button"

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import SendToSupport from './SendToSupport'
 
 /**
  * Why the last generation found no timetable, as a dialog rather than a
@@ -11,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion'
  * _diagnose_infeasibility in backend/app/services/solver.py) - each shown as
  * its own numbered reason.
  */
-export default function GenerationFailedDialog({ open, explanation, message, onClose, onOpenConstraints }) {
+export default function GenerationFailedDialog({ open, explanation, message, onClose, onOpenConstraints, schoolId = null, timetableId = null }) {
   useEffect(() => {
     if (!open) return undefined
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -93,6 +94,12 @@ export default function GenerationFailedDialog({ open, explanation, message, onC
                   ))}
                 </ol>
               </section>
+              <div className="mt-5">
+                <SendToSupport
+                  schoolId={schoolId}
+                  context={{ where: 'the failed-generation dialog', timetable_id: timetableId, reasons }}
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-7 py-4">

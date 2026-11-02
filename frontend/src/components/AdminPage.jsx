@@ -3,6 +3,7 @@ import { api, getToken, setToken } from '../api'
 import AuthPage from './AuthPage'
 import AdminTab from './AdminTab'
 import AdminRuleEvents from './AdminRuleEvents'
+import AdminProblems from './AdminProblems'
 import AdminOutreach from './AdminOutreach'
 
 /**
@@ -92,6 +93,7 @@ export default function AdminPage() {
               ['dashboard', 'Dashboard'],
               ['accounts', 'Accounts'],
               ['outreach', 'Outreach'],
+              ['problems', 'Problems'],
               ['rules', 'Rule reading'],
             ].map(([id, label]) => (
               <button
@@ -114,7 +116,7 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-8">
-        {view === 'dashboard' ? <Dashboard /> : view === 'rules' ? <AdminRuleEvents /> : view === 'outreach' ? <AdminOutreach notice={outreachNotice} /> : <Accounts />}
+        {view === 'dashboard' ? <Dashboard /> : view === 'rules' ? <AdminRuleEvents /> : view === 'problems' ? <AdminProblems /> : view === 'outreach' ? <AdminOutreach notice={outreachNotice} /> : <Accounts />}
       </main>
     </div>
   )
