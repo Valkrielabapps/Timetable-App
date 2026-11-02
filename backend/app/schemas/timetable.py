@@ -72,6 +72,13 @@ class SlotMove(BaseModel):
     to_period_id: int
 
 
+class SlotTargets(BaseModel):
+    """A slot picked up to drag: where could it go?"""
+
+    class_group_id: int
+    from_period_id: int
+
+
 class SlotLock(BaseModel):
     """Lock or unlock every entry in one section's period at once."""
 

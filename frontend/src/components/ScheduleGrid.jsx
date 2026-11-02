@@ -1,4 +1,14 @@
+import { useState } from 'react'
+
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+// While dragging: where the slot can go. Replaces the lock tint for the
+// length of the drag, since "can it go here" is the question then.
+const DROP_TONE = {
+  ok: 'bg-emerald-100 ring-2 ring-inset ring-emerald-400',
+  warn: 'bg-amber-100 ring-2 ring-inset ring-amber-400',
+  blocked: 'bg-red-100 ring-2 ring-inset ring-red-400',
+}
 
 const SPECIAL_TONE = {
   muted: 'bg-slate-50 text-slate-400',
@@ -58,7 +68,16 @@ export default function ScheduleGrid({
   // The whole section is frozen: nothing in it moves or unlocks until it is
   // unfrozen, so its slots show neither red nor green.
   sectionFrozen = false,
+  // While a slot is dragged: Map(periodId -> { status: ok|warn|blocked,
+  // reason }) for every period it could be dropped in (see move-targets in
+  // backend/app/routers/timetables.py), or null. Colours each cell green,
+  // amber or red, and the cell under the pointer says why.
+  dropTargets = null,
+  dragFromPeriodId = null,
 }) {
+  // The cell being dragged over - a title tooltip doesn't show mid-drag, so
+  // the reason is written into the cell itself.
+  const [over, setOver] = useState(null)
   return (
     <div className="overflow-x-auto rounded-md border border-slate-200">
       <table className="min-w-full border-collapse text-[15px] leading-snug">
@@ -124,6 +143,9 @@ export default function ScheduleGrid({
                 // An inset ring rather than a border, so the grid's own lines
                 // don't shift and the lock tint stays readable underneath —
                 // the two say different things and both need to survive.
+                const target = dropTargets && period ? dropTargets.get(period.id) : null
+                const dragTint = target ? DROP_TONE[target.status] ?? '' : ''
+                const isDragOrigin = dropTargets && period && period.id === dragFromPeriodId
                 const broken = entries.flatMap((e) => violatingEntries.get(e.id) ?? [])
                 const violationRing = broken.length ? 'ring-2 ring-inset ring-amber-400' : ''
                 const what = isBlock && entries.length > 1 ? 'the whole block' : isBatched ? 'every batch' : 'it'
@@ -143,17 +165,40 @@ export default function ScheduleGrid({
                 return (
                   <td
                     key={d}
-                    title={broken.length ? broken.map((v) => v.description).join('\n') : undefined}
-                    className={`border border-slate-200 px-3 py-2 transition-colors ${
+                    data-drop={target?.status}
+                    title={
+                      target?.reason ?? (broken.length ? broken.map((v) => v.description).join('\n') : undefined)
+                    }
+                    className={`relative border border-slate-200 px-3 py-2 transition-colors ${
                       editable ? 'align-top' : ''
-                    } ${editable && lockable ? 'cursor-pointer' : ''} ${lockTint} ${violationRing}`}
+                    } ${editable && lockable ? 'cursor-pointer' : ''} ${
+                      dragTint || `${lockTint} ${violationRing}`
+                    } ${isDragOrigin ? 'opacity-50' : ''}`}
                     // The whole coloured cell toggles the lock, not just the
                     // words in it - clicking the empty part of a red cell used
                     // to do nothing at all.
                     onClick={editable && lockable ? () => onToggleLock(entries) : undefined}
                     onDragOver={editable && period ? (e) => e.preventDefault() : undefined}
-                    onDrop={editable && period ? () => onDrop(d, order) : undefined}
+                    onDragEnter={editable && period ? () => setOver(period.id) : undefined}
+                    onDrop={
+                      editable && period
+                        ? () => {
+                            setOver(null)
+                            onDrop(d, order)
+                          }
+                        : undefined
+                    }
                   >
+                    {target?.reason && over === period.id && (
+                      <div
+                        role="status"
+                        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 px-1.5 py-1 text-[11px] font-medium leading-tight ${
+                          target.status === 'blocked' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
+                        }`}
+                      >
+                        {target.reason}
+                      </div>
+                    )}
                     {!period ? (
                       <span className="text-slate-300">-</span>
                     ) : entries.length === 0 ? (

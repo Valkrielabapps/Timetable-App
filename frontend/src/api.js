@@ -382,6 +382,13 @@ export const api = {
   // elective block has one entry per option and a split lab one per batch,
   // and moving one of them alone would tear the block apart. All-or-nothing
   // on the server. See move_slot in backend/app/routers/timetables.py.
+  // While a slot is dragged: every period it could go to, ok / warn / blocked
+  // with the reason. See move_targets in backend/app/routers/timetables.py.
+  moveTargets: (timetableId, classGroupId, fromPeriodId) =>
+    post(`/timetables/${timetableId}/move-targets`, {
+      class_group_id: classGroupId,
+      from_period_id: fromPeriodId,
+    }),
   moveSlot: (timetableId, classGroupId, fromPeriodId, toPeriodId) =>
     post(`/timetables/${timetableId}/move-slot`, {
       class_group_id: classGroupId,

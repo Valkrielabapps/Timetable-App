@@ -140,6 +140,33 @@ export default function TimetableTab({
   // is kept so a drop into another section's grid can be refused rather than
   // quietly moving the slot inside its own.
   const [dragSource, setDragSource] = useState(null)
+  // Where the slot being dragged could go - { classGroupId, fromPeriodId,
+  // byPeriod: Map(periodId -> { status, reason }) } - asked for as soon as
+  // it is picked up, so the grid can colour every cell before the drop.
+  const [dragTargets, setDragTargets] = useState(null)
+  const dragToken = useRef(0)
+  async function startDrag(classGroupId, period) {
+    setDragSource({ classGroupId, period })
+    setDragTargets(null)
+    if (!timetable || !period || !api.moveTargets) return
+    const token = ++dragToken.current
+    try {
+      const res = await api.moveTargets(timetable.id, classGroupId, period.id)
+      if (token !== dragToken.current) return // a newer drag, or this one ended
+      setDragTargets({
+        classGroupId,
+        fromPeriodId: period.id,
+        byPeriod: new Map(res.targets.map((t) => [t.period_id, t])),
+      })
+    } catch {
+      // No colours, and the drop is checked by the server as before.
+    }
+  }
+  function endDrag() {
+    dragToken.current += 1
+    setDragSource(null)
+    setDragTargets(null)
+  }
   // Which export format is currently downloading, if any — guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
@@ -304,7 +331,8 @@ export default function TimetableTab({
 
   async function handleDrop(day, order, classGroupId) {
     const source = dragSource
-    setDragSource(null)
+    const known = dragTargets
+    endDrag()
     if (!source) return
     // Every section's grid is on screen at once, so a drop can land in a grid
     // the dragged slot does not belong to. Moving it would quietly reposition
@@ -341,6 +369,14 @@ export default function TimetableTab({
     const frozenThere = entriesFor(day, order, classGroupId).find((e) => e.subject_frozen)
     if (frozenThere) {
       setError(`${frozenThere.subject_name} is frozen, so that lesson stays where it is. Unfreeze it under Freezing > Subjects to move it.`)
+      return
+    }
+    // Already known to be refused: say why, and don't ask.
+    const verdict = known?.classGroupId === classGroupId && known.fromPeriodId === source.period.id
+      ? known.byPeriod.get(targetPeriod.id)
+      : null
+    if (verdict?.status === 'blocked') {
+      setError(`Can't move it there: ${verdict.reason}.`)
       return
     }
     setError(null)
@@ -797,6 +833,20 @@ export default function TimetableTab({
       {/* Pinned to the bottom of the screen: a lock or a move refused in a
           section far down the page used to be reported up here, out of
           sight, and the click looked like it had done nothing. */}
+      {dragSource && (
+        <div className="pointer-events-none fixed bottom-6 left-6 z-40 flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-700 shadow-lg ring-1 ring-slate-200">
+          {dragTargets ? (
+            <>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-emerald-200 ring-1 ring-emerald-500" /> Can go</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-amber-200 ring-1 ring-amber-500" /> Allowed, breaks a rule</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-red-200 ring-1 ring-red-500" /> Blocked</span>
+            </>
+          ) : (
+            <span>Checking where it can go…</span>
+          )}
+        </div>
+      )}
+
       {error && (
         <div className="fixed bottom-6 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg bg-red-700 px-4 py-3 text-sm text-white shadow-lg">
           <p>{error}</p>
@@ -1007,8 +1057,10 @@ export default function TimetableTab({
                   entriesAt={(d, o) => entriesFor(d, o, cg.id)}
                   editable={!readOnly}
                   violatingEntries={violatingEntries}
-                  onDragStart={(d, o) => setDragSource({ classGroupId: cg.id, period: periodAt(d, o) })}
-                  onDragEnd={() => setDragSource(null)}
+                  onDragStart={(d, o) => startDrag(cg.id, periodAt(d, o))}
+                  onDragEnd={endDrag}
+                  dropTargets={dragTargets?.classGroupId === cg.id ? dragTargets.byPeriod : null}
+                  dragFromPeriodId={dragSource?.classGroupId === cg.id ? dragSource.period?.id : null}
                   onDrop={(d, o) => handleDrop(d, o, cg.id)}
                   onToggleLock={handleToggleLock}
                   rowLabel={rowLabel}

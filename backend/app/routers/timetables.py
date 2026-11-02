@@ -58,6 +58,7 @@ from app.schemas.timetable import (
     EntryUpdateOut,
     SlotLock,
     SlotMove,
+    SlotTargets,
     TimetableSummaryOut,
     EditCommandRequest,
     EditCommandResponse,
@@ -235,14 +236,40 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
     """
     if timetable.status != "draft" or not timetable.entries:
         return []
+    setup = _rule_setup(db, timetable, class_groups, subjects, teachers, periods)
+    if setup is None:
+        return []
+    rules, index = setup
+    return [vars(v) for v in check_rules(_placements(timetable.entries, periods), rules, index)]
 
+
+def _placements(entries, periods: dict, moved: dict | None = None) -> list[Placement]:
+    """The checker's view of these entries; `moved` (entry id -> period id)
+    places some of them somewhere else, for asking "what if"."""
+    moved = moved or {}
+    out = []
+    for e in entries:
+        pid = moved.get(e.id, e.period_id)
+        out.append(Placement(
+            entry_id=e.id, class_group_id=e.class_group_id, subject_id=e.subject_id,
+            teacher_id=e.teacher_id, period_id=pid,
+            day_of_week=periods[pid].day_of_week, order=periods[pid].order,
+            occupies_teacher=e.teacher_id is not None,
+        ))
+    return out
+
+
+def _rule_setup(db: Session, timetable: Timetable, class_groups: dict, subjects: dict, teachers: dict,
+                periods: dict):
+    """The rules this timetable is held to, and the names they resolve
+    against - or None when there are none to check."""
     rows = (
         db.query(Constraint)
         .filter(Constraint.school_id == timetable.school_id, Constraint.type == "ir")
         .all()
     )
     if not rows:
-        return []
+        return None
 
     rules = []
     for row in rows:
@@ -262,7 +289,7 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
             # on generation; repeating it on every read would be noise.
             continue
     if not rules:
-        return []
+        return None
 
     school_periods = list(periods.values())
     index = SchoolIndex(
@@ -273,18 +300,7 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
         first_order_by_day=_edge_orders(school_periods, first=True),
         last_order_by_day=_edge_orders(school_periods, first=False),
     )
-
-    placements = [
-        Placement(
-            entry_id=e.id, class_group_id=e.class_group_id, subject_id=e.subject_id,
-            teacher_id=e.teacher_id, period_id=e.period_id,
-            day_of_week=periods[e.period_id].day_of_week,
-            order=periods[e.period_id].order,
-            occupies_teacher=e.teacher_id is not None,
-        )
-        for e in timetable.entries
-    ]
-    return [vars(v) for v in check_rules(placements, rules, index)]
+    return rules, index
 
 
 def _violations_after_edit(db: Session, timetable: Timetable) -> list[dict]:
@@ -1136,6 +1152,157 @@ def lock_slot(
         entries=[_entry_out(db, e) for e in entries],
         violations=_violations_after_edit(db, timetable),
     )
+
+
+@router.post("/{timetable_id}/move-targets")
+def move_targets(
+    timetable_id: int, payload: SlotTargets, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Where a picked-up slot could be dropped, for colouring the grid while
+    it is dragged: every other lesson period of the section, each one
+
+        ok       - move-slot would accept it
+        warn     - it would accept it, but a rule (or a teacher's marked
+                   unavailability) would be broken
+        blocked  - it would refuse, with the reason ("Vivek teaches 11 A then")
+
+    The same checks as move_slot, run in memory over the timetable for every
+    target at once instead of one request per cell, and nothing is saved.
+    """
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    school_id = timetable.school_id
+    sid0, src = payload.class_group_id, payload.from_period_id
+    periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()}
+    if src not in periods:
+        raise HTTPException(status_code=404, detail="Period not found")
+    cgs = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
+    subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
+    teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
+    rooms = {r.id: r for r in db.query(Room).filter(Room.school_id == school_id).all()}
+    entries = list(timetable.entries)
+
+    at: dict[tuple[int, int], list[TimetableEntry]] = {}
+    by_period: dict[int, list[TimetableEntry]] = {}
+    for e in entries:
+        at.setdefault((e.class_group_id, e.period_id), []).append(e)
+        by_period.setdefault(e.period_id, []).append(e)
+
+    def label(cid) -> str:
+        cg = cgs.get(cid)
+        return (f"{cg.grade} {cg.name}" if cg.grade else cg.name) if cg else "another section"
+
+    def subj(e) -> str:
+        s = subjects.get(e.subject_id)
+        return s.name if s else "a lesson"
+
+    by_subject, by_block = frozen_lessons_index(db, school_id)
+    school = db.get(School, school_id)
+    off_by_grade = grade_off_period_ids(list(periods.values()), school.grade_day_limits if school else None)
+    zero_cache: dict = {}
+
+    def no_lesson_reason(period_id: int, cid: int) -> str | None:
+        cg = cgs.get(cid)
+        grade = cg.grade if cg else None
+        if grade not in zero_cache:
+            zero_cache[grade] = zero_period_ids_for(db, school_id, grade)
+        if period_id in zero_cache[grade]:
+            return f"That's {grade or label(cid)}'s zero period"
+        if grade and period_id in off_by_grade.get(grade, set()):
+            return f"{grade}'s day is over by then"
+        return None
+
+    def together(t: int) -> list[int]:
+        sections = [sid0]
+        i = 0
+        while i < len(sections):
+            sid = sections[i]
+            i += 1
+            for pid in (src, t):
+                blocks = {e.elective_block_id for e in at.get((sid, pid), []) if e.elective_block_id is not None}
+                if not blocks:
+                    continue
+                for o in by_period.get(pid, []):
+                    if o.elective_block_id in blocks and o.class_group_id not in sections:
+                        sections.append(o.class_group_id)
+        return sections
+
+    setup = _rule_setup(db, timetable, cgs, subjects, teachers, periods)
+    base: set = set()
+    if setup:
+        rules, index = setup
+        base = {(v.constraint_id, v.detail) for v in check_rules(_placements(entries, periods), rules, index)
+                if v.strength == "required"}
+
+    def judge(t: int) -> tuple[str, str | None]:
+        sections = together(t)
+        source = [e for sid in sections for e in at.get((sid, src), [])]
+        target = [e for sid in sections for e in at.get((sid, t), [])]
+        if not source:
+            return "blocked", "There's nothing in that slot to move"
+        for sid in sections:
+            cg = cgs.get(sid)
+            if cg is not None and cg.frozen:
+                return "blocked", (f"{label(sid)} is frozen" + ("" if sid == sid0 else " and shares this lesson"))
+        for e in source + target:
+            name = _subject_frozen_name(e, by_subject, by_block)
+            if name:
+                return "blocked", f"{name} is frozen"
+        for sid in sections:
+            if any(e.class_group_id == sid for e in source):
+                why = no_lesson_reason(t, sid)
+                if why:
+                    return "blocked", why + ("" if sid == sid0 else f" for {label(sid)}")
+            if any(e.class_group_id == sid for e in target):
+                why = no_lesson_reason(src, sid)
+                if why:
+                    return "blocked", f"What's there can't come back: {why[0].lower() + why[1:]}"
+        if any(e.locked for e in source):
+            return "blocked", "This slot is locked. Click it to unlock it first"
+        locked = [e for e in target if e.locked]
+        if locked:
+            e = locked[0]
+            where = "" if e.class_group_id == sid0 else f" in {label(e.class_group_id)}"
+            return "blocked", f"{subj(e)}{where} is locked there"
+        moving = {e.id for e in source + target}
+        for movers, dest in ((source, t), (target, src)):
+            others = [o for o in by_period.get(dest, []) if o.id not in moving]
+            for e in movers:
+                for o in others:
+                    if e.teacher_id is not None and o.teacher_id == e.teacher_id:
+                        tname = teachers[e.teacher_id].name if e.teacher_id in teachers else "The teacher"
+                        if dest == t:
+                            return "blocked", f"{tname} teaches {label(o.class_group_id)} then"
+                        return "blocked", (f"{subj(e)} would move back to the starting period, where "
+                                           f"{tname} teaches {label(o.class_group_id)}")
+                    if e.room_id is not None and o.room_id == e.room_id:
+                        rname = rooms[e.room_id].name if e.room_id in rooms else "The room"
+                        return "blocked", f"{rname} is in use by {label(o.class_group_id)} then"
+        warnings = []
+        for movers, dest in ((source, t), (target, src)):
+            for e in movers:
+                tch = teachers.get(e.teacher_id)
+                if tch and dest in set(tch.unavailable_period_ids or []):
+                    warnings.append(f"{tch.name} is marked unavailable then")
+        if setup:
+            moved = {e.id: t for e in source} | {e.id: src for e in target}
+            after = [v for v in check_rules(_placements(entries, periods, moved), rules, index)
+                     if v.strength == "required" and (v.constraint_id, v.detail) not in base]
+            for v in after:
+                text = f"Breaks \u201c{v.description}\u201d"
+                if text not in warnings:
+                    warnings.append(text)
+        if warnings:
+            return "warn", "; ".join(dict.fromkeys(warnings))
+        return "ok", None
+
+    out = []
+    for p in periods.values():
+        if p.is_break or p.id == src:
+            continue
+        status, reason = judge(p.id)
+        out.append({"period_id": p.id, "status": status, "reason": reason})
+    return {"from_period_id": src, "targets": out}
 
 
 def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
