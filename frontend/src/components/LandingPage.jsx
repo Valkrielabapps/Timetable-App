@@ -409,8 +409,9 @@ function TimetableMockup() {
 function WorkflowDemo() {
   const reduceMotion = useReducedMotion()
   return (
-    <section id="features" className="mx-auto max-w-6xl px-6 pb-14 pt-20">
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-950 shadow-sm">
+    <section id="features" className="bg-neutral-950">
+      <div className="mx-auto max-w-6xl px-6 pb-16 pt-20">
+      <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950">
         <video
           className="block aspect-video w-full"
           autoPlay={!reduceMotion}
@@ -425,6 +426,7 @@ function WorkflowDemo() {
           <source src="/media/timetablz-demo.webm" type="video/webm" />
           <source src="/media/timetablz-demo.mp4" type="video/mp4" />
         </video>
+      </div>
       </div>
     </section>
   )
