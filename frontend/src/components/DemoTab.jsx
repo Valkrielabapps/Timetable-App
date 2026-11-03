@@ -18,17 +18,19 @@ const isFile = (url) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url)
 
 export default function DemoTab() {
   return (
-    <div className="flex max-w-4xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <div>
         <h2 className="text-xl font-semibold tracking-tight">Demo</h2>
         <p className="mt-1 text-sm text-slate-500">{DEMO_DESCRIPTION}</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      {/* Fills the rest of the screen: the full width of the page, and the
+          height left below the header and the title above. */}
+      <div className="h-[calc(100vh-13rem)] min-h-[420px] w-full overflow-hidden rounded-xl border border-slate-200 bg-white">
         {DEMO_VIDEO_URL ? (
-          <div className="aspect-video w-full bg-black">
+          <div className="h-full w-full bg-black">
             {isFile(DEMO_VIDEO_URL) ? (
-              <video src={DEMO_VIDEO_URL} title={DEMO_TITLE} controls preload="metadata" className="h-full w-full" />
+              <video src={DEMO_VIDEO_URL} title={DEMO_TITLE} controls preload="metadata" className="h-full w-full object-contain" />
             ) : (
               <iframe
                 src={DEMO_VIDEO_URL}
@@ -40,7 +42,7 @@ export default function DemoTab() {
             )}
           </div>
         ) : (
-          <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-slate-50 text-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-slate-50 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
