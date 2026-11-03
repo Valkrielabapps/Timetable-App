@@ -409,9 +409,11 @@ function TimetableMockup() {
 function WorkflowDemo() {
   const reduceMotion = useReducedMotion()
   return (
-    <section id="features" className="bg-neutral-950">
-      <div className="mx-auto max-w-6xl px-6 pb-16 pt-20">
-      <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950">
+    // The same near-black as the video's own background (#090909), so the
+    // video has no visible edge and reads as part of the page.
+    <section id="features" style={{ backgroundColor: '#090909' }}>
+      <div className="mx-auto max-w-[1600px] px-2 pb-10 pt-8 sm:px-6">
+      <div>
         <video
           className="block aspect-video w-full"
           autoPlay={!reduceMotion}
