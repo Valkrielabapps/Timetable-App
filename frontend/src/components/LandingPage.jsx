@@ -136,7 +136,7 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, sig
       <Hero onGetStarted={onGetStarted} signedIn={signedIn} />
       <WorkflowDemo />
       <MetricsSection />
-      <WhyChoose />
+      <WhyChoose onGetStarted={onGetStarted} />
       {/* HowItWorks and Pricing removed for now (explicit request) — the
           component functions/data (STEPS, PRICING_TIERS) are left intact
           further down this file so they're a one-line add back rather
@@ -534,188 +534,161 @@ function MetricsSection() {
  * testimonials.
  */
 /**
- * "Why schools choose Timetablz", laid out like Sequoia's "one integrated
- * platform" section: a centred headline and paragraph, a product mock-up in
- * the middle, and two benefits either side of it. On a phone the mock-up
- * comes first and the benefits stack beneath it.
+ * "Why schools choose Timetablz", laid out like Deel's hero: a black panel
+ * on the left with the claim, a pick-what-you-need grid and the call to
+ * action; a photo on the right with the product floating over it as small
+ * cards. Black and white throughout - green only on the "generated" tick,
+ * the one place it means something.
  *
- * Every benefit is a real property of the product - no invented numbers.
- * The mock-up is drawn in HTML rather than a screenshot so it stays crisp
- * and matches the app's real palette.
+ * The photo is /media/why-person.jpg (frontend/public/media), an
+ * AI-generated person, shown in black and white. Until that file exists the
+ * panel shows a plain dark gradient behind the cards, so nothing looks
+ * broken.
  */
-const WHY_BENEFITS = {
-  left: [
-    {
-      title: 'Timetables in minutes, not weeks',
-      body: 'The whole school is solved at once, every section and every teacher together, usually in under a minute.',
-    },
-    {
-      title: 'Zero clashes, guaranteed',
-      body: 'No teacher or room is ever double-booked. Clashes are ruled out while the timetable is built, not found later on the staff room wall.',
-    },
-  ],
-  right: [
-    {
-      title: 'Rules in plain English',
-      body: "Type rules the way you'd say them, like \"no PE right after lunch\". You see exactly how each one was read before it's applied.",
-    },
-    {
-      title: 'Ready to share',
-      body: 'Lock the slots that already work, regenerate the rest, and export every class and teacher timetable to Excel or PDF.',
-    },
-  ],
-}
-
-function WhyBenefit({ title, body, delay }) {
-  return (
-    <motion.div
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.4 }}
-      variants={fadeUp}
-      transition={{ duration: 0.5, delay }}
-      className="max-w-[240px]"
-    >
-      <h3 className="text-[17px] font-semibold leading-snug text-neutral-900">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-neutral-500">{body}</p>
-    </motion.div>
-  )
-}
-
-const MOCK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-// [subject, tint] per period, one row per period - a believable Grade 9 week.
-const MOCK_SUBJECTS = {
-  Maths: 'bg-emerald-100 text-emerald-900',
-  English: 'bg-sky-100 text-sky-900',
-  Physics: 'bg-violet-100 text-violet-900',
-  Hindi: 'bg-amber-100 text-amber-900',
-  Biology: 'bg-rose-100 text-rose-900',
-  PE: 'bg-lime-100 text-lime-900',
-  Chemistry: 'bg-indigo-100 text-indigo-900',
-}
-const MOCK_WEEK = [
-  ['Maths', 'English', 'Physics', 'Maths', 'Hindi'],
-  ['English', 'Maths', 'Chemistry', 'Biology', 'Maths'],
-  ['Physics', 'Hindi', 'Maths', 'English', 'Chemistry'],
-  ['Biology', 'PE', 'English', 'Physics', 'English'],
-  ['Hindi', 'Chemistry', 'Biology', 'PE', 'Physics'],
+const WHY_OPTIONS = [
+  'Build the whole timetable',
+  'Handle electives',
+  'Cover absent teachers',
+  'Keep approved grades fixed',
+  'Export to Excel & PDF',
 ]
 
-function WhyMockup() {
+function WhyCard({ className = '', delay = 0, children }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
+      initial={{ opacity: 0, y: 14 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
-      transition={{ duration: 0.6 }}
-      className="relative mx-auto w-full max-w-[460px]"
+      viewport={{ once: true, amount: 0.4 }}
+      transition={{ duration: 0.45, delay }}
+      className={`absolute rounded-2xl bg-white shadow-[0_18px_50px_-18px_rgba(0,0,0,0.45)] ${className}`}
     >
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_30px_80px_-30px_rgba(16,24,40,0.35)]">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[13px] font-semibold text-neutral-900">Grade 9 · Section A</p>
-            <p className="text-[11px] text-neutral-400">Week timetable</p>
-          </div>
-          <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            No clashes
-          </span>
-        </div>
-
-        <div className="mt-3 flex gap-1.5 text-[10px]">
-          <span className="rounded-full bg-neutral-900 px-2.5 py-1 font-medium text-white">By section</span>
-          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-500">By teacher</span>
-          <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-500">Substitutions</span>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {[
-            ['Sections', '14'],
-            ['Teachers', '33'],
-            ['Generated in', '4 sec'],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-neutral-100 bg-neutral-50 px-2.5 py-2">
-              <p className="text-[9px] uppercase tracking-wide text-neutral-400">{label}</p>
-              <p className="mt-0.5 text-lg font-semibold tracking-tight text-neutral-900">{value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-3 overflow-hidden rounded-xl border border-neutral-100">
-          <div className="grid grid-cols-[40px_repeat(5,1fr)] bg-neutral-50 text-[9px] font-medium uppercase tracking-wide text-neutral-400">
-            <span />
-            {MOCK_DAYS.map((d) => (
-              <span key={d} className="py-1.5 text-center">{d}</span>
-            ))}
-          </div>
-          {MOCK_WEEK.map((row, p) => (
-            <div key={p} className="grid grid-cols-[40px_repeat(5,1fr)] gap-1 border-t border-neutral-100 px-1 py-1">
-              <span className="self-center text-center text-[9px] text-neutral-400">P{p + 1}</span>
-              {row.map((subject, d) => (
-                <span
-                  key={d}
-                  className={`truncate rounded-md px-1 py-1.5 text-center text-[9.5px] font-medium ${MOCK_SUBJECTS[subject]}`}
-                >
-                  {subject}
-                </span>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Fades the bottom of the card into the section, as in the reference. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 rounded-b-2xl bg-gradient-to-t from-[#f3faf6] to-transparent" />
+      {children}
     </motion.div>
   )
 }
 
-function WhyChoose() {
-  return (
-    <section className="bg-gradient-to-b from-white to-[#f3faf6] px-6 py-24">
-      <div className="mx-auto max-w-6xl">
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={fadeUp}
-          transition={{ duration: 0.5 }}
-          className="mx-auto max-w-2xl text-center"
-        >
-          <h2 className="text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
-            Why schools choose <em className="pr-1 font-light italic text-neutral-500">Timetablz.</em>
-          </h2>
-          <p className="mt-5 text-[15px] leading-relaxed text-neutral-500">
-            One connected workflow replaces weeks of spreadsheet redrafts. Set up your school, describe your
-            rules in plain English, and get a clash-free timetable for every section and every teacher.
-          </p>
-          <a
-            href="/why-timetablz"
-            className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-neutral-900 hover:text-neutral-600"
-          >
-            Why Timetablz
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </a>
-        </motion.div>
+function WhyChoose({ onGetStarted }) {
+  const [picked, setPicked] = useState(() => new Set([WHY_OPTIONS[0]]))
+  const [photo, setPhoto] = useState(true)
+  const toggle = (o) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(o)) next.delete(o)
+      else next.add(o)
+      return next
+    })
 
-        <div className="mt-16 grid items-center gap-12 lg:grid-cols-[1fr_minmax(0,460px)_1fr] lg:gap-10">
-          <div className="order-1 lg:hidden">
-            <WhyMockup />
+  return (
+    <section className="bg-white px-3 py-6 sm:px-5">
+      <div className="mx-auto grid max-w-[1600px] gap-3 lg:grid-cols-2">
+        {/* Left: the claim, what you need, start */}
+        <div className="flex flex-col justify-center rounded-3xl bg-neutral-950 px-8 py-14 text-white sm:px-14 lg:min-h-[640px] lg:px-20">
+          <motion.h2
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.4 }}
+            variants={fadeUp}
+            transition={{ duration: 0.5 }}
+            className="max-w-xl text-5xl font-semibold leading-[1.02] tracking-[-0.03em] md:text-6xl"
+          >
+            Build, adjust and share every timetable in your school.
+          </motion.h2>
+
+          <p className="mt-12 text-lg font-medium">What would you like to do with Timetablz?</p>
+          <div className="mt-4 grid max-w-xl grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {WHY_OPTIONS.map((o) => {
+              const on = picked.has(o)
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggle(o)}
+                  className={`flex min-h-[92px] flex-col items-center justify-center gap-2.5 rounded-xl border px-3 py-4 text-center text-[14px] font-medium leading-tight transition-colors ${
+                    on ? 'border-white bg-white text-neutral-950' : 'border-white/20 text-white hover:border-white/50'
+                  }`}
+                >
+                  <span
+                    className={`flex h-4 w-4 items-center justify-center rounded border ${
+                      on ? 'border-neutral-950 bg-neutral-950' : 'border-white/60'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {on && (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                  </span>
+                  {o}
+                </button>
+              )
+            })}
           </div>
-          <div className="order-2 grid gap-10 sm:grid-cols-2 lg:order-none lg:grid-cols-1 lg:justify-items-end lg:gap-14">
-            {WHY_BENEFITS.left.map((b, i) => (
-              <WhyBenefit key={b.title} {...b} delay={0.1 * i} />
-            ))}
-          </div>
-          <div className="hidden lg:block">
-            <WhyMockup />
-          </div>
-          <div className="order-3 grid gap-10 sm:grid-cols-2 lg:order-none lg:grid-cols-1 lg:gap-14">
-            {WHY_BENEFITS.right.map((b, i) => (
-              <WhyBenefit key={b.title} {...b} delay={0.1 * i + 0.1} />
-            ))}
-          </div>
+
+          <button
+            type="button"
+            onClick={onGetStarted}
+            className="mt-8 w-full max-w-xl rounded-full bg-white px-6 py-4 text-base font-semibold text-neutral-950 transition-colors hover:bg-neutral-200"
+          >
+            Start free
+          </button>
+          <p className="mt-4 max-w-xl text-center text-sm text-white/55">14 days free · No card needed</p>
+        </div>
+
+        {/* Right: a person, with the product floating over the photo */}
+        <div className="relative min-h-[560px] overflow-hidden rounded-3xl bg-gradient-to-br from-neutral-800 to-neutral-950 lg:min-h-[640px]">
+          {photo && (
+            <img
+              src="/media/why-person.jpg"
+              alt=""
+              onError={() => setPhoto(false)}
+              className="absolute inset-0 h-full w-full object-cover grayscale"
+              loading="lazy"
+            />
+          )}
+
+          <WhyCard className="left-6 top-6 w-[min(300px,calc(100%-3rem))] p-5 sm:left-8 sm:top-8">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+              <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Timetable generated</span>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </span>
+            </div>
+            <p className="mt-3 text-[44px] font-light leading-none tracking-[-0.04em] text-neutral-950 tabular-nums">0 clashes</p>
+            <p className="mt-2 text-[13px] text-neutral-500">18 sections · 32 teachers</p>
+          </WhyCard>
+
+          {[
+            ['Electives', 'left-6 top-[218px] sm:left-8', 0.1],
+            ['Lab double periods', 'left-6 top-[278px] sm:left-24', 0.18],
+            ['Substitutes', 'left-6 top-[338px] sm:left-14', 0.26],
+          ].map(([label, pos, delay]) => (
+            <WhyCard key={label} className={`${pos} flex items-center gap-2.5 px-4 py-2.5`} delay={delay}>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-950">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </span>
+              <span className="text-[14px] font-medium text-neutral-900">{label}</span>
+            </WhyCard>
+          ))}
+
+          <WhyCard className="right-6 top-[150px] hidden px-4 py-3 sm:block sm:right-8" delay={0.2}>
+            <p className="text-[12px] text-neutral-500">Physics Lab · Grade 11 A</p>
+            <p className="mt-0.5 text-[15px] font-semibold text-neutral-950">Double period, Tue P3–P4</p>
+            <span className="mt-2 inline-block rounded-full border border-neutral-950 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-950">
+              Rule followed
+            </span>
+          </WhyCard>
+
+          <WhyCard className="bottom-6 right-6 w-[min(300px,calc(100%-3rem))] px-5 py-4 sm:bottom-8 sm:right-8" delay={0.3}>
+            <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-neutral-500">Rules in plain English</p>
+            <p className="mt-2 text-[17px] font-medium leading-snug text-neutral-950">&ldquo;No PE right after lunch.&rdquo;</p>
+            <p className="mt-1 text-[13px] text-neutral-500">Read, checked and applied to every section</p>
+          </WhyCard>
         </div>
       </div>
     </section>
