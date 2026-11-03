@@ -67,8 +67,8 @@ function StepVisual({ activeStep }) {
 
   return (
     <svg viewBox="0 0 320 420" className="h-[420px] w-[320px]">
-      {/* Faint vertical spine connecting the layers, Griffin-diagram-style. */}
-      <line x1="160" y1="40" x2="160" y2="380" stroke="rgba(23,23,23,0.12)" strokeWidth="1" />
+      {/* Faint vertical spine connecting the layers, ending at the bottom tip of the last one. */}
+      <line x1="160" y1="40" x2="160" y2="334" stroke="rgba(23,23,23,0.12)" strokeWidth="1" />
 
       {LAYER_LABELS.map((label, i) => {
         const cy = 70 + i * gap
