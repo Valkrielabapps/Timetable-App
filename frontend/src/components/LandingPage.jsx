@@ -920,7 +920,7 @@ function ClosingCta({ onGetStarted, signedIn }) {
         className="mx-auto max-w-6xl px-6 py-24 md:py-28"
       >
         <h2 className="max-w-4xl text-4xl font-medium leading-[1.1] tracking-tight text-neutral-900 md:text-6xl">
-          Make the hardest timetable feel effortless, with Timetablz<span className="text-emerald-600">.</span>
+          Make the hardest timetable feel effortless, with Timetablz.
         </h2>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <a
