@@ -439,22 +439,28 @@ function WorkflowDemo() {
 // after: '10 minutes'.
 const TIME_SAVED = {
   before: 'A timetable that takes weeks by hand.',
-  after: 'Minutes',
+  after: 'Minutes.',
 }
 
 // Real numbers so far, across every school using Timetablz. Update them as
 // schools join - they are the claim, so they have to stay true.
 const CAPABILITY_STATS = [
-  { n: '01', label: 'Schools', value: '1', unit: 'running their timetable on Timetablz' },
-  { n: '02', label: 'Students', value: '500+', unit: 'with clash-free timetables' },
-  { n: '03', label: 'Teachers', value: '50+', unit: 'scheduled with no double-booking' },
-  { n: '04', label: 'Generation time', value: 'Minutes', unit: 'for a whole school' },
+  { n: '01', label: 'Schools', value: '1', unit: 'school', note: 'Running its whole timetable on Timetablz' },
+  { n: '02', label: 'Students', value: '500+', unit: 'students', note: 'On clash-free timetables every week' },
+  { n: '03', label: 'Teachers', value: '50+', unit: 'teachers', note: 'Scheduled with no double-booking' },
+  { n: '04', label: 'Clashes', value: '0', unit: 'clashes', note: 'Teacher and room, in every timetable' },
 ]
 
+/**
+ * The numbers, laid out like Papermark's: a one-line claim, one very large
+ * light number, a thin rule, then four columns - index, name, a big light
+ * figure with its unit beside it, and a line of detail. Inter at weight 300
+ * for the figures; everything else stays in the site's own font.
+ */
 function MetricsSection() {
   return (
     <section className="border-t border-neutral-100 bg-white px-6 py-24">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <motion.div
           initial="hidden"
           whileInView="show"
@@ -462,22 +468,23 @@ function MetricsSection() {
           variants={fadeUp}
           transition={{ duration: 0.5 }}
         >
-          {/* The time saved, the number a coordinator cares about most. Until
-              a school confirms its own before-and-after (e.g. "from 3 weeks
-              to 10 minutes"), this stays general: hand-built timetables take
-              weeks, Timetablz takes minutes. Put the confirmed figures in
-              TIME_SAVED below once there are some. */}
-          <p className="text-2xl text-neutral-900 md:text-3xl">{TIME_SAVED.before}</p>
-          <p className="mt-4 text-7xl font-semibold tracking-tight text-neutral-900 tabular-nums md:text-8xl">
-            {TIME_SAVED.after}<span className="text-emerald-600">.</span>
+          <p className="text-xl text-neutral-900 md:text-2xl">{TIME_SAVED.before}</p>
+          <p
+            className="mt-2 font-light leading-none tracking-[-0.04em] text-neutral-950 tabular-nums"
+            style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(4.5rem, 13vw, 11rem)' }}
+          >
+            {TIME_SAVED.after}
           </p>
         </motion.div>
 
-        <div className="mt-10 text-[13px] uppercase tracking-wide text-neutral-500">
-          Every section and every teacher, solved together
+        <div className="mt-16 flex flex-wrap items-baseline justify-between gap-2 border-b border-neutral-200 pb-5">
+          <p className="text-[13px] uppercase tracking-[0.08em] text-neutral-500">
+            500+ students and 50+ teachers already on Timetablz
+          </p>
+          <p className="text-[13px] text-neutral-500">Live schools · 2026</p>
         </div>
 
-        <div className="mt-8 divide-y divide-neutral-200 border-t border-neutral-200 pt-8 lg:grid lg:grid-cols-4 lg:divide-y-0 lg:divide-x">
+        <div className="divide-y divide-neutral-200 lg:grid lg:grid-cols-4 lg:divide-x lg:divide-y-0">
           {CAPABILITY_STATS.map((stat, i) => (
             <motion.div
               key={stat.n}
@@ -486,12 +493,22 @@ function MetricsSection() {
               viewport={{ once: true, amount: 0.3 }}
               variants={fadeUp}
               transition={{ duration: 0.4, delay: i * 0.08 }}
-              className="py-6 first:pt-0 lg:py-0 lg:px-8 lg:first:pl-0"
+              className="py-8 lg:px-9 lg:py-10 lg:first:pl-0"
             >
-              <p className="text-[13px] text-neutral-500">{stat.n}</p>
-              <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-neutral-900">{stat.label}</p>
-              <p className="mt-4 text-5xl font-semibold tracking-tight text-neutral-900 tabular-nums">{stat.value}</p>
-              <p className="mt-1 text-sm text-neutral-500">{stat.unit}</p>
+              <p className="text-[13px] text-neutral-400 tabular-nums">{stat.n}</p>
+              <p className="mt-8 text-[15px] font-semibold uppercase tracking-[0.12em] text-neutral-900">{stat.label}</p>
+              <p className="mt-10 flex items-baseline gap-2.5">
+                <span
+                  className="font-light leading-none tracking-[-0.04em] text-neutral-950 tabular-nums"
+                  style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(3.25rem, 5vw, 4.5rem)' }}
+                >
+                  {stat.value}
+                </span>
+                <span className="text-lg text-neutral-500" style={{ fontFamily: 'var(--font-display)' }}>
+                  {stat.unit}
+                </span>
+              </p>
+              <p className="mt-6 text-[15px] leading-relaxed text-neutral-500">{stat.note}</p>
             </motion.div>
           ))}
         </div>

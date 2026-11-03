@@ -8,12 +8,14 @@
    font-serif/font-sans via the @theme override below, so existing
    `font-sans`/`font-serif` utility classes (and the sans default already
    implied everywhere) just pick these up automatically. */
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Instrument+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Instrument+Sans:wght@400;500;600;700&family=Inter:wght@200;300;400;500;600&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Fraunces", ui-serif, Georgia, serif;
+  /* The big light numbers in the homepage's numbers section. */
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
