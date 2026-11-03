@@ -4,13 +4,13 @@
  * (optional) -> generate), as real counts read from App.jsx's own live
  * state. Used by both the always-visible header progress bar (App.jsx)
  * and the detailed step list (OverviewTab.jsx) so the two can never drift
- * apart — before this, OverviewTab computed its own steps locally and the
+ * apart - before this, OverviewTab computed its own steps locally and the
  * header had no equivalent at all, meaning progress was invisible on
  * every tab except Overview, which is where a new admin spends the least
  * time (the actual setup work happens on Data Entry and Constraints).
  *
  * Subjects and teachers are two separate steps, not one combined
- * "subjects & teachers" step — they're two separate pages in Data Entry
+ * "subjects & teachers" step - they're two separate pages in Data Entry
  * (SubjectsSection.jsx / TeachersSection.jsx) now, so the progress
  * tracking matches the real structure of the work instead of glossing
  * over it.
@@ -21,7 +21,7 @@ export function useSetupProgress({
   classGroupLabel,
   // periods/subjects/teachers/constraints are all App.jsx's own state now
   // (see App.jsx's docstrings on why each was lifted out of its
-  // originally-owning tab) — read directly here instead of independently
+  // originally-owning tab) - read directly here instead of independently
   // re-fetching them, since App.jsx already keeps them live and this hook
   // re-running its own fetch of the same lists on every tab switch was
   // the remaining cause of the header progress bar (and OverviewTab, and
@@ -32,7 +32,7 @@ export function useSetupProgress({
   teachers = [],
   constraints = [],
   hasTimetable = false,
-  // Every SubjectRequirement in the school — App.jsx's own state now,
+  // Every SubjectRequirement in the school - App.jsx's own state now,
   // always fully loaded (see App.jsx's docstring on why the old per-
   // section lazy cache had to go: TeachersSection's live workload total
   // needs every section's data at once, not just whichever ones happen
@@ -41,7 +41,7 @@ export function useSetupProgress({
   allRequirements = [],
 }) {
   const loaded = Boolean(schoolId)
-  // Nothing left for this hook to fetch itself — every count it reports
+  // Nothing left for this hook to fetch itself - every count it reports
   // is derived from already-loaded state passed in, so there's nothing
   // that can fail here anymore. Kept in the return value (always null)
   // so OverviewTab/SetupProgressBar don't need to change how they read it.

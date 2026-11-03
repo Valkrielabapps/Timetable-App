@@ -1,5 +1,5 @@
 """
-CRUD endpoints for schools — the first vertical slice through the stack
+CRUD endpoints for schools - the first vertical slice through the stack
 (router -> schema -> model -> database). Later routers for teachers,
 class groups, subjects, rooms, and constraints follow this same pattern.
 
@@ -7,10 +7,10 @@ Schools are owned by a user (see owner_id on the School model): creating
 one attaches the logged-in user as owner. Beyond the owner, a school can
 now have additional admins/viewers via SchoolMembership (see
 app/core/access.py and app/routers/invites.py for how those rows get
-created) — list_schools and get_school both include schools the current
+created) - list_schools and get_school both include schools the current
 user has a membership in, not just ones they own. Every OTHER router
 (subjects, teachers, timetables, etc.) now goes through
-app.core.access.require_school_access too — this file used to be the only
+app.core.access.require_school_access too - this file used to be the only
 one that checked ownership at all; that gap is closed as of this feature,
 see docs/ARCHITECTURE.md for the full writeup.
 """
@@ -108,7 +108,7 @@ def update_grade_order(
     school_id: int, payload: SchoolGradeOrderUpdate,
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
-    """Persists the sidebar's admin-customized grade display order — see
+    """Persists the sidebar's admin-customized grade display order - see
     School.grade_order's docstring. Full-replace (not a patch/reorder-one
     operation): the frontend always sends the complete new ordering, since
     that's simpler and less error-prone than the server reasoning about a
@@ -272,12 +272,12 @@ def update_institution_type(
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
     """
-    Lets an admin fix a school's school-vs-college label after creation —
+    Lets an admin fix a school's school-vs-college label after creation - 
     previously this was only ever set once, in the create-school modal,
     with no way to change it (see docs/ARCHITECTURE.md's "School vs.
     college" section). Purely cosmetic, same as at creation time: this
     never gates or removes any existing data (class groups, lab-batch
-    settings, credits) — it only changes which placeholder wording and
+    settings, credits) - it only changes which placeholder wording and
     which college-only fields the frontend shows going forward.
     """
     role = require_school_access(db, current_user, school_id, min_role="admin")
@@ -334,7 +334,7 @@ def update_school_profile(
 
 @router.get("/{school_id}/members", response_model=list[MemberOut])
 def list_members(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Admin-only: the owner (synthesized — never has its own
+    """Admin-only: the owner (synthesized - never has its own
     SchoolMembership row) plus every SchoolMembership row for this
     school."""
     require_school_access(db, current_user, school_id, min_role="admin")
@@ -409,7 +409,7 @@ def create_invite(
     Admin-only. Attempts to send the invite by email via Resend (see
     app/services/email_service.py) if RESEND_API_KEY is configured;
     otherwise, and on any send failure, this silently no-ops on the email
-    side — the invite is still created and its link is still included in
+    side - the invite is still created and its link is still included in
     the response (see api.js / TeamTab.jsx), so the admin always has a
     copyable fallback regardless of whether the email went out.
     """

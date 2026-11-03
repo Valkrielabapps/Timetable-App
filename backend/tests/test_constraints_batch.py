@@ -1,10 +1,10 @@
 """
 Tests for POST /api/constraints/batch (app/routers/constraints.py's
-parse_and_create_constraints_batch) — the batch counterpart to /parse.
+parse_and_create_constraints_batch) - the batch counterpart to /parse.
 Covers both paths through _resolve_constraints_batch_text: the LLM batch
 call (mocked here, never a real API call) and the per-line fallback that
 kicks in when it's unavailable, which in this test env means "always"
-(no ANTHROPIC_API_KEY is set — same as every other constraint test file).
+(no ANTHROPIC_API_KEY is set - same as every other constraint test file).
 """
 from unittest.mock import patch
 
@@ -27,7 +27,7 @@ def _create_teacher(client, headers, school_id, name):
 
 def test_batch_without_llm_falls_back_to_one_rule_per_line(client):
     """No ANTHROPIC_API_KEY in this test env (see conftest.py), so this
-    exercises the per-line regex fallback end to end — two lines, each
+    exercises the per-line regex fallback end to end - two lines, each
     independently recognizable by the regex parser, should become two
     separate Constraint rows."""
     assert settings.anthropic_api_key is None
@@ -168,7 +168,7 @@ def test_batch_falls_back_to_per_line_when_llm_batch_call_fails(client):
 def test_batch_flags_conflicts_between_two_rules_in_the_same_paste(client):
     """Two contradictory rules submitted in the SAME batch call must be
     flagged against each other, exactly like two separate /parse calls
-    would be — conflict detection is DB-driven (queries every saved
+    would be - conflict detection is DB-driven (queries every saved
     constraint), not scoped to "this batch" vs "earlier saves", so this
     should fall out for free rather than needing special-case logic."""
     _, headers = signup(client)

@@ -3,11 +3,11 @@ import { api, setToken } from '../api'
 
 /**
  * Landing screen for an invite link. This app has no client-side router
- * (see App.jsx — it's plain tab state, no react-router), so the invite
+ * (see App.jsx - it's plain tab state, no react-router), so the invite
  * link is a query param instead of a path: `?invite=<token>`. App.jsx
  * checks for that param before anything else and renders this in place
  * of the normal login/app shell, regardless of whether the visitor is
- * already logged in — accepting an invite for a *different* school than
+ * already logged in - accepting an invite for a *different* school than
  * whatever they're currently logged into as is a legitimate thing to do
  * (see backend/app/routers/invites.py: accepting always requires a
  * password, so this can't be used to silently switch who's logged in).

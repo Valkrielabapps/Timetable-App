@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkAddClassGroups from './BulkAddClassGroups'
 
-// Numeric-aware comparison so "Grade 2" sorts before "Grade 10" — a plain
+// Numeric-aware comparison so "Grade 2" sorts before "Grade 10" - a plain
 // string sort would put "Grade 10" right after "Grade 1", ahead of every
 // other single-digit grade. Falls back to a plain locale compare for
 // non-numeric labels (e.g. "Nursery", "LKG") where there's no number to
@@ -19,11 +19,11 @@ function naturalGradeCompare(a, b) {
 
 // Sorts grade keys by the school's explicit `gradeOrder` (admin-set via
 // the Reorder mode below) when one exists, falling back to the natural
-// sort above for any grade not yet in that list — a school that's never
+// sort above for any grade not yet in that list - a school that's never
 // touched reordering gets a sensibly-ordered sidebar for free, and a
 // brand-new grade added after the last reorder still shows up (at the
 // end) instead of silently disappearing from the list. "Ungrouped"
-// (sections with no grade set) always sorts last — it's not a real grade,
+// (sections with no grade set) always sorts last - it's not a real grade,
 // just where sections with none land.
 export function sortGradeKeys(keys, gradeOrder) {
   const order = gradeOrder && gradeOrder.length > 0 ? gradeOrder : null
@@ -49,14 +49,14 @@ export function sortGradeKeys(keys, gradeOrder) {
  * (grade is null) show under an "Ungrouped" heading so nothing silently
  * disappears from the tree.
  *
- * Motion notes (kept deliberately restrained — this is admin software, not
+ * Motion notes (kept deliberately restrained - this is admin software, not
  * a marketing page): the selected section's highlight is a single shared
  * `motion.div` (`layoutId="sidebar-active-pill"`) that Framer Motion
  * animates between positions instead of the highlight just teleporting on
- * every click — same trick used by most polished dashboard sidebars.
+ * every click - same trick used by most polished dashboard sidebars.
  * Grade groups expand/collapse with a real height animation instead of
  * instantly showing/hiding. Hover/tap use tiny (2px/0.99 scale) offsets,
- * not the bouncier spring/scale treatment used on the landing page —
+ * not the bouncier spring/scale treatment used on the landing page - 
  * this needs to feel calm and precise, not playful.
  */
 export default function Sidebar({
@@ -94,25 +94,25 @@ export default function Sidebar({
   const [submittingSection, setSubmittingSection] = useState(false)
   // Which grade heading is currently being renamed (grade key, or null).
   const [editingGrade, setEditingGrade] = useState(null)
-  // Swaps the rename pencil for up/down arrows on every grade heading —
+  // Swaps the rename pencil for up/down arrows on every grade heading - 
   // a toggle rather than always-visible arrows, since most admins only
   // need this once (right after adding grades out of order) and constant
   // arrows next to every heading would be visual noise the rest of the time.
   const [reorderMode, setReorderMode] = useState(false)
-  // Which section is currently being edited (class group id, or null) —
+  // Which section is currently being edited (class group id, or null) - 
   // edit mode swaps the row for a small grade+name form instead of a
   // single text field, since fixing a typo and moving a section to a
   // different grade are the same "correct this section" action to an
   // admin, not two separate features.
   const [editingSectionId, setEditingSectionId] = useState(null)
   // Whether the school/college pill next to the school switcher has
-  // swapped for its own tiny dropdown — see the institution-type block
+  // swapped for its own tiny dropdown - see the institution-type block
   // near the top of the render below.
   const [editingType, setEditingType] = useState(false)
   // Optimistic override for gradeOrder, used only while a reorder is
   // in flight. Without this, every up/down click waited on a full
   // round trip to the server (through Railway, then Supabase) before
-  // the arrows visually moved anything — on a slow connection that
+  // the arrows visually moved anything - on a slow connection that
   // looked like nothing happened, and clicking again before the first
   // request resolved computed the next swap from the same stale
   // pre-move order both times, so rapid clicks could silently no-op or
@@ -142,7 +142,7 @@ export default function Sidebar({
   }, [classGroups, effectiveGradeOrder])
 
   // "Ungrouped" is pinned last by sortGradeKeys and isn't a real grade, so
-  // it's excluded here — it can't be moved, and there's no reason to
+  // it's excluded here - it can't be moved, and there's no reason to
   // persist it in the school's saved gradeOrder.
   const orderableGradeKeys = grades.map(([g]) => g).filter((g) => g !== 'Ungrouped')
 

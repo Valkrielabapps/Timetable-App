@@ -342,7 +342,7 @@ describe('saving', () => {
     expect(screen.getByLabelText('Mrs. Rao away Period 1')).not.toBeChecked()
     expect(screen.getByLabelText('Mrs. Rao away Period 2')).toBeChecked()
     expect(shown()).toEqual(['Mr. Bose'])
-    expect(screen.getByText('Saved earlier for this date — saving again replaces it.')).toBeInTheDocument()
+    expect(screen.getByText('Saved earlier for this date - saving again replaces it.')).toBeInTheDocument()
     // Another part of the school starts empty.
     fireEvent.click(screen.getByRole('radio', { name: 'Middle' }))
     expect(screen.getByLabelText('Mr. Khan')).not.toBeChecked()

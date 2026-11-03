@@ -1,7 +1,7 @@
 """
 Endpoints for logging same-day teacher substitutions (e.g. "Ms. Iyer is
 out today, Mr. Rao is covering her Period 3 class"). See
-app/models/school.py's SubstitutionLog docstring — this is a simple audit
+app/models/school.py's SubstitutionLog docstring - this is a simple audit
 log an admin fills in by hand, not something the solver reads.
 
 Cover is saved per date and per part of the school (see
@@ -12,14 +12,14 @@ saves together - see app/services/substitution_summary.py.
 Note on the access-control pattern here vs. other routers:
 require_school_access (app/core/access.py) is a plain function you call
 inside a route body with an already-resolved db session and user, e.g.
-`require_school_access(db, current_user, school_id)` — it is NOT itself a
+`require_school_access(db, current_user, school_id)` - it is NOT itself a
 FastAPI dependency, so it must never be wrapped in `Depends(...)`. Doing
 that was a real bug in an earlier draft of this file: FastAPI tried to
 resolve require_school_access's own `db: Session` parameter as request
 input, which isn't a valid Pydantic field type, and crashed the whole app
 at import time (backend wouldn't start at all, not just this endpoint).
 Every other router in this codebase gets `db`/`current_user` from their
-own real dependencies first, then calls require_school_access directly —
+own real dependencies first, then calls require_school_access directly - 
 this file now follows that same pattern.
 """
 from datetime import date as date_type
@@ -66,7 +66,7 @@ def create_substitution(
     current_user: User = Depends(get_current_user),
 ):
     """Save a day's substitution log. Admin-only, same as every other
-    write endpoint in this app (subjects, teachers, constraints, etc.) —
+    write endpoint in this app (subjects, teachers, constraints, etc.) - 
     a viewer can see substitution history but not add to it.
 
     With a date, this replaces whatever was saved before for the same date

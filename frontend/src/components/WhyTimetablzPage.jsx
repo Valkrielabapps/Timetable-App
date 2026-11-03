@@ -4,21 +4,21 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Standalone "Why Timetablz" page — reached via `?page=why` (same
+ * Standalone "Why Timetablz" page - reached via `?page=why` (same
  * no-router pattern as PricingPage/SupportPage; see App.jsx). The nav's
  * "Why Timetablz" link used to jump to the `#features` anchor (the
  * WorkflowDemo section); it now navigates here instead, by request.
  *
- * Layout is modeled on Griffin's product page (griffin.com) — a dark,
+ * Layout is modeled on Griffin's product page (griffin.com) - a dark,
  * two-column "scrollytelling" section: a numbered step list on the left
  * that the visitor scrolls through, and a sticky isometric diagram on the
  * right whose highlighted layer updates to match whichever step is
  * currently in view (tracked via IntersectionObserver on each step's
- * section below, not a scroll-position calculation — more resilient to
+ * section below, not a scroll-position calculation - more resilient to
  * different viewport heights).
  *
  * The four steps are the same STEPS content LandingPage.jsx's HowItWorks
- * section used before it was removed from the homepage (see that file) —
+ * section used before it was removed from the homepage (see that file) - 
  * reused verbatim rather than inventing new copy, since it already
  * accurately describes the real four-stage workflow. The diagram's labels
  * (Your school → Your rules → We solve it → Your timetable) are worded for a
@@ -55,11 +55,11 @@ const STEPS = [
 const LAYER_LABELS = STEPS.map((s) => s.layer)
 
 /**
- * A stack of four isometric "layer" diamonds — one static diagram whose
+ * A stack of four isometric "layer" diamonds - one static diagram whose
  * highlighted layer changes with `activeStep`, echoing how Griffin's own
  * diagram stays on screen while different parts of it light up as you
  * scroll through YOUR APP / YOUR TECH / OUR PLATFORM / OUR BANK LICENSE.
- * Plain SVG, no illustration library — four rhombi are simple enough to
+ * Plain SVG, no illustration library - four rhombi are simple enough to
  * hand-draw with polygon points.
  */
 function StepVisual({ activeStep }) {
@@ -113,7 +113,7 @@ export default function WhyTimetablzPage({ onBack, onGetStarted }) {
           }
         })
       },
-      // A thin band through the vertical middle of the viewport — a step
+      // A thin band through the vertical middle of the viewport - a step
       // becomes "active" once it crosses the center, not as soon as any
       // part of it is visible, so the transition lines up with whichever
       // step the visitor is actually reading.

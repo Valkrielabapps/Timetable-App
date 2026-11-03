@@ -1,11 +1,11 @@
 """
-Tests for app/services/bulk_import.py — the two design choices that carry
+Tests for app/services/bulk_import.py - the two design choices that carry
 the whole feature (see its module docstring): best-effort per-row error
 handling (one bad row doesn't block the rest of the file) and upsert-by-
 name (re-uploading after fixing a typo updates rather than duplicates).
 
 Exercises the service functions directly rather than through the
-multipart-upload HTTP endpoint — the parsing/import logic is what this
+multipart-upload HTTP endpoint - the parsing/import logic is what this
 feature is actually about; the endpoint itself is a thin wrapper (see
 app/routers/subjects.py's bulk_import_subjects) that just calls
 parse_rows() then the matching import_* function.
@@ -44,7 +44,7 @@ def test_import_subjects_partial_failure_does_not_block_good_rows(orm_db):
     school = _make_school(db)
     rows = [
         {"name": "Math", "required_room_type": ""},
-        {"name": "", "required_room_type": "lab"},  # missing required name — should be skipped, not fatal
+        {"name": "", "required_room_type": "lab"},  # missing required name - should be skipped, not fatal
         {"name": "Chemistry", "required_room_type": "lab"},
     ]
 
@@ -110,7 +110,7 @@ def test_import_class_groups_upserts_by_grade_and_name(orm_db):
     )
     assert result.created == 1
 
-    # Same (grade, name) pair, different student_count — should update, not duplicate.
+    # Same (grade, name) pair, different student_count - should update, not duplicate.
     result = import_class_groups(
         db, school.id, [{"name": "A", "grade": "Grade 8", "student_count": "35"}]
     )

@@ -10,10 +10,10 @@ import { useState } from 'react'
  * overview, but isn't the default view.
  *
  * Step data comes in as `progress`, App.jsx's single `useSetupProgress()`
- * call — not a second call of the hook here. This used to call the hook
+ * call - not a second call of the hook here. This used to call the hook
  * independently with its own params, which meant it ran an entirely
  * separate set of fetches from the header's progress bar (App.jsx) on
- * every visit to this tab — twice the requests for the same data, and it
+ * every visit to this tab - twice the requests for the same data, and it
  * silently broke once useSetupProgress started expecting
  * periods/subjects/teachers/allRequirements to be handed in rather than
  * fetched itself, since this second call site never passed them. Sharing

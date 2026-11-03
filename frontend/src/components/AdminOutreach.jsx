@@ -202,7 +202,7 @@ function Numbers({ overview }) {
       {cards.map(([label, value, hint]) => (
         <div key={label} className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="text-xs text-slate-500">{label}</div>
-          <div className="mt-0.5 text-xl font-semibold">{value ?? '—'}</div>
+          <div className="mt-0.5 text-xl font-semibold">{value ?? '-'}</div>
           <div className="mt-0.5 text-[11px] text-slate-500">{hint}</div>
         </div>
       ))}
@@ -213,7 +213,7 @@ function Numbers({ overview }) {
 // ---------------------------------------------------------------------------
 
 function sequenceText(seq) {
-  if (!seq) return '—'
+  if (!seq) return '-'
   if (seq.status === 'draft') return 'Drafted'
   if (seq.status === 'approved') return 'Approved'
   if (seq.status === 'sent') return `Email ${seq.step} sent`
@@ -427,7 +427,7 @@ function SchoolRow({ school: s, checked, onCheck, open, onOpen, onSave }) {
             {[s.area, s.district, s.classes_up_to, s.group_name].filter(Boolean).join(' · ')}
           </div>
         </td>
-        <td className="p-2 text-xs">{s.priority ?? '—'}</td>
+        <td className="p-2 text-xs">{s.priority ?? '-'}</td>
         <td className="p-2 text-xs">{contact ?? <span className="text-slate-400">Principal</span>}</td>
         <td className="p-2 text-xs">{s.recipient ?? <span className="text-slate-400">None found</span>}</td>
         <td className="p-2 text-xs">{sequenceText(s.sequence)}</td>
@@ -495,7 +495,7 @@ function SchoolDetail({ school: s, onSave }) {
         <input value={form.phone} onChange={set('phone')} className={input} />
       </label>
       <label className="flex flex-col gap-1 text-xs text-slate-500">Website
-        {s.website ? <a href={s.website} target="_blank" rel="noreferrer" className="truncate py-1 text-sky-700 underline">{s.website}</a> : <span className="py-1">—</span>}
+        {s.website ? <a href={s.website} target="_blank" rel="noreferrer" className="truncate py-1 text-sky-700 underline">{s.website}</a> : <span className="py-1">-</span>}
       </label>
       <label className="flex flex-col gap-1 text-xs text-slate-500">Next step
         <input value={form.next_step} onChange={set('next_step')} placeholder="Call the office, visit…" className={input} />
@@ -666,7 +666,7 @@ function Activity() {
     api.admin.outreach.schools({ status: 'replied' }).then((d) => setReplies(d.schools)).catch(() => {})
   }, [])
 
-  const when = (iso) => (iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—')
+  const when = (iso) => (iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-')
 
   return (
     <div className="flex flex-col gap-5">

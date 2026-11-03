@@ -1,7 +1,7 @@
-/* Fraunces (serif display) for big headlines — pairs with the black/white
+/* Fraunces (serif display) for big headlines - pairs with the black/white
    Griffin-style Hero redesign in LandingPage.jsx, which looked mismatched
    using the browser's plain default system font. Instrument Sans replaces
-   that default everywhere else — deliberately not Inter/Geist/Space
+   that default everywhere else - deliberately not Inter/Geist/Space
    Grotesk, the three sans fonts every AI-generated SaaS landing page
    reaches for by default; Instrument Sans reads just as clean but doesn't
    carry that same generic-template tell. Both are set as the site's
@@ -27,7 +27,7 @@ body {
    keyboard focus ring fall back to the browser's default blue, which reads
    as unfinished against the black/white/neutral palette used everywhere
    else (this used to be indigo, a leftover from before the black/white
-   rebrand — fixed here to match). Additive only — elements that already
+   rebrand - fixed here to match). Additive only - elements that already
    set their own focus treatment (most inputs use `focus:outline-none`
    plus a border-color change) are unaffected, since a utility class's
    specificity wins over this tag-level rule. */

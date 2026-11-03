@@ -1,5 +1,5 @@
 """
-Tests for app/services/email_service.py in isolation — mocks the Resend
+Tests for app/services/email_service.py in isolation - mocks the Resend
 HTTP call entirely (never makes a real network request) and asserts the
 fail-open contract described in that module's docstring: this function
 must return a bool and never raise, regardless of what happens.

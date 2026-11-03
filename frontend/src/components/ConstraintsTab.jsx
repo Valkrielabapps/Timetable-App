@@ -8,7 +8,7 @@ import { useTimetable, useTimetables } from '../hooks/useSchoolData'
 import { filterOptions, filtersActive, NO_FILTERS, organise } from '../constraintGroups'
 import { pickVersions } from '../lib/versions'
 
-// Types whose parameters include an optional class_group_ids scope —
+// Types whose parameters include an optional class_group_ids scope - 
 // these are the ones that get the "Applies to" line and scope editor.
 // The other types (workload_limit, availability) are always about one
 // specific teacher, not a set of sections, so scoping doesn't apply.
@@ -16,7 +16,7 @@ import { pickVersions } from '../lib/versions'
 // max_consecutive_periods is a special case: it's only actually scopable
 // when it's the subject variant (parameters.subject_id set). The teacher
 // variant (parameters.teacher_id set) caps that teacher's whole schedule
-// and ignores any class_group_ids you'd set here — see isActuallyScopable
+// and ignores any class_group_ids you'd set here - see isActuallyScopable
 // below, which checks the card's own parameters rather than just its type.
 const SCOPABLE_TYPES = new Set([
   'no_subject_period',
@@ -33,9 +33,9 @@ const SCOPABLE_TYPES = new Set([
  * Plain-English constraint entry. Text is sent to
  * POST /api/constraints/parse (see backend/app/routers/constraints.py),
  * which tries Claude first (backend/app/services/llm_constraint_parser.py)
- * for flexible phrasing and richer constraint types — including rules
+ * for flexible phrasing and richer constraint types - including rules
  * scoped to one grade/section ("Grade 3 shouldn't have Math last period")
- * and consecutive-period limits ("no more than 2 PE periods in a row") —
+ * and consecutive-period limits ("no more than 2 PE periods in a row") - 
  * and silently falls back to a regex parser if no API key is configured or
  * the call fails, so constraint entry never just breaks. Each saved
  * A constraint is either a rule (is_hard) or a preference. A preference is
@@ -50,7 +50,7 @@ const SCOPABLE_TYPES = new Set([
  *
  * "Got several rules at once? Add them all together" switches to a
  * textarea and POSTs the whole block to POST /api/constraints/batch in
- * one request instead of one rule at a time — the backend tries to split
+ * one request instead of one rule at a time - the backend tries to split
  * it into distinct rules itself (via a batch-oriented LLM call) and falls
  * back to treating each non-blank line as its own rule if that's
  * unavailable, so the placeholder text below recommends one rule per
@@ -60,7 +60,7 @@ const SCOPABLE_TYPES = new Set([
  * PUT /{id}/reparse, keeping the same id), an explicit "Applies to" line
  * with a scope editor for the rule types that support being scoped to
  * specific sections (PUT /{id} with an updated parameters.class_group_ids),
- * and `conflicts` — server-computed warnings when this constraint directly
+ * and `conflicts` - server-computed warnings when this constraint directly
  * contradicts another one already saved (two "must be" position rules for
  * the same subject, or two "must be"/"must not be" day rules for the same
  * subject, that can never both be true).
@@ -85,14 +85,14 @@ export default function ConstraintsTab({
   const [pending, setPending] = useState(null)
   const [confirming, setConfirming] = useState(false)
   // Batch entry ("add several rules at once") is a separate mode rather
-  // than trying to detect multi-line input in the single-rule form —
+  // than trying to detect multi-line input in the single-rule form - 
   // keeping them distinct means the single-rule flow's behavior (and its
   // POST /parse call) never has to change to accommodate this.
   const [batchMode, setBatchMode] = useState(false)
   const [batchInput, setBatchInput] = useState('')
   const [batchSubmitting, setBatchSubmitting] = useState(false)
   // Short-lived confirmation ("Added 3 constraints") shown after a batch
-  // submit — the new cards themselves already show up in the list below
+  // submit - the new cards themselves already show up in the list below
   // once onReload() finishes, so this is just feedback that the paste
   // actually did something, not a second source of truth for what was
   // created.

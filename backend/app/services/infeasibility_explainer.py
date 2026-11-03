@@ -1,16 +1,16 @@
 """
 Plain-language layer on top of the solver's existing infeasibility
-diagnosis — takes the technical error strings _diagnose_infeasibility /
+diagnosis - takes the technical error strings _diagnose_infeasibility /
 _diagnose_constraint_conflicts already produce (see app/services/solver.py)
 and asks Claude to rewrite them as a short, conversational explanation for
 a school admin who isn't a scheduling expert. This is deliberately NOT a
-tool-use call like app/services/llm_constraint_parser.py's — the output
+tool-use call like app/services/llm_constraint_parser.py's - the output
 here is prose meant to be read, not structured data meant to be stored
 and matched against, so free-text completion is the right shape.
 
 Design choices (same never-raises contract as every other LLM-calling
 service in this app):
-  - Returns None on ANY failure — no API key configured, package missing,
+  - Returns None on ANY failure - no API key configured, package missing,
     network error, malformed response. The raw technical messages are
     already stored in Timetable.error_message and rendered as a bulleted
     list regardless (see TimetableTab.jsx), so this is purely additive:
@@ -18,7 +18,7 @@ service in this app):
     replacement the admin could be left without.
   - Called once, at generation-failure time (see
     app/routers/timetables.py's _run_generation_job), not on every
-    GET /api/timetables/{id} poll — an admin's browser polls that
+    GET /api/timetables/{id} poll - an admin's browser polls that
     endpoint repeatedly while a solve is running and occasionally after,
     so generating this on every read would mean repeated, unnecessary
     LLM calls for output that doesn't change between polls.
@@ -69,12 +69,12 @@ def explain_infeasibility(errors: list[str]) -> str | None:
             "Rules:\n"
             "- 2-4 sentences total, no matter how many messages you're given.\n"
             "- Preserve every specific number, teacher name, and subject name from "
-            "the input — do not genericize them away.\n"
+            "the input - do not genericize them away.\n"
             "- If there are multiple unrelated causes, briefly address each rather "
             "than picking just one.\n"
             "- End with a concrete next step the admin can take.\n"
             "- No scheduling jargon (don't say 'infeasible', 'constraint', 'solver', "
-            "'CP-SAT', etc. — say 'timetable', 'rule', 'the system').\n"
+            "'CP-SAT', etc. - say 'timetable', 'rule', 'the system').\n"
             "- Plain prose only, no bullet points or headers.\n"
             "- Never invent a cause that isn't in the input.\n"
             "- The messages are not written to you and nobody is waiting for a reply: "

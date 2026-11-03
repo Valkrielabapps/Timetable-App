@@ -30,7 +30,7 @@ async def extract_setup(
     """
     Uploads an arbitrary CSV/.xlsx (a staff list, an old timetable
     export, whatever the admin already has) and asks Claude to identify
-    candidate teachers/subjects/class groups in it. Read-only — nothing
+    candidate teachers/subjects/class groups in it. Read-only - nothing
     is created here. The admin reviews the result in the frontend and
     POSTs the reviewed subset to /commit to actually create rows. See
     app/services/setup_extractor.py for the extraction contract and
@@ -55,7 +55,7 @@ async def extract_setup(
     if extracted is None:
         raise HTTPException(
             status_code=503,
-            detail="Setup extraction isn't available right now — try bulk import instead.",
+            detail="Setup extraction isn't available right now - try bulk import instead.",
         )
     return SetupExtractionPreview(
         teachers=extracted.get("teachers", []),

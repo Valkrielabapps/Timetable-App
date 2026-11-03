@@ -6,12 +6,12 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Standalone Customers page — reached via `?page=customers` (same
+ * Standalone Customers page - reached via `?page=customers` (same
  * no-router pattern as AboutPage/SupportPage; see App.jsx). Same dark
  * theme and wide two-column section layout as those two pages.
  *
  * The nav and footer's "Customers" link used to jump to the `#customers`
- * anchor on the homepage (Testimonials, LandingPage.jsx) — it now points
+ * anchor on the homepage (Testimonials, LandingPage.jsx) - it now points
  * here instead, for a dedicated page with more room to be honest about
  * where things actually stand.
  *

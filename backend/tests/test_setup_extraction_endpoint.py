@@ -1,7 +1,7 @@
 """
 Tests for POST /api/schools/{id}/setup-extraction and its /commit
 counterpart (app/routers/setup_extraction.py). Only the LLM call
-(setup_extractor.extract_setup_llm) is mocked — file parsing and the
+(setup_extractor.extract_setup_llm) is mocked - file parsing and the
 actual DB writes on /commit go through the real code paths.
 """
 from unittest.mock import patch

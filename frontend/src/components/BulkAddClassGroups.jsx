@@ -334,7 +334,7 @@ export default function BulkAddClassGroups({ onAddClassGroups, existing = [], on
 
 /**
  * Expands "A-D" into ['A','B','C','D'] (single-letter range, case as
- * typed) or falls back to splitting on commas for anything else — so
+ * typed) or falls back to splitting on commas for anything else - so
  * "A, B, C" and "North, South" both work as an explicit list.
  */
 function expandSections(text) {

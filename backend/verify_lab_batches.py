@@ -1,6 +1,6 @@
 """
 One-off verification script for lab-batch splitting (Subject.lab_batch_count).
-Not part of the test suite — run manually: python verify_lab_batches.py
+Not part of the test suite - run manually: python verify_lab_batches.py
 
 Builds a small in-memory SQLite school: one class group, a normal subject
 (Math) and a lab subject split into 3 batches (Programming Lab), 3 teachers

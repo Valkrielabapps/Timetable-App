@@ -163,7 +163,7 @@ def summary_pdf(summary: dict, school_name: str) -> bytes:
 
     day = summary["date"]
     story = [
-        Paragraph(f"Substitutions — {esc(summary['weekday'])}, {day.day} {day.strftime('%B %Y')}", title),
+        Paragraph(f"Substitutions - {esc(summary['weekday'])}, {day.day} {day.strftime('%B %Y')}", title),
         Paragraph(esc(f"{school_name} · {summary['category_label']}"), sub),
         Spacer(1, 0.4 * cm),
     ]

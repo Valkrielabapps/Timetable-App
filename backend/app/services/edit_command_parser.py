@@ -1,5 +1,5 @@
 """
-Conversational timetable editing — turns a plain-English instruction like
+Conversational timetable editing - turns a plain-English instruction like
 "move Grade 8's Math to period 2 on Wednesdays" or "lock Mrs. Sharma's
 Monday classes" into the SAME structured edit the existing drag-and-drop
 UI produces (PATCH .../entries/{id} or POST .../swap-with/{id} in
@@ -12,11 +12,11 @@ non-LLM fallback here. Constraint parsing has a regex fallback because a
 handful of fixed phrasings cover most real constraint sentences well
 enough; resolving "which one of potentially hundreds of existing
 timetable entries, at which one of the school's periods" from free text
-has no equivalent fixed-pattern shortcut worth building — the ambiguity
+has no equivalent fixed-pattern shortcut worth building - the ambiguity
 resolution (which entry did they mean? which period?) genuinely needs the
 model's judgment, grounded against the actual current state of this
 timetable. If no ANTHROPIC_API_KEY is configured, this feature is simply
-unavailable and the admin uses drag-and-drop instead — see
+unavailable and the admin uses drag-and-drop instead - see
 app/routers/timetables.py's edit_command endpoint for how that's
 surfaced.
 
@@ -30,7 +30,7 @@ they mean? which slot is "period 2" when lunch or the class teacher
 period comes first? - each lesson slot carries its period_number) into the one place that already has full context to resolve it,
 instead of the router trying to re-derive partial matches from scratch.
 Every returned id is re-validated against the same lists server-side
-before anything is mutated — a hallucinated id that doesn't appear in
+before anything is mutated - a hallucinated id that doesn't appear in
 what was actually offered is treated as ordinary parse failure, not
 trusted.
 """
@@ -57,7 +57,7 @@ _TOOL_SCHEMA = {
                     "'move' changes an entry's period (and optionally teacher). 'lock'/"
                     "'unlock' toggles one entry's locked flag. 'swap' exchanges two "
                     "entries' periods. 'unresolved' if you cannot confidently identify "
-                    "which entry (or period, or second entry for a swap) is meant — use "
+                    "which entry (or period, or second entry for a swap) is meant - use "
                     "this rather than guessing."
                 ),
             },
@@ -79,7 +79,7 @@ _TOOL_SCHEMA = {
             },
             "description": {
                 "type": "string",
-                "description": "One short sentence describing the edit performed (or, for 'unresolved', what's ambiguous and what extra detail would resolve it) — shown to the admin as confirmation or as the error message.",
+                "description": "One short sentence describing the edit performed (or, for 'unresolved', what's ambiguous and what extra detail would resolve it) - shown to the admin as confirmation or as the error message.",
             },
         },
         "required": ["action", "description"],
@@ -94,7 +94,7 @@ def parse_edit_command_llm(
     teachers: list[dict],
 ) -> dict | None:
     """
-    `entries`/`periods`/`teachers` are plain dicts (not ORM objects) —
+    `entries`/`periods`/`teachers` are plain dicts (not ORM objects) - 
     the exact fields the model is grounded against, so the caller decides
     what's in scope rather than this function reaching into the database
     itself:
@@ -107,7 +107,7 @@ def parse_edit_command_llm(
     Returns the raw tool-input dict (action, entry_id, target_period_id,
     target_teacher_id, other_entry_id, description) on success, or None
     if the LLM path can't be used right now (no key, package missing,
-    call/response failed for any reason) — never raises. The router is
+    call/response failed for any reason) - never raises. The router is
     responsible for validating every returned id actually appears in the
     lists passed in before mutating anything; this function only relays
     what the model said.
@@ -130,7 +130,7 @@ def parse_edit_command_llm(
             f"Current timetable entries: {entries}\n\n"
             f"Available periods: {periods}\n\n"
             f"Known teachers: {teachers}\n\n"
-            "Every id you return MUST be copied exactly from one of these lists — never "
+            "Every id you return MUST be copied exactly from one of these lists - never "
             "invent an id. If the instruction could match more than one entry (e.g. a "
             "subject that appears several times in the week and no day/period was given "
             "to narrow it down), or no entry/period matches at all, use "

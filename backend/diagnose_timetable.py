@@ -11,7 +11,7 @@ infeasible:
   - a teacher whose combined periods/week across all their subjects
     exceeds their own max_periods_per_week
 
-Doesn't change anything — safe to run anytime, including while the
+Doesn't change anything - safe to run anytime, including while the
 backend server is running.
 
 Usage (from the backend/ folder, with your venv active):
@@ -118,7 +118,7 @@ def main():
             elif approx_load:
                 print(f"  {t['name']}: ~{approx_load:.1f} periods/week")
         if not overloaded and not dupes:
-            print("\nNo obvious data problem found by this script — the actual solver "
+            print("\nNo obvious data problem found by this script - the actual solver "
                   "constraints may be more subtle (e.g. a teacher's specific "
                   "unavailable periods clashing with when they're needed).")
 

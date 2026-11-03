@@ -4,11 +4,11 @@ Export a generated timetable to Excel (.xlsx) or PDF.
 Both formats show the same two views already in the frontend
 (TimetableTab.jsx): one grid per class-group section ("By Section") and
 one grid per teacher ("By Teacher", their combined schedule across every
-section they teach) — so what an admin sees on screen, and what they hand
+section they teach) - so what an admin sees on screen, and what they hand
 out to a section or a teacher on paper, always match.
 
 Shared data-gathering happens once in `_load_grid_data` so the Excel and
-PDF builders can never disagree about what's actually in the timetable —
+PDF builders can never disagree about what's actually in the timetable - 
 they just render the same grid data two different ways.
 """
 import io
@@ -183,7 +183,7 @@ def _cell_text(entry, data: dict, mode: str) -> str:
     """mode='section': shows subject + teacher (for a section's own grid).
     mode='teacher': shows subject + section (for a teacher's own grid).
     Both also show the assigned room, if any (see solver.py's best-effort
-    room assignment — not every entry is guaranteed a room)."""
+    room assignment - not every entry is guaranteed a room)."""
     subject = data["subjects_by_id"].get(entry.subject_id)
     subject_name = subject.name if subject else "?"
     room = data["rooms_by_id"].get(entry.room_id) if entry.room_id else None
@@ -248,11 +248,11 @@ def _school_grids(data: dict) -> list[tuple[str, str, list[list[str]]]]:
         rows = _grid_rows(data, data["entries_by_class_period"], cg.id, mode="section")
         if _has_content(rows):
             label = _class_group_label(cg)
-            grids.append((label, f"{label} — Timetable", rows))
+            grids.append((label, f"{label} - Timetable", rows))
     for teacher in data["teachers"]:
         rows = _grid_rows(data, data["entries_by_teacher_period"], teacher.id, mode="teacher")
         if _has_content(rows):
-            grids.append((teacher.name, f"{teacher.name} — Teaching Schedule", rows))
+            grids.append((teacher.name, f"{teacher.name} - Teaching Schedule", rows))
     return grids
 
 
@@ -275,7 +275,7 @@ def _student_grids(data: dict, class_group: ClassGroup, combinations) -> list[tu
         rows = _grid_rows(data, index, class_group.id, mode="section")
         grids.append((
             f"{number}. {combination.label}",
-            f"{label} — {combination.label}",
+            f"{label} - {combination.label}",
             rows,
         ))
     return grids

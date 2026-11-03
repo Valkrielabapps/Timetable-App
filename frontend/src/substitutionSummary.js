@@ -69,7 +69,7 @@ export function groupRows(summary) {
 
 /** The summary as a WhatsApp message (*bold* is WhatsApp's own markup). */
 export function summaryText(summary) {
-  const lines = [`*Substitutions — ${formatDate(summary.date)}*`, summary.category_label]
+  const lines = [`*Substitutions - ${formatDate(summary.date)}*`, summary.category_label]
   if (summary.on_leave.length > 0) {
     lines.push('', `*On leave:* ${summary.on_leave.map(leaveText).join(', ')}`)
   }
@@ -120,7 +120,7 @@ export function summaryHtml(summary, schoolName) {
   th { background: #1e293b; color: white; } .uncovered { color: #b91c1c; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style></head><body>
-<h1>Substitutions — ${escapeHtml(formatDate(summary.date))}</h1>
+<h1>Substitutions - ${escapeHtml(formatDate(summary.date))}</h1>
 <div class="sub">${escapeHtml([schoolName, summary.category_label].filter(Boolean).join(' · '))}</div>
 ${summary.on_leave.length ? `<p><strong>On leave:</strong> ${escapeHtml(summary.on_leave.map(leaveText).join(', '))}</p>` : ''}
 ${summary.rows.length ? groups : '<p>No lessons need cover.</p>'}

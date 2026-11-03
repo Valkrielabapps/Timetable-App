@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # JWT signing secret. MUST be overridden (via .env) for anything beyond
-    # local development — this default is intentionally not secret.
+    # local development - this default is intentionally not secret.
     jwt_secret: str = "dev-only-secret-change-me"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Hard cap on how long the CP-SAT solver searches before giving up and
     # reporting "unknown" instead of a definite answer. Generation runs as
     # a background job (see app/routers/timetables.py), so this can be
-    # generous without risking an HTTP timeout — the frontend polls for
+    # generous without risking an HTTP timeout - the frontend polls for
     # the result instead of waiting on one long request.
     solver_time_limit_seconds: int = 60
 
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
 
     # Used by app/services/llm_constraint_parser.py. If unset, constraint
     # parsing silently falls back to the regex-based parser
-    # (app/services/constraint_parser.py) — the app works either way, the
+    # (app/services/constraint_parser.py) - the app works either way, the
     # LLM parser just understands a much wider range of phrasing and
     # constraint types.
     anthropic_api_key: str | None = None
@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # Google Cloud OAuth 2.0 Client ID (Web application type), used to
     # verify the ID token Google's Sign-In button hands back to the
     # frontend. Must match the client ID configured in the frontend
-    # (VITE_GOOGLE_CLIENT_ID) — Google's library rejects a token whose
+    # (VITE_GOOGLE_CLIENT_ID) - Google's library rejects a token whose
     # audience doesn't match what we verify against. Unset by default:
     # the "Sign in with Google" button hides itself on the frontend and
     # the backend endpoint returns a clear error if this is missing.
@@ -106,21 +106,21 @@ class Settings(BaseSettings):
 
     # Used by app/services/email_service.py to actually send invite emails
     # via Resend's HTTP API (https://resend.com). If unset, invite creation
-    # silently skips sending — the invite is still created and its link is
+    # silently skips sending - the invite is still created and its link is
     # still returned in the API response, so the admin can copy/send it
     # manually (same behavior as before this was wired up). Get a key at
     # resend.com/api-keys.
     resend_api_key: str | None = None
     # Resend requires "Name <email>" format. The default is Resend's shared
     # onboarding@resend.dev sender, which works out of the box with no
-    # domain setup but is best for testing only — verify your own sending
+    # domain setup but is best for testing only - verify your own sending
     # domain in Resend and set this to something like
     # "Timetable App <notifications@yourdomain.com>" before relying on this
     # for real users (unverified-domain mail is more likely to land in spam
     # and can only send to the Resend account's own verified address).
     email_from_address: str = "Timetable App <onboarding@resend.dev>"
     # Base URL of the deployed frontend (no trailing slash), used to build
-    # the invite link included in the email — e.g. "https://app.example.com".
+    # the invite link included in the email - e.g. "https://app.example.com".
     # Defaults to the local Vite dev server so invite emails work out of the
     # box in development; MUST be set to the real deployed frontend URL in
     # production or invite links will point at localhost.
@@ -132,7 +132,7 @@ class Settings(BaseSettings):
 
     # How long a forgot-password link stays valid before it's rejected as
     # expired (see PasswordResetToken / app/routers/auth.py). Short on
-    # purpose — this is a bearer link that could leak via a forwarded
+    # purpose - this is a bearer link that could leak via a forwarded
     # email or shared inbox, so it shouldn't stay usable indefinitely.
     password_reset_expire_minutes: int = 60
 

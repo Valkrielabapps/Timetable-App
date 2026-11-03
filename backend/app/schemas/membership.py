@@ -1,11 +1,11 @@
-"""Pydantic schemas for school membership and invites — see
+"""Pydantic schemas for school membership and invites - see
 app/models/school.py (SchoolMembership, SchoolInvite) and
 app/routers/schools.py / app/routers/invites.py."""
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class MemberOut(BaseModel):
-    """One row in a school's member list — the owner (synthesized, no
+    """One row in a school's member list - the owner (synthesized, no
     SchoolMembership row required) plus any SchoolMembership rows."""
 
     user_id: int
@@ -32,7 +32,7 @@ class InviteOut(BaseModel):
     role: str
     status: str
     # Safe to include here (unlike anywhere public) because every endpoint
-    # that returns an InviteOut — create + list — is admin-only, gated by
+    # that returns an InviteOut - create + list - is admin-only, gated by
     # require_school_access(min_role="admin"). An admin who can already
     # see/revoke an invite can also just re-derive its access by inviting
     # again, so exposing the token to them isn't a new capability, just a
@@ -43,14 +43,14 @@ class InviteOut(BaseModel):
     # creation time; False both when no email was even attempted (no
     # RESEND_API_KEY configured) and when sending failed for any other
     # reason. Always False for invites read back later via list_invites,
-    # since this isn't stored — it's only meaningful on the create response,
+    # since this isn't stored - it's only meaningful on the create response,
     # which is when TeamTab.jsx uses it to decide what to tell the admin.
     email_sent: bool = False
 
 
 class InvitePreviewOut(BaseModel):
     """What the accept-invite screen shows before the invitee has done
-    anything — doesn't require auth to fetch, since the invitee likely
+    anything - doesn't require auth to fetch, since the invitee likely
     isn't logged in yet."""
 
     email: str
@@ -62,7 +62,7 @@ class InvitePreviewOut(BaseModel):
 class AcceptInviteRequest(BaseModel):
     """`name` is only required when accepting creates a brand-new account
     (no existing user with the invite's email). `password` is always
-    required — either to set a new account's password, or to confirm an
+    required - either to set a new account's password, or to confirm an
     existing account's password, so accepting an invite link alone is
     never enough to log into someone else's existing account."""
 

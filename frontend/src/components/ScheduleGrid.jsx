@@ -127,8 +127,8 @@ export default function ScheduleGrid({
                 const locked = entries.some((e) => e.locked)
                 const canDrag = editable && entries.length > 0 && !locked && !subjectFrozen
                 // Locked/unlocked as a light background tint on the whole cell
-                // rather than an icon on the entry — red for locked, green for
-                // unlocked — so the state reads at a glance across the grid.
+                // rather than an icon on the entry - red for locked, green for
+                // unlocked - so the state reads at a glance across the grid.
                 const lockTint = sectionFrozen
                   ? 'bg-slate-50'
                   : lockable
@@ -141,7 +141,7 @@ export default function ScheduleGrid({
                   ? 'hover:bg-slate-50'
                   : ''
                 // An inset ring rather than a border, so the grid's own lines
-                // don't shift and the lock tint stays readable underneath —
+                // don't shift and the lock tint stays readable underneath - 
                 // the two say different things and both need to survive.
                 const target = dropTargets && period ? dropTargets.get(period.id) : null
                 const dragTint = target ? DROP_TONE[target.status] ?? '' : ''

@@ -1,7 +1,7 @@
 """
 Tests for app/routers/constraints.py's direct-create/update/reparse CRUD
 and its conflict-detection helpers (_find_placement_conflicts,
-_find_day_conflicts) — exercised through POST/PUT /api/constraints
+_find_day_conflicts) - exercised through POST/PUT /api/constraints
 directly (skipping /parse's LLM-first/regex-fallback text parsing
 entirely, since ConstraintCreate already accepts type/parameters
 directly; the parsing pipeline itself is a separate concern from what
@@ -48,7 +48,7 @@ def test_contradicting_require_subject_period_constraints_are_flagged(client):
 
 def test_same_position_does_not_conflict(client):
     """Two 'require first period' rules for the same subject agree with
-    each other, not contradict — only opposite positions should flag."""
+    each other, not contradict - only opposite positions should flag."""
     _, headers = signup(client)
     school = create_school(client, headers)
     math = _create_subject(client, headers, school["id"], "Math")
@@ -66,7 +66,7 @@ def test_same_position_does_not_conflict(client):
 
 def test_disjoint_scope_does_not_conflict(client):
     """Two contradicting position rules for the same subject, but scoped
-    to different (non-overlapping) class groups, can both actually hold —
+    to different (non-overlapping) class groups, can both actually hold - 
     no conflict should be reported."""
     _, headers = signup(client)
     school = create_school(client, headers)
@@ -109,7 +109,7 @@ def test_require_and_ban_same_day_conflict(client):
 
 def test_reparse_keeps_the_same_id(client):
     """PUT /{id}/reparse mutates the existing row in place rather than
-    creating a new one — the whole point is that a reworded rule keeps its
+    creating a new one - the whole point is that a reworded rule keeps its
     id and position in the list (see the router's docstring)."""
     _, headers = signup(client)
     school = create_school(client, headers)
@@ -153,7 +153,7 @@ def test_update_scope_is_a_direct_field_edit(client):
     )
     assert r.status_code == 200, r.text
     assert r.json()["parameters"]["class_group_ids"] == [cg["id"]]
-    assert r.json()["type"] == "require_subject_period"  # unchanged — this is a field edit, not a re-parse
+    assert r.json()["type"] == "require_subject_period"  # unchanged - this is a field edit, not a re-parse
 
 
 def test_viewer_cannot_create_or_reparse_constraints(client):

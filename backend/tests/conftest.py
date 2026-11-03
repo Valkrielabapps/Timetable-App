@@ -3,19 +3,19 @@ Shared pytest fixtures for the backend test suite.
 
 Forces a fresh, isolated temp-file SQLite database for the whole test
 session, regardless of whatever DATABASE_URL a developer's real .env
-points at — tests should never depend on (or risk touching) a real
+points at - tests should never depend on (or risk touching) a real
 dev.db. A temp *file* rather than `sqlite:///:memory:` is deliberate:
 each new connection SQLAlchemy's default pool opens against an in-memory
 SQLite URL gets its own blank database unless a shared/static connection
 pool is configured, which app/core/database.py's production engine setup
-doesn't do (no reason to, in production) — so TestClient requests (each
+doesn't do (no reason to, in production) - so TestClient requests (each
 of which may grab a different pooled connection) would intermittently
 hit a database with no tables in it. A temp file sidesteps this with zero
 changes to production code.
 
 This has to happen before anything imports app.core.config or
 app.core.database, since both read DATABASE_URL exactly once, at import
-time — done here, at the very top of conftest.py, since pytest always
+time - done here, at the very top of conftest.py, since pytest always
 imports conftest.py before collecting/importing any test module.
 """
 import os
@@ -90,7 +90,7 @@ def client():
 def orm_db():
     """A plain SQLAlchemy session for tests that call service-layer
     functions (e.g. app.services.bulk_import) directly rather than going
-    through the HTTP layer — same throwaway-in-memory-DB pattern as
+    through the HTTP layer - same throwaway-in-memory-DB pattern as
     test_solver.py's local db_session fixture, kept here too so other
     service-level test files don't each need their own copy."""
     from sqlalchemy import create_engine

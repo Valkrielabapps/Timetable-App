@@ -3,7 +3,7 @@ import { api } from '../api'
 
 /**
  * Admin-only tab: who has access to this school, and inviting more people.
- * See backend/app/core/access.py for the role model — "admin" (full
+ * See backend/app/core/access.py for the role model - "admin" (full
  * access) or "viewer" (read-only, every mutating endpoint blocks them
  * with a 403). The owner is always an implicit admin and can't be
  * removed or demoted (backend/app/routers/schools.py enforces this too;
@@ -11,8 +11,8 @@ import { api } from '../api'
  *
  * Inviting someone tries to send them an email via Resend (see
  * backend/app/services/email_service.py) with the invite link. That's
- * best-effort — no RESEND_API_KEY configured, or any send failure, just
- * means no email went out — so a copyable link is always shown too,
+ * best-effort - no RESEND_API_KEY configured, or any send failure, just
+ * means no email went out - so a copyable link is always shown too,
  * regardless of whether the email succeeded.
  */
 export default function TeamTab({ schoolId, members, invites, onReload }) {
@@ -24,9 +24,9 @@ export default function TeamTab({ schoolId, members, invites, onReload }) {
   const [justCreatedLink, setJustCreatedLink] = useState(null)
 
   // Clears a previously-copied invite link if the admin switches to a
-  // different school while still on this tab (rare — TeamTab normally
+  // different school while still on this tab (rare - TeamTab normally
   // fully remounts on a top-level tab switch, which would reset this
-  // anyway — but not on a school switch alone) so it can't be confused
+  // anyway - but not on a school switch alone) so it can't be confused
   // for a link belonging to the newly selected school.
   useEffect(() => {
     setJustCreatedLink(null)
@@ -143,7 +143,7 @@ export default function TeamTab({ schoolId, members, invites, onReload }) {
                     setJustCreatedLink({
                       link: `${window.location.origin}/?invite=${inv.token}`,
                       email: inv.email,
-                      // Unknown here — this re-shows the link for an
+                      // Unknown here - this re-shows the link for an
                       // already-existing invite, not a freshly created
                       // one, and list_invites doesn't report whether the
                       // original email send succeeded.

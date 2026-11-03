@@ -13,7 +13,7 @@ connect_args = {"check_same_thread": False} if settings.database_url.startswith(
 
 # pool_pre_ping: check a connection is still alive before handing it out.
 # Matters specifically for free-tier hosted Postgres (e.g. Supabase), which
-# can drop idle connections after inactivity — without this, the first
+# can drop idle connections after inactivity - without this, the first
 # request after a quiet period would fail with a stale-connection error
 # instead of transparently reconnecting. No-op/cheap for SQLite.
 engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)

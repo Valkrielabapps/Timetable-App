@@ -5,7 +5,7 @@ Why a job instead of a plain request/response: solving a large school's
 schedule can legitimately take up to a minute (see
 app/core/config.py:solver_time_limit_seconds and the stress-test notes in
 app/services/solver.py). Holding an HTTP request open that long is
-fragile — browsers, reverse proxies, and hosting platforms all impose
+fragile - browsers, reverse proxies, and hosting platforms all impose
 their own timeouts well under that, and a stuck request gives the admin no
 feedback in the meantime. So instead:
 
@@ -18,7 +18,7 @@ feedback in the meantime. So instead:
      no longer "generating".
 
 This uses a plain Python thread rather than a task queue (Celery/RQ +
-Redis) — the right tradeoff for this project's current scale: zero new
+Redis) - the right tradeoff for this project's current scale: zero new
 infrastructure to run, at the cost of jobs not surviving a server restart
 and not scaling across multiple backend processes. If this needs to run
 behind multiple worker processes or survive restarts, swap this for a
@@ -363,7 +363,7 @@ _GENERATION_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CO
 
 def _run_generation_job(timetable_id: int, school_id: int) -> None:
     """
-    Runs on a background thread — must open its own DB session rather
+    Runs on a background thread - must open its own DB session rather
     than reusing the request's (SQLAlchemy sessions aren't thread-safe,
     and the request's session is closed once the response is sent anyway,
     which happens well before this function finishes).
@@ -384,7 +384,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
 
         if result.status in ("optimal", "feasible"):
             # (class_group_id, subject_id) -> assistant_teacher_id, from the
-            # plan — not something the solver chooses, just carried over so
+            # plan - not something the solver chooses, just carried over so
             # each generated entry can show who's assisting. A single query
             # up front rather than one per assignment, since a school-wide
             # generation can produce hundreds of entries.
@@ -418,7 +418,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
                     elective_option_id=a.get("elective_option_id"),
                     # Carries a lock forward from the previous timetable if
                     # this entry landed on the exact same (class group,
-                    # subject, teacher, period) that was locked before —
+                    # subject, teacher, period) that was locked before - 
                     # see generate_school_timetable's locked-entry handling
                     # in app/services/solver.py. So an admin's lock sticks
                     # across regenerations instead of needing to be
@@ -445,7 +445,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
                 school_row.current_timetable_id = timetable.id
         else:
             timetable.status = "failed"
-            # Newline-joined rather than "; " — result.errors may contain
+            # Newline-joined rather than "; " - result.errors may contain
             # several distinct diagnoses (see _diagnose_infeasibility in
             # app/services/solver.py), and the frontend renders each line
             # as its own bullet rather than running them together into one
@@ -461,14 +461,14 @@ def _generate(timetable_id: int, school_id: int) -> None:
                 result.errors = [*result.errors, result.frozen_hint]
             if result.errors:
                 timetable.error_message = "\n".join(result.errors)
-                # Best-effort — see explain_infeasibility's docstring for
+                # Best-effort - see explain_infeasibility's docstring for
                 # why this never raises and just leaves error_explanation
                 # null on any failure (no API key, network issue, etc.).
                 # Run once here, not on every GET, since this result never
                 # changes for this timetable once computed.
                 timetable.error_explanation = explain_infeasibility(result.errors)
             elif result.status == "infeasible":
-                # _diagnose_infeasibility ran and came up empty — a real
+                # _diagnose_infeasibility ran and came up empty - a real
                 # conflict exists, but it's an interaction between several
                 # constraints rather than one single identifiable cause,
                 # which is a genuinely hard problem (see the ARCHITECTURE.md
@@ -476,7 +476,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
                 # know, and give a concrete next step.
                 timetable.error_message = (
                     "No feasible timetable found, and the specific cause couldn't be "
-                    "automatically identified — it's likely an interaction between several "
+                    "automatically identified - it's likely an interaction between several "
                     "constraints rather than one on its own. Try temporarily removing your "
                     "most recently added constraint or subject requirement and regenerating, "
                     "to narrow down which one is conflicting."
@@ -484,7 +484,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
             else:
                 timetable.error_message = (
                     "The solver couldn't reach a conclusive answer in time. "
-                    "This usually means the school is very large — try generating "
+                    "This usually means the school is very large - try generating "
                     "a smaller subset (e.g. one grade at a time) if this keeps happening."
                 )
 
@@ -734,12 +734,12 @@ def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Dep
     move it to a different period/teacher/room by hand (used by
     TimetableTab.jsx's drag-to-move and lock toggle).
 
-    Locking doesn't do anything by itself here — it's read back by
+    Locking doesn't do anything by itself here - it's read back by
     app/services/solver.py the next time this school's timetable is
     regenerated, which forces that exact (class group, subject, teacher,
     period) combination to stay fixed instead of being re-solved. Editing
     is only allowed on a "draft" timetable (a completed, successful
-    generation) — not one that's still generating or that failed, since
+    generation) - not one that's still generating or that failed, since
     there's nothing coherent to edit in those states.
 
     Conflict checking: any change to period_id/teacher_id/room_id is
@@ -749,7 +749,7 @@ def update_entry(entry_id: int, payload: TimetableEntryUpdate, db: Session = Dep
     check entirely since nothing about the schedule is actually moving.
 
     Note: this rejects moving a slot onto a period some *other* entry
-    already occupies for the same class group — including when the intent
+    already occupies for the same class group - including when the intent
     was really "swap these two slots". Use POST
     /entries/{entry_id}/swap-with/{other_entry_id} for that instead; it's
     a different operation because it has to move both entries in one
@@ -845,7 +845,7 @@ def _refuse_if_frozen(db: Session, class_group_id: int) -> None:
 
 
 def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> TimetableEntryOut:
-    """The actual mutation behind PATCH /entries/{id} — factored out so
+    """The actual mutation behind PATCH /entries/{id} - factored out so
     POST /timetables/{id}/edit-command (conversational editing) performs
     the EXACT same conflict-checked update instead of a second copy of
     this logic. Callers are responsible for auth/status checks; this just
@@ -899,7 +899,7 @@ def _apply_entry_update(db: Session, entry: TimetableEntry, data: dict) -> Timet
 @router.post("/entries/{entry_id}/swap-with/{other_entry_id}", response_model=EntryUpdateOut)
 def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Swaps two entries' periods in one transaction — what actually happens
+    Swaps two entries' periods in one transaction - what actually happens
     when you drag one filled slot in TimetableTab.jsx onto another filled
     slot. A plain PATCH .../period_id move would reject this: moving entry
     A into entry B's period looks like a double-booking until B has also
@@ -909,7 +909,7 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
     catching a real conflict (e.g. either entry's teacher is already
     booked elsewhere at the other's period).
 
-    Refuses to swap a locked entry — a lock means "don't move this until
+    Refuses to swap a locked entry - a lock means "don't move this until
     I unlock it", and a swap is a move just like a drag.
     """
     entry = db.get(TimetableEntry, entry_id)
@@ -927,7 +927,7 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
             detail=f"This timetable isn't editable right now (status: {timetable.status}).",
         )
     if entry.locked or other.locked:
-        raise HTTPException(status_code=400, detail="Can't swap a locked slot — unlock it first.")
+        raise HTTPException(status_code=400, detail="Can't swap a locked slot - unlock it first.")
     if entry.period_id == other.period_id:
         raise HTTPException(status_code=400, detail="These are already in the same period.")
 
@@ -938,7 +938,7 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
 
 
 def _apply_entry_swap(db: Session, entry: TimetableEntry, other: TimetableEntry) -> list[TimetableEntryOut]:
-    """The actual mutation behind POST /entries/{id}/swap-with/{id} —
+    """The actual mutation behind POST /entries/{id}/swap-with/{id} - 
     factored out for the same reason as _apply_entry_update above.
     Callers are responsible for auth/status/locked/same-timetable checks."""
     if entry.elective_block_id is not None or other.elective_block_id is not None:
@@ -1293,7 +1293,7 @@ def move_chain(
 
 def _entry_out(db: Session, entry: TimetableEntry) -> TimetableEntryOut:
     """Builds a single TimetableEntryOut with human-readable names, same
-    lookups as _to_timetable_out but for one entry — used by the PATCH
+    lookups as _to_timetable_out but for one entry - used by the PATCH
     endpoint so it doesn't have to rebuild the whole timetable's entry
     list just to return the one row that changed."""
     school_id = entry.timetable.school_id
@@ -1352,7 +1352,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     app/services/edit_command_parser.py into one of the same lock/move/
     swap operations the PATCH/swap-with endpoints perform, and applied
     through the exact same conflict-checked mutation functions
-    (_apply_entry_update / _apply_entry_swap below) — this endpoint never
+    (_apply_entry_update / _apply_entry_swap below) - this endpoint never
     mutates anything on its own, it only decides WHICH of those two
     functions to call and with what arguments.
 
@@ -1361,7 +1361,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     ANTHROPIC_API_KEY is configured, or the call fails for any reason,
     this returns 503 telling the admin to use drag-and-drop instead of
     silently doing nothing. Every id the model returns is re-validated
-    against this timetable's actual entries/periods/teachers before use —
+    against this timetable's actual entries/periods/teachers before use - 
     a hallucinated id is treated as an ordinary "couldn't resolve that"
     failure (422), never trusted.
     """
@@ -1419,12 +1419,12 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     if parsed is None:
         raise HTTPException(
             status_code=503,
-            detail="Conversational editing isn't available right now — try dragging the entry instead.",
+            detail="Conversational editing isn't available right now - try dragging the entry instead.",
         )
 
     action = parsed.get("action")
     description = parsed.get("description") or "Edit applied."
-    unresolved_detail = "Couldn't confidently resolve that — try rephrasing, or use drag-and-drop."
+    unresolved_detail = "Couldn't confidently resolve that - try rephrasing, or use drag-and-drop."
 
     if action == "unresolved" or action not in ("move", "lock", "unlock", "swap"):
         raise HTTPException(status_code=422, detail=description or unresolved_detail)
@@ -1440,7 +1440,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
 
     if action == "move":
         if entry.locked:
-            raise HTTPException(status_code=400, detail="That slot is locked — unlock it first.")
+            raise HTTPException(status_code=400, detail="That slot is locked - unlock it first.")
         target_period_id = parsed.get("target_period_id")
         if target_period_id not in periods:
             raise HTTPException(status_code=422, detail=unresolved_detail)
@@ -1459,7 +1459,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
     if other is None:
         raise HTTPException(status_code=422, detail=unresolved_detail)
     if entry.locked or other.locked:
-        raise HTTPException(status_code=400, detail="Can't swap a locked slot — unlock it first.")
+        raise HTTPException(status_code=400, detail="Can't swap a locked slot - unlock it first.")
     if entry.period_id == other.period_id:
         raise HTTPException(status_code=400, detail="These are already in the same period.")
     updated = _apply_entry_swap(db, entry, other)
@@ -1485,7 +1485,7 @@ def export_timetable(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Downloads a printable version of a generated timetable — one sheet
+    Downloads a printable version of a generated timetable - one sheet
     (Excel) or page (PDF) per section, followed by one per teacher, so
     the same file can be handed to a class or a teacher. See
     app/services/export.py for how the grids are built; both formats

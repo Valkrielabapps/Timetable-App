@@ -4,10 +4,10 @@
 # `eol=lf` forces LF in the working tree on every platform, not just what
 # gets committed, so this fixes it for any fresh clone too, not just this
 # one. Existing already-committed files won't be rewritten just by adding
-# this file — see the renormalize step below.
+# this file - see the renormalize step below.
 * text=auto eol=lf
 
-# Binary files some tooling might add later — never touched by line-ending
+# Binary files some tooling might add later - never touched by line-ending
 # normalization regardless of what `text=auto` would otherwise guess.
 *.png binary
 *.jpg binary

@@ -1,17 +1,17 @@
 """
 Stress test: generate a timetable for a school with 50+ sections, using a
 *realistic* teacher assignment structure rather than a fully-symmetric
-worst case (every teacher qualified for every subject/section) — real
+worst case (every teacher qualified for every subject/section) - real
 schools have natural variation (subject teachers are assigned per grade
 band, not shared across the whole school), which is much friendlier to
 the solver than a deliberately adversarial fully-symmetric instance.
 
 Structure: 10 grades x 5 sections = 50 sections. Each grade has its own
 dedicated pool of 2 teachers per subject (8 subjects), so teachers aren't
-shared across grades — this mirrors how Indian schools typically staff
+shared across grades - this mirrors how Indian schools typically staff
 larger campuses (a "Grade 6-8 wing" teacher roster, etc).
 
-Not part of the app itself — a one-off diagnostic script, run directly
+Not part of the app itself - a one-off diagnostic script, run directly
 with `python3 stress_test_50sections.py`.
 """
 import os
@@ -78,7 +78,7 @@ grade_teachers_by_grade = {}
 
 for grade in GRADES:
     # dedicated teachers per subject for this grade only (not shared
-    # across grades) — realistic staffing, but >1 interchangeable teacher
+    # across grades) - realistic staffing, but >1 interchangeable teacher
     # per subject introduces symmetry the solver has to break itself
     # (unless PIN_PREFERRED_TEACHER pins it ahead of time).
     grade_teachers = {}

@@ -32,7 +32,7 @@ class LoginRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     # The ID token Google's Sign-In button returns via its `credential`
-    # field (a JWT) — verified server-side in routers/auth.py rather than
+    # field (a JWT) - verified server-side in routers/auth.py rather than
     # trusted as-is, since anything from the client could be forged.
     credential: str
 

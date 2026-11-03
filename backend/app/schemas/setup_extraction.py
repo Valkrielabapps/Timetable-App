@@ -18,7 +18,7 @@ class ExtractedClassGroup(BaseModel):
 
 class SetupExtractionPreview(BaseModel):
     """
-    Result of POST /schools/{id}/setup-extraction — nothing has been
+    Result of POST /schools/{id}/setup-extraction - nothing has been
     created in the database yet. The admin reviews this (deselecting or
     editing items in the frontend) and POSTs the reviewed version to
     /commit to actually create rows. See app/services/setup_extractor.py
@@ -34,7 +34,7 @@ class SetupExtractionPreview(BaseModel):
 class SetupExtractionCommit(BaseModel):
     """
     The admin-reviewed subset of a SetupExtractionPreview to actually
-    create. Same shape as the preview minus `notes` — the frontend
+    create. Same shape as the preview minus `notes` - the frontend
     starts from the preview response, lets the admin remove/edit items,
     and posts back what's left.
     """

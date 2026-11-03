@@ -21,7 +21,7 @@ export default function SubstitutionSummary({ schoolId, schoolName, summary }) {
   }
 
   const copy = async () => {
-    flash((await copyText(summaryText(summary))) ? 'Copied — paste it into WhatsApp.' : 'Couldn’t copy. Try again.')
+    flash((await copyText(summaryText(summary))) ? 'Copied - paste it into WhatsApp.' : 'Couldn’t copy. Try again.')
   }
   const print = () => {
     if (!printSummary(summary, schoolName)) flash('Allow pop-ups for this site to print.')

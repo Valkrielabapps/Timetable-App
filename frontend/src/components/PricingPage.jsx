@@ -4,33 +4,33 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Standalone pricing page — reached via `?page=pricing` (see App.jsx,
+ * Standalone pricing page - reached via `?page=pricing` (see App.jsx,
  * same no-router pattern as AboutPage/SupportPage).
  *
  * Dark theme (bg-white, white text) matching About/Support/Customers/Why
  * Timetablz, by explicit request. Back to a three-card grid (Free / Pro /
  * Business side by side, Pro highlighted) rather than the single-column
- * row layout this page used before — also by explicit request, reverting
+ * row layout this page used before - also by explicit request, reverting
  * an earlier "de-templatify" pass that had swapped the card grid for
  * rows. Three tiers is a real, deliberate business decision (Free / Pro /
  * Business), not filler; the card grid is just how that decision reads
  * best now.
  *
  * Still left out, same reasoning as before:
- *   - The top logo strip / "70,000+ companies" trust line — no comparable
+ *   - The top logo strip / "70,000+ companies" trust line - no comparable
  *     customer count exists (see the Hero trust bar on the homepage).
- *   - The Monthly/Annual billing toggle — annual pricing hasn't been
+ *   - The Monthly/Annual billing toggle - annual pricing hasn't been
  *     decided.
- *   - The "View Github / self-hosted" half of the closing banner — no
+ *   - The "View Github / self-hosted" half of the closing banner - no
  *     public repo or self-hosted offering exists.
  *
- * The USD/INR toggle stays — see USD_PER_INR below on what it does and
+ * The USD/INR toggle stays - see USD_PER_INR below on what it does and
  * doesn't represent.
  */
 
-// Rough, clearly-labeled reference rate for *display* only — this does
+// Rough, clearly-labeled reference rate for *display* only - this does
 // NOT mean Pro is separately priced in USD, or that a foreign school
-// would actually be billed in dollars today (Razorpay billing is INR —
+// would actually be billed in dollars today (Razorpay billing is INR - 
 // see the business-setup conversation). It just converts the one real
 // price (₹4,999) so a visitor thinking in USD has a ballpark figure,
 // same as any "approx. $X" conversion widget. Update this if the real
@@ -72,11 +72,11 @@ const fadeUp = {
 }
 
 // Billing-specific subset of the same honest-FAQ approach SupportPage.jsx
-// uses — every answer here matches what docs/legal/TERMS_OF_SERVICE.md
+// uses - every answer here matches what docs/legal/TERMS_OF_SERVICE.md
 // actually says (Section 6 pricing, Section 7 payment, Section 8
 // refunds), not invented policy. The refund-window language stays vague
 // on purpose since the real refund policy is still an open placeholder
-// in that document (see [FREE TRIAL / PILOT PERIOD] and Section 8) —
+// in that document (see [FREE TRIAL / PILOT PERIOD] and Section 8) - 
 // update this once that's decided.
 export const BILLING_FAQS = [
   {
@@ -216,7 +216,7 @@ export default function PricingPage({ onBack, onGetStarted }) {
             <strong className="text-neutral-800">role-based access</strong>. Cancel anytime.
           </p>
 
-          {/* See USD_PER_INR above — this converts the display, it isn't
+          {/* See USD_PER_INR above - this converts the display, it isn't
               a second, separately-decided USD price point. */}
           <div className="mt-8 inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 p-1 text-sm">
             {['INR', 'USD'].map((c) => (

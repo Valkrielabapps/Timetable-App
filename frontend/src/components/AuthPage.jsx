@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { api, setToken } from '../api'
 
 // Set by whoever deploys this (see docs/DEPLOYMENT.md) after creating a
-// Google Cloud OAuth 2.0 Client ID. Left blank in local dev by default —
+// Google Cloud OAuth 2.0 Client ID. Left blank in local dev by default - 
 // the button below simply doesn't render when it's unset, rather than
 // showing a broken "Sign in with Google" that fails on click.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -12,7 +12,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
  * Login / signup screen. Email+password is fully functional. Google
  * sign-in uses Google Identity Services' hosted button (loaded from
  * accounts.google.com at runtime, not bundled) rather than a hand-built
- * button — Google requires their own rendered button/prompt for the ID
+ * button - Google requires their own rendered button/prompt for the ID
  * token flow used here, so this isn't stylistic, it's how the flow works.
  * The resulting ID token is verified server-side in
  * backend/app/routers/auth.py's /auth/google endpoint, never trusted
@@ -25,14 +25,14 @@ export default function AuthPage({ onAuthenticated, onBack, initialMode = 'login
   const [name, setName] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
-  // True once a forgot-password request has been submitted — shown
+  // True once a forgot-password request has been submitted - shown
   // instead of the form so a resubmit can't fire twice. Deliberately the
   // same message regardless of what the backend actually did (see
   // forgot_password's docstring in backend/app/routers/auth.py): this
   // screen must not reveal whether the email had an account.
   const [forgotSubmitted, setForgotSubmitted] = useState(false)
   // True if the Google script failed to load (offline, ad-blocker,
-  // accounts.google.com unreachable, etc.) — without this, that failure
+  // accounts.google.com unreachable, etc.) - without this, that failure
   // was silent: the "or" divider would render with no button ever
   // appearing beneath it, and no indication anything had gone wrong.
   const [googleUnavailable, setGoogleUnavailable] = useState(false)
@@ -56,7 +56,7 @@ export default function AuthPage({ onAuthenticated, onBack, initialMode = 'login
 
   // Loads Google's script once, initializes it with our client ID, and
   // renders its button into googleButtonRef. Skipped entirely if no
-  // client ID is configured — see GOOGLE_CLIENT_ID above.
+  // client ID is configured - see GOOGLE_CLIENT_ID above.
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return
 
@@ -121,7 +121,7 @@ export default function AuthPage({ onAuthenticated, onBack, initialMode = 'login
       setForgotSubmitted(true)
     } catch (err) {
       // Only a genuinely broken request (network error, malformed email)
-      // reaches here — the backend itself always returns success-shaped
+      // reaches here - the backend itself always returns success-shaped
       // 202 regardless of whether the email has an account, so this
       // isn't the "no account found" path.
       setError(err.message)

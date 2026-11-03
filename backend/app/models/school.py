@@ -21,16 +21,16 @@ class School(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    # "school" or "college" — chosen once at creation (see routers/schools.py
+    # "school" or "college" - chosen once at creation (see routers/schools.py
     # and frontend App.jsx's create-school modal). Purely a UI hint for
-    # smart defaults (terminology, which optional fields to show) — nothing
+    # smart defaults (terminology, which optional fields to show) - nothing
     # in the solver or access-control logic branches on this, so an
     # existing row with this left null is treated as "school" everywhere
     # that reads it, not an error state.
     institution_type = Column(String, nullable=True)
     # Explicit display order for the sidebar's grade groups, as a list of
     # grade label strings (e.g. ["Nursery", "LKG", "UKG", "Grade 1", ...]).
-    # Empty by default — the sidebar falls back to a natural (numeric-
+    # Empty by default - the sidebar falls back to a natural (numeric-
     # aware) sort until an admin explicitly reorders grades (see
     # PUT /api/schools/{id}/grade-order), since most schools' grade names
     # sort correctly on their own and shouldn't require manual setup.
@@ -190,19 +190,19 @@ class Subject(Base):
     name = Column(String, nullable=False)
     # If set, the solver will only assign this subject to a Room whose
     # room_type matches exactly (e.g. "lab" for Chemistry). Null means any
-    # room is fine — most subjects don't need a specific room type.
+    # room is fine - most subjects don't need a specific room type.
     required_room_type = Column(String, nullable=True)
-    # Optional, informational only — colleges track credits per course;
+    # Optional, informational only - colleges track credits per course;
     # schools generally don't set this at all. Not read by the solver.
     credits = Column(Integer, nullable=True)
     # If set to 2+, every period the solver schedules for this subject is
     # split into this many simultaneous batches instead of one class
-    # session — e.g. a 60-student "Programming Lab" section splitting into
+    # session - e.g. a 60-student "Programming Lab" section splitting into
     # 3 batches of ~20 in 3 different lab rooms, at the same time, each
     # needing its own qualified teacher. Null/1 means no split (the
     # default, and what every subject used before this field existed).
     # See app/services/solver.py's batch-splitting block for how this is
-    # enforced — each batch is its own teacher+room assignment tied to the
+    # enforced - each batch is its own teacher+room assignment tied to the
     # same day/period as its sibling batches.
     lab_batch_count = Column(Integer, nullable=True)
 
@@ -231,7 +231,7 @@ class Teacher(Base):
     # subject_ids this teacher is qualified to teach
     qualified_subject_ids = Column(JSON, default=list)
     # Which grades (ClassGroup.grade label, e.g. "Grade 9") this teacher
-    # teaches. Empty list = no restriction (teaches every grade) — this is
+    # teaches. Empty list = no restriction (teaches every grade) - this is
     # the default and matches every teacher's behavior before this field
     # existed, so a school that never touches this setting sees no change.
     # Only meaningful in combination with qualified_subject_ids: the
@@ -242,7 +242,7 @@ class Teacher(Base):
     unavailable_period_ids = Column(JSON, default=list)
     max_periods_per_week = Column(Integer, nullable=True)
     # Whether this teacher can be picked as an *assistant* teacher on a
-    # section's plan (see SubjectRequirement.assistant_teacher_id below) —
+    # section's plan (see SubjectRequirement.assistant_teacher_id below) - 
     # a separate flag from qualified_subject_ids, since being someone's
     # assistant for a class isn't the same as being qualified to teach
     # that subject solo. Defaults false so no existing teacher becomes
@@ -259,7 +259,7 @@ class ClassGroup(Base):
     `grade` + `name` together form the Grade > Section hierarchy shown in
     the UI (e.g. grade="Grade 8", name="A"). `grade` is a free-text label
     rather than its own table for the same reason periods/subjects are
-    generic — schools name grades differently (Grade 8, Class VIII, Year 9).
+    generic - schools name grades differently (Grade 8, Class VIII, Year 9).
     """
     __tablename__ = "class_groups"
 
@@ -332,7 +332,7 @@ class SubjectRequirement(Base):
 
     Unique on (class_group_id, subject_id): a class group should only have
     one requirement per subject. This is enforced at the DB level as a
-    backstop — the API layer also upserts on this pair (see
+    backstop - the API layer also upserts on this pair (see
     app/routers/class_groups.py) rather than relying on the DB constraint
     alone, since a raw IntegrityError isn't a friendly API error.
     """
@@ -349,7 +349,7 @@ class SubjectRequirement(Base):
     # teacher is a fixed choice and stays in preferred_teacher_id, so
     # everything that reads that field keeps working. Null = any qualified.
     allowed_teacher_ids = Column(JSON, nullable=True)
-    # Optional second teacher for this section's subject — picked from
+    # Optional second teacher for this section's subject - picked from
     # teachers flagged Teacher.is_assistant_eligible, independent of
     # qualified_subject_ids (an assistant doesn't need to be independently
     # qualified to teach the subject solo). Purely informational: the
@@ -529,7 +529,7 @@ class Timetable(Base):
     """A generated schedule (one solver run's output).
 
     Generation runs as a background job (see app/routers/timetables.py)
-    rather than blocking the HTTP request that kicked it off — a solve can
+    rather than blocking the HTTP request that kicked it off - a solve can
     legitimately take up to a minute for a large school, which is too long
     to hold a request open. `status` tracks the job lifecycle:
     "generating" -> "draft" (succeeded) or "failed". `solver_status` and
@@ -551,7 +551,7 @@ class Timetable(Base):
     # time by app/services/infeasibility_explainer.py (see its docstring).
     # Null whenever that service couldn't run (no ANTHROPIC_API_KEY, etc.)
     # or wasn't applicable (e.g. the generic timeout/unattributed-failure
-    # messages, which are already plain English) — the frontend falls
+    # messages, which are already plain English) - the frontend falls
     # back to showing just the raw error_message list in that case, so a
     # null here is never a broken state, just a less-polished one.
     error_explanation = Column(Text, nullable=True)
@@ -582,13 +582,13 @@ class TimetableEntry(Base):
     period_id = Column(Integer, ForeignKey("periods.id"), nullable=False)
     locked = Column(Boolean, default=False)  # admin locked this slot before regenerating
     # Copied from SubjectRequirement.assistant_teacher_id at generation
-    # time (see _run_generation_job in app/routers/timetables.py) — not
+    # time (see _run_generation_job in app/routers/timetables.py) - not
     # something the solver chooses or optimizes around, just carried over
     # so the generated grid can show who's assisting on this slot without
     # a separate lookup back to the plan.
     assistant_teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
     # 1-indexed batch number when this entry came from a Subject.lab_batch_count
-    # split (see app/services/solver.py) — null for every normal, unsplit
+    # split (see app/services/solver.py) - null for every normal, unsplit
     # entry. Lets the frontend show "Batch 1"/"Batch 2" for what would
     # otherwise be two indistinguishable rows at the same class/subject/period.
     lab_batch = Column(Integer, nullable=True)
@@ -626,7 +626,7 @@ class SchoolMembership(Base):
     A second admin/viewer login for a school, on top of School.owner_id.
 
     The owner (School.owner_id) is always an implicit "admin" member, even
-    with no row here — this table only needs to exist for *additional*
+    with no row here - this table only needs to exist for *additional*
     users, so a freshly created school with a single owner works exactly
     as before with zero rows in this table (see
     app/core/access.get_membership_role for where that implicit-owner
@@ -636,7 +636,7 @@ class SchoolMembership(Base):
 
     Roles are deliberately just two tiers for now: "admin" (everything the
     owner can do, including inviting/removing other members) and "viewer"
-    (read-only — every mutating endpoint rejects a viewer with 403, see
+    (read-only - every mutating endpoint rejects a viewer with 403, see
     app/core/access.require_school_access). See docs/ARCHITECTURE.md for
     why finer-grained permissions were left out of this first pass.
     """
@@ -657,7 +657,7 @@ class SchoolInvite(Base):
     A pending invitation for someone (identified by email, not yet
     necessarily a User row) to join a school with a given role. Created by
     an existing admin (POST /api/schools/{id}/invites), consumed by
-    POST /api/invites/{token}/accept — which creates the User row too if
+    POST /api/invites/{token}/accept - which creates the User row too if
     the invited email hasn't signed up yet, so an admin can invite a
     colleague who's never used the app before. `token` is the only thing
     the invite link needs to carry; it's long and random specifically so
@@ -679,7 +679,7 @@ class SchoolInvite(Base):
 
 class SubstitutionLog(Base):
     """
-    A day's worth of manual teacher-substitution records — e.g. "Ms. Iyer
+    A day's worth of manual teacher-substitution records - e.g. "Ms. Iyer
     is out Wednesday, Mr. Rao is covering her Period 3 Grade 8A Math
     class." This is deliberately a simple audit log, not something the
     solver reads or reasons about: substitutions are same-day, one-off
@@ -690,7 +690,7 @@ class SubstitutionLog(Base):
     `changes` stores a list of individual swaps as JSON (each with
     period_id, absent_teacher_id, substituting_teacher_id, class_group_id,
     and an optional subject_id) rather than one row per swap, so a whole
-    day's substitutions are created and read as a single record — see
+    day's substitutions are created and read as a single record - see
     app/schemas/substitutions.py's SubstitutionChange for the shape of
     each entry.
     """

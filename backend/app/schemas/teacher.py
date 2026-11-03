@@ -6,7 +6,7 @@ class TeacherCreate(BaseModel):
     name: str = Field(max_length=100)
     email: str | None = Field(default=None, max_length=200)
     qualified_subject_ids: list[int] = []
-    # Empty = teaches every grade (no restriction) — see the model's
+    # Empty = teaches every grade (no restriction) - see the model's
     # docstring for why this is the default rather than "qualifies for
     # nothing", unlike qualified_subject_ids.
     qualified_grades: list[str] = []
@@ -35,7 +35,7 @@ class TeacherOut(BaseModel):
     qualified_subject_ids: list[int]
     # `| None` purely to tolerate existing rows from before this column
     # existed, whose value is NULL until the migration's ALTER TABLE ...
-    # DEFAULT backfills them (see docs/GETTING_STARTED.md) — the frontend
+    # DEFAULT backfills them (see docs/GETTING_STARTED.md) - the frontend
     # already treats a missing/None value the same as an empty list.
     qualified_grades: list[str] | None = None
     unavailable_period_ids: list[int]

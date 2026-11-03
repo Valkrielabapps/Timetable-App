@@ -4,13 +4,13 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.models.school import ClassGroup, Constraint, Period, School, Subject, SubjectRequirement, Teacher
-from app.models.user import User  # noqa: F401 — registers the `users` table that School.owner_id FKs to
+from app.models.user import User  # noqa: F401 - registers the `users` table that School.owner_id FKs to
 from app.services.solver import generate_school_timetable, solve_example
 
 
 def test_solve_example_is_feasible():
     """The worked example has an obvious valid solution, so the solver
-    should always find it — this test mainly catches OR-Tools install
+    should always find it - this test mainly catches OR-Tools install
     or API-usage regressions."""
     result = solve_example()
     assert result.status in ("optimal", "feasible")
@@ -40,7 +40,7 @@ def db_session():
 
 def _make_school_with_periods(db, days=5, periods_per_day=2):
     """5 weekdays x periods_per_day periods, ordered 0..periods_per_day-1
-    within each day — enough structure to exercise 'unavailable on a
+    within each day - enough structure to exercise 'unavailable on a
     whole day' and 'last period of the day' constraints."""
     school = School(name="Test School")
     db.add(school)
@@ -55,7 +55,7 @@ def _make_school_with_periods(db, days=5, periods_per_day=2):
 
 def test_availability_constraint_is_respected(db_session):
     """A teacher marked unavailable on Monday (Teacher.unavailable_period_ids,
-    set by the 'availability' constraint type — see
+    set by the 'availability' constraint type - see
     app/routers/constraints.py) should never be scheduled on Monday, even
     though the requirement's periods_per_week leaves the solver free to
     pick from any of the 5 days."""
@@ -86,7 +86,7 @@ def test_availability_constraint_is_respected(db_session):
     db.commit()
     db.refresh(class_group)
 
-    # 3 periods/week out of 10 available slots — plenty of room to avoid
+    # 3 periods/week out of 10 available slots - plenty of room to avoid
     # Monday entirely, so if the solver ever lands on Monday it's because
     # unavailable_period_ids was ignored, not because it had no choice.
     db.add(SubjectRequirement(class_group_id=class_group.id, subject_id=subject.id, periods_per_week=3))
@@ -104,7 +104,7 @@ def test_availability_constraint_is_respected(db_session):
 
 def test_no_subject_last_period_constraint_is_respected(db_session):
     """A 'no_subject_period' Constraint row (position='last') should keep
-    the subject off the last period of every day, school-wide — see the
+    the subject off the last period of every day, school-wide - see the
     req_restricted_periods handling in app/services/solver.py."""
     db = db_session
     school = _make_school_with_periods(db, days=5, periods_per_day=2)
@@ -152,7 +152,7 @@ def test_no_subject_last_period_constraint_is_respected(db_session):
 
 def test_teacher_qualified_grades_is_respected(db_session):
     """A teacher whose Teacher.qualified_grades is non-empty should only be
-    assignable to class groups whose grade is in that list — e.g. a Math
+    assignable to class groups whose grade is in that list - e.g. a Math
     teacher qualified only for 'Grade 9' should never be assigned to a
     'Grade 8' section's Math requirement, even if they're the only teacher
     qualified for the subject there (the solve should report infeasible /
@@ -165,7 +165,7 @@ def test_teacher_qualified_grades_is_respected(db_session):
     db.commit()
     db.refresh(subject)
 
-    # Qualified for Math, but only in Grade 9 — should never be assigned to
+    # Qualified for Math, but only in Grade 9 - should never be assigned to
     # the Grade 8 section below.
     teacher = Teacher(
         school_id=school.id,
@@ -194,7 +194,7 @@ def test_teacher_qualified_grades_is_respected(db_session):
     assert all(a["teacher_id"] is None for a in result.assignments)
     assert any("no teacher yet" in w.lower() for w in result.warnings), result.warnings
 
-    # Now add a second class group in Grade 9 — the same teacher should be
+    # Now add a second class group in Grade 9 - the same teacher should be
     # assignable there, proving the restriction is a match, not a blanket
     # exclusion of this teacher.
     grade_9 = ClassGroup(school_id=school.id, grade="Grade 9", name="A")
@@ -217,7 +217,7 @@ def test_teacher_qualified_grades_is_respected(db_session):
 
 def test_assistant_teacher_is_not_double_booked(db_session):
     """SubjectRequirement.assistant_teacher_id reserves that teacher's time
-    wherever the requirement lands — it shouldn't be possible for the
+    wherever the requirement lands - it shouldn't be possible for the
     solver to assign an assistant to co-teach one class while also using
     them as the sole primary teacher of a different class at the same
     period. See the assistant_teacher_id bullet in generate_school_
@@ -226,7 +226,7 @@ def test_assistant_teacher_is_not_double_booked(db_session):
     # A single period in the whole school: Math (CG1) and English (CG2)
     # both need exactly that one period, so if the assistant reservation
     # isn't enforced, the solver has no reason at all to avoid landing them
-    # both there — the conflict is unavoidable, not a matter of bad luck.
+    # both there - the conflict is unavoidable, not a matter of bad luck.
     school = _make_school_with_periods(db, days=1, periods_per_day=1)
 
     math = Subject(school_id=school.id, name="Math")
@@ -257,16 +257,16 @@ def test_assistant_teacher_is_not_double_booked(db_session):
     db.add(SubjectRequirement(class_group_id=cg2.id, subject_id=english.id, periods_per_week=1))
     db.commit()
 
-    # Only one period exists and both requirements need it — Ms. Iyer would
+    # Only one period exists and both requirements need it - Ms. Iyer would
     # have to be in two places at once (assisting Math for CG1, teaching
     # English for CG2), which is genuinely impossible.
     result = generate_school_timetable(db, school.id)
     assert result.status == "infeasible", (
-        "Expected the sole shared period to make this infeasible — the assistant "
+        "Expected the sole shared period to make this infeasible - the assistant "
         "reservation isn't being enforced if this solved anyway"
     )
 
-    # Add a second period so the two requirements *can* be separated —
+    # Add a second period so the two requirements *can* be separated - 
     # confirm the solver actually does separate them rather than still
     # double-booking Ms. Iyer.
     db.add(Period(school_id=school.id, day_of_week=0, order=1, label="D0P1"))
@@ -286,7 +286,7 @@ def test_assistant_teacher_is_not_double_booked(db_session):
 def test_multi_constraint_conflict_is_named(db_session):
     """Two different subjects each individually-fine 'require first period'
     rules for the same class group, together impossible (a class group can
-    only have one subject per period) — the exact scenario
+    only have one subject per period) - the exact scenario
     docs/ARCHITECTURE.md names as something _diagnose_infeasibility's
     single-cause checks can't see. _diagnose_constraint_conflicts should
     name both constraints specifically instead of falling back to the

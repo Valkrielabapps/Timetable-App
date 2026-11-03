@@ -23,13 +23,13 @@ import TeachersSection from './TeachersSection'
 /**
  * Data Entry is four separate sub-pages, not one combined table:
  * Subjects (what the school teaches), Teachers (who teaches, and which
- * subjects they cover), Setup (periods and rooms — the foundational,
+ * subjects they cover), Setup (periods and rooms - the foundational,
  * one-time setup a school does before entering subjects/teachers), and
  * This section's plan (how many periods/week the *currently selected*
  * section needs of each subject, plus which teacher covers it here).
  * Subjects/Teachers/Setup are reached from the sidebar's "Subjects &
  * Teachers" item (school-wide, no section implied); the Plan page is
- * reached by clicking a section in the sidebar directly — it has no
+ * reached by clicking a section in the sidebar directly - it has no
  * sub-nav tab of its own, since "click a section to see its plan"
  * already is the navigation for it, and showing the school-wide
  * Subjects/Teachers/Setup tabs while a specific section's plan is open
@@ -37,17 +37,17 @@ import TeachersSection from './TeachersSection'
  * looking at every teacher in the school" confusion this split is meant
  * to avoid.
  *
- * Setup used to be a collapsed "Setup — N periods, N rooms — manage"
- * disclosure sitting above the Subjects/Teachers sub-nav — easy to miss
+ * Setup used to be a collapsed "Setup - N periods, N rooms - manage"
+ * disclosure sitting above the Subjects/Teachers sub-nav - easy to miss
  * entirely for a new admin, since nothing about a plain underlined text
  * link says "this is where you configure the school's daily schedule."
  * It's now a full sub-page, a peer of Subjects and Teachers, since
  * periods/rooms are exactly as much "a point of data entry" as those two
- * are — a school can't get a working timetable without them.
+ * are - a school can't get a working timetable without them.
  *
  * This used to be a single dense table where every row did five things
- * at once — subject name, room type/credits, periods/week, teacher
- * assignment, preferred-teacher picker, status — which meant "add
+ * at once - subject name, room type/credits, periods/week, teacher
+ * assignment, preferred-teacher picker, status - which meant "add
  * subjects" and "add teachers" (two genuinely separate tasks for a
  * school admin) were smashed into one screen. Splitting them mirrors how
  * an admin actually thinks about the job ("what do we teach" vs "who
@@ -55,7 +55,7 @@ import TeachersSection from './TeachersSection'
  * its own prominent, correctly-scoped bulk import instead of one import
  * panel with a "which resource am I uploading" dropdown.
  *
- * Only "This section's plan" is genuinely scoped to `classGroupId` —
+ * Only "This section's plan" is genuinely scoped to `classGroupId` - 
  * Subjects and Teachers are school-wide. `activeSectionId` on the Plan
  * page can be switched independently of the sidebar's selection (see
  * its own comment below), same as before the split.
@@ -72,7 +72,7 @@ export default function DataEntryTab({
   gradeDayLimits = null,
   onSaveGradeDayLimits,
   // Subjects/teachers/periods/rooms/classGroups are owned by App.jsx now,
-  // not fetched here — this component gets unmounted every time the
+  // not fetched here - this component gets unmounted every time the
   // admin switches to another top-level tab, so state kept locally here
   // was destroyed and had to be re-fetched from scratch on the way back.
   // App.jsx never unmounts, so lifting ownership there means switching
@@ -89,13 +89,13 @@ export default function DataEntryTab({
   // reloading every section for one field.
   setClassGroups,
   // Every SubjectRequirement in the school, owned by App.jsx (same
-  // reasoning as subjects/teachers/periods/rooms above — this component
+  // reasoning as subjects/teachers/periods/rooms above - this component
   // unmounts on every tab switch, so state kept locally here would be
   // destroyed right along with it). This section's own `requirements` is
   // just a filtered view of it, not separately fetched/cached, since
   // App.jsx already loads the whole list up front (TeachersSection needs
   // every section's data at once for its live workload total, so a lazy
-  // per-visited-section cache — which is what this used to be — isn't an
+  // per-visited-section cache - which is what this used to be - isn't an
   // option anymore anyway).
   allRequirements,
   setAllRequirements,
@@ -129,7 +129,7 @@ export default function DataEntryTab({
   const electiveBlocks = allElectiveBlocks.filter((b) => inBlock(b, activeSectionId))
   const blockMutations = useElectiveBlockMutations(schoolId)
 
-  // Full refresh — kept for the less-frequent call sites (bulk import,
+  // Full refresh - kept for the less-frequent call sites (bulk import,
   // quick period setup, a delete that could have cascaded into any
   // section's plan, or copying periods into other sections) where
   // re-fetching everything is the simplest correct thing to do and isn't
@@ -171,8 +171,8 @@ export default function DataEntryTab({
   }
 
   // Bulk import's resource dropdown still includes "Class groups" even on
-  // the Subjects/Teachers pages (nothing removed, just re-defaulted — see
-  // BulkImportPanel's docstring) — `load()` already covers class groups
+  // the Subjects/Teachers pages (nothing removed, just re-defaulted - see
+  // BulkImportPanel's docstring) - `load()` already covers class groups
   // too now, since `onReloadSchoolData` (App.jsx's loadSchoolData) fetches
   // classGroups/teachers/subjects/periods/rooms together in one function.
   const reloadAll = load
@@ -182,7 +182,7 @@ export default function DataEntryTab({
   const subjectsApi = {
     async create(data) {
       // Shows the new row immediately (before the server round trip
-      // resolves) instead of waiting for it — the round trip itself
+      // resolves) instead of waiting for it - the round trip itself
       // (network + remote Postgres) is what was making "+ Add subject"
       // feel like a 2-3 second freeze even after this was already
       // reduced to a single call. The temp row is marked `_pending` so
@@ -204,7 +204,7 @@ export default function DataEntryTab({
     },
     async update(id, data) {
       // Patched in place from the server's response instead of a full
-      // reload (5 parallel GETs) — renaming a subject or changing its
+      // reload (5 parallel GETs) - renaming a subject or changing its
       // room type/credits doesn't affect teachers/periods/rooms/
       // requirements, so there's nothing else here that could have gone
       // stale.
@@ -215,7 +215,7 @@ export default function DataEntryTab({
       // Removed locally instead of a full reload (5 parallel GETs), same
       // reasoning as update above. This does leave a removed subject's id
       // lingering in any teacher's `qualified_subject_ids` in local state
-      // until that teacher is next reloaded — harmless, since nothing
+      // until that teacher is next reloaded - harmless, since nothing
       // reads a qualification against a subject that's no longer in the
       // `subjects` list (TeachersSection/PlanSection both filter/map over
       // `subjects` first), and it self-heals on the next full load.
@@ -246,7 +246,7 @@ export default function DataEntryTab({
 
   const teachersApi = {
     async update(id, data) {
-      // Same reasoning as subjectsApi.update above — assigning/removing
+      // Same reasoning as subjectsApi.update above - assigning/removing
       // a qualified subject or editing a teacher's own fields doesn't
       // touch subjects/periods/rooms/requirements.
       const updated = await api.updateTeacher(id, data)
@@ -264,7 +264,7 @@ export default function DataEntryTab({
   }
 
   // Replaces this section's slice of `allRequirements` with a freshly
-  // computed one, leaving every other section's entries untouched — used
+  // computed one, leaving every other section's entries untouched - used
   // by all three handlers below instead of `load()`, which would refetch
   // subjects/teachers/periods/rooms/classGroups school-wide for what's
   // only ever a single-section edit.
@@ -279,7 +279,7 @@ export default function DataEntryTab({
     try {
       // Re-fetch just this section instead of reading from React state to
       // close a race if this field is blurred twice in quick succession
-      // (e.g. tabbing through fields) — see PeriodsPerWeekInput's
+      // (e.g. tabbing through fields) - see PeriodsPerWeekInput's
       // docstring below.
       const fresh = await api.listRequirements(activeSectionId)
       const existing = fresh.find((r) => r.subject_id === subjectId)
@@ -307,7 +307,7 @@ export default function DataEntryTab({
   async function handleSetPreferredTeacher(subjectId, teacherId) {
     try {
       // Unlike handleUpdatePeriods above, this skips the leading re-fetch
-      // and trusts `allRequirements` directly — a <select>'s onChange is
+      // and trusts `allRequirements` directly - a <select>'s onChange is
       // one discrete event, not a text field a user can blur twice in
       // quick succession, so there's no analogous race to guard against.
       const requirement = requirements.find((r) => r.subject_id === subjectId)
@@ -354,13 +354,13 @@ export default function DataEntryTab({
     }
   }
 
-  // Adds or removes this subject from the active section's plan — the
+  // Adds or removes this subject from the active section's plan - the
   // subject picker's checkbox toggle. Adding creates a requirement row
   // with a placeholder periods_per_week (1) the admin then fills in for
   // real in the table; removing deletes the row outright, same as
   // setting periods/week back to 0 in the table already does (this is
   // just a more discoverable way to do the same thing, plus it's how a
-  // subject gets added in the first place now — the table no longer
+  // subject gets added in the first place now - the table no longer
   // shows every school subject to type a number into).
   async function handleToggleSectionSubject(subjectId, shouldSelect) {
     try {
@@ -383,16 +383,16 @@ export default function DataEntryTab({
   }
 
   // Excludes subjects still `_pending` (optimistically added, not yet
-  // confirmed by the server — see subjectsApi.create above) — setting
+  // confirmed by the server - see subjectsApi.create above) - setting
   // periods/week or a preferred teacher here would target the subject's
   // temporary id instead of its real one.
-  // Used below to also filter by grade — a teacher whose Teacher.
+  // Used below to also filter by grade - a teacher whose Teacher.
   // qualified_grades is non-empty should only show up as "qualified" for
   // sections in one of those grades (empty = no restriction, same as the
   // solver's own check in app/services/solver.py).
   const activeSectionGrade = classGroups.find((cg) => cg.id === activeSectionId)?.grade
 
-  // Eligible for the Assistant Teacher column — a standalone flag
+  // Eligible for the Assistant Teacher column - a standalone flag
   // (Teacher.is_assistant_eligible, set in TeachersSection), not gated by
   // qualified_subject_ids/qualified_grades the way the main teacher
   // picker is. An assistant doesn't need to be independently qualified to
@@ -400,7 +400,7 @@ export default function DataEntryTab({
   const assistantEligibleTeachers = teachers.filter((t) => t.is_assistant_eligible)
 
   // Only subjects this section has actually been given a requirement
-  // row for — i.e. ones an admin picked via the subject picker below —
+  // row for - i.e. ones an admin picked via the subject picker below - 
   // not every subject in the school. A school with 20 subjects but one
   // section (say, Kindergarten) that only needs 6 of them shouldn't show
   // the other 14 as rows to skip past every time this page opens.
@@ -657,12 +657,12 @@ export default function DataEntryTab({
 }
 
 /**
- * Periods and rooms — the school's foundational, one-time setup. Used to
- * live as a collapsed "Setup — manage" text-link disclosure sitting above
+ * Periods and rooms - the school's foundational, one-time setup. Used to
+ * live as a collapsed "Setup - manage" text-link disclosure sitting above
  * the Subjects/Teachers sub-nav, which made it easy for a new admin to
  * never notice it was there at all. It's a full sub-page now, a peer of
  * Subjects and Teachers, since it's exactly as much "a point of data
- * entry" as those two — a school can't get a working timetable without
+ * entry" as those two - a school can't get a working timetable without
  * its periods and rooms configured.
  */
 function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimits, onSaveGradeDayLimits, rooms, onRoomsChanged, onImported, readOnly }) {
@@ -734,7 +734,7 @@ function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimit
 
 /**
  * "How many periods/week does the currently selected section need of
- * each subject" plus which teacher covers it here — the one genuinely
+ * each subject" plus which teacher covers it here - the one genuinely
  * per-section question in Data Entry. Everything else (subject list,
  * teacher list/qualifications) lives on the other two sub-pages; this
  * one only reads them.
@@ -772,7 +772,7 @@ function PlanSection({
 }) {
   // Whether the subject picker (below) is showing instead of the periods/
   // week table. Starts open for a section with nothing picked yet, closed
-  // otherwise — decided once per section switch (the effect below), not
+  // otherwise - decided once per section switch (the effect below), not
   // re-derived from `rows.length` on every render, which is what this
   // used to do: as soon as the *first* checked subject's create request
   // resolved, `rows.length` flipped from 0 to 1 and the whole picker
@@ -783,10 +783,10 @@ function PlanSection({
   useEffect(() => {
     setSubjectPickerOpen(rows.length === 0)
     // Deliberately only re-derives on a section switch, not whenever
-    // `rows` changes — see the comment above.
+    // `rows` changes - see the comment above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSectionId])
-  // Optimistic override for the picker's checkboxes — without this, each
+  // Optimistic override for the picker's checkboxes - without this, each
   // click waited on a full round trip (through Railway, then Supabase)
   // before visually checking/unchecking at all, since `rows` only reflects
   // what the server has confirmed. On a slow connection that reads as
@@ -1306,11 +1306,11 @@ function ClassTeacherPicker({ section, teachers, classGroups, onChange, readOnly
 
 /**
  * Checkbox list of the school's subjects for picking which ones apply to
- * one section — shown full-page the first time a section has none picked
+ * one section - shown full-page the first time a section has none picked
  * yet, and re-openable afterward via "Edit subjects" in PlanSection to
  * add/remove. Checking a box creates that subject's requirement row
  * (periods_per_week starts at a placeholder 1, filled in for real in the
- * table); unchecking deletes it — same underlying operation as setting
+ * table); unchecking deletes it - same underlying operation as setting
  * periods/week back to 0 in the table, just a more discoverable way in.
  */
 function SectionSubjectPicker({
@@ -1374,7 +1374,7 @@ function SectionSubjectPicker({
 /**
  * Small dropdown-style panel for picking which sections a "copy periods"
  * action should apply to, instead of silently always copying to every
- * other section in the school — a school with several unrelated grades
+ * other section in the school - a school with several unrelated grades
  * (say, 6 and 11) has no reason to want grade 6's subject plan pushed
  * into grade 11 just because they're both "other sections."
  */
@@ -1433,7 +1433,7 @@ function CopyTargetPicker({ otherSections, copyTargetIds, onCopyTargetIdsChange,
  * whenever it changes (e.g. switching sections).
  *
  * The previous version used an uncontrolled input (`defaultValue`), which
- * only sets the DOM's value on first mount — React does not update it on
+ * only sets the DOM's value on first mount - React does not update it on
  * later re-renders. Since this row's <tr> was reused across section
  * switches (same subject.id, so same React key), the box kept showing
  * whichever section's number it happened to mount with first, even after

@@ -1,6 +1,6 @@
 """
 Tests for app/core/access.py's require_school_access, exercised through
-real router endpoints rather than calling the function directly — the
+real router endpoints rather than calling the function directly - the
 actual risk this closes (see docs/ARCHITECTURE.md's "Multiple admins per
 school..." section) is a router forgetting to call it or getting the
 school_id wrong, which a unit test on access.py alone wouldn't catch.
@@ -96,7 +96,7 @@ def test_owner_cannot_be_removed_or_demoted(client):
 def test_cross_school_isolation(client):
     """A resource belonging to school A must not be readable/writable by
     an admin of unrelated school B, even though they're a real admin
-    somewhere — access is per-school, not a global "is an admin" flag."""
+    somewhere - access is per-school, not a global "is an admin" flag."""
     _, a_headers = signup(client, email="a_owner@a.com")
     school_a = create_school(client, a_headers, name="School A")
     r = client.post("/api/subjects", json={"school_id": school_a["id"], "name": "Math"}, headers=a_headers)

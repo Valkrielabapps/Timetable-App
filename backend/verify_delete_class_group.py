@@ -1,6 +1,6 @@
 """
 One-off verification script for deleting a ClassGroup that already has
-generated TimetableEntry rows — checks the fix in
+generated TimetableEntry rows - checks the fix in
 app/routers/class_groups.py's delete_class_group (explicit TimetableEntry
 cleanup, since there's no ORM cascade for that relationship).
 

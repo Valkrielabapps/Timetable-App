@@ -1,4 +1,4 @@
-"""Pydantic schemas for SubstitutionLog — see app/models/school.py's
+"""Pydantic schemas for SubstitutionLog - see app/models/school.py's
 SubstitutionLog docstring for what this feature is (a same-day manual
 substitution record, not something the solver reads)."""
 from datetime import date as date_type

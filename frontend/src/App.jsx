@@ -43,8 +43,8 @@ import { pickVersions } from './lib/versions'
 import { pageFromLocation } from './lib/sitePages'
 
 // Substitutions used to be its own tab here, but it's really a sibling
-// view of the generated schedule (same data — entries, periods, teachers
-// — different lens), not a distinct workflow, so it now lives as a
+// view of the generated schedule (same data - entries, periods, teachers
+// - different lens), not a distinct workflow, so it now lives as a
 // Schedule/Substitutions toggle inside TimetableTab.jsx instead of adding
 // to this top-level count.
 // The header's numbered steps, in the order the work is done. The first
@@ -81,11 +81,11 @@ function App() {
   // What a setup-check Fix button asked to open - see handleFix.
   const [focus, setFocus] = useState(null)
   const [teachers, setTeachers] = useState([])
-  // Subjects/periods/rooms — lifted up here (alongside classGroups/
+  // Subjects/periods/rooms - lifted up here (alongside classGroups/
   // teachers, which already lived here) rather than kept local to
   // DataEntryTab, because DataEntryTab gets unmounted every time the
   // admin switches to another top-level tab (`{tab === 'entry' && (...)}`
-  // in the render below) — any state kept inside it is destroyed on
+  // in the render below) - any state kept inside it is destroyed on
   // every tab switch and has to be re-fetched from scratch on the way
   // back, which is exactly why switching to Constraints and back used to
   // cost a fresh multi-request reload of data that was on screen seconds
@@ -93,7 +93,7 @@ function App() {
   // switches for free.
   const [subjects, setSubjects] = useState([])
   const [periods, setPeriods] = useState([])
-  // Constraints — same reasoning as subjects/periods/rooms above: lifted
+  // Constraints - same reasoning as subjects/periods/rooms above: lifted
   // here instead of fetched independently by ConstraintsTab (which
   // unmounts on every tab switch) and *again* by useSetupProgress (for
   // the header bar/OverviewTab), which together used to mean opening
@@ -101,7 +101,7 @@ function App() {
   // already-answered fetch of classGroups) before anything on the page
   // could render.
   const [constraints, setConstraints] = useState([])
-  // Team membership/invites — same reasoning as constraints above:
+  // Team membership/invites - same reasoning as constraints above:
   // TeamTab used to fetch these itself on every mount, and since it fully
   // remounts on every tab switch (App.jsx's `key={tab}`), the "Owner"
   // badge and member list took a visible several seconds to appear on
@@ -111,12 +111,12 @@ function App() {
   const [invites, setInvites] = useState([])
   // Every SubjectRequirement across every section in the school (periods/
   // week + preferred/assistant teacher per subject per section), fetched
-  // once as a flat list — same "lift it so a tab switch can't throw it
+  // once as a flat list - same "lift it so a tab switch can't throw it
   // away" reasoning as subjects/periods/rooms above, but school-wide
   // rather than per-section-and-lazy the way this used to be cached.
   // Needed in full, always, now that TeachersSection.jsx sums each
   // teacher's committed periods/week *across every section* for the live
-  // workload total — a lazy per-visited-section cache would silently
+  // workload total - a lazy per-visited-section cache would silently
   // undercount any section the admin hasn't happened to open yet, which
   // defeats the point of a workload warning.
   const [allRequirements, setAllRequirements] = useState([])
@@ -131,13 +131,13 @@ function App() {
   // straight to Plan & billing (an upgrade prompt or the renewal banner).
   const [settingsSection, setSettingsSection] = useState('school')
   // Which of Data Entry's three sub-pages (subjects/teachers/plan) is
-  // active — lifted up here rather than kept local to DataEntryTab so
+  // active - lifted up here rather than kept local to DataEntryTab so
   // the header progress bar and OverviewTab's step cards can jump
   // straight to e.g. "Teachers" instead of just landing on Data Entry
   // and making the admin find the right sub-page themselves.
   const [dataEntrySubView, setDataEntrySubView] = useState('subjects')
   // Whether loadSchools()/loadSchoolData() have resolved at least once
-  // for the current user/school — distinct from schools.length === 0 /
+  // for the current user/school - distinct from schools.length === 0 /
   // classGroups.length === 0, which is also true *while the fetch is
   // still in flight* right after login. Without this, the "Create your
   // school" prompt and FirstRunWelcome (both genuine "you truly have
@@ -148,7 +148,7 @@ function App() {
   const [schoolsReady, setSchoolsReady] = useState(false)
   const [schoolDataReady, setSchoolDataReady] = useState(false)
   const [error, setError] = useState(null)
-  // Add-school is a small modal rather than window.prompt() — a native
+  // Add-school is a small modal rather than window.prompt() - a native
   // browser dialog looked jarring next to an otherwise fully custom UI,
   // and couldn't show a "please wait" state or a proper error.
   const [addSchoolOpen, setAddSchoolOpen] = useState(false)
@@ -156,13 +156,13 @@ function App() {
   const [newInstitutionType, setNewInstitutionType] = useState('school') // 'school' | 'college'
   const [creatingSchool, setCreatingSchool] = useState(false)
   // Unauthenticated visitors see LandingPage.jsx first (marketing page,
-  // "Get started"/"Sign in" CTAs), not straight-to-login — this flips to
+  // "Get started"/"Sign in" CTAs), not straight-to-login - this flips to
   // true once one of those is clicked, revealing AuthPage. Reset to false
   // on logout so signing out lands back on the marketing page, not a bare
   // login form.
   //
-  // Also seeded from `?start=auth` on initial load — PricingPage's CTAs
-  // are a real navigation (full page reload, no client router — see
+  // Also seeded from `?start=auth` on initial load - PricingPage's CTAs
+  // are a real navigation (full page reload, no client router - see
   // legalPage below), not a same-page state flip, so a "Get started"
   // click there has to encode the intent in the URL it navigates to
   // rather than just calling setShowAuth(true) directly.
@@ -200,7 +200,7 @@ function App() {
     setEnteredApp(true)
   }
 
-  // Drop `?start=auth` once read above — same reasoning as
+  // Drop `?start=auth` once read above - same reasoning as
   // handleInviteAccepted/handlePasswordReset below (replaceState, not a
   // real navigation, so it doesn't re-trigger on a later refresh/back).
   useEffect(() => {
@@ -211,20 +211,20 @@ function App() {
   }, [])
 
   // This app has no client-side router (see AcceptInvitePage.jsx's
-  // docstring) — an invite link is just `?invite=<token>` on the same
+  // docstring) - an invite link is just `?invite=<token>` on the same
   // URL, checked once on load. Kept in state (not re-read from the URL
   // on every render) so it doesn't reappear if the user navigates within
   // the app after accepting/dismissing it.
   const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [inviteHandled, setInviteHandled] = useState(false)
 
-  // Same reasoning as inviteToken above — a password-reset link is
+  // Same reasoning as inviteToken above - a password-reset link is
   // `?reset=<token>` on the same URL, checked once on load.
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset'))
   const [resetHandled, setResetHandled] = useState(false)
 
   // Same "no client-side router, so read it once from the URL" pattern as
-  // inviteToken/resetToken above — LandingPage.jsx's footer links to
+  // inviteToken/resetToken above - LandingPage.jsx's footer links to
   // `?page=privacy` / `?page=terms` with a plain <a>, which triggers a
   // real navigation (full reload) rather than a route change, so this
   // only needs to be read on initial mount, not watched afterwards.
@@ -278,7 +278,7 @@ function App() {
   async function loadSchoolData(schoolId) {
     try {
       // Members/invites are admin-only endpoints (GET .../members and
-      // .../invites both 403 a viewer) — skipped entirely for a non-admin
+      // .../invites both 403 a viewer) - skipped entirely for a non-admin
       // rather than let that 403 reject this whole Promise.all and leave
       // every other tab (Subjects, Teachers, Timetable, ...) with no data
       // at all just because Team isn't something a viewer can see anyway
@@ -314,7 +314,7 @@ function App() {
   }
 
   // Narrower than loadSchoolData (which also re-fetches classGroups/
-  // teachers/subjects/periods/rooms/timetables) — a constraint add/edit/
+  // teachers/subjects/periods/rooms/timetables) - a constraint add/edit/
   // delete/scope-change can't affect any of those, but a full re-fetch of
   // *constraints* specifically is still needed after one (rather than
   // patching the changed row locally) because each card's `conflicts` is
@@ -329,7 +329,7 @@ function App() {
   }
 
   // Narrower than loadSchoolData, same reasoning as reloadConstraints
-  // above — an invite/role-change/remove/revoke only ever affects the
+  // above - an invite/role-change/remove/revoke only ever affects the
   // member/invite lists, not any of the school's other data.
   async function reloadTeam() {
     try {
@@ -373,11 +373,11 @@ function App() {
     }
   }
 
-  // Bulk sibling of handleAddClassGroup — used by BulkAddClassGroups.jsx's
+  // Bulk sibling of handleAddClassGroup - used by BulkAddClassGroups.jsx's
   // range form (e.g. "Grade 1-12" x "Sections A-C" = 36 in one go).
   // Fires every create in parallel and reloads once at the end, rather
   // than calling handleAddClassGroup in a loop (which would reload school
-  // data after every single one — wasteful for dozens of creates, and the
+  // data after every single one - wasteful for dozens of creates, and the
   // repeated re-renders would fight with the form's own submitting state).
   async function handleAddClassGroups(pairs) {
     try {
@@ -388,7 +388,7 @@ function App() {
       await loadSchoolData(selectedSchoolId)
     } catch (err) {
       setError(err.message)
-      // Some may have succeeded before one failed — refresh regardless so
+      // Some may have succeeded before one failed - refresh regardless so
       // the sidebar/list reflects whatever did get created rather than
       // looking stale until the next unrelated reload.
       await loadSchoolData(selectedSchoolId)
@@ -405,7 +405,7 @@ function App() {
     }
   }
 
-  // Renames a grade heading for every section under it at once — "grade"
+  // Renames a grade heading for every section under it at once - "grade"
   // is just a shared string, not its own row, so fixing a shared typo
   // (or relabeling "Grade 8" to "Grade VIII") shouldn't require editing
   // each section individually. oldGrade is the sidebar's grouping key,
@@ -424,7 +424,7 @@ function App() {
     }
   }
 
-  // Persists the sidebar's admin-customized grade order — see
+  // Persists the sidebar's admin-customized grade order - see
   // School.grade_order's docstring on the backend. Updates `schools`
   // locally from the response instead of a full loadSchoolData() reload,
   // since reordering grades can't have changed anything else.
@@ -438,7 +438,7 @@ function App() {
     }
   }
 
-  // Lets an admin fix a school's school-vs-college label after creation —
+  // Lets an admin fix a school's school-vs-college label after creation - 
   // previously only set once, in the create-school modal, with no way to
   // change it and no indicator anywhere showing which one a school was
   // (see docs/ARCHITECTURE.md's "School vs. college" section). Same
@@ -480,7 +480,7 @@ function App() {
       setError(null)
       // If the deleted section was selected, loadSchoolData's own
       // fallback logic (`cg.some((c) => c.id === prev) ? prev : cg[0]?.id
-      // ?? null`) picks another one automatically — nothing extra needed
+      // ?? null`) picks another one automatically - nothing extra needed
       // here.
       await loadSchoolData(selectedSchoolId)
     } catch (err) {
@@ -523,7 +523,7 @@ function App() {
   function handleInviteAccepted(acceptedUser) {
     setInviteHandled(true)
     // Drop the ?invite=... param so refreshing/navigating later doesn't
-    // re-show this screen — replaceState rather than a real navigation
+    // re-show this screen - replaceState rather than a real navigation
     // since there's no router to do it "properly" with.
     window.history.replaceState(null, '', window.location.pathname)
     enterApp()
@@ -541,10 +541,10 @@ function App() {
   const selectedClassGroup = classGroups.find((c) => c.id === selectedClassGroupId)
 
   // Single source of truth for "how close is this section to a
-  // generated timetable" — shared by the header's compact bar, the
+  // generated timetable" - shared by the header's compact bar, the
   // Constraints/Timetable tabs' muted-until-ready styling below, and
   // OverviewTab's detailed step cards (see useSetupProgress.js). Called
-  // unconditionally (rules-of-hooks) — before login or without a
+  // unconditionally (rules-of-hooks) - before login or without a
   // selected section, schoolId/classGroupId are null and the hook just
   // never fires its fetch.
   // Setup progress needs to know whether a draft timetable exists. The
@@ -576,7 +576,7 @@ function App() {
     classGroupId: selectedClassGroupId,
     classGroupLabel: selectedClassGroup ? `Section ${selectedClassGroup.name}` : null,
     // periods/subjects/teachers/constraints/allRequirements are already
-    // loaded and kept live here — handed to the hook instead of it
+    // loaded and kept live here - handed to the hook instead of it
     // independently re-fetching the same lists on every tab switch (this
     // used to include its own listConstraints/listTimetables calls,
     // redundant with both App.jsx's own load and ConstraintsTab's).
@@ -588,7 +588,7 @@ function App() {
     allRequirements,
   })
 
-  // Public, no-auth-required pages — checked before the invite/reset/
+  // Public, no-auth-required pages - checked before the invite/reset/
   // session logic below since they don't depend on any of it (a signed-
   // out visitor, or someone with an unrelated ?invite=/?reset= link still
   // in their address bar, should see the legal page they clicked through
@@ -671,7 +671,7 @@ function App() {
 
   if (checkingSession) {
     // A blank screen while the session check runs read as a frozen/broken
-    // app on a slow connection — a small centered spinner at least signals
+    // app on a slow connection - a small centered spinner at least signals
     // something is happening.
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -731,7 +731,7 @@ function App() {
   const isAdmin = selectedSchool?.role === 'admin'
 
   // Jumps to a tab and, for Data Entry, straight to the right sub-page
-  // (subjects/teachers/plan) instead of leaving the admin to find it —
+  // (subjects/teachers/plan) instead of leaving the admin to find it - 
   // used by both the header progress bar and OverviewTab's step cards.
   function handleNavigate(tabId, subView) {
     setTab(tabId)
@@ -789,7 +789,7 @@ function App() {
   // Setup, each reached via its own sidebar item, no section implied) and
   // section-scoped (a section's plan, reached by clicking that section in
   // the sidebar). Whichever mode is active determines whether the sidebar
-  // should show a section as selected — showing one while browsing the
+  // should show a section as selected - showing one while browsing the
   // whole school's teacher list is exactly the "why does the sidebar say
   // Section 8-B while I'm looking at every teacher" confusion this avoids.
   const inSchoolWideDataEntry =
@@ -863,7 +863,7 @@ function App() {
                   // Constraints/Timetable can't do anything useful until
                   // the basics exist (no subjects/teachers means an empty
                   // Constraints screen and a Timetable tab that can only
-                  // fail) — muted rather than hidden or disabled, so
+                  // fail) - muted rather than hidden or disabled, so
                   // someone who wants to peek still can.
                   const muted = ['constraints', 'timetable'].includes(t.id) && !setupProgress.allRequiredDone
                   // A section's weekly plan (sub-view 'plan') is where its
@@ -942,7 +942,7 @@ function App() {
             // an in-flight async update on the outgoing tab (e.g. Data
             // Entry's periods/week field saving right as you switch tabs)
             // can re-render it mid-exit, which can prevent Framer
-            // Motion's exit-complete callback from ever firing — leaving
+            // Motion's exit-complete callback from ever firing - leaving
             // a zero-opacity but still-laid-out copy of the old tab stuck
             // in the DOM forever, pushing the new content down. Plain
             // key-based remounting has no exit phase to get stuck in, so
@@ -962,7 +962,7 @@ function App() {
                     do anything (it tracks one section's progress toward a
                     generated timetable), so a school with none yet sees
                     the "add your first section" flow here instead of it
-                    blocking every other tab — Subjects/Teachers and even
+                    blocking every other tab - Subjects/Teachers and even
                     Constraints are school-wide and don't need one. */}
                 {tab === 'dashboard' && (
                   classGroups.length > 0 ? (

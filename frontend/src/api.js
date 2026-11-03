@@ -100,7 +100,7 @@ async function request(path, options = {}) {
 }
 
 // Separate from request() because a plain <a href> download can't attach
-// an Authorization header — and every /api endpoint now requires one,
+// an Authorization header - and every /api endpoint now requires one,
 // including exports (see app/core/access.py's require_school_access
 // rollout across every router). Fetches the file with auth, then
 // triggers a save exactly like a normal link would have, via a temporary
@@ -123,7 +123,7 @@ async function downloadFile(path, filename) {
 }
 
 // Separate from request() because bulk-import posts multipart/form-data
-// (a file, not JSON) — must NOT set a Content-Type header (the browser
+// (a file, not JSON) - must NOT set a Content-Type header (the browser
 // sets its own with the multipart boundary) or the upload gets mangled.
 async function uploadFile(path, schoolId, file) {
   const token = getToken();
@@ -138,8 +138,8 @@ async function uploadFile(path, schoolId, file) {
   return res.json();
 }
 
-// Setup extraction's upload endpoint takes only a file — no school_id
-// form field, since the school is already in the URL path — so it can't
+// Setup extraction's upload endpoint takes only a file - no school_id
+// form field, since the school is already in the URL path - so it can't
 // reuse uploadFile() above, which always appends school_id to the body.
 async function uploadFileOnly(path, file) {
   const token = getToken();
@@ -170,7 +170,7 @@ export const api = {
   signup: (data) => post("/auth/signup", data),
   login: (data) => post("/auth/login", data),
   // `credential` is the ID token Google's Sign-In button hands back via
-  // its callback — see components/AuthPage.jsx and
+  // its callback - see components/AuthPage.jsx and
   // backend/app/routers/auth.py's /auth/google endpoint, which verifies
   // it server-side rather than trusting it as-is.
   loginWithGoogle: (credential) => post("/auth/google", { credential }),
@@ -327,7 +327,7 @@ export const api = {
   // Constraints
   listConstraints: (schoolId) => get(`/constraints?school_id=${schoolId}`),
   parseConstraint: (schoolId, text) => post("/constraints/parse", { school_id: schoolId, text }),
-  // Batch counterpart to parseConstraint — `text` can contain several
+  // Batch counterpart to parseConstraint - `text` can contain several
   // rules at once (one per line works best); returns one parse-response
   // per distinct rule found. See backend/app/routers/constraints.py's
   // POST /batch docstring for how it splits multi-rule text with and
@@ -337,13 +337,13 @@ export const api = {
   // The two halves of entering a rule are deliberately separate calls: the
   // general rule representation can express far more than the old fixed types,
   // and the price of that is that a misreading no longer announces itself by
-  // failing to parse — it produces a valid rule that quietly schedules
+  // failing to parse - it produces a valid rule that quietly schedules
   // something nobody asked for. The sentence this returns is what the admin
   // checks before anything is written.
   interpretConstraint: (schoolId, text) =>
     post("/constraints/interpret", { school_id: schoolId, text }),
   // Save a rule the admin has just been shown and accepted. Takes the rule
-  // back rather than the text, so what gets stored is what they read — a
+  // back rather than the text, so what gets stored is what they read - a
   // re-parse could return something different, and then the sentence they
   // agreed to would not be the rule in the database.
   confirmConstraint: (schoolId, rule, sourceText) =>
@@ -353,16 +353,16 @@ export const api = {
   reportRuleFeedback: (schoolId, text, action, shown) =>
     post("/constraints/feedback", { school_id: schoolId, text, action, shown: shown || null }),
   // Re-parses new text into an EXISTING constraint (same id) instead of
-  // creating a new one — used by the Edit affordance on a constraint card.
+  // creating a new one - used by the Edit affordance on a constraint card.
   reparseConstraint: (id, text) => put(`/constraints/${id}/reparse`, { text }),
-  // Direct field edit — used for the scope picker (parameters.class_group_ids)
+  // Direct field edit - used for the scope picker (parameters.class_group_ids)
   // without re-typing/re-parsing the whole rule.
   updateConstraint: (id, data) => put(`/constraints/${id}`, data),
   deleteConstraint: (id) => del(`/constraints/${id}`),
   // Several at once, in one request - Select mode on the Constraints tab.
   deleteConstraints: (schoolId, ids) => post(`/constraints/delete-many`, { school_id: schoolId, ids }),
 
-  // Timetables — generation runs as a background job (see
+  // Timetables - generation runs as a background job (see
   // backend/app/routers/timetables.py). generateTimetable() kicks the job
   // off and returns immediately with status="generating"; getTimetable()
   // polls for the job's current state (TimetableTab.jsx polls this on an
@@ -379,13 +379,13 @@ export const api = {
   makeTimetableCurrent: (id) => post(`/timetables/${id}/make-current`, {}),
   renameTimetable: (id, name) => patch(`/timetables/${id}`, { name }),
   deleteTimetable: (id) => del(`/timetables/${id}`),
-  // Manual editing of one already-generated slot — lock/unlock it (kept in
+  // Manual editing of one already-generated slot - lock/unlock it (kept in
   // place on the next regenerate) and/or drag it to a free period.
   // See PATCH /api/timetables/entries/{id} in backend/app/routers/timetables.py.
   updateTimetableEntry: (entryId, data) => patch(`/timetables/entries/${entryId}`, data),
   // Dragging a slot onto another *filled* slot swaps them (moving just one
   // would look like a double-booking until the other moves out of the
-  // way too) — see POST .../entries/{id}/swap-with/{id} in the same router.
+  // way too) - see POST .../entries/{id}/swap-with/{id} in the same router.
   swapTimetableEntries: (entryId, otherEntryId) =>
     post(`/timetables/entries/${entryId}/swap-with/${otherEntryId}`),
   // Move everything in one section's period to another, swapping with
@@ -429,14 +429,14 @@ export const api = {
       period_id: periodId,
       locked,
     }),
-  // Conversational editing — plain-English text resolved server-side
+  // Conversational editing - plain-English text resolved server-side
   // (via Claude, grounded against this timetable's actual entries and
   // the school's actual periods) into a lock/move/swap, applied through
   // the same conflict-checked logic as the two calls above. No non-LLM
-  // fallback for this one — see backend/app/services/edit_command_parser.py's
+  // fallback for this one - see backend/app/services/edit_command_parser.py's
   // docstring for why; a 503 here means "not configured", not a bug.
   editTimetableByCommand: (timetableId, text) => post(`/timetables/${timetableId}/edit-command`, { text }),
-  // Triggers a browser download of the exported file — see downloadFile
+  // Triggers a browser download of the exported file - see downloadFile
   // above for why this can't just be a plain <a href> anymore.
   // `{ watermark: false }` leaves the Timetablz name off (paid plans only;
   // a Free school gets a 402, which opens the upgrade prompt).
@@ -461,7 +461,7 @@ export const api = {
   updateElectiveBlock: (id, data) => put(`/elective-blocks/${id}`, data),
   deleteElectiveBlock: (id) => del(`/elective-blocks/${id}`),
 
-  // Bulk import — upload a CSV/.xlsx of subjects, rooms, teachers, or
+  // Bulk import - upload a CSV/.xlsx of subjects, rooms, teachers, or
   // class groups instead of adding them one at a time. See
   // backend/app/services/bulk_import.py and the /bulk-import routes on
   // each resource's router. `resource` is one of "subjects", "rooms",
@@ -469,7 +469,7 @@ export const api = {
   bulkImport: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import`, schoolId, file),
   bulkImportTemplateUrl: (resource) => `/api/${resource}/bulk-import/template`,
 
-  // Setup-from-document extraction — upload an arbitrary spreadsheet
+  // Setup-from-document extraction - upload an arbitrary spreadsheet
   // (not in bulk-import's expected column format) and let Claude propose
   // teachers/subjects/class groups from it. extractSetup() is read-only
   // (nothing created yet); commitSetupExtraction() actually creates the
@@ -478,7 +478,7 @@ export const api = {
   extractSetup: (schoolId, file) => uploadFileOnly(`/schools/${schoolId}/setup-extraction`, file),
   commitSetupExtraction: (schoolId, payload) => post(`/schools/${schoolId}/setup-extraction/commit`, payload),
 
-  // Members & invites — see backend/app/core/access.py for the role model
+  // Members & invites - see backend/app/core/access.py for the role model
   // (admin/viewer, owner is always an implicit admin) and
   // backend/app/routers/schools.py + invites.py for these endpoints.
   listMembers: (schoolId) => get(`/schools/${schoolId}/members`),
@@ -487,7 +487,7 @@ export const api = {
   listInvites: (schoolId) => get(`/schools/${schoolId}/invites`),
   createInvite: (schoolId, email, role) => post(`/schools/${schoolId}/invites`, { email, role }),
   revokeInvite: (schoolId, inviteId) => del(`/schools/${schoolId}/invites/${inviteId}`),
-  // Public — no auth required, since whoever clicked the invite link
+  // Public - no auth required, since whoever clicked the invite link
   // likely isn't logged in yet.
   previewInvite: (token) => get(`/invites/${token}`),
   acceptInvite: (token, data) => post(`/invites/${token}/accept`, data),

@@ -1,7 +1,7 @@
 """
 Turns a plain-English scheduling constraint into a structured constraint.
 
-This is a pattern-matching parser, not an LLM call — it recognizes a fixed
+This is a pattern-matching parser, not an LLM call - it recognizes a fixed
 set of common phrasings well enough to be useful without needing an API key
 or external service. It is NOT a general NLP system: unusual phrasing falls
 through to a generic "scheduling_rule" bucket that's recorded but not
@@ -14,40 +14,40 @@ output shape (ParsedConstraint), so nothing else has to change.
 What's actually enforced by the solver today (see app/routers/constraints.py
 for how each type gets turned into something the solver reads, and
 app/services/solver.py for where it's applied):
-  - "workload_limit" — teacher + a period count found -> sets
+  - "workload_limit" - teacher + a period count found -> sets
     Teacher.max_periods_per_week.
-  - "availability" — teacher + a day of the week found -> adds that day's
+  - "availability" - teacher + a day of the week found -> adds that day's
     periods to Teacher.unavailable_period_ids.
-  - "no_subject_period" — subject + "first period"/"last period" +
+  - "no_subject_period" - subject + "first period"/"last period" +
     negation ("should not", "can't", "never", ...) found -> excludes that
     subject from the first/last period of every day.
-  - "require_subject_period" — subject + "first period"/"last period"
+  - "require_subject_period" - subject + "first period"/"last period"
     with NO negation ("should be", "must be", "always", ...) found ->
     restricts that subject to *only* the first/last period of every day.
-  - "subject_sequence" — "<subject B> can't/shouldn't/must not
+  - "subject_sequence" - "<subject B> can't/shouldn't/must not
     immediately follow <subject A>" -> forbids subject B from being
     scheduled in the period right after subject A, for the same class,
     on any day.
-  - "no_subject_day" / "require_subject_day" — a subject tied to (or
+  - "no_subject_day" / "require_subject_day" - a subject tied to (or
     banned from) a specific day of the week, e.g. "No PE on Fridays" /
     "Math should be on Mondays". Same require/exclude-by-negation
     detection as the first/last-period pattern above, but for a whole day
     instead of one position.
-  - "max_consecutive_periods" — "no more than N periods in a row" /
+  - "max_consecutive_periods" - "no more than N periods in a row" /
     "N consecutive periods" / "N periods back-to-back", tied to whichever
     of a subject or a teacher is named in the sentence (subject: caps how
     many of that subject can run back-to-back for a class; teacher: caps
     how many periods that teacher can teach back-to-back, any subject).
-  - "min_gap_between_subjects" — "leave at least N periods between X and
+  - "min_gap_between_subjects" - "leave at least N periods between X and
     Y" / "X and Y must be at least N periods apart" -> forbids the two
     named subjects from landing within N periods of each other on the
     same day, for the same class.
-  - "scheduling_rule" — the catch-all for everything else. Recorded, shown
+  - "scheduling_rule" - the catch-all for everything else. Recorded, shown
     in the UI, but not applied to the solve. Still a real gap: things like
     per-class-only rules phrased unusually aren't recognized yet. A
     subject/teacher name that doesn't exactly match (or substring-match)
     an existing Subject/Teacher name in the school also falls through
-    here — add the subject/teacher first, then the constraint.
+    here - add the subject/teacher first, then the constraint.
 """
 import re
 from dataclasses import dataclass
@@ -71,7 +71,7 @@ class ParsedConstraint:
 _PERIODS_RE = re.compile(r"(\d+)\s*period", re.IGNORECASE)
 _FIRST_LAST_RE = re.compile(r"\b(first|last)\s+period\b", re.IGNORECASE)
 # "no more than 2 periods in a row" / "at most 3 consecutive periods" /
-# "3 periods back-to-back" — either order, number first or number last.
+# "3 periods back-to-back" - either order, number first or number last.
 _CONSECUTIVE_RE = re.compile(
     r"(?:no\s+more\s+than|not\s+more\s+than|at\s+most|max(?:imum)?\s+(?:of\s+)?)\s*(\d+)\s+"
     r"(?:consecutive\s+periods|periods?\s+in\s+a\s+row|back-to-back\s+periods?)"
@@ -79,14 +79,14 @@ _CONSECUTIVE_RE = re.compile(
     re.IGNORECASE,
 )
 # "leave at least 1 period between PE and Math" / "PE and Math must be at
-# least 2 periods apart" — just the gap count; which two subjects is
+# least 2 periods apart" - just the gap count; which two subjects is
 # resolved separately via _find_two_subjects.
 _GAP_RE = re.compile(
     r"at\s+least\s+(\d+)\s+periods?\s+(?:apart|between|gap)",
     re.IGNORECASE,
 )
 # "Math can't immediately follow PE" / "Math should not directly follow PE" /
-# "Math cannot come right after PE" — captures (second_subject, first_subject),
+# "Math cannot come right after PE" - captures (second_subject, first_subject),
 # since "X follows Y" means Y happens first.
 _SEQUENCE_RE = re.compile(
     r"(.+?)\s+(?:can'?t|cannot|should\s+not|shouldn'?t|must\s+not|mustn'?t)\s+"
@@ -105,7 +105,7 @@ _NEGATION_WORDS = [
 def _is_negated(text: str) -> bool:
     """Whether the text expresses a prohibition ("should NOT be first
     period") rather than a requirement ("SHOULD be first period"). Simple
-    whole-sentence keyword check — good enough for short one-clause
+    whole-sentence keyword check - good enough for short one-clause
     constraint sentences, which is what the UI is designed for."""
     lower = f" {text.lower()} "
     return any(word in lower for word in _NEGATION_WORDS)
@@ -118,7 +118,7 @@ def _find_by_name(text: str, names: list[str]) -> str | None:
     matching for people's names typed without a title ("Sharma" ->
     "Priya Sharma"). Uses word-boundary matching for short names (<=3
     chars, e.g. subject codes like "PE" or "PT") so they don't spuriously
-    match as a substring of an unrelated longer word — "PE" inside
+    match as a substring of an unrelated longer word - "PE" inside
     "periods" being the motivating case that broke the max-consecutive
     regex path when the sentence mentioned both a teacher and the word
     "periods" but no actual subject."""
@@ -149,7 +149,7 @@ def _find_subject(text: str, subject_names: list[str]) -> str | None:
 
 def _find_two_subjects(text: str, subject_names: list[str]) -> tuple[str | None, str | None]:
     """For rules naming two subjects at once ("leave a gap between PE and
-    Math") — finds every subject name that appears in the text and returns
+    Math") - finds every subject name that appears in the text and returns
     the first two, in the order they appear. Longest names are matched
     first so e.g. "Physical Education" isn't shadowed by a shorter
     coincidental substring match."""
@@ -185,7 +185,7 @@ def parse_constraint(text: str, teacher_names: list[str], subject_names: list[st
     teacher = _find_teacher(text, teacher_names)
     subject = _find_subject(text, subject_names)
 
-    # "Math can't immediately follow PE" — cross-subject sequencing. Checked
+    # "Math can't immediately follow PE" - cross-subject sequencing. Checked
     # before the general subject match above since it needs two subjects,
     # not one, and "follow" text would otherwise fall through unrecognized.
     sequence_match = _SEQUENCE_RE.search(text)
@@ -203,7 +203,7 @@ def parse_constraint(text: str, teacher_names: list[str], subject_names: list[st
                 second_subject_name=second,
             )
 
-    # "Leave at least 1 period between PE and Math" — needs two subject
+    # "Leave at least 1 period between PE and Math" - needs two subject
     # names, so checked before the single-subject patterns below (which
     # would otherwise just grab whichever one comes first in the text).
     gap_match = _GAP_RE.search(text)
@@ -222,7 +222,7 @@ def parse_constraint(text: str, teacher_names: list[str], subject_names: list[st
                 min_gap=gap,
             )
 
-    # "no more than 2 periods in a row" for a subject or a teacher — checked
+    # "no more than 2 periods in a row" for a subject or a teacher - checked
     # before the single first/last-period pattern since both can mention a
     # subject, but this one needs the explicit consecutive/row/back-to-back
     # phrasing to trigger.
@@ -250,7 +250,7 @@ def parse_constraint(text: str, teacher_names: list[str], subject_names: list[st
             )
 
     # "Math should not be the first period" (exclude) vs.
-    # "French should be the first period" (require) — same pattern,
+    # "French should be the first period" (require) - same pattern,
     # opposite meaning depending on whether the sentence is negated.
     first_last_match = _FIRST_LAST_RE.search(text)
     if first_last_match and subject:
@@ -272,7 +272,7 @@ def parse_constraint(text: str, teacher_names: list[str], subject_names: list[st
             description=f"{subject} should always be scheduled in the {position} period of the day",
         )
 
-    # "No PE on Fridays" (exclude) / "Math should be on Mondays" (require) —
+    # "No PE on Fridays" (exclude) / "Math should be on Mondays" (require) - 
     # a subject tied to a whole day, not a teacher's availability (that
     # pattern requires a teacher name, checked further below). Only
     # triggers when a subject matched and no teacher did, so it doesn't

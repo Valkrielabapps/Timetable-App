@@ -231,7 +231,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
   )
 
   // How many periods/week each teacher is already carrying on the live
-  // timetable — used to break ties among equally-qualified substitutes by
+  // timetable - used to break ties among equally-qualified substitutes by
   // preferring whoever's lighter-loaded, rather than an arbitrary order.
   const loadByTeacherId = useMemo(() => {
     const counts = new Map()
@@ -558,7 +558,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800">4. Assign Substitutes</h3>
                   {savedHere && (
-                    <p className="text-xs text-gray-500">Saved earlier for this date — saving again replaces it.</p>
+                    <p className="text-xs text-gray-500">Saved earlier for this date - saving again replaces it.</p>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">

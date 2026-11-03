@@ -12,10 +12,10 @@ dist
 dist-ssr
 *.local
 
-# Local env config — .env.example stays tracked as the template, but the
+# Local env config - .env.example stays tracked as the template, but the
 # real .env (whatever values a given machine is actually running with)
 # shouldn't be. Previously missing here, which is why frontend/.env ended
-# up committed — see docs/GETTING_STARTED.md and the git history note
+# up committed - see docs/GETTING_STARTED.md and the git history note
 # about untracking it.
 .env
 !.env.example

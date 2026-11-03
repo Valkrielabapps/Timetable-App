@@ -5,9 +5,9 @@ import BulkAddClassGroups from './BulkAddClassGroups'
  * Shown instead of the tab area when a school has zero grades/sections yet
  * (App.jsx: `selectedSchool && !selectedClassGroup`). This exists because
  * every other tab (Overview, Data Entry, Constraints, Timetable) needs a
- * selected class group to render anything meaningful — Data Entry's
+ * selected class group to render anything meaningful - Data Entry's
  * "requirements" list, Overview's checklist, and Timetable's grid are all
- * scoped to one section — so a school with no sections at all previously
+ * scoped to one section - so a school with no sections at all previously
  * just saw a tiny "Add a grade/section to get started" hint buried in the
  * header, with no explanation of what happens after that, or why a
  * section has to exist before periods/subjects/teachers (which are
@@ -15,7 +15,7 @@ import BulkAddClassGroups from './BulkAddClassGroups'
  *
  * Defaults straight to the bulk/range form (most schools have several
  * grades, not one), with plain from/to + section-chip controls instead of
- * raw range syntax — see BulkAddClassGroups.jsx. Adding a single section
+ * raw range syntax - see BulkAddClassGroups.jsx. Adding a single section
  * is still available but tucked behind a small link rather than a
  * co-equal toggle, since it's the less common first action. Once at least
  * one section is added, App.jsx selects one automatically and

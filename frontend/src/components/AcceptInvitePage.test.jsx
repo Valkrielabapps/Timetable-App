@@ -5,7 +5,7 @@ import AcceptInvitePage from './AcceptInvitePage'
 import { api } from '../api'
 
 // AcceptInvitePage calls the real `api` module on mount (api.previewInvite)
-// and on submit (api.acceptInvite) — mocked here rather than hitting a real
+// and on submit (api.acceptInvite) - mocked here rather than hitting a real
 // backend, which is the pattern any future test on a component that talks
 // to api.js should follow.
 vi.mock('../api', () => ({
@@ -19,7 +19,7 @@ describe('AcceptInvitePage', () => {
   })
 
   it('shows a loading spinner before the invite preview resolves', () => {
-    // Never resolves during this test — asserts on the state before that.
+    // Never resolves during this test - asserts on the state before that.
     api.previewInvite.mockReturnValue(new Promise(() => {}))
     const { container } = render(<AcceptInvitePage token="abc" onAccepted={vi.fn()} />)
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()

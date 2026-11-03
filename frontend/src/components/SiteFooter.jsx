@@ -2,17 +2,17 @@
  * The public site's footer - the same one on the homepage and every page
  * reached from it, so each page ends the same way it starts (SiteNav).
  */
-// Every link here goes somewhere real — an in-page anchor already used
+// Every link here goes somewhere real - an in-page anchor already used
 // elsewhere on this page, a mailto, or one of the two legal pages built
 // in LegalPage.jsx/PrivacyPolicyPage.jsx/TermsOfServicePage.jsx.
 // Deliberately NOT padded out with Papermark's full column count (Use
-// Cases, Alternatives, a blog, a help center, comparison pages, ...) —
+// Cases, Alternatives, a blog, a help center, comparison pages, ...) - 
 // this site doesn't have any of that content, and a footer full of links
 // to pages that don't exist would look broken rather than substantial.
 const FOOTER_COLUMNS = [
   {
     // "How it works" link removed along with that section (see the render
-    // comment above HowItWorks) — add back once it's wanted again. Pricing
+    // comment above HowItWorks) - add back once it's wanted again. Pricing
     // now points at the standalone PricingPage.jsx (`?page=pricing`)
     // instead of the removed in-page `#pricing` anchor.
     heading: 'Product',
@@ -22,7 +22,7 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    // No "Contact us" mailto here yet — the business email/domain hasn't
+    // No "Contact us" mailto here yet - the business email/domain hasn't
     // been decided (see the founder conversation on domain naming), and a
     // mailto to a made-up address would silently bounce. Add it back once
     // that's settled.

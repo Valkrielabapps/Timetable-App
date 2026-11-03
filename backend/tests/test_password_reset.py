@@ -36,9 +36,9 @@ def _capture_reset_emails(monkeypatch):
 
 def _get_reset_token_for(email):
     """Pulls the token straight out of the DB via the app's own session
-    factory (the same database `client` talks to — NOT the `orm_db`
+    factory (the same database `client` talks to - NOT the `orm_db`
     fixture, which is a separate throwaway in-memory DB for service-level
-    tests, see conftest.py) — the API response never includes the token
+    tests, see conftest.py) - the API response never includes the token
     itself (see forgot_password's docstring), same as how a real user
     would only get it via the emailed link."""
     db = SessionLocal()

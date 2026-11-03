@@ -62,7 +62,7 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=404, detail="Subject not found")
     require_school_access(db, current_user, subject.school_id, min_role="admin")
     # SubjectRequirement.subject_id has no ORM-level relationship/cascade
-    # back to Subject (only class_group_id does — see the model), so a
+    # back to Subject (only class_group_id does - see the model), so a
     # bare db.delete(subject) here left orphaned requirement rows behind:
     # invisible in the UI (DataEntryTab only iterates over subjects that
     # still exist), but still summed by the solver as real demand,
@@ -105,7 +105,7 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
 
 @router.get("/bulk-import/template")
 def download_subjects_template():
-    """A starter CSV — see app/services/bulk_import.py:TEMPLATES."""
+    """A starter CSV - see app/services/bulk_import.py:TEMPLATES."""
     return Response(
         content=TEMPLATES["subjects"],
         media_type="text/csv",
@@ -122,7 +122,7 @@ async def bulk_import_subjects(
 ):
     """
     Upload a CSV or .xlsx of subjects (columns: name, required_room_type)
-    instead of adding them one at a time. Upserts by name — re-uploading
+    instead of adding them one at a time. Upserts by name - re-uploading
     after fixing a typo updates rather than duplicates. See
     app/services/bulk_import.py for the parsing/import logic and the
     best-effort error-handling philosophy (one bad row doesn't block the

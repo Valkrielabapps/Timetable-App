@@ -3,7 +3,7 @@ Tests for POST /api/timetables/{id}/edit-command
 (app/routers/timetables.py's edit_command, backed by
 app/services/edit_command_parser.py). Builds a real, small, generated
 timetable through the actual solver (not mocked) so the entries/periods
-being edited are genuine rows — only the LLM call itself is mocked,
+being edited are genuine rows - only the LLM call itself is mocked,
 never a real Anthropic request.
 """
 import time
@@ -43,7 +43,7 @@ def _create_class_group(client, headers, school_id, grade, name):
 
 def _build_and_generate_timetable(client, headers, school_id):
     """One class group, one subject needing 1 period/week, one qualified
-    teacher, a 2-day x 2-period-per-day school — small enough that the
+    teacher, a 2-day x 2-period-per-day school - small enough that the
     solver finishes essentially instantly, and generates exactly one
     entry with an obvious extra free slot to move it into."""
     math = _create_subject(client, headers, school_id, "Math")
@@ -75,7 +75,7 @@ def _build_and_generate_timetable(client, headers, school_id):
 
 def test_edit_command_unavailable_without_llm_configured(client):
     """No non-LLM fallback for this feature (see edit_command_parser.py's
-    docstring) — must fail clearly (503), not silently do nothing."""
+    docstring) - must fail clearly (503), not silently do nothing."""
     assert settings.anthropic_api_key is None
     _, headers = signup(client)
     school = create_school(client, headers)
@@ -96,7 +96,7 @@ def test_edit_command_moves_entry_when_llm_resolves_it(client):
     entry = timetable["entries"][0]
 
     # The other (day, order) slot in this 2x2 school, guaranteed free
-    # since only one entry exists — figure out its period id the same way
+    # since only one entry exists - figure out its period id the same way
     # the real periods list would let the LLM.
     periods = client.get(f"/api/periods?school_id={school['id']}", headers=headers).json()
     target_period = next(
@@ -156,7 +156,7 @@ def test_edit_command_unresolved_returns_422_not_a_silent_noop(client):
     fake_parsed = {
         "action": "unresolved", "entry_id": None, "target_period_id": None,
         "target_teacher_id": None, "other_entry_id": None,
-        "description": "There are multiple Math periods for Grade 8 — which day did you mean?",
+        "description": "There are multiple Math periods for Grade 8 - which day did you mean?",
     }
     with patch.object(settings, "anthropic_api_key", "fake-key"):
         with patch("app.routers.timetables.parse_edit_command_llm", return_value=fake_parsed):
@@ -172,7 +172,7 @@ def test_edit_command_unresolved_returns_422_not_a_silent_noop(client):
 def test_edit_command_hallucinated_id_is_rejected_not_trusted(client):
     """A returned id that doesn't actually belong to this timetable/school
     must be treated as a resolution failure, never used to mutate
-    anything — see the endpoint's docstring on why every id is
+    anything - see the endpoint's docstring on why every id is
     re-validated server-side."""
     _, headers = signup(client)
     school = create_school(client, headers)

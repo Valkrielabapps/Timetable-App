@@ -57,7 +57,7 @@ class PasswordResetToken(Base):
     `used` is set True the moment a token is redeemed, so a leaked/reused
     reset link (e.g. from an email forwarded or left open in a browser
     tab) can't reset the password a second time even before `expires_at`.
-    Works for Google-only accounts too (hashed_password null) — resetting
+    Works for Google-only accounts too (hashed_password null) - resetting
     just sets a password, giving that account an email/password login
     option alongside Google sign-in, rather than requiring one to exist
     already.

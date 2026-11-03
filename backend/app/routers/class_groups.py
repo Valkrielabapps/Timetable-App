@@ -88,7 +88,7 @@ def freeze_sections(payload: FreezeRequest, db: Session = Depends(get_db), curre
 @router.get("/requirements", response_model=list[SubjectRequirementOut])
 def list_all_requirements(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Every requirement across every section in the school, not just one
-    class group — used by TeachersSection.jsx's live workload total, which
+    class group - used by TeachersSection.jsx's live workload total, which
     needs to sum a teacher's periods/week commitments across all sections
     at once, not just whichever one is currently open. Registered here,
     before /{class_group_id}, on purpose: FastAPI matches routes in
@@ -153,11 +153,11 @@ def delete_class_group(class_group_id: int, db: Session = Depends(get_db), curre
     require_school_access(db, current_user, class_group.school_id, min_role="admin")
     # TimetableEntry.class_group_id has no ORM-level relationship/cascade
     # back to ClassGroup (only SubjectRequirement does, via the
-    # cascade="all, delete-orphan" on ClassGroup.requirements — see the
+    # cascade="all, delete-orphan" on ClassGroup.requirements - see the
     # model), so deleting a class group that already has generated
     # timetable entries would otherwise either raise a foreign-key
     # constraint error (Postgres) or silently leave orphaned rows behind
-    # (SQLite, which doesn't enforce FKs by default) — the orphaned rows
+    # (SQLite, which doesn't enforce FKs by default) - the orphaned rows
     # then crash _to_timetable_out's plain dict lookups the next time
     # that timetable is viewed. Deleting them explicitly here closes that
     # gap, the same fix already applied to delete_subject in subjects.py
@@ -218,7 +218,7 @@ def add_requirement(
 
     # Upsert on (class_group_id, subject_id) rather than blind-insert: a
     # class group should only have one requirement per subject, and a
-    # duplicate here (e.g. from a client-side race — two "create" calls in
+    # duplicate here (e.g. from a client-side race - two "create" calls in
     # quick succession before the first one's result comes back) would
     # silently inflate the real periods/week total past what the UI shows,
     # which can make the solver infeasible for no visible reason.
@@ -464,10 +464,10 @@ async def bulk_import_class_groups(
     """
     Upload a CSV or .xlsx of class groups/sections (columns: name, grade,
     student_count) instead of adding them one at a time. Upserts on
-    (grade, name) — e.g. re-uploading with an updated student_count for
+    (grade, name) - e.g. re-uploading with an updated student_count for
     "Grade 8 - A" updates that section rather than creating a duplicate.
     Note this only creates the sections themselves, not their subject
-    requirements (periods/week per subject) — those are still set per
+    requirements (periods/week per subject) - those are still set per
     section in Data Entry, since they depend on which subjects that grade
     actually takes.
     """

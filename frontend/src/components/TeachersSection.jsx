@@ -17,10 +17,10 @@ const SORTS = [
 const SORT_KEY = 'timetablz.teachers.sort'
 
 /**
- * "Who teaches what" — one row per teacher, their subjects shown as
+ * "Who teaches what" - one row per teacher, their subjects shown as
  * removable chips with a "+ Add" picker for the rest. This is the
  * teacher-centric mirror of the subject-to-teacher assignment that used
- * to live inline in the (now-removed) combined subjects/teachers table —
+ * to live inline in the (now-removed) combined subjects/teachers table - 
  * moved here since "which subjects does this teacher cover" is naturally
  * a question about the teacher, not something that should require
  * finding them in every relevant subject's own dropdown one at a time.
@@ -58,13 +58,13 @@ function useRealLoad(schoolId) {
 }
 
 // This teacher's committed periods/week across every section in the
-// school, from the plan (SubjectRequirement.preferred_teacher_id) — not
+// school, from the plan (SubjectRequirement.preferred_teacher_id) - not
 // the generated timetable. That's a deliberate scope choice: this is
 // meant to warn about overload *while an admin is still assigning
 // teachers*, before anyone has generated anything, so it can only count
 // what's been explicitly pinned. A subject left on "Any (let solver
-// choose)" doesn't show up here for anyone, since nothing — including
-// the app — knows yet who'll actually teach it; the true final total
+// choose)" doesn't show up here for anyone, since nothing - including
+// the app - knows yet who'll actually teach it; the true final total
 // (including solver-assigned subjects) only exists once a timetable has
 // been generated, which is a separate, later feature.
 //
@@ -107,7 +107,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
   const [openDropdownId, setOpenDropdownId] = useState(null)
   const [openGradeDropdownId, setOpenGradeDropdownId] = useState(null)
   // Which teacher's name/email/weekly-limit is currently being edited
-  // (teacher id, or null) — everything else about a teacher (subjects,
+  // (teacher id, or null) - everything else about a teacher (subjects,
   // grades, assistant eligibility) is already directly editable inline;
   // this covers the basic fields that weren't yet.
   const [editingTeacherId, setEditingTeacherId] = useState(null)
@@ -330,7 +330,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
         {shownTeachers.map((teacher) => {
           const qualified = sortByName(subjects.filter((s) => teacher.qualified_subject_ids.includes(s.id)))
           // Excludes subjects still `_pending` (optimistically shown right
-          // after "+ Add subject" but not yet confirmed by the server) —
+          // after "+ Add subject" but not yet confirmed by the server) - 
           // picking one here before it has a real id would send that
           // temporary id to the backend instead of a valid subject id.
           const available = subjects.filter((s) => !s._pending && !teacher.qualified_subject_ids.includes(s.id))
@@ -591,7 +591,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
 }
 
 /**
- * Inline edit for a teacher's basic fields — name, email, and weekly
+ * Inline edit for a teacher's basic fields - name, email, and weekly
  * period limit. Everything else about a teacher (subjects, grades,
  * assistant eligibility) is already editable directly on their row via
  * chips/checkboxes; these three fields weren't, and "the teacher's name
@@ -700,14 +700,14 @@ function TeacherEditForm({ teacher, onSave, onCancel }) {
  * creating a name-only teacher and then having to find them in every
  * relevant subject's "+ Add" dropdown one at a time. A teacher can teach
  * more than one subject (e.g. a Math teacher who also covers Physics), so
- * this is a multi-select checkbox list, not a single dropdown — mirrors
+ * this is a multi-select checkbox list, not a single dropdown - mirrors
  * how `qualified_subject_ids` is actually modeled (a list) rather than
  * implying one teacher = one subject.
  */
 function AddTeacherModal({ schoolId, subjects, allGrades, onClose, onAdded }) {
   const [name, setName] = useState('')
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([])
-  // Empty = no restriction (teaches every grade) — same default as
+  // Empty = no restriction (teaches every grade) - same default as
   // Teacher.qualified_grades server-side, so leaving this untouched here
   // behaves exactly like every teacher did before this field existed.
   const [selectedGrades, setSelectedGrades] = useState([])

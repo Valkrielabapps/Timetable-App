@@ -7,8 +7,8 @@ Design choices:
   - CSV and .xlsx are both accepted, detected by file extension. openpyxl
     (already a dependency, used by app/services/export.py) reads the
     Excel case; the standard library's csv module handles CSV. Both paths
-    converge on the same shape — a list of dicts keyed by the header
-    row's column names, lowercased and stripped — so every import_*
+    converge on the same shape - a list of dicts keyed by the header
+    row's column names, lowercased and stripped - so every import_*
     function below only has to deal with one input shape regardless of
     which file type was uploaded.
   - Best-effort, not all-or-nothing: a bad row (missing a required
@@ -50,7 +50,7 @@ def parse_rows(filename: str, content: bytes) -> list[dict]:
     Parses an uploaded file into a list of row dicts keyed by lowercased,
     stripped header names. Raises ValueError (caught by the router and
     turned into a 400) if the file type isn't recognized or has no header
-    row — everything past that point is per-row, not per-file, error
+    row - everything past that point is per-row, not per-file, error
     handling.
     """
     lower_name = filename.lower()
@@ -64,7 +64,7 @@ def parse_rows(filename: str, content: bytes) -> list[dict]:
         ws = wb.active
         rows = [[("" if c is None else str(c)) for c in row] for row in capped(ws.iter_rows(values_only=True))]
     else:
-        raise ValueError("Unsupported file type — upload a .csv or .xlsx file.")
+        raise ValueError("Unsupported file type - upload a .csv or .xlsx file.")
 
     rows = [r for r in rows if any(str(c).strip() for c in r)]  # drop fully blank rows
     if not rows:
@@ -203,11 +203,11 @@ def _resolve_grades(raw: str, grades: list[str]) -> tuple[list[str], list[str]]:
 def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImportResult:
     """
     Expected columns: name (required), email (optional),
-    max_periods_per_week (optional int), qualified_subjects (optional —
+    max_periods_per_week (optional int), qualified_subjects (optional - 
     subject names separated by ';' or ',', matched case-insensitively
     against this school's existing subjects; add the subjects first if
     they don't exist yet, or they're silently skipped with a warning),
-    qualified_grades (optional — also accepted as "grades" or
+    qualified_grades (optional - also accepted as "grades" or
     "eligible_grades"; see below).
 
     Grades: the grades a teacher may teach, separated by ';' or ','. Matched
@@ -252,7 +252,7 @@ def import_teachers(db: Session, school_id: int, rows: list[dict]) -> BulkImport
                     unresolved.append(sname)
             if unresolved:
                 result.errors.append(
-                    f"Row {i} ({name}): couldn't match subject(s) {', '.join(unresolved)} — "
+                    f"Row {i} ({name}): couldn't match subject(s) {', '.join(unresolved)} - "
                     f"add them as subjects first, then re-import to pick them up."
                 )
 
@@ -366,7 +366,7 @@ def import_class_groups(
     return result
 
 
-# Downloadable starter templates — header row + one example row, so an
+# Downloadable starter templates - header row + one example row, so an
 # admin doesn't have to guess column names or formatting from scratch.
 TEMPLATES: dict[str, str] = {
     "subjects": "name,required_room_type\nChemistry,lab\nMath,\n",

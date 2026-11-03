@@ -2,12 +2,12 @@ import { motion } from 'framer-motion'
 import { useRef, useState } from 'react'
 
 /**
- * A soft, blurred radial glow — the "spotlight" effect popularized by
+ * A soft, blurred radial glow - the "spotlight" effect popularized by
  * Aceternity UI's component gallery (https://ui.aceternity.com), hand-built
  * here rather than pulled from an external package: it's just an SVG
  * ellipse behind a heavy Gaussian blur filter, animated with Framer
  * Motion, so there's no real dependency worth adding for it. Purely
- * decorative — `pointer-events-none` so it never intercepts clicks on
+ * decorative - `pointer-events-none` so it never intercepts clicks on
  * whatever it's layered behind.
  *
  * Used behind LandingPage.jsx's Hero section to add some depth instead of
@@ -52,15 +52,15 @@ export function Spotlight({ className = '', fill = '#0f172a' }) {
 /**
  * A faint dot/line grid with a radial fade mask, so it's crisp in the
  * center and dissolves toward the edges instead of ending in a hard line
- * — another Aceternity-gallery staple ("grid background"). Sits behind
+ * - another Aceternity-gallery staple ("grid background"). Sits behind
  * the Hero section, `-z-10`, with the Spotlight glow layered on top of it.
  */
 export function GridBackground({ className = '', dark = false }) {
   // `dark` swaps the line color for something visible against a black/
-  // near-black section (e.g. Hero's Griffin-style dark theme) — the same
+  // near-black section (e.g. Hero's Griffin-style dark theme) - the same
   // light slate lines used on a white background would be invisible there.
   // 0.08 opacity read as basically invisible once the Hero's sides had
-  // nothing else going on to sit behind, so this is bumped slightly —
+  // nothing else going on to sit behind, so this is bumped slightly - 
   // still faint, but the grid actually registers as texture now instead
   // of flattening to solid black.
   const lineColor = dark ? 'rgba(255,255,255,0.14)' : '#e2e8f0'
@@ -80,15 +80,15 @@ export function GridBackground({ className = '', dark = false }) {
 
 /**
  * Card wrapper that tracks the cursor and renders a soft radial glow at
- * the pointer position on hover — the "glow card" / "spotlight card"
+ * the pointer position on hover - the "glow card" / "spotlight card"
  * pattern from Aceternity/Magic UI's galleries. Hand-built with a plain
  * `onMouseMove` handler writing CSS custom properties (`--x`/`--y`) that
- * a `radial-gradient` background reads, rather than a package — no state
+ * a `radial-gradient` background reads, rather than a package - no state
  * updates on every mousemove, so no React re-render cost per frame.
  *
  * Wraps each card in LandingPage.jsx's Features() grid. Falls back
  * gracefully to a plain bordered card for anyone on a touch device where
- * hover doesn't apply — the glow is a bonus, not load-bearing.
+ * hover doesn't apply - the glow is a bonus, not load-bearing.
  */
 export function GlowCard({ children, className = '' }) {
   const ref = useRef(null)

@@ -16,7 +16,7 @@ const SORTS = [
 const SORT_KEY = 'timetablz.subjects.sort'
 
 /**
- * "What does your school teach" — subject name plus optional advanced
+ * "What does your school teach" - subject name plus optional advanced
  * fields (room type, and for colleges, credits/lab batches). Deliberately
  * does not show periods/week or teacher assignment: those are two other
  * questions ("how much of it does this section need" and "who teaches
@@ -50,7 +50,7 @@ export default function SubjectsSection({
   const presentAtStart = useRef(null)
   if (presentAtStart.current === null) presentAtStart.current = new Set(subjects.map((x) => x.id))
   const [showImport, setShowImport] = useState(true)
-  // Which subject rows have their "advanced" fields expanded — collapsed
+  // Which subject rows have their "advanced" fields expanded - collapsed
   // by default since most subjects never set these; a row that already
   // has an advanced field set starts expanded so existing settings are
   // never hidden without a trace.
@@ -292,10 +292,10 @@ export default function SubjectsSection({
         </thead>
         <tbody>
           {/* `initial={false}` skips the enter animation for rows already
-              present when this table mounts — without it, every plain tab
+              present when this table mounts - without it, every plain tab
               switch back to Subjects replayed a staggered fade-in for the
               *entire* list (DataEntryTab fully remounts on every top-level
-              tab switch — see App.jsx's `key={tab}` — so this ran on every
+              tab switch - see App.jsx's `key={tab}` - so this ran on every
               single visit, not just when a subject was actually added).
               With it, only a genuinely new row (or one being removed)
               animates; everything else just appears, instantly, matching

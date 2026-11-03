@@ -2,25 +2,25 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 /**
  * Renders one of the plain-Markdown legal docs (src/legal/*.md, imported
- * as raw text via Vite's `?raw` suffix — see PrivacyPolicyPage.jsx /
+ * as raw text via Vite's `?raw` suffix - see PrivacyPolicyPage.jsx /
  * TermsOfServicePage.jsx) as a styled page, instead of pulling in a full
  * markdown library (react-markdown/marked) for two static documents with
  * a deliberately narrow set of syntax (#, ##, bold, lists, a table, a
  * horizontal rule, an HTML comment at the top). `renderMarkdown` below is
- * a hand-rolled, line-by-line parser scoped to exactly that syntax — it
+ * a hand-rolled, line-by-line parser scoped to exactly that syntax - it
  * is NOT a general Markdown parser and will not handle nested lists, code
  * blocks, or links.
  *
  * Both source .md files (see docs/legal/ in the repo, which is where
- * these are actually authored/edited — this component just displays a
+ * these are actually authored/edited - this component just displays a
  * copy of them) still contain unfilled [BRACKETED] placeholders
- * (business address, support email, effective date, jurisdiction) — see
+ * (business address, support email, effective date, jurisdiction) - see
  * the draft notice this component renders above the content. Do not
  * remove that notice until those are filled in for real.
  */
 
 // Splits "**bold**" segments out of a line of already-escaped-free plain
-// text and returns an array of strings/<strong> elements — the only
+// text and returns an array of strings/<strong> elements - the only
 // inline formatting either document uses.
 function renderInline(text, keyPrefix) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
@@ -33,7 +33,7 @@ function renderInline(text, keyPrefix) {
 }
 
 function renderMarkdown(source) {
-  // Strip the leading HTML comment (the "PLACEHOLDER GUIDE" block) — it's
+  // Strip the leading HTML comment (the "PLACEHOLDER GUIDE" block) - it's
   // authoring guidance for whoever fills the doc in, not page content.
   const withoutComment = source.replace(/<!--[\s\S]*?-->/, '').trim()
   const lines = withoutComment.split('\n')

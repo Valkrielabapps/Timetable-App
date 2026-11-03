@@ -4,7 +4,7 @@ the admin-only invite management endpoints in app/routers/schools.py.
 Covers the two branches AcceptInviteRequest's docstring calls out:
 accepting creates a brand-new account (invite email never signed up) vs.
 confirms an existing account's password (invite email already has a
-User row) — and that a wrong password on the existing-account branch is
+User row) - and that a wrong password on the existing-account branch is
 rejected rather than silently logging in as that user.
 """
 from unittest.mock import patch
@@ -102,7 +102,7 @@ def test_revoked_invite_cannot_be_accepted(client):
 def test_create_invite_without_resend_configured_still_succeeds(client):
     """The whole point of email being best-effort: no RESEND_API_KEY (the
     default, and the test env's actual state) must never block invite
-    creation itself — see app/services/email_service.py's docstring."""
+    creation itself - see app/services/email_service.py's docstring."""
     assert settings.resend_api_key is None
     _, owner_headers = signup(client, email="owner@a.com")
     school = create_school(client, owner_headers)

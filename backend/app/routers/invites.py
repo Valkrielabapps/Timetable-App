@@ -1,5 +1,5 @@
 """
-Public, token-based invite endpoints — deliberately separate from
+Public, token-based invite endpoints - deliberately separate from
 schools.py's admin-only member/invite management, since the person
 using these two endpoints (someone who just clicked an invite link) isn't
 authenticated yet and shouldn't need to be to find out what the invite is
@@ -45,12 +45,12 @@ def preview_invite(request: Request, token: str, db: Session = Depends(get_db)):
 @limiter.limit("20/hour")
 def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db: Session = Depends(get_db)):
     """
-    Accepting always requires a password — either to set one for a
+    Accepting always requires a password - either to set one for a
     brand-new account (invite.email has never signed up: `name` and
     `password` create the account) or to confirm an existing account's
     password (invite.email already has a User row: `password` must match
-    it). This is what stops the invite link alone — which could leak via
-    a forwarded email, a screenshot, etc. — from being enough to log into
+    it). This is what stops the invite link alone - which could leak via
+    a forwarded email, a screenshot, etc. - from being enough to log into
     somebody's existing account; see AcceptInviteRequest's docstring.
 
     Returns a real access token either way, so the frontend can drop the
@@ -66,7 +66,7 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
         if not existing.hashed_password or not verify_password(payload.password, existing.hashed_password):
             raise HTTPException(
                 status_code=401,
-                detail="An account with this email already exists — enter its password to accept.",
+                detail="An account with this email already exists - enter its password to accept.",
             )
         user = existing
     else:

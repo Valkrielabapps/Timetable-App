@@ -4,7 +4,7 @@ Auth endpoints: email/password signup and login, plus Google sign-in.
 Google sign-in verifies the ID token Google's Sign-In button hands the
 frontend (a JWT signed by Google, not something we issue) against Google's
 public keys and our configured client ID, then finds-or-creates a User by
-email. No password is ever involved for that path — `hashed_password` stays
+email. No password is ever involved for that path - `hashed_password` stays
 null for Google-only accounts (the User model already allows this).
 """
 import logging
@@ -79,7 +79,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
 def google_login(request: Request, payload: GoogleLoginRequest, db: Session = Depends(get_db)):
     if not settings.google_client_id:
         # Fails loudly rather than silently accepting an unverifiable
-        # token — better than pretending Google sign-in works when the
+        # token - better than pretending Google sign-in works when the
         # server has no client ID to check the token's audience against.
         raise HTTPException(
             status_code=503,
@@ -93,7 +93,7 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
     except ValueError as exc:
         # verify_oauth2_token collapses every failure mode (audience
         # mismatch, expired token, bad signature, clock skew, ...) into a
-        # generic ValueError — logging the real message here is the only
+        # generic ValueError - logging the real message here is the only
         # way to tell which one it actually was, since the client only
         # ever sees the generic 401 below (a client shouldn't learn
         # *why* a token was rejected, e.g. clock skew details).
@@ -108,7 +108,7 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
 
     # Match on google_sub first (a returning Google-sign-in user), then
     # fall back to email (an existing email/password account signing in
-    # with Google for the first time — link it rather than creating a
+    # with Google for the first time - link it rather than creating a
     # duplicate account with the same email).
     user = db.query(User).filter(User.google_sub == google_sub).first()
     if not user:
@@ -173,14 +173,14 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     """
     Always returns the same generic response whether or not an account
     with this email exists, and regardless of whether the email actually
-    sent — deliberately, to avoid leaking which emails have accounts on
+    sent - deliberately, to avoid leaking which emails have accounts on
     this app (a classic account-enumeration hole: if this returned 404
     for "no such user" and 200 for "reset sent", an attacker could use it
     to check which email addresses are registered). The frontend should
     just always show "if that email exists, we've sent a reset link."
 
     A Google-only account (hashed_password is null) can still request and
-    complete a reset — see PasswordResetToken's docstring for why that's
+    complete a reset - see PasswordResetToken's docstring for why that's
     intentional rather than an edge case to reject.
     """
     # Per-email as well as per-IP: without this, someone can flood one
@@ -206,7 +206,7 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
 def reset_password(request: Request, payload: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
     Unlike forgot_password, this endpoint's response DOES reveal whether
-    the token was valid — that's fine here (unlike the email-enumeration
+    the token was valid - that's fine here (unlike the email-enumeration
     concern above) because a reset token is an unguessable random value,
     not something an attacker can iterate over like an email address, so
     confirming "this specific token is invalid" doesn't leak anything
@@ -214,7 +214,7 @@ def reset_password(request: Request, payload: ResetPasswordRequest, db: Session 
 
     Logs the user in on success (returns a TokenResponse, same as
     login/signup) since they've just proven control of the account's
-    email by clicking the link — making them re-enter the new password
+    email by clicking the link - making them re-enter the new password
     on a separate login screen right after setting it would be friction
     with no real security benefit.
     """

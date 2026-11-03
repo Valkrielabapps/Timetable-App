@@ -22,7 +22,7 @@ from app.models.user import User
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # tokenUrl points at the login endpoint purely for the /docs "Authorize"
-# button's benefit — this API takes JSON, not a form, so that endpoint
+# button's benefit - this API takes JSON, not a form, so that endpoint
 # won't actually work from the docs UI, but the header-based flow does.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 

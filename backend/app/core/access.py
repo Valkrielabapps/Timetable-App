@@ -1,5 +1,5 @@
 """
-School-membership access control — the fix for a real gap that existed
+School-membership access control - the fix for a real gap that existed
 until now: every router except schools.py took a bare `school_id` (or a
 resource id it belongs to) and trusted it completely, with no check that
 the logged-in user actually had anything to do with that school. Any
@@ -7,7 +7,7 @@ authenticated user could read or write any other school's data just by
 changing an id in the request.
 
 This module is deliberately plain functions called explicitly inside each
-endpoint, not a single FastAPI `Depends()` — because school_id shows up in
+endpoint, not a single FastAPI `Depends()` - because school_id shows up in
 three different shapes across the existing routers (a query param on list
 endpoints, a body field on create endpoints, or not at all on
 get/update/delete endpoints that only take a resource id and need it
@@ -19,7 +19,7 @@ router calls it wherever it already has that id in hand.
 Role model: two tiers. "admin" can do everything a school's owner could;
 "viewer" can only read. The school's owner (School.owner_id) is always an
 implicit admin, so a freshly created school with no SchoolMembership rows
-at all still works exactly as before this feature existed — memberships
+at all still works exactly as before this feature existed - memberships
 only matter for *additional* users beyond the owner.
 """
 from fastapi import HTTPException, status
@@ -36,7 +36,7 @@ def get_membership_role(db: Session, user: User, school_id: int) -> str | None:
     "admin" or "viewer".
 
     One query, not two: this used to be `db.get(School, ...)` followed by
-    a separate `SchoolMembership` query when the user wasn't the owner —
+    a separate `SchoolMembership` query when the user wasn't the owner - 
     correct, but every request pays that as a sequential extra round trip
     to the database purely for an access check, on top of whatever the
     endpoint itself needs to do. The outer join resolves both the school's
@@ -64,11 +64,11 @@ def require_school_access(
     db: Session, user: User, school_id: int, min_role: str = "viewer", allow_locked: bool = False,
 ) -> str:
     """
-    Raises 404 (not 403) when the user has no access at all — same
+    Raises 404 (not 403) when the user has no access at all - same
     reasoning as schools.py's existing get_school check: a school you
     can't see shouldn't even reveal that it exists via a different error
     code. Raises 403 when the user has *some* access but not enough (a
-    viewer hitting a write endpoint) — that one *should* say "you don't
+    viewer hitting a write endpoint) - that one *should* say "you don't
     have permission" rather than pretend the school doesn't exist, since
     the user can already see it elsewhere in the UI.
 
@@ -81,7 +81,7 @@ def require_school_access(
     if _ROLE_RANK[role] < _ROLE_RANK[min_role]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You have read-only access to this school — an admin can make this change.",
+            detail="You have read-only access to this school - an admin can make this change.",
         )
     # A school whose free days (or paid plan's grace period) are over is
     # locked: it can still be read, but nothing can be changed until it pays

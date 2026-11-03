@@ -38,7 +38,7 @@ const seenFailures = new Set()
 
 /**
  * Generates a timetable for the whole school (every section + every
- * teacher together, so there are no cross-section conflicts — see
+ * teacher together, so there are no cross-section conflicts - see
  * backend/app/services/solver.py, which already reads every class group
  * in the school in one solve) and displays it as a day x period grid,
  * either for the currently selected section or for a chosen teacher
@@ -46,37 +46,37 @@ const seenFailures = new Set()
  *
  * Generation runs as a background job on the backend (see
  * backend/app/routers/timetables.py) because a large school's solve can
- * take up to a minute — too long to hold an HTTP request open. So instead
+ * take up to a minute - too long to hold an HTTP request open. So instead
  * of awaiting one blocking call, we kick the job off, get back a
  * "generating" row immediately, and poll GET /api/timetables/{id} on an
  * interval until status is no longer "generating".
  *
  * The Export links download the whole school's timetable as a single
- * file (every section + every teacher, one sheet/page each — see
+ * file (every section + every teacher, one sheet/page each - see
  * backend/app/services/export.py), not just whatever's currently shown
  * on screen, since that's what an admin printing schedules actually
  * wants.
  *
  * Once a timetable is generated, individual slots can be hand-edited in
  * the "By Section" view: click a slot to lock/unlock it (locked = the next
- * regenerate leaves it exactly where it is — see lock-slot in
+ * regenerate leaves it exactly where it is - see lock-slot in
  * backend/app/routers/timetables.py, and the locked-entry handling in
  * backend/app/services/solver.py), or drag an unlocked slot to a different
  * period to move it by hand, swapping with whatever is there. The unit is
  * the slot, not the entry: an elective block (one entry per option) or a
  * split lab (one per batch) moves as a whole, because its parts always run
  * together. There's no
- * lock icon — locked/unlocked is shown as a light red/green tint on the
+ * lock icon - locked/unlocked is shown as a light red/green tint on the
  * whole cell instead, so the state reads at a glance across the whole
  * grid. Moving goes through move-slot, which rejects the change with a
- * message if it would double-book a teacher or a room — that message is
+ * message if it would double-book a teacher or a room - that message is
  * what ends up in `error` and shown below the grid. Editing is section-view-only: the "By
  * Teacher" view mixes entries from several different classes, where "move
  * this" is ambiguous (though the red/green tint still shows there, as
  * information).
  *
  * The text box above the grid ("Or describe an edit...") is a
- * conversational alternative to dragging — POST
+ * conversational alternative to dragging - POST
  * /api/timetables/{id}/edit-command (backend/app/services/
  * edit_command_parser.py) resolves plain English against this
  * timetable's actual entries and the school's actual periods (grounded
@@ -84,13 +84,13 @@ const seenFailures = new Set()
  * swap operation the drag-and-drop handlers below call. It can reference
  * any class group in the school by name, not just whichever one is
  * currently selected in the grid. There's no non-LLM fallback for this
- * one (unlike constraint parsing) — with no ANTHROPIC_API_KEY configured
+ * one (unlike constraint parsing) - with no ANTHROPIC_API_KEY configured
  * it just returns an error telling the admin to drag instead, since
  * there's no fixed-pattern shortcut for "which of potentially hundreds of
  * entries did they mean" worth building.
  *
  * `page` toggles between this generated-schedule view and Substitutions
- * (SubstitutionsTab) — they used to be separate top-level tabs, but
+ * (SubstitutionsTab) - they used to be separate top-level tabs, but
  * Substitutions is really a sibling lens on the same generated timetable
  * (same data: entries, periods, teachers), not a distinct workflow, so it
  * lives here as a second view instead of adding to the top nav's tab
@@ -104,15 +104,15 @@ export default function TimetableTab({
   // Only to name the subjects in each section's elective combinations.
   subjects = [],
   // periods/timetable/generating are App.jsx's own state now, not fetched
-  // or held locally here — this component gets unmounted every time the
+  // or held locally here - this component gets unmounted every time the
   // admin switches to another top-level tab
   // (`{tab === 'timetable' && (...)}` in App.jsx), so a just-generated
   // timetable kept only in this component's memory was destroyed on every
   // tab switch, making it look like it "disappeared" and prompting to
   // generate a new one. App.jsx fetches it once (as part of
   // loadSchoolData) and owns it from then on, including polling while a
-  // generation is in progress — even while the admin is on a different
-  // tab — so there's nothing left here that a remount can lose.
+  // generation is in progress - even while the admin is on a different
+  // tab - so there's nothing left here that a remount can lose.
   periods,
   constraints = [],
   readOnly = false,
@@ -122,13 +122,13 @@ export default function TimetableTab({
   onFix,
 }) {
   // Constraints saved on the Constraints tab that the solver doesn't
-  // actually apply — most commonly the "scheduling_rule" catch-all for
+  // actually apply - most commonly the "scheduling_rule" catch-all for
   // free-text rules the parser couldn't map to a real constraint type
   // (see generate_school_timetable's docstring in
   // backend/app/services/solver.py), but any constraint's `enforced` flag
   // can come back false (e.g. an availability rule where no day was
   // recognized). Surfaced here, right before Generate, rather than only on
-  // the Constraints tab itself — an admin who set up rules earlier and
+  // the Constraints tab itself - an admin who set up rules earlier and
   // comes straight to Timetable to generate would otherwise have no reason
   // to suspect some of them are silently no-ops.
   const unenforcedConstraints = constraints.filter((c) => !c.enforced)
@@ -198,7 +198,7 @@ export default function TimetableTab({
     setDragSource(null)
     setDragTargets(null)
   }
-  // Which export format is currently downloading, if any — guards against
+  // Which export format is currently downloading, if any - guards against
   // a double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
   // Whether exports carry the Timetablz name. Leaving it off is a paid-plan
@@ -220,7 +220,7 @@ export default function TimetableTab({
     }
     setWatermark(next)
   }
-  // Conversational editing (POST /api/timetables/{id}/edit-command) — a
+  // Conversational editing (POST /api/timetables/{id}/edit-command) - a
   // plain-English alternative to drag-and-drop, e.g. "move Grade 8's Math
   // to period 2 on Wednesdays". Section-view-only, same reasoning as
   // drag-and-drop above. commandFeedback holds the last result (success
@@ -243,7 +243,7 @@ export default function TimetableTab({
   }
 
   useEffect(() => {
-    // Re-syncs whenever the teacher list changes — not just when nothing
+    // Re-syncs whenever the teacher list changes - not just when nothing
     // is selected. Without the "still valid" check, switching schools
     // could leave selectedTeacherId pointing at a teacher that doesn't
     // exist in the new school's list at all (a stale id from before),
@@ -321,7 +321,7 @@ export default function TimetableTab({
 
   // Patches the one (or two, for a swap) entries the server actually
   // returned into local state instead of re-fetching the whole timetable
-  // — refetching every entry in the school just to reflect a single
+  // - refetching every entry in the school just to reflect a single
   // lock/move/swap was the cause of the lock toggle visibly taking 5-10
   // seconds to show its new state (a school-wide timetable can be
   // hundreds of rows; PATCH/swap already return the exact row(s) that
@@ -443,7 +443,7 @@ export default function TimetableTab({
     return periods.find((p) => p.day_of_week === day && p.order === order)
   }
 
-  // Returns every entry in this slot, not just one — a lab-batch-split
+  // Returns every entry in this slot, not just one - a lab-batch-split
   // subject (Subject.lab_batch_count >= 2, see backend/app/services/
   // solver.py) produces several simultaneous entries at the same class
   // group + period, one per batch, each with its own teacher and room.
@@ -457,7 +457,7 @@ export default function TimetableTab({
       )
     }
     // Includes slots where this teacher is only the *assistant*, not the
-    // main teacher — their own timetable should show both, not just the
+    // main teacher - their own timetable should show both, not just the
     // classes they lead solo.
     // A class pooled from several sections is one lesson for its teacher.
     return teacherLessons(timetable.entries.filter(
@@ -539,7 +539,7 @@ export default function TimetableTab({
 
   // In By Teacher view, an entry can show up because the selected teacher
   // is the main teacher or because they're only the assistant (see
-  // entriesFor above) — this tells the two apart so the grid can label
+  // entriesFor above) - this tells the two apart so the grid can label
   // "(Assisting)" instead of implying they're leading a class solo.
   const isSelectedTeacherAssisting = (e) =>
     view === 'teacher' && e.assistant_teacher_id === selectedTeacherId && e.teacher_id !== selectedTeacherId

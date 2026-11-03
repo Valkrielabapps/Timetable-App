@@ -6,12 +6,12 @@ import { api, setToken } from '../api'
  * pattern as AcceptInvitePage.jsx (no client-side router in this app):
  * the link is `?reset=<token>`, checked by App.jsx before the normal
  * login/app shell renders, regardless of whether the visitor is already
- * logged in elsewhere — see backend/app/routers/auth.py's reset_password
+ * logged in elsewhere - see backend/app/routers/auth.py's reset_password
  * endpoint, which just needs a valid unexpired/unused token, not an
  * existing session.
  *
  * Unlike AcceptInvitePage there's no preview step (nothing to fetch and
- * show before submitting — the backend doesn't expose whether a given
+ * show before submitting - the backend doesn't expose whether a given
  * reset token is valid except by trying to use it), so this goes
  * straight to the "set a new password" form.
  */

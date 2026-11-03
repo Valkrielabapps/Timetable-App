@@ -7,15 +7,15 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Marketing landing page — what an unauthenticated visitor sees before
+ * Marketing landing page - what an unauthenticated visitor sees before
  * AuthPage.jsx, instead of landing straight on a login form. App.jsx
  * renders this first and only swaps to AuthPage once `onGetStarted` is
  * called (a "Get started" / "Sign in" click), so bookmarking straight
- * into login isn't supported yet — not a real gap for a single-page app
+ * into login isn't supported yet - not a real gap for a single-page app
  * with no router, just worth knowing if that's ever needed later.
  *
  * Content notes for whoever edits this next:
- *   - PRICING is explicitly placeholder (see the section below) — actual
+ *   - PRICING is explicitly placeholder (see the section below) - actual
  *     pricing hasn't been decided yet (see docs/ARCHITECTURE.md and the
  *     business-side conversation this was built alongside). Replace the
  *     numbers before this goes live for real, or swap the section for a
@@ -24,11 +24,11 @@ import SiteFooter from './SiteFooter'
  *   - TESTIMONIALS are placeholder too, deliberately attributed to a role
  *     ("School Administrator") rather than an invented name/school, so
  *     nobody mistakes them for real quotes. Swap in real ones once you
- *     have them — fabricated specific attributions (fake names, fake
+ *     have them - fabricated specific attributions (fake names, fake
  *     schools) would be actively misleading, generic role-based ones are
  *     an honest placeholder.
  *   - The hero's timetable visual is a hand-built CSS/SVG mockup, not a
- *     real screenshot — there's no production deployment to screenshot
+ *     real screenshot - there's no production deployment to screenshot
  *     yet (see the deployment conversation). Swap for a real screenshot
  *     once the app is hosted somewhere presentable.
  */
@@ -137,7 +137,7 @@ export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, sig
       <WorkflowDemo />
       <MetricsSection />
       <WhyChoose onGetStarted={onGetStarted} />
-      {/* HowItWorks and Pricing removed for now (explicit request) — the
+      {/* HowItWorks and Pricing removed for now (explicit request) - the
           component functions/data (STEPS, PRICING_TIERS) are left intact
           further down this file so they're a one-line add back rather
           than a rebuild once pricing is settled and this section is
@@ -156,15 +156,15 @@ function LandingNav({ onGetStarted, onSignIn, signedIn }) {
 }
 
 /**
- * Faint single-stroke line-art scenes for the empty sides of the Hero —
+ * Faint single-stroke line-art scenes for the empty sides of the Hero - 
  * replaces the earlier blurred-glow Spotlight treatment. Both sides are
  * built around the same subject as the product itself: a printed weekly
- * timetable pinned to the classroom wall, grid cells and all — not just a
+ * timetable pinned to the classroom wall, grid cells and all - not just a
  * generic classroom. `side="left"` shows a wall clock above a pinned
  * timetable chart, with a student desk and chair below it; `side="right"`
  * mirrors it with a teacher's desk whose laptop screen shows the same
  * grid in miniature, next to a second wall timetable and a stack of
- * books. Everything is `stroke`-only, no fill, at very low opacity — the
+ * books. Everything is `stroke`-only, no fill, at very low opacity - the
  * point is background texture, not an illustration anyone reads closely.
  * Hand-drawn with basic shapes rather than an icon library so it stays a
  * single dependency-free inline SVG.
@@ -176,7 +176,7 @@ function HeroSideArt({ side, className = '' }) {
 
   // A pinned weekly-timetable chart: an outer frame, a heavier header
   // row, `cols` x `rows` grid cells, and two small "pin" dots at the top
-  // corners as if it's tacked to a board — reused (at different sizes)
+  // corners as if it's tacked to a board - reused (at different sizes)
   // on both sides so the two scenes visibly share the same motif.
   function TimetableChart({ x, y, width, height, cols = 5, rows = 6 }) {
     const headerH = height / (rows + 1)
@@ -276,7 +276,7 @@ function HeroSideArt({ side, className = '' }) {
 function Hero({ onGetStarted, signedIn }) {
   return (
     <section className="relative overflow-hidden bg-black">
-      {/* Faint line-art filling the empty sides of the centered hero — the
+      {/* Faint line-art filling the empty sides of the centered hero - the
           reference the user sent (a hospitality SaaS hero) uses extremely
           faint single-stroke line drawings of an office scene instead of a
           blurred glow; this is the same idea adapted to our own subject
@@ -293,7 +293,7 @@ function Hero({ onGetStarted, signedIn }) {
           {/* The cycling word sits on its own dedicated line (explicit <br/>,
               not just wrapping wherever it happens to land) so its
               changing width can never push "Instant timetables" onto an
-              extra line — see the earlier version of this component for
+              extra line - see the earlier version of this component for
               the layout-shift bug this avoids. */}
           {/* The heading's words are real text (sr-only) rather than an
               aria-label, so search engines read "Instant timetables for
@@ -353,7 +353,7 @@ function Hero({ onGetStarted, signedIn }) {
 
 /**
  * A hand-built visual, not a real screenshot (see this file's top
- * docstring) — a small animated grid that suggests the actual product's
+ * docstring) - a small animated grid that suggests the actual product's
  * By Section timetable view without claiming to BE it.
  */
 function TimetableMockup() {
@@ -524,12 +524,12 @@ function MetricsSection() {
  * from the reference screenshots: a serif headline, then a stack of large
  * soft rounded cards (some half-width, one full-width) each pairing a
  * short claim with a small supporting visual and a couple of floating
- * pill badges. Kept deliberately restrained relative to the reference —
+ * pill badges. Kept deliberately restrained relative to the reference - 
  * one or two badges per card, muted geometry instead of a colorful
- * illustration — after earlier attempts at "decorative product graphics"
+ * illustration - after earlier attempts at "decorative product graphics"
  * on this page read as cluttered (see FloatingTimetableCard's removal
  * further up the file's history). No invented performance numbers (no
- * "35% RevPAR"-style stat) since there's no usage data yet to back one —
+ * "35% RevPAR"-style stat) since there's no usage data yet to back one - 
  * see this file's top docstring on the same principle for pricing/
  * testimonials.
  */
@@ -777,10 +777,10 @@ function Pricing({ onGetStarted }) {
 // Different width ratios per tile (narrow/medium/wide) to match the
 // uneven-column photo-grid look from the Papermark reference, rather than
 // three equal boxes. Also a distinct dark gradient tone per tile, used as
-// a stand-in for tiles that don't have a real photo yet — varying the
+// a stand-in for tiles that don't have a real photo yet - varying the
 // gradient at least keeps those from reading as one flat repeated block.
 // All three tiles now carry a real Shishya Public School photo (see the
-// comment on the third entry — confirmed with the founder that the
+// comment on the third entry - confirmed with the founder that the
 // TESTIMONIALS quote text is still illustrative/placeholder, not
 // something this school actually said). Pairing a real, identifiable
 // photo with an invented quote would read as putting words in their
@@ -788,7 +788,7 @@ function Pricing({ onGetStarted }) {
 // caption instead (see the `image` check in the render below) rather
 // than reusing TESTIMONIALS[i].quote/role. Note the entrance photo here
 // and the third tile's photo are the same shot the founder uploaded
-// twice — left as-is per the literal request, worth swapping one out for
+// twice - left as-is per the literal request, worth swapping one out for
 // a distinct angle later if that's noticeable in the row.
 const TESTIMONIAL_TILE_STYLES = [
   {
@@ -816,14 +816,14 @@ const TESTIMONIAL_TILE_STYLES = [
 
 /**
  * Papermark-style "Real impact for real teams" photo-tile layout, applied
- * to this page's existing (already-honest — see TESTIMONIALS above,
+ * to this page's existing (already-honest - see TESTIMONIALS above,
  * role-only attribution, no invented names/schools) testimonials.
  *
  * The reference uses real photos of real customers/teams. Two of the
  * three tiles still don't have one (no photography of any other customer,
  * and no image-generation tool available in this session), so those stay
  * a plain dark gradient rather than a stock photo standing in for a real
- * one — swap each remaining gradient div for a real photo once one
+ * one - swap each remaining gradient div for a real photo once one
  * exists, the overlay/quote positioning already works with either.
  */
 function Testimonials() {
@@ -845,7 +845,7 @@ function Testimonials() {
             const style = TESTIMONIAL_TILE_STYLES[i % TESTIMONIAL_TILE_STYLES.length]
             return (
               // Hover motion is plain CSS (`group`/`group-hover:`), not a
-              // framer-motion `whileHover` — this div already has a
+              // framer-motion `whileHover` - this div already has a
               // `transition` prop driving its scroll-into-view fade/rise,
               // and framer applies one `transition` config to every
               // animation state including hover, which would wrongly
@@ -861,9 +861,9 @@ function Testimonials() {
                 className={`group relative min-h-[380px] flex-1 cursor-default overflow-hidden rounded-xl shadow-lg shadow-black/0 transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-black/40 ${style.flex}`}
               >
                 {/* The "photo" (a real one where available, a gradient
-                    stand-in otherwise) zooms in slightly on hover — the
+                    stand-in otherwise) zooms in slightly on hover - the
                     same subtle Ken Burns-style effect Papermark's photo
-                    tiles use — while the overlay and text stay put so the
+                    tiles use - while the overlay and text stay put so the
                     caption/quote never jitters. */}
                 {style.image ? (
                   <img

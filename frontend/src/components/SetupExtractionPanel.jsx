@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { api } from '../api'
 
 /**
- * Upload an arbitrary spreadsheet the admin already has lying around —
- * an old staff list, a manually-made timetable export, whatever — that
+ * Upload an arbitrary spreadsheet the admin already has lying around - 
+ * an old staff list, a manually-made timetable export, whatever - that
  * isn't in BulkImportPanel's expected column format. Claude reads it and
  * proposes teachers/subjects/class groups; nothing is created until the
  * admin reviews the preview below (unchecking anything wrong) and clicks

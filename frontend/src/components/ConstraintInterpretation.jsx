@@ -6,13 +6,13 @@
  * politeness.
  *
  * Rules used to be matched against nine fixed types, and anything outside them
- * was saved as unenforced text — so a misreading announced itself by visibly
+ * was saved as unenforced text - so a misreading announced itself by visibly
  * doing nothing. Rules are now expressed in a general representation that can
  * say far more, and the price is that almost any sentence yields a *valid*
  * rule. A misreading no longer fails; it schedules something nobody asked for,
  * faithfully, with nothing anywhere to show it. Reading against real rules,
  * about a third of the ones that parsed cleanly meant something other than
- * what was typed — and nearly every one of those was obvious on sight:
+ * what was typed - and nearly every one of those was obvious on sight:
  *
  *     typed:  PE shouldn't be on two days in a row
  *     read:   PE periods and PE periods are never back to back
@@ -104,7 +104,7 @@ export default function ConstraintInterpretation({
  *
  * Worth showing as prominently as a successful reading. A rule it refuses to
  * guess at is a rule that would otherwise have been wrong, so this is the
- * system working — but only if the admin is told what to do about it, which is
+ * system working - but only if the admin is told what to do about it, which is
  * why the question and the alternative readings matter more than the reason
  * code does.
  */
@@ -152,7 +152,7 @@ function NotUnderstood({ typed, interpretation, onReword, onCancel }) {
 }
 
 // Said in the admin's terms, not the parser's. "not_supported" in particular
-// is not their fault and shouldn't read like it is — the rule is fine, the app
+// is not their fault and shouldn't read like it is - the rule is fine, the app
 // can't do it yet.
 const HEADINGS = {
   ambiguous: 'This could mean more than one thing',

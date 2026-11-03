@@ -128,7 +128,7 @@ async def bulk_import_teachers(
 ):
     """
     Upload a CSV or .xlsx of teachers (columns: name, email,
-    max_periods_per_week, qualified_subjects — subject names separated by
+    max_periods_per_week, qualified_subjects - subject names separated by
     ';' or ',') instead of adding them one at a time. Subjects should be
     imported/added first so qualified_subjects can resolve against them;
     see app/services/bulk_import.py for what happens to an unresolvable

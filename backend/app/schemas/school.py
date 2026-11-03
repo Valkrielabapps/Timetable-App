@@ -1,4 +1,4 @@
-"""Pydantic schemas for School — what the API accepts/returns, separate from
+"""Pydantic schemas for School - what the API accepts/returns, separate from
 the SQLAlchemy model that defines what the database stores."""
 from datetime import datetime
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class SchoolCreate(BaseModel):
     name: str = Field(max_length=120)
     # "school" or "college", chosen in the create-school modal. Not
-    # validated against a strict enum here — the frontend only ever sends
+    # validated against a strict enum here - the frontend only ever sends
     # one of the two, and treating anything else as "school" (see
     # institution_type's docstring on the model) is a safer default than
     # a 422 on a typo'd value from some future caller.
@@ -22,7 +22,7 @@ class SchoolOut(BaseModel):
     name: str
     institution_type: str | None = None
     # `| None` purely to tolerate rows from before this column existed,
-    # same reasoning as Teacher.qualified_grades — the frontend already
+    # same reasoning as Teacher.qualified_grades - the frontend already
     # treats a missing/None value the same as an empty list.
     grade_order: list[str] | None = None
     grade_day_limits: list[dict] | None = None
@@ -34,7 +34,7 @@ class SchoolOut(BaseModel):
     plan: str | None = None
     plan_valid_until: datetime | None = None
     # The current user's role for THIS school specifically ("admin" or
-    # "viewer") — not a column on the School model, computed per-request
+    # "viewer") - not a column on the School model, computed per-request
     # by whichever router endpoint builds this (see app/core/access.py).
     # Lets the frontend gate write UI (hide "Add", "Generate", etc. for a
     # viewer) without a separate round-trip to find out.
@@ -74,7 +74,7 @@ class SchoolGradeOrderUpdate(BaseModel):
 
 
 class SchoolInstitutionTypeUpdate(BaseModel):
-    # Same "not a strict enum" reasoning as SchoolCreate.institution_type —
+    # Same "not a strict enum" reasoning as SchoolCreate.institution_type - 
     # the frontend only ever sends "school" or "college".
     institution_type: str | None = None
 

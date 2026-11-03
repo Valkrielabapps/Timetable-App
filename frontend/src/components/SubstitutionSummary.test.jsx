@@ -45,7 +45,7 @@ describe('the summary as text', () => {
 
   it('is a WhatsApp message with the day, who is away and each lesson', () => {
     expect(summaryText(WHOLE)).toBe([
-      '*Substitutions — Monday, 26 October 2026*',
+      '*Substitutions - Monday, 26 October 2026*',
       'Whole school',
       '',
       '*On leave:* Mr. Khan (Period 2, Period 6), Mrs. Rao (whole day)',
@@ -65,7 +65,7 @@ describe('the summary as text', () => {
 
   it('for one part, no part headings; with nothing to cover, says so', () => {
     const text = summaryText({ ...WHOLE, category: 'primary', category_label: 'Primary', rows: [], on_leave: [], uncovered: 0 })
-    expect(text).toBe('*Substitutions — Monday, 26 October 2026*\nPrimary\n\nNo lessons need cover.')
+    expect(text).toBe('*Substitutions - Monday, 26 October 2026*\nPrimary\n\nNo lessons need cover.')
   })
 
   it('the printed page escapes names', () => {

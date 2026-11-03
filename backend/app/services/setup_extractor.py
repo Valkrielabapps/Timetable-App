@@ -1,14 +1,14 @@
 """
 Setup-from-document extraction: an admin uploads a spreadsheet they
-already have lying around — an old staff list, a manually-made timetable
-export, whatever — that is NOT in this app's expected bulk-import column
+already have lying around - an old staff list, a manually-made timetable
+export, whatever - that is NOT in this app's expected bulk-import column
 format (see app/services/bulk_import.py), and Claude reads it freeform
 and proposes teachers/subjects/class-groups to create.
 
 This is deliberately a different, simpler code path than bulk_import.py:
 
   - bulk_import.py assumes a known header row (name, email,
-    qualified_subjects, ...) and is precise/mechanical — it's for an
+    qualified_subjects, ...) and is precise/mechanical - it's for an
     admin who is willing to format a file to match this app.
   - This module assumes NOTHING about structure. The file might have no
     header row at all (e.g. a raw timetable grid with days as columns
@@ -21,20 +21,20 @@ extract_setup_llm() never touches the database, and nothing is created
 until the admin explicitly confirms a selection through the /commit
 endpoint (see app/routers/setup_extraction.py), which re-shapes the
 confirmed items into the same row-dict shape bulk_import.py's import_*
-functions expect and calls those directly — so upsert-by-name behavior,
+functions expect and calls those directly - so upsert-by-name behavior,
 "missing name" validation, etc. all come for free from that existing,
 tested code rather than being reimplemented here.
 
 Scope, v1 (documented, not silent):
   - CSV and .xlsx only, matching bulk_import.py's supported types. PDF
-    upload is NOT supported — there's no PDF-parsing dependency in this
+    upload is NOT supported - there's no PDF-parsing dependency in this
     codebase, and scanned/PDF staff lists would need OCR, which has very
     different failure modes (silently wrong text) than a spreadsheet
     read. Left as a known future gap rather than bolted on half-working.
   - Only the first MAX_ROWS rows of the file are sent to the LLM. This
     bounds prompt size/cost for the realistic case (a school's staff or
     class list) and is generous enough that no normal admin file will
-    ever hit it in practice — if it does, the extraction will just be
+    ever hit it in practice - if it does, the extraction will just be
     based on a truncated prefix rather than erroring, which is
     consistent with this codebase's "best-effort" bias (see
     bulk_import.py's docstring) but is worth knowing about.
@@ -106,7 +106,7 @@ _TOOL_SCHEMA = {
             "notes": {
                 "type": "string",
                 "description": (
-                    "Anything ambiguous, inconsistent, or that couldn't be confidently extracted — "
+                    "Anything ambiguous, inconsistent, or that couldn't be confidently extracted - "
                     "shown to the admin alongside the preview. Empty string if nothing to flag."
                 ),
             },
@@ -117,19 +117,19 @@ _TOOL_SCHEMA = {
 
 _SYSTEM_PROMPT = """You extract school staffing/scheduling setup data from an arbitrary \
 spreadsheet a school admin uploaded. It could be a staff directory, a subject list, an \
-existing manually-made timetable, or something else entirely — you don't know its \
+existing manually-made timetable, or something else entirely - you don't know its \
 structure in advance.
 
 Identify:
 - Distinct TEACHERS (by name). Include their email if a column clearly has one.
 - Distinct SUBJECTS mentioned anywhere (a subject taught, a column header that's a
   subject name, a class period labeled with a subject, etc.).
-- Distinct CLASS GROUPS — sections, divisions, or grades like "Grade 8 - A" or "10B".
+- Distinct CLASS GROUPS - sections, divisions, or grades like "Grade 8 - A" or "10B".
 
 Only extract what's clearly present. Do not invent teachers, subjects, or groups that \
 aren't evidenced by the data. If a teacher's subjects are evident from context (e.g. a \
 "subject" or "teaches" column, or their name appearing in a subject's row/column in a \
-timetable grid), include those in subject_names — matching a name in the subjects list \
+timetable grid), include those in subject_names - matching a name in the subjects list \
 you're also returning. If genuinely unclear or inconsistent, leave it out and mention it \
 in notes instead of guessing.
 
@@ -138,7 +138,7 @@ Call record_extracted_setup with your findings."""
 
 def read_spreadsheet_rows(filename: str, content: bytes) -> list[list[str]]:
     """
-    Reads an uploaded CSV/.xlsx file into a plain grid of cell strings —
+    Reads an uploaded CSV/.xlsx file into a plain grid of cell strings - 
     no header-row assumption, unlike bulk_import.py's parse_rows(), since
     this feature doesn't know the document's structure ahead of time.
     Raises ValueError (caught by the router, turned into a 400) for an
@@ -155,7 +155,7 @@ def read_spreadsheet_rows(filename: str, content: bytes) -> list[list[str]]:
         rows = [[("" if c is None else str(c)) for c in row] for row in capped(ws.iter_rows(values_only=True))]
     else:
         raise ValueError(
-            "Unsupported file type — upload a .csv or .xlsx file. "
+            "Unsupported file type - upload a .csv or .xlsx file. "
             "(PDF documents aren't supported yet.)"
         )
 
@@ -179,7 +179,7 @@ def extract_setup_llm(rows: list[list[str]]) -> dict | None:
     Sends the raw grid to Claude and returns the parsed tool-use input
     dict on success, or None on any failure (no API key configured, the
     anthropic package missing, a network/API error, or a malformed
-    response) — never raises. The router treats None as "extraction
+    response) - never raises. The router treats None as "extraction
     isn't available right now" (503), the same pattern used by
     infeasibility_explainer.explain_infeasibility and
     edit_command_parser.parse_edit_command_llm.

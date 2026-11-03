@@ -1,17 +1,17 @@
 """
-Transactional email — invite emails and password-reset emails, both sent
+Transactional email - invite emails and password-reset emails, both sent
 via Resend's HTTP API
 (https://resend.com/docs/api-reference/emails/send-email). Plain
 `requests` calls rather than Resend's SDK, since `requests` is already a
-dependency and the API is a handful of simple POSTs — not worth a new
+dependency and the API is a handful of simple POSTs - not worth a new
 package for that.
 
 Design choices (mirrors app/services/llm_constraint_parser.py):
-  - Every send_* function returns False (never raises) on ANY failure —
+  - Every send_* function returns False (never raises) on ANY failure - 
     no API key configured, network error, Resend rejecting the request,
     whatever.
       - For invites specifically: sending is a nice-to-have on top of
-        invite creation, not a precondition for it — the invite is
+        invite creation, not a precondition for it - the invite is
         already created and its link already returned to the admin
         before this is even called, so a flaky email API must never turn
         a successful invite into a failed request.
@@ -19,7 +19,7 @@ Design choices (mirrors app/services/llm_constraint_parser.py):
         endpoint always returns the same generic response regardless of
         what this returns, specifically so a caller can't distinguish
         "no account with that email" from "email failed to send" from
-        "email sent" — see that endpoint's docstring for why (user
+        "email sent" - see that endpoint's docstring for why (user
         enumeration).
   - No retry logic in either case. For invites, the admin still has the
     copyable link in the UI as a fallback (see TeamTab.jsx). For password
@@ -38,7 +38,7 @@ _RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: str | None = None) -> bool:
-    """Shared send path for every email this service sends — the part
+    """Shared send path for every email this service sends - the part
     that's identical regardless of which template/recipient is involved:
     no-op if unconfigured, POST to Resend, swallow every failure mode into
     False. `log_context` is just a short label (e.g. "invite email",
@@ -83,7 +83,7 @@ def send_invite_email(
     invite_token: str,
 ) -> bool:
     """Returns True if Resend accepted the email, False otherwise (including
-    when no API key is configured at all — that's a silent no-op, not an
+    when no API key is configured at all - that's a silent no-op, not an
     error, since email is optional infrastructure)."""
     invite_link = f"{settings.frontend_base_url}/?invite={invite_token}"
     role_label = "admin" if role == "admin" else "viewer"
@@ -127,7 +127,7 @@ def _one_line(text: str | None, limit: int) -> str:
 
 def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     """Returns True if Resend accepted the email, False otherwise
-    (including when no API key is configured). Never raises — see the
+    (including when no API key is configured). Never raises - see the
     module docstring for why app/routers/auth.py's forgot_password
     endpoint deliberately ignores this return value in its response."""
     reset_link = f"{settings.frontend_base_url}/?reset={reset_token}"
@@ -146,7 +146,7 @@ def send_password_reset_email(to_email: str, reset_token: str) -> bool:
       </p>
       <p style="color: #64748b; font-size: 13px;">
         This link expires in {expire_minutes} minutes. If you didn't request
-        this, you can safely ignore this email — your password won't change.
+        this, you can safely ignore this email - your password won't change.
       </p>
       <p style="color: #64748b; font-size: 13px;">
         Or copy this link: <br />{reset_link}

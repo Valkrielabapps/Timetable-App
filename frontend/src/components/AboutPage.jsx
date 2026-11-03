@@ -3,12 +3,12 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Standalone About/Company page — reached via `?page=about` (same
+ * Standalone About/Company page - reached via `?page=about` (same
  * no-router pattern as PricingPage/SupportPage; see App.jsx). Dark theme
  * (black background, matching Hero/WhyTimetablzPage) per explicit
  * request, modeled loosely on the Griffin "Hello, we're Griffin" about
  * page structure the user referenced (short section headings, generous
- * spacing, no narrow centered column) — adapted to Timetablz's own
+ * spacing, no narrow centered column) - adapted to Timetablz's own
  * content rather than reusing Griffin's copy.
  *
  * Kept deliberately honest about where the company actually is right
@@ -16,11 +16,11 @@ import SiteFooter from './SiteFooter'
  * MetricsSection's placeholder-metrics warning and TESTIMONIAL_TILE_
  * STYLES in LandingPage.jsx): no fabricated founding story, no invented
  * team bios or headshots, no "after years at [big company]" backstory
- * that was never stated, and — per explicit request — no founder name
+ * that was never stated, and - per explicit request - no founder name
  * mentioned anywhere on this page. What's here is limited to what's
  * actually known: the real problem the product solves, what's been
  * built, and the one real school partner (Shishya Public School,
- * Dehradun) — rather than padding it out with a polished-sounding
+ * Dehradun) - rather than padding it out with a polished-sounding
  * narrative that isn't true yet.
  */
 
@@ -75,8 +75,8 @@ export default function AboutPage({ onBack, onGetStarted }) {
           </p>
         </motion.div>
 
-        {/* A wide two-column row per section — a short heading on the
-            left, the body copy on the right — rather than one narrow
+        {/* A wide two-column row per section - a short heading on the
+            left, the body copy on the right - rather than one narrow
             centered column of text. Spreads the page across its full
             width the way the Griffin reference does, instead of
             cramming everything into a single skinny strip down the

@@ -10,7 +10,7 @@ inserted or updated in place) and deletes the rest.
 Usage (from the backend/ folder, with your venv active):
     python dedupe_requirements.py
 
-Safe to run multiple times — if there are no duplicates, it does nothing.
+Safe to run multiple times - if there are no duplicates, it does nothing.
 Stop the backend server first so nothing else is writing to dev.db while
 this runs.
 """

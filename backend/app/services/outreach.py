@@ -288,9 +288,9 @@ _ROLE_WORDS = ("principal", "vice", "coordinator", "headmistress", "headmaster",
                "message", "desk", "about", "read", "more", "the", "our", "and", "of")
 _PRINCIPAL_PATTERNS = [
     re.compile(rf"Name of (?:the )?(?:Principal|Head of (?:the )?(?:School|Institution))[^A-Za-z]{{0,12}}((?:{_TITLE}\s*)?{_NAME})"),
-    re.compile(rf"\b(?:Principal|PRINCIPAL)\b\s*(?:Name)?\s*[:\-–—|]\s*((?:{_TITLE}\s*)?{_NAME})"),
+    re.compile(rf"\b(?:Principal|PRINCIPAL)\b\s*(?:Name)?\s*[:\-–\u2014|]\s*((?:{_TITLE}\s*)?{_NAME})"),
     re.compile(rf"\b(?:Principal|PRINCIPAL)\b[ \t]*\n\s*({_TITLE}\s*{_NAME})"),
-    re.compile(rf"({_TITLE}\s*{_NAME})\s*[,\-–—(|\n]{{0,3}}\s*(?:M\.?\w*\.?,?\s*(?:B\.?\s?Ed\.?)?\s*)?[,\-–—(|\n]{{0,3}}\s*(?:The\s+)?Principal\b"),
+    re.compile(rf"({_TITLE}\s*{_NAME})\s*[,\-–\u2014(|\n]{{0,3}}\s*(?:M\.?\w*\.?,?\s*(?:B\.?\s?Ed\.?)?\s*)?[,\-–\u2014(|\n]{{0,3}}\s*(?:The\s+)?Principal\b"),
 ]
 _OTHER_ROLES = ("Vice Principal", "Academic Coordinator", "Headmistress", "Head Mistress", "Headmaster", "Correspondent")
 
@@ -332,9 +332,9 @@ def extract_people(text: str) -> dict:
                 out["principal_name"] = name
                 break
     for role in _OTHER_ROLES:
-        m = re.search(rf"\b{role}\b\s*[:\-–—|]\s*((?:{_TITLE}\s*)?{_NAME})", text, re.I) or re.search(
+        m = re.search(rf"\b{role}\b\s*[:\-–\u2014|]\s*((?:{_TITLE}\s*)?{_NAME})", text, re.I) or re.search(
             rf"\b{role}\b[ \t]*\n\s*({_TITLE}\s*{_NAME})", text, re.I) or re.search(
-            rf"({_TITLE}\s*{_NAME})\s*[,\-–—(|\n]{{0,3}}\s*(?:The\s+)?{role}\b", text)
+            rf"({_TITLE}\s*{_NAME})\s*[,\-–\u2014(|\n]{{0,3}}\s*(?:The\s+)?{role}\b", text)
         if m:
             name = _clean_name(m.group(1))
             if name and name != out.get("principal_name"):

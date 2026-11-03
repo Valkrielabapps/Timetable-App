@@ -17,7 +17,7 @@ const RESOURCES = {
  * one at a time through the panels below. Upserts by name (see
  * backend/app/services/bulk_import.py) so re-uploading the same file
  * after fixing a typo updates rather than duplicates, and one bad row
- * doesn't block the rest of the file — the result summary below the
+ * doesn't block the rest of the file - the result summary below the
  * form always shows created/updated counts plus any per-row errors.
  *
  * Teachers' "qualified_subjects" column is matched against subjects
@@ -26,7 +26,7 @@ const RESOURCES = {
  * the grades of the school's sections ("6", "Class 6" and "Grade 6" all
  * work, "6-8" is a range), and an empty cell means every grade.
  *
- * `resource` locks this panel to exactly one resource type — no dropdown
+ * `resource` locks this panel to exactly one resource type - no dropdown
  * to switch it. Each embedding page (Subjects, Teachers) is already
  * unambiguous about what it imports, so offering "import rooms" from the
  * Teachers page (or vice versa) was a leftover from when this was one
@@ -71,7 +71,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
 
       <form onSubmit={handleUpload} className="mt-3 flex flex-wrap items-center gap-2">
         {/* The native file input renders as plain text in some browsers,
-            not obviously clickable next to the "Import" button — hidden
+            not obviously clickable next to the "Import" button - hidden
             (not removed, still what actually opens the file dialog and
             holds the value) in favor of a label styled to look like the
             other secondary buttons on this page. */}

@@ -1,11 +1,11 @@
 /**
- * Compact, always-visible progress indicator for the header — shown on
+ * Compact, always-visible progress indicator for the header - shown on
  * every tab, not just Overview, since the actual setup work happens on
  * Data Entry and Constraints and a new admin shouldn't have to keep
  * clicking back to Overview just to see how close they are. Clicking it
  * jumps straight to the current step via `onNavigate(tab, subView)`.
  *
- * Purely presentational — App.jsx owns the single `useSetupProgress`
+ * Purely presentational - App.jsx owns the single `useSetupProgress`
  * call (it also needs `allRequiredDone` to mute the Constraints/
  * Timetable tabs) and passes the result down, rather than this component
  * fetching the same data a second time.

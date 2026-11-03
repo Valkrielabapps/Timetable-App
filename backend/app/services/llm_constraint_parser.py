@@ -1,5 +1,5 @@
 """
-LLM-based constraint parser — calls Claude to turn a free-text scheduling
+LLM-based constraint parser - calls Claude to turn a free-text scheduling
 rule into a structured constraint, instead of the fixed regex patterns in
 app/services/constraint_parser.py. This understands a much wider range of
 phrasing and a richer set of constraint types (see ParsedConstraint below),
@@ -7,15 +7,15 @@ because it's real language understanding rather than keyword matching.
 
 Design choices:
   - Uses forced tool-use (`tool_choice`), not free-text completion, so the
-    response is always valid structured data — no second parsing step, no
+    response is always valid structured data - no second parsing step, no
     "the model wrapped its answer in prose" failure mode.
   - Grounds the model against the school's actual teacher/subject/class-group
     names (passed in the system prompt) and instructs it to only use exact
     names from those lists, or null. This keeps the *matching* logic here
     (in the prompt) rather than pushing fuzzy string matching into the
-    router — the router just does an exact dict lookup on whatever name
+    router - the router just does an exact dict lookup on whatever name
     comes back, same as the regex parser did.
-  - Returns None on ANY failure — no API key configured, network error,
+  - Returns None on ANY failure - no API key configured, network error,
     rate limit, malformed response, whatever. The caller
     (app/routers/constraints.py) falls back to the regex parser when this
     returns None, so a flaky LLM call never blocks constraint entry
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 #                               on the same day for either a subject (any
 #                               class, optionally scoped via
 #                               class_group_name) or a teacher (their whole
-#                               schedule, any subject/class — set
+#                               schedule, any subject/class - set
 #                               teacher_name instead of subject_name)
 #   min_gap_between_subjects  - SYMMETRIC spacing. first_subject_name and
 #                               second_subject_name
@@ -133,7 +133,7 @@ _TOOL_SCHEMA = {
                 "enum": ["require", "exclude", None],
                 "description": "For subject_period_position and subject_day_position: 'require' if the sentence says the subject MUST/SHOULD be there, 'exclude' if it says the subject must NOT/CAN'T/SHOULDN'T be there.",
             },
-            "max_consecutive": {"type": ["integer", "null"], "description": "For max_consecutive_periods — the max number of back-to-back periods allowed."},
+            "max_consecutive": {"type": ["integer", "null"], "description": "For max_consecutive_periods - the max number of back-to-back periods allowed."},
             "min_gap": {
                 "type": ["integer", "null"],
                 "description": (
@@ -253,7 +253,7 @@ _BATCH_TOOL_SCHEMA = {
         "properties": {
             "constraints": {
                 "type": "array",
-                "description": "One entry per distinct constraint mentioned in the text — several if the admin listed multiple rules, one if there's only one.",
+                "description": "One entry per distinct constraint mentioned in the text - several if the admin listed multiple rules, one if there's only one.",
                 "items": _TOOL_SCHEMA["input_schema"],
             },
         },
@@ -290,7 +290,7 @@ def _int_list(value) -> list[int] | None:
 
 
 def _parsed_constraint_from_tool_input(data: dict, fallback_description: str) -> ParsedConstraint:
-    """Shared by parse_constraint_llm and parse_constraints_batch_llm —
+    """Shared by parse_constraint_llm and parse_constraints_batch_llm - 
     turns one record_constraint-shaped dict (single call's `tool_use.input`
     or one entry of a batch call's `constraints` array) into a
     ParsedConstraint. `fallback_description` covers the (should-be-rare)
@@ -433,7 +433,7 @@ def _grounding_system_prompt(
     periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> str:
     """The "only use exact names from these lists" grounding instructions
-    shared by both the single-constraint and batch prompts — factored out
+    shared by both the single-constraint and batch prompts - factored out
     so the two can't quietly drift apart on how strict that matching rule
     is worded.
 
@@ -464,7 +464,7 @@ def parse_constraint_llm(
     periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> ParsedConstraint | None:
     """Returns None (never raises) if the LLM path can't be used right
-    now — no key configured, or the call/response failed for any reason.
+    now - no key configured, or the call/response failed for any reason.
     Callers must handle None by falling back to the regex parser."""
     if not settings.anthropic_api_key:
         return None
@@ -504,14 +504,14 @@ def parse_constraints_batch_llm(
     class_group_labels: list[str],
     periods: list[tuple[int, int, str | None, bool]] | None = None,
 ) -> list[ParsedConstraint] | None:
-    """Batch counterpart to parse_constraint_llm — extracts every distinct
+    """Batch counterpart to parse_constraint_llm - extracts every distinct
     constraint from a whole block of text (e.g. several rules pasted or
     typed together) in a single call, instead of requiring one call per
     sentence. Same never-raises contract: returns None if the LLM path
     can't be used right now (no key, package missing, call/response
     failed for any reason). Callers must handle None by falling back to
     splitting the text into lines and parsing each with
-    parse_constraint_llm/the regex parser individually — see
+    parse_constraint_llm/the regex parser individually - see
     app/routers/constraints.py's _resolve_constraints_batch_text."""
     if not settings.anthropic_api_key:
         return None
@@ -529,7 +529,7 @@ def parse_constraints_batch_llm(
             "mentioned in the text below, which may contain several rules written "
             "together (one per line, or run together in a paragraph) rather than "
             "just one sentence. Use the record_constraints tool, with one array "
-            "entry per distinct rule you find — do not merge unrelated rules into "
+            "entry per distinct rule you find - do not merge unrelated rules into "
             "one entry, and do not skip any rule just because it's vague; use "
             "type='scheduling_rule' for anything that doesn't fit a specific "
             "type rather than dropping it.\n\n"

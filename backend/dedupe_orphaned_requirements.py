@@ -6,7 +6,7 @@ Root cause (now fixed in app/routers/subjects.py): deleting a subject used
 to leave its requirement rows behind instead of cleaning them up. Those
 orphaned rows are invisible in Data Entry (it only lists requirements for
 subjects that still exist) but the solver still sums every requirement row
-for a class group as real demand — so an orphan silently inflates a
+for a class group as real demand - so an orphan silently inflates a
 section's periods/week total and can make generation infeasible for no
 visible reason (a "needs 80 periods/week but the school only has 40"-style
 error with no obvious cause in the UI).
@@ -14,9 +14,9 @@ error with no obvious cause in the UI).
 Usage (from the backend/ folder, with your venv active, SERVER STOPPED):
     python dedupe_orphaned_requirements.py
 
-Safe to run multiple times — if there are no orphans, it does nothing.
+Safe to run multiple times - if there are no orphans, it does nothing.
 IMPORTANT: stop the backend server (Ctrl+C) first. Editing dev.db while
-something else has it open is unreliable — writes can silently get lost
+something else has it open is unreliable - writes can silently get lost
 or reverted, especially if the project folder is synced by OneDrive.
 """
 import sqlite3

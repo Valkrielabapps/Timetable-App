@@ -41,12 +41,12 @@ def create_period(payload: PeriodCreate, db: Session = Depends(get_db), current_
         db.commit()
     except IntegrityError:
         # Period has a DB-level uniqueness rule on (school_id, day_of_week,
-        # order) — two periods can't share the same slot on the same day.
+        # order) - two periods can't share the same slot on the same day.
         # Without this catch, a duplicate insert (e.g. clicking "Quick
         # setup" twice, or manually adding a slot that already exists)
         # surfaced as a raw 500 with a Postgres stack trace instead of a
         # message the admin can actually act on. db.rollback() is required
-        # here — SQLAlchemy leaves the session unusable after a failed
+        # here - SQLAlchemy leaves the session unusable after a failed
         # flush until the transaction is explicitly rolled back, so any
         # *next* query on this session (even an unrelated one) would
         # otherwise also fail.

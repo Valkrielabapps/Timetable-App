@@ -1,5 +1,5 @@
 """
-Tests for app/services/setup_extractor.py in isolation — mocks the
+Tests for app/services/setup_extractor.py in isolation - mocks the
 Anthropic call entirely, and exercises read_spreadsheet_rows() against
 real in-memory CSV/xlsx bytes (no LLM involved for that part). Follows
 the same fail-open contract test shape as test_infeasibility_explainer.py.
@@ -52,7 +52,7 @@ def test_extract_setup_llm_returns_none_without_api_key():
 
 def test_extract_setup_llm_returns_tool_input_on_success():
     # NOTE: MagicMock(name=...) is reserved for the mock's own repr name, not
-    # an attribute — set .name afterwards instead, or block.name would be a
+    # an attribute - set .name afterwards instead, or block.name would be a
     # Mock object, not the string the real code checks against.
     fake_block = MagicMock(
         type="tool_use",

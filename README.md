@@ -3,7 +3,7 @@
 A web application that generates conflict-free school timetables automatically.
 School administrators upload their data (teachers, classes, subjects, rooms,
 constraints) and the app produces an optimized, conflict-free schedule using a
-constraint solver — instead of building timetables by hand in a spreadsheet.
+constraint solver - instead of building timetables by hand in a spreadsheet.
 
 ## Who this is for
 
@@ -13,18 +13,18 @@ minimal, and advanced scheduling rules are opt-in rather than required.
 
 ## How it works (MVP flow)
 
-1. **Import** — admin uploads teacher/class/subject/room data via CSV or Excel.
-2. **Configure constraints** — admin describes scheduling rules in plain terms
+1. **Import** - admin uploads teacher/class/subject/room data via CSV or Excel.
+2. **Configure constraints** - admin describes scheduling rules in plain terms
    (e.g. "Teacher X is unavailable on Fridays", "Math must not be the last
    period for Grade 5").
-3. **Generate** — one click triggers the solver, which produces a complete
+3. **Generate** - one click triggers the solver, which produces a complete
    timetable satisfying all hard constraints and as many soft preferences as
    possible.
-4. **Resolve conflicts** — if no fully valid schedule exists, the app shows
+4. **Resolve conflicts** - if no fully valid schedule exists, the app shows
    *why* (which constraints conflict) so the admin can adjust.
-5. **Lock & regenerate** — admin can lock parts of the schedule they like and
+5. **Lock & regenerate** - admin can lock parts of the schedule they like and
    regenerate the rest.
-6. **Export** — download as PDF/Excel or push to existing school
+6. **Export** - download as PDF/Excel or push to existing school
    calendar/ERP systems.
 
 ## Tech stack
@@ -63,25 +63,25 @@ timetable-app/
 Full interactive docs (try-it-out included) are at `/docs` once the backend
 is running. Currently available:
 
-- `/api/auth/signup`, `/api/auth/login`, `/api/auth/me` — email/password
+- `/api/auth/signup`, `/api/auth/login`, `/api/auth/me` - email/password
   auth, returns a JWT used as `Authorization: Bearer <token>` on every
   other request
-- `/api/schools` — create/list/get, scoped to the logged-in user
+- `/api/schools` - create/list/get, scoped to the logged-in user
   (`owner_id`)
 - `/api/subjects`, `/api/rooms`, `/api/periods`, `/api/teachers`,
-  `/api/class-groups`, `/api/constraints` — full CRUD (create, list, get,
+  `/api/class-groups`, `/api/constraints` - full CRUD (create, list, get,
   update, delete), each filterable by `?school_id=`. Class groups also
   carry a `grade` field (e.g. "Grade 8") for the Grade > Section hierarchy.
-- `/api/class-groups/{id}/requirements` — how many periods/week a class
+- `/api/class-groups/{id}/requirements` - how many periods/week a class
   group needs of a subject (nested under class groups)
-- `/api/constraints/parse` (POST) — turns plain-English constraint text
+- `/api/constraints/parse` (POST) - turns plain-English constraint text
   into a structured Constraint row; see "NLP constraints" below
-- `/api/timetables/generate?school_id=` (POST) — runs the real solver
+- `/api/timetables/generate?school_id=` (POST) - runs the real solver
   against a school's teachers/class groups/subject requirements/periods
   and saves the result as a draft timetable
-- `/api/timetables/{id}` and `/api/timetables?school_id=` — fetch a
+- `/api/timetables/{id}` and `/api/timetables?school_id=` - fetch a
   generated timetable with human-readable names filled in
-- `/api/solver/test` — diagnostic endpoint that runs a small built-in
+- `/api/solver/test` - diagnostic endpoint that runs a small built-in
   OR-Tools example, useful to confirm the solver install works
 
 Also built (this section previously said "not yet"): CSV/Excel bulk
@@ -98,7 +98,7 @@ sign-in (needs an OAuth client only you can create).
 real teacher/subject/class-group names so it only ever returns names that
 actually exist) and falls back to a pattern-matching parser
 (`app/services/constraint_parser.py`) if no `ANTHROPIC_API_KEY` is set or
-the call fails for any reason — same input/output shape either way, so
+the call fails for any reason - same input/output shape either way, so
 the rest of the router doesn't care which one produced a given result.
 
 Most constraint types are read directly by the solver
@@ -108,7 +108,7 @@ Most constraint types are read directly by the solver
 subject-vs-first/last-period placement, subject-vs-day placement, max
 consecutive periods (per subject or per teacher), minimum gap between two
 subjects, and subject-sequencing ("Math can't immediately follow PE") are
-all hard constraints in the CP-SAT model — see `backend/tests/test_solver.py`
+all hard constraints in the CP-SAT model - see `backend/tests/test_solver.py`
 for a couple of regression tests proving the availability and placement
 cases actually hold. The one exception is the catch-all
 `scheduling_rule` type: free-text that doesn't match any of the specific
@@ -122,19 +122,19 @@ enforced by the solver" (`ConstraintOut.enforced`, computed in
 The admin UI matches the uploaded design: auth screen, then a Grade >
 Section sidebar with four tabs per section.
 
-- **Auth** — real email/password login and signup. "Continue with Google"
+- **Auth** - real email/password login and signup. "Continue with Google"
   is shown but disabled (needs Google OAuth credentials from you first).
-- **Sidebar** — school switcher plus a Grade > Section tree built from
+- **Sidebar** - school switcher plus a Grade > Section tree built from
   class groups; "+ Add" creates a new grade/section on the fly.
-- **Overview** — 3-step status summary (data entry → constraints →
+- **Overview** - 3-step status summary (data entry → constraints →
   generate) with quick links into each tab.
-- **Data Entry** — one table: subjects, periods/week for the selected
+- **Data Entry** - one table: subjects, periods/week for the selected
   section, and which teacher(s) are qualified for each subject (chips +
   dropdown). Includes a one-click "Quick setup: Mon–Fri, 8 periods/day" for
   schools that don't have periods configured yet.
-- **Constraints** — the NLP input described above, rendered as removable
+- **Constraints** - the NLP input described above, rendered as removable
   cards.
-- **Timetable** — "Generate Timetable" solves for the *whole school* at
+- **Timetable** - "Generate Timetable" solves for the *whole school* at
   once (every section + every shared teacher together, so there are no
   cross-section conflicts), then displays the result as a day × period
   grid with a By Section / By Teacher toggle.
@@ -142,7 +142,7 @@ Section sidebar with four tabs per section.
 See `frontend/src/api.js` for the full list of API calls the UI makes, and
 `frontend/src/components/` for each screen. A few older components
 (`SubjectsPanel`, `TeachersPanel`, `ClassGroupsPanel`, `RoomsPanel`,
-`TimetablePanel`) are left in place but unused/superseded — each has a
+`TimetablePanel`) are left in place but unused/superseded - each has a
 comment saying so and is safe to delete.
 
 ## Status
@@ -159,7 +159,7 @@ sequencing constraint types described above), assigns rooms as a
 best-effort second pass, and either returns a conflict-free schedule or a
 clear reason it couldn't. CSV/Excel bulk import, Excel/PDF export, and a
 manual same-day substitution log are also built. Scope is intentionally
-generic (not locked to one curriculum or school type yet) — see
+generic (not locked to one curriculum or school type yet) - see
 `docs/ARCHITECTURE.md` for the data model reasoning and open decisions.
 
 Next up, roughly in priority order: Google sign-in (once you've created

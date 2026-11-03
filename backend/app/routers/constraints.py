@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_enforced(constraint: Constraint) -> bool:
-    """Whether this constraint row is actually read by the solver — see
+    """Whether this constraint row is actually read by the solver - see
     app/services/solver.py. Kept in one place so the API response
     (ConstraintOut.enforced) and the /parse endpoint agree, instead of two
     copies of this logic drifting apart.
@@ -110,7 +110,7 @@ def _find_placement_conflicts(
     constraints on the same subject, with overlapping scope, but different
     positions ('first' vs 'last'). The solver intersects every 'require'
     constraint's eligible-period set for a given requirement (see
-    generate_school_timetable in app/services/solver.py) — first-period and
+    generate_school_timetable in app/services/solver.py) - first-period and
     last-period sets don't overlap on any school with more than one period a
     day, so requiring both at once means that subject can NEVER be
     scheduled, no matter what else is true. Every other kind of
@@ -149,7 +149,7 @@ def _find_placement_conflicts(
             continue
         conflicts.append(
             f"Contradicts constraint #{other.id} ('{other.description}'), which requires the same "
-            f"subject to be the {other_position} period instead — a subject can't satisfy both at "
+            f"subject to be the {other_position} period instead - a subject can't satisfy both at "
             f"once, so it will never be schedulable. Remove or rescope one of the two."
         )
     return conflicts
@@ -196,12 +196,12 @@ def _find_day_conflicts(
         if constraint_type == "require_subject_day" and other.type == "require_subject_day" and other_day != day_of_week:
             conflicts.append(
                 f"Contradicts constraint #{other.id} ('{other.description}'), which requires the same "
-                f"subject on a different day instead — a subject can only be pinned to one day, so "
+                f"subject on a different day instead - a subject can only be pinned to one day, so "
                 f"it will never be schedulable. Remove or rescope one of the two."
             )
         elif {constraint_type, other.type} == {"no_subject_day", "require_subject_day"} and other_day == day_of_week:
             conflicts.append(
-                f"Contradicts constraint #{other.id} ('{other.description}') — one requires this "
+                f"Contradicts constraint #{other.id} ('{other.description}') - one requires this "
                 f"subject on that day, the other bans it that same day. Remove or rescope one of the two."
             )
     return conflicts
@@ -356,7 +356,7 @@ def get_constraint(constraint_id: int, db: Session = Depends(get_db), current_us
 @router.put("/{constraint_id}", response_model=ConstraintOut)
 def update_constraint(constraint_id: int, payload: ConstraintUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Direct field edit — most useful for adjusting `parameters.class_group_ids`
+    Direct field edit - most useful for adjusting `parameters.class_group_ids`
     (the scope of a placement/consecutive/sequence constraint) without
     re-typing and re-parsing the whole rule, e.g. TimetableTab's scope
     picker sends {"parameters": {...same dict, class_group_ids: [...]}}. For
@@ -556,7 +556,7 @@ class _ResolvedConstraint:
 @dataclass
 class _ResolutionData:
     """Everything needed to turn a ParsedConstraint's *names* (teacher_name,
-    subject_name, ...) into this school's actual row ids — fetched once
+    subject_name, ...) into this school's actual row ids - fetched once
     per request (not once per rule) so a batch of N rules costs one set of
     three queries, not N."""
 
@@ -608,8 +608,8 @@ def _parse_text_to_constraint(text: str, data: _ResolutionData, allow_llm: bool 
     which understands far more phrasing and constraint types than the
     regex parser. If no ANTHROPIC_API_KEY is configured, or the API call
     fails for any reason, it falls back to the regex parser
-    (app/services/constraint_parser.py) — via _adapt_legacy, since that
-    parser predates the unified output shape — so constraint entry never
+    (app/services/constraint_parser.py) - via _adapt_legacy, since that
+    parser predates the unified output shape - so constraint entry never
     just breaks because of an LLM/network issue."""
     # allow_llm=False when the school's plan has used its monthly AI
     # allowance (app/services/plans.py): the rule still gets read, by the
@@ -635,7 +635,7 @@ def _apply_parsed_constraint(
 ) -> _ResolvedConstraint:
     """
     Turns one already-parsed ParsedConstraint into (db_type, parameters,
-    description) — the second half of what used to be
+    description) - the second half of what used to be
     _resolve_constraint_text, split out so both the single-constraint path
     (_resolve_constraint_text below) and the batch path
     (_resolve_constraints_batch_text) can resolve N parsed rules against
@@ -658,7 +658,7 @@ def _apply_parsed_constraint(
       - max_consecutive_periods -> stored as parameters={subject_id,
                              max_consecutive, class_group_ids?} (subject
                              variant) or {teacher_id, max_consecutive}
-                             (teacher variant — not scoped to class groups,
+                             (teacher variant - not scoped to class groups,
                              since it caps that teacher's whole schedule);
                              read directly by the solver.
       - subject_day_position (mode=require|exclude) -> stored as
@@ -752,7 +752,7 @@ def _apply_parsed_constraint(
     elif parsed.type == "max_consecutive_periods":
         # Teacher variant caps that teacher's own back-to-back periods
         # across their whole schedule (any subject/class), so it's not
-        # scoped to class groups — only the subject variant is.
+        # scoped to class groups - only the subject variant is.
         if matched_teacher and not matched_subject and parsed.max_consecutive and parsed.max_consecutive >= 1:
             parameters = {"teacher_id": matched_teacher.id, "max_consecutive": parsed.max_consecutive}
         elif matched_subject and parsed.max_consecutive and parsed.max_consecutive >= 1:
@@ -834,7 +834,7 @@ def _resolve_constraint_text(db: Session, school_id: int, text: str, allow_llm: 
     """
     Shared by both POST /parse (new constraint) and PUT /{id}/reparse
     (editing an existing one's text in place): turns plain-English text
-    into (db_type, parameters, description) — load the school's
+    into (db_type, parameters, description) - load the school's
     teacher/subject/class-group names once, parse the one rule, then
     resolve it. See _apply_parsed_constraint for what each constraint
     type resolves to.
@@ -847,8 +847,8 @@ def _resolve_constraint_text(db: Session, school_id: int, text: str, allow_llm: 
 def _resolve_constraints_batch_text(db: Session, school_id: int, text: str, allow_llm: bool = True) -> list[_ResolvedConstraint]:
     """
     Batch counterpart to _resolve_constraint_text, used by POST
-    /api/constraints/batch: turns a whole block of text — several rules
-    written together, one per line or run into a paragraph — into a list
+    /api/constraints/batch: turns a whole block of text - several rules
+    written together, one per line or run into a paragraph - into a list
     of (db_type, parameters, description) tuples, one per distinct rule
     found.
 
@@ -860,7 +860,7 @@ def _resolve_constraints_batch_text(db: Session, school_id: int, text: str, allo
     returned nothing usable, falls back to treating each non-empty line as
     its own rule and running it through the same single-constraint
     pipeline every /parse request already uses (LLM-per-line, then regex)
-    — a reasonable assumption for a fallback path, since the batch-entry
+ - a reasonable assumption for a fallback path, since the batch-entry
     UI's placeholder text encourages one rule per line anyway.
     """
     data = _load_resolution_data(db, school_id)
@@ -1021,8 +1021,8 @@ def parse_and_create_constraints_batch(
     payload: ConstraintBatchParseRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """
-    Batch counterpart to POST /parse: takes a whole block of free text —
-    several rules an admin pasted or typed together, e.g. one per line —
+    Batch counterpart to POST /parse: takes a whole block of free text - 
+    several rules an admin pasted or typed together, e.g. one per line - 
     and creates one Constraint row per distinct rule found, instead of
     requiring a separate request (and a separate round of typing) per
     sentence. See _resolve_constraints_batch_text for how the text gets
@@ -1031,7 +1031,7 @@ def parse_and_create_constraints_batch(
     Every row is created and committed before any conflict-checking
     happens (`_to_out` below), so a rule that contradicts another rule
     from the SAME batch gets flagged exactly like it would if the two had
-    been entered one at a time in separate requests — conflict detection
+    been entered one at a time in separate requests - conflict detection
     is DB-driven (queries every constraint of this type for the school),
     not batch-scoped, so there's no special-casing needed here for
     "conflicts with a sibling from this same paste" versus "conflicts
@@ -1113,7 +1113,7 @@ def parse_and_create_constraints_batch(
 def reparse_constraint(constraint_id: int, payload: ConstraintReparseRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Re-parses new text into an EXISTING constraint row instead of creating
-    a new one — what TimetableTab.jsx's "Edit" affordance calls when you
+    a new one - what TimetableTab.jsx's "Edit" affordance calls when you
     fix a typo or reword a rule, so its id (and position in the list)
     stays stable instead of a delete-then-recreate. Goes through the same
     _resolve_constraint_text as a brand-new constraint, so an edited rule
