@@ -77,7 +77,9 @@ from app.services.export import build_excel, build_pdf, build_student_excel, bui
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.subject_freezing import frozen_lessons_index
 from app.services.infeasibility_explainer import explain_infeasibility
-from app.services.solver import _class_group_labels, generate_school_timetable, find_blocking_rules
+from app.services.solver import (
+    _class_group_labels, find_blocking_rules, generate_school_timetable, generate_with_compromises,
+)
 from app.services.timetable_structure import grade_off_period_ids, lesson_numbers, zero_period_ids_for
 
 router = APIRouter(prefix="/api/timetables", tags=["timetables"])
@@ -197,6 +199,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         is_current=(lambda c: c is not None and c.id == timetable.id)(versions.current_version(db, timetable.school_id)),
         generation_notes=list((timetable.generation_notes or {}).get("notes", [])),
         frozen_kept=list((timetable.generation_notes or {}).get("frozen_kept", [])),
+        compromise=(timetable.generation_notes or {}).get("compromise"),
         entries=entries,
         violations=_violations_for(db, timetable, class_groups, subjects, teachers, periods),
         pending_constraint_ids=sorted(
@@ -382,6 +385,31 @@ def _generate(timetable_id: int, school_id: int) -> None:
 
         timetable.solver_status = result.status
 
+        # No timetable with every rule, and the rules are the reason: make one
+        # anyway with those rules loosened, and say exactly what was given up
+        # (app/services/solver.generate_with_compromises). A setup that can't
+        # work even without rules (too few teachers, an overfull section)
+        # still fails, with its diagnosis - loosening rules wouldn't help.
+        compromise = None
+        searched = False
+        if not result.errors and result.status in ("infeasible", "unknown"):
+            searched = True
+            found: dict = {}
+            result.errors = find_blocking_rules(db, school_id, found=found)
+            if found.get("ids"):
+                alt, loosened = generate_with_compromises(db, school_id, found["ids"])
+                if alt.status in ("optimal", "feasible"):
+                    compromise = {
+                        "rules": [(c.description or c.source_text or "A rule").strip() for c in loosened],
+                        "rule_ids": sorted(c.id for c in loosened),
+                        "reason": list(result.errors) + (
+                            [result.frozen_hint] if result.frozen_hint
+                            and not any("frozen" in e for e in result.errors) else []),
+                        "accepted": False,
+                    }
+                    result = alt
+                    timetable.solver_status = alt.status
+
         if result.status in ("optimal", "feasible"):
             # (class_group_id, subject_id) -> assistant_teacher_id, from the
             # plan - not something the solver chooses, just carried over so
@@ -435,6 +463,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
             timetable.generation_notes = {
                 "notes": list(result.warnings or []),
                 "frozen_kept": sorted(labels.values()),
+                **({"compromise": compromise} if compromise else {}),
             }
             timetable.status = "draft"
             if timetable.version_number is None:
@@ -450,7 +479,7 @@ def _generate(timetable_id: int, school_id: int) -> None:
             # app/services/solver.py), and the frontend renders each line
             # as its own bullet rather than running them together into one
             # sentence.
-            if not result.errors and result.status in ("infeasible", "unknown"):
+            if not result.errors and not searched and result.status in ("infeasible", "unknown"):
                 # No direct cause found: switch rules off one at a time to find
                 # which ones are to blame, so the message can name them.
                 result.errors = find_blocking_rules(db, school_id)
@@ -491,6 +520,13 @@ def _generate(timetable_id: int, school_id: int) -> None:
         db.commit()
         if timetable.status == "failed":
             _log_failed_generation(timetable, school_id)
+        elif compromise:
+            from app.services import problem_log
+            problem_log.record(
+                "generation_failed", "Generated with compromises: " + "; ".join(compromise["rules"])[:300],
+                school_id=school_id, timetable_id=timetable.id, with_snapshot=True,
+                detail={"reasons": compromise["reason"], "compromise": True},
+            )
         # After the result is safely committed, and never allowed to undo it:
         # housekeeping failing is not a reason to report a generation as failed.
         try:
@@ -1178,6 +1214,22 @@ def lock_slot(
         entries=[_entry_out(db, e) for e in entries],
         violations=_violations_after_edit(db, timetable),
     )
+
+
+@router.post("/{timetable_id}/accept-compromise", response_model=TimetableOut)
+def accept_compromise(timetable_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Keep a timetable made with compromises as it is: the notice that some
+    rules were loosened is put away. The broken rules still show on the grid
+    and the Constraints page, as for any rule a timetable breaks."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    notes = dict(timetable.generation_notes or {})
+    if not notes.get("compromise"):
+        raise HTTPException(status_code=400, detail="This timetable wasn't made with compromises.")
+    notes["compromise"] = {**notes["compromise"], "accepted": True}
+    timetable.generation_notes = notes
+    db.commit()
+    db.refresh(timetable)
+    return _to_timetable_out(db, timetable)
 
 
 def _board(db: Session, timetable: Timetable):

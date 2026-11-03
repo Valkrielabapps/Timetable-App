@@ -240,9 +240,18 @@ def test_rules_count_frozen_lessons(client, world):
         db.commit()
     finally:
         db.close()
-    state, message, _ = timetable(generate(w))
-    assert state == "failed"
-    assert "frozen section kept its lessons where they were" in message
+    # Not possible with the rule, so the timetable is made with it loosened,
+    # and the reason given says the frozen lessons are what it can't move.
+    tt_id = generate(w)
+    state, _, _ = timetable(tt_id)
+    assert state == "draft"
+    db = SessionLocal()
+    try:
+        comp = db.get(Timetable, tt_id).generation_notes["compromise"]
+    finally:
+        db.close()
+    assert comp["rules"] == ["Rao at most 3 a day"]
+    assert any("frozen section kept its lessons where they were" in r for r in comp["reason"])
 
 
 def test_a_teacher_overloaded_by_frozen_lessons_alone_is_named(client, world):

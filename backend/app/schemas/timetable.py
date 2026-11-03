@@ -176,6 +176,10 @@ class TimetableOut(BaseModel):
     # and which sections it kept frozen rather than solving.
     generation_notes: list[str] = []
     frozen_kept: list[str] = []
+    # Made with compromises: some of the school's rules couldn't all hold, so
+    # they were loosened - {"rules": [...], "reason": [...], "accepted": bool}.
+    # None for an ordinary timetable.
+    compromise: dict | None = None
     entries: list[TimetableEntryOut]
     # Rules saved after this timetable was generated: not applied to it yet,
     # and so left out of `violations` - "generate again" rather than "broken".

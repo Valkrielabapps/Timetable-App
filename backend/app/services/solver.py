@@ -17,7 +17,7 @@ import os
 import random
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import combinations
 
 from ortools.sat.python import cp_model
@@ -123,6 +123,10 @@ _TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", defau
 #   "one_teacher"  - let a section's subject be split between teachers
 #   "max_periods"  - ignore teachers' max periods/week
 _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozenset())
+# Rules (Constraint ids) treated as strong preferences instead of
+# requirements, for a timetable made with compromises: kept wherever
+# possible, broken only where they can't all hold. See generate_with_compromises.
+_SOFTEN_RULES: contextvars.ContextVar = contextvars.ContextVar("soften_rules", default=frozenset())
 # The built-in timetable habits (see _add_default_habits). Off while searching
 # for which rule blocks a school: habits are preferences, they can't make a
 # school impossible, and leaving them on would make every try optimise.
@@ -2179,9 +2183,13 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         if adversary is not None:
             adversary_steer = (atoms, index)
         rules = []
+        soften = _SOFTEN_RULES.get()
         for c in ir_constraints:
             try:
-                rules.append((f"c{c.id}", rule_from_dict(c.parameters or {})))
+                rule = rule_from_dict(c.parameters or {})
+                if c.id in soften and rule.strength == "required":
+                    rule = replace(rule, strength="strong_preference")
+                rules.append((f"c{c.id}", rule))
             except IRError as exc:
                 # A stored rule that no longer validates is a bug in whatever
                 # wrote it, not something the admin can act on mid-solve - but
@@ -3165,7 +3173,8 @@ _SEARCHABLE_TYPES = (
 )
 
 
-def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180, per_try_seconds: float = 15) -> list[str]:
+def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180, per_try_seconds: float = 15,
+                        found: dict | None = None) -> list[str]:
     """Which of the school's rules stop a timetable from existing.
 
     The step the failure message used to ask the admin to do by hand - switch
@@ -3179,6 +3188,10 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
          that can't all hold together: drop each rule in turn, keep it dropped
          if the school is still impossible without it. What is left are rules
          that, between them, are the conflict.
+
+    `found`, if given, gets "ids": the Constraint ids the message names as
+    the cause (empty when the cause isn't the rules) - what a timetable made
+    with compromises loosens.
 
     Only a solve that FINDS a timetable counts as "possible". A try that runs
     out of time counts as impossible, which can make step 3 keep a rule it
@@ -3229,6 +3242,10 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
         )
         return ok
 
+    def named(cs) -> None:
+        if found is not None:
+            found["ids"] = {c.id for c in cs}
+
     def quote(c: Constraint) -> str:
         return f"“{(c.description or c.source_text or 'a rule').strip().rstrip('.')}”"
 
@@ -3248,6 +3265,7 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
         if ok:
             singles.append(c)
     if singles:
+        named(singles)
         if len(singles) == 1:
             return [f"The rule {quote(singles[0])} makes the timetable impossible. Remove or loosen it and generate again."]
         return [
@@ -3257,6 +3275,7 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
 
     if checked < len(rows):
         # Ran out of time partway through the single-rule checks.
+        named(rows[checked:])
         return [
             "The timetable works with all your rules switched off, so one or more of them is the cause. "
             f"There wasn't time to test every rule (checked {checked} of {len(rows)}), and none of those "
@@ -3274,6 +3293,7 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
             break
         if not ok:
             needed = trial  # still impossible without it: not part of the conflict
+    named(needed)
     if finished and needed:
         return [
             f"These rules can't all be met at the same time: {', '.join(quote(c) for c in needed)}. "
@@ -3287,6 +3307,32 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
         f"combination. It is among these {len(needed)} rules; loosening one of them should fix it:",
         *[quote(c) for c in needed],
     ]
+
+
+def generate_with_compromises(db: Session, school_id: int, rule_ids: set[int]) -> tuple[TimetableSolveResult, list[Constraint]]:
+    """A full timetable for a school whose rules can't all hold together.
+
+    The rules that clash (`rule_ids`, from find_blocking_rules) are loosened,
+    nothing else: rules in the general form become strong preferences, kept
+    everywhere they can be and broken only where they must; the older fixed
+    rule types have no "mostly" and are left out entirely. Every physical
+    limit - a teacher or room in two places, a lesson in a break, a teacher's
+    hours, one teacher per section and subject - holds exactly as before.
+
+    Returns the solve and the rules that were loosened, so the school can be
+    told precisely what was given up.
+    """
+    rows = db.query(Constraint).filter(Constraint.school_id == school_id, Constraint.id.in_(rule_ids)).all()
+    ir_ids = {c.id for c in rows if c.type == "ir"}
+    dropped = {c.id for c in rows if c.type != "ir"}
+    t1 = _SOFTEN_RULES.set(frozenset(ir_ids))
+    t2 = _SKIP_RULES.set(frozenset(_SKIP_RULES.get() | dropped))
+    try:
+        result = generate_school_timetable(db, school_id)
+    finally:
+        _SOFTEN_RULES.reset(t1)
+        _SKIP_RULES.reset(t2)
+    return result, rows
 
 
 def _diagnose_setup(db, school_id, attempt, all_ids, had_rules) -> list[str]:

@@ -145,6 +145,9 @@ export default function TimetableTab({
   // byPeriod: Map(periodId -> { status, reason }) } - asked for as soon as
   // it is picked up, so the grid can colour every cell before the drop.
   const [dragTargets, setDragTargets] = useState(null)
+  // Timetables made with compromises that were accepted here, so the notice
+  // goes at once rather than when the timetable is next fetched.
+  const [acceptedCompromises, setAcceptedCompromises] = useState(() => new Set())
   const dragToken = useRef(0)
   async function startDrag(classGroupId, period) {
     setDragSource({ classGroupId, period })
@@ -782,6 +785,22 @@ export default function TimetableTab({
           subjectFreezes={subjectFreezes}
           onCancel={() => setConfirmGenerate(false)}
           onConfirm={() => handleGenerate(true)}
+        />
+      )}
+
+      {solved && timetable?.compromise && !timetable.compromise.accepted && !acceptedCompromises.has(timetable.id) && (
+        <CompromiseNotice
+          compromise={timetable.compromise}
+          readOnly={readOnly}
+          onAccept={async () => {
+            try {
+              await api.acceptCompromise(timetable.id)
+              setAcceptedCompromises((prev) => new Set(prev).add(timetable.id))
+            } catch (err) {
+              setError(err.message)
+            }
+          }}
+          onOpenConstraints={onOpenConstraints}
         />
       )}
 
@@ -1490,6 +1509,73 @@ function SectionTimetable({
         showAssistant
         showBlockName={!combination}
       />
+    </section>
+  )
+}
+
+/**
+ * A timetable made with compromises (backend/app/services/solver.py,
+ * generate_with_compromises): the school's rules couldn't all hold, so the
+ * clashing ones were loosened and broken as little as possible. Says which,
+ * and offers to keep it as it is or go and change the rules. Where each one
+ * is broken is marked on the grid, like any rule a timetable breaks.
+ */
+function CompromiseNotice({ compromise, readOnly, onAccept, onOpenConstraints }) {
+  const [why, setWhy] = useState(false)
+  const rules = compromise.rules ?? []
+  return (
+    <section aria-label="Made with compromises" className="rounded-lg border border-neutral-900 bg-white px-4 py-3.5 text-sm">
+      <p className="font-semibold text-neutral-900">
+        Your rules couldn&rsquo;t all be met at once, so this timetable bends{' '}
+        {rules.length === 1 ? 'one of them' : `${rules.length} of them`} as little as possible.
+      </p>
+      <p className="mt-1 text-neutral-600">
+        Every lesson is placed and no teacher or room is double-booked. Only{' '}
+        {rules.length === 1 ? 'this rule is' : 'these rules are'} not followed everywhere:
+      </p>
+      <ul className="mt-2 flex flex-col gap-1">
+        {rules.map((r) => (
+          <li key={r} className="flex items-start gap-2 text-neutral-900">
+            <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-neutral-900" aria-hidden="true" />
+            <span>&ldquo;{r}&rdquo;</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-neutral-500">The slots where they are broken are outlined on the timetable below.</p>
+      {compromise.reason?.length > 0 && (
+        <div className="mt-2">
+          <button type="button" onClick={() => setWhy((v) => !v)} className="text-xs font-medium text-neutral-700 underline">
+            {why ? 'Hide why' : 'Why couldn’t they all be met?'}
+          </button>
+          {why && (
+            <ul className="mt-1.5 flex flex-col gap-1 text-xs text-neutral-600">
+              {compromise.reason.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {!readOnly && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onAccept}
+            className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700"
+          >
+            Keep this timetable
+          </button>
+          {onOpenConstraints && (
+            <button
+              type="button"
+              onClick={onOpenConstraints}
+              className="rounded-md border border-neutral-300 px-3.5 py-1.5 text-xs font-semibold text-neutral-800 hover:bg-neutral-50"
+            >
+              Change the rules
+            </button>
+          )}
+        </div>
+      )}
     </section>
   )
 }

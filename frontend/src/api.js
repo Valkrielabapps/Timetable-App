@@ -395,6 +395,8 @@ export const api = {
   // on the server. See move_slot in backend/app/routers/timetables.py.
   // While a slot is dragged: every period it could go to, ok / warn / blocked
   // with the reason. See move_targets in backend/app/routers/timetables.py.
+  // Keep a timetable made with compromises as it is (the notice goes away).
+  acceptCompromise: (timetableId) => post(`/timetables/${timetableId}/accept-compromise`, {}),
   moveTargets: (timetableId, classGroupId, fromPeriodId) =>
     post(`/timetables/${timetableId}/move-targets`, {
       class_group_id: classGroupId,
