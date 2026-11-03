@@ -541,7 +541,7 @@ function MetricsSection() {
  * the one place it means something.
  *
  * The photo is /media/why-person.jpg (frontend/public/media), an
- * AI-generated person, shown in black and white. Until that file exists the
+ * AI-generated photo, shown in full colour. Until that file exists the
  * panel shows a plain dark gradient behind the cards, so nothing looks
  * broken.
  */
@@ -616,7 +616,7 @@ function WhyChoose({ onGetStarted }) {
               src="/media/why-person.jpg"
               alt=""
               onError={() => setPhoto(false)}
-              className="absolute inset-0 h-full w-full object-cover object-[55%_45%] grayscale"
+              className="absolute inset-0 h-full w-full object-cover object-[55%_45%]"
               loading="lazy"
             />
           )}
