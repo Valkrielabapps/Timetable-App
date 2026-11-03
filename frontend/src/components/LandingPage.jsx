@@ -545,12 +545,13 @@ function MetricsSection() {
  * panel shows a plain dark gradient behind the cards, so nothing looks
  * broken.
  */
-const WHY_OPTIONS = [
-  'Build the whole timetable',
-  'Handle electives',
-  'Cover absent teachers',
-  'Keep approved grades fixed',
-  'Export to Excel & PDF',
+const WHY_FEATURES = [
+  'Clash-free timetables',
+  'Plain-English rules',
+  'Elective blocks',
+  'Substitute cover',
+  'Drag to adjust',
+  'Excel & PDF',
 ]
 
 function WhyCard({ className = '', delay = 0, children }) {
@@ -568,15 +569,7 @@ function WhyCard({ className = '', delay = 0, children }) {
 }
 
 function WhyChoose({ onGetStarted }) {
-  const [picked, setPicked] = useState(() => new Set([WHY_OPTIONS[0]]))
   const [photo, setPhoto] = useState(true)
-  const toggle = (o) =>
-    setPicked((prev) => {
-      const next = new Set(prev)
-      if (next.has(o)) next.delete(o)
-      else next.add(o)
-      return next
-    })
 
   return (
     <section className="bg-white px-3 py-6 sm:px-5">
@@ -594,37 +587,17 @@ function WhyChoose({ onGetStarted }) {
             Build, adjust and share every timetable in your school.
           </motion.h2>
 
-          <p className="mt-12 text-lg font-medium">What would you like to do with Timetablz?</p>
-          <div className="mt-4 grid max-w-xl grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {WHY_OPTIONS.map((o) => {
-              const on = picked.has(o)
-              return (
-                <button
-                  key={o}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggle(o)}
-                  className={`flex min-h-[92px] flex-col items-center justify-center gap-2.5 rounded-xl border px-3 py-4 text-center text-[14px] font-medium leading-tight transition-colors ${
-                    on ? 'border-white bg-white text-neutral-950' : 'border-white/20 text-white hover:border-white/50'
-                  }`}
-                >
-                  <span
-                    className={`flex h-4 w-4 items-center justify-center rounded border ${
-                      on ? 'border-neutral-950 bg-neutral-950' : 'border-white/60'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    {on && (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                    )}
-                  </span>
-                  {o}
-                </button>
-              )
-            })}
-          </div>
+          <p className="mt-12 text-sm font-medium uppercase tracking-[0.12em] text-white/55">Everything in one place</p>
+          <ul className="mt-4 grid max-w-xl grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {WHY_FEATURES.map((f) => (
+              <li
+                key={f}
+                className="flex min-h-[72px] items-center justify-center rounded-xl border border-white/15 px-3 py-4 text-center text-[15px] font-medium leading-tight text-white"
+              >
+                {f}
+              </li>
+            ))}
+          </ul>
 
           <button
             type="button"
