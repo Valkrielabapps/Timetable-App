@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Fragment, useEffect, useState } from 'react'
 import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
@@ -396,295 +396,40 @@ function TimetableMockup() {
   )
 }
 
-// The exact example phrase used throughout docs/GETTING_STARTED.md's walk-
-// through of the Constraints tab ("try typing something like...") — reused
-// here verbatim so the demo below shows the real product's actual copy
-// and workflow, not an invented example.
-const DEMO_CONSTRAINT = 'Priya Sharma can only teach 10 periods a week'
-
-// The same step names as the Why Timetablz page.
-const DEMO_NAV_ITEMS = ['Your school', 'Your rules', 'Your timetable']
-
-// Shown during the new 'setup' phase — a Data Entry tab was in
-// DEMO_NAV_ITEMS but never actually got a turn in the demo (it only ever
-// toggled between Constraints and Timetable), so the loop looked like it
-// was skipping one of the three real product areas. This gives it one.
-const DEMO_SETUP_ITEMS = ['Grade 8 · Section A (32 students)', 'Mathematics (6 periods/week)', 'Priya Sharma · Mathematics']
-
 /**
- * Replaces the old text-plus-icon-cards Features() section with a single,
- * looping, silent product demo — no headline, no body copy, just the
- * actual workflow (set up a section → type a rule in plain English →
- * generate → get a clash-free grid) animating on repeat. Modeled on how
- * roommaster.com and relume.io use a real-interface-driven hero/section
- * animation instead of a static screenshot or a wall of feature text.
+ * The product demo: an 18-second silent video of the real workflow (set up
+ * sections, write a rule in plain English, generate, drag a lesson and see
+ * what fits), looping like an ad. Made with made-up school data by
+ * marketing/homepage-video/render.py; the files live in public/media/.
  *
- * Kept strictly black/white/grey (no colored badges or traffic-light
- * dots) to match the rest of the site's Papermark/Griffin-inspired
- * monochrome theme — the first version of this demo used emerald/indigo/
- * amber accent colors, which read as inconsistent with everything else
- * on the page after the black/white pass elsewhere.
- *
- * Built as a small state machine (`phase`) driven by chained setTimeouts,
- * the same self-scheduling pattern as a typewriter effect — each phase schedules the next
- * one, and the final phase resets back to 'setup' so it loops forever.
- * AnimatePresence handles the cross-fade between phases; ResultGrid's own
- * staggered cell animation replays every loop because its key changes on
- * every remount.
+ * muted + playsInline are what let browsers autoplay it, phones included.
+ * Someone who has asked for reduced motion gets the still poster with the
+ * controls, so it plays only if they choose to.
  */
 function WorkflowDemo() {
-  // Opens on the finished timetable, so whoever scrolls here first sees the
-  // result - not a spinner in an empty box, which read as a broken page.
-  const [phase, setPhase] = useState('result') // 'setup' | 'typing' | 'added' | 'generating' | 'result'
-  const [charCount, setCharCount] = useState(0)
-  const [setupCount, setSetupCount] = useState(0)
-
-  useEffect(() => {
-    if (phase !== 'setup') return
-    if (setupCount < DEMO_SETUP_ITEMS.length) {
-      const t = setTimeout(() => setSetupCount((c) => c + 1), 500)
-      return () => clearTimeout(t)
-    }
-    const t = setTimeout(() => setPhase('typing'), 700)
-    return () => clearTimeout(t)
-  }, [phase, setupCount])
-
-  useEffect(() => {
-    if (phase !== 'typing') return
-    if (charCount < DEMO_CONSTRAINT.length) {
-      const t = setTimeout(() => setCharCount((c) => c + 1), 42)
-      return () => clearTimeout(t)
-    }
-    const t = setTimeout(() => setPhase('added'), 750)
-    return () => clearTimeout(t)
-  }, [phase, charCount])
-
-  useEffect(() => {
-    if (phase === 'added') {
-      const t = setTimeout(() => setPhase('generating'), 1300)
-      return () => clearTimeout(t)
-    }
-    if (phase === 'generating') {
-      const t = setTimeout(() => setPhase('result'), 900)
-      return () => clearTimeout(t)
-    }
-    if (phase === 'result') {
-      const t = setTimeout(() => {
-        setCharCount(0)
-        setSetupCount(0)
-        setPhase('setup')
-      }, 3200)
-      return () => clearTimeout(t)
-    }
-  }, [phase])
-
-  const activeNav =
-    phase === 'setup' ? 'Your school' : phase === 'generating' || phase === 'result' ? 'Your timetable' : 'Your rules'
-
+  const reduceMotion = useReducedMotion()
   return (
     <section id="features" className="mx-auto max-w-6xl px-6 pb-14 pt-20">
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-        {/* Fake browser chrome — grounds this as "the actual app", the
-            same trick both reference videos use (a real address bar
-            framing the interface being demoed). Grey dots, not the usual
-            red/amber/green traffic lights — same "less decorative, more
-            deliberate" call made on LandingNav's wordmark earlier. */}
-        <div className="flex items-center gap-2 border-b border-neutral-100 bg-neutral-50 px-5 py-3.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <div className="ml-3 max-w-xs flex-1 truncate rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-[13px] text-neutral-400">
-            timetablz.com
-          </div>
-        </div>
-
-        <div className="flex">
-          <div className="hidden w-48 shrink-0 border-r border-neutral-100 bg-neutral-50/60 p-5 sm:block">
-            {DEMO_NAV_ITEMS.map((item) => (
-              <div
-                key={item}
-                className={`mb-1.5 rounded-md px-3.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                  activeNav === item ? 'bg-neutral-900 text-white' : 'text-neutral-500'
-                }`}
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-
-          <div className="relative min-h-[380px] flex-1 p-6 sm:p-10">
-            <AnimatePresence mode="wait">
-              {phase === 'setup' && (
-                <motion.div
-                  key="setup"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <p className="mb-3 text-sm font-medium text-neutral-500">Setting up your school</p>
-                  <div className="space-y-2.5">
-                    {DEMO_SETUP_ITEMS.map((item, i) => (
-                      <AnimatePresence key={item}>
-                        {setupCount > i && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25 }}
-                            className="flex items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-[14px] text-neutral-700"
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-neutral-900">
-                              <path d="M20 6 9 17l-5-5" />
-                            </svg>
-                            {item}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {(phase === 'typing' || phase === 'added') && (
-                <motion.div
-                  key="constraints"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <p className="mb-2.5 text-sm font-medium text-neutral-500">Describe a scheduling rule</p>
-                  <div className="rounded-lg border border-neutral-200 bg-white px-5 py-4 text-[15px] text-neutral-800">
-                    {DEMO_CONSTRAINT.slice(0, charCount)}
-                    <span className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 animate-pulse bg-neutral-400 align-middle" />
-                  </div>
-                  <AnimatePresence>
-                    {phase === 'added' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
-                        Availability rule added
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              )}
-
-              {phase === 'generating' && (
-                <motion.div
-                  key="generating"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="flex h-full flex-col items-center justify-center gap-3 py-20"
-                >
-                  <motion.div
-                    className="h-9 w-9 rounded-full border-2 border-neutral-200 border-t-neutral-900"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                  />
-                  <p className="text-sm font-medium text-neutral-500">Building every section at once…</p>
-                </motion.div>
-              )}
-
-              {phase === 'result' && (
-                <motion.div
-                  key="result"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <p className="text-sm font-medium text-neutral-500">Grade 8 · Section A</p>
-                    <motion.span
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: 0.3, duration: 0.25 }}
-                      className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-3 py-1 text-[13px] font-medium text-white"
-                    >
-                      Zero clashes
-                    </motion.span>
-                  </div>
-                  <ResultGrid />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-neutral-950 shadow-sm">
+        <video
+          className="block aspect-video w-full"
+          autoPlay={!reduceMotion}
+          controls={reduceMotion}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          poster="/media/timetablz-demo-poster.jpg"
+          aria-label="Timetablz in 18 seconds: set up a school, write a rule, generate a clash-free timetable and drag a lesson to adjust it"
+        >
+          <source src="/media/timetablz-demo.webm" type="video/webm" />
+          <source src="/media/timetablz-demo.mp4" type="video/mp4" />
+        </video>
       </div>
     </section>
   )
 }
 
-/**
- * The "generated timetable" grid shown in WorkflowDemo's result phase —
- * light-theme sibling of TimetableMockup further down this file, sized
- * and paced for a section that loops every few seconds rather than
- * playing once on scroll-into-view.
- */
-function ResultGrid() {
-  const rows = ['P1', 'P2', 'P3', 'P4']
-  const cols = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-  const subjects = ['Math', 'Science', 'English', 'PE', 'Art', 'History']
-  // Round-robin subject color coding, one very lightly tinted color per
-  // subject (bg-*-50, not -100) — the rest of WorkflowDemo (sidebar,
-  // buttons, badges, spinner) stayed black/white/neutral per explicit
-  // "keep the edgy black and white theme" feedback; this grid is the one
-  // deliberate exception, since each subject reading at a glance the way
-  // a real printed timetable uses color is worth the one departure from
-  // the page's monochrome rule elsewhere.
-  const SUBJECT_COLORS = {
-    Math: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
-    Science: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
-    English: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
-    PE: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-100' },
-    Art: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
-    History: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
-  }
-
-  return (
-    <div className="grid grid-cols-[36px_repeat(5,1fr)] gap-2 text-[11px]">
-      <div />
-      {cols.map((c) => (
-        <div key={c} className="pb-1 text-center font-medium text-neutral-400">
-          {c}
-        </div>
-      ))}
-      {rows.map((r, ri) => (
-        <Fragment key={r}>
-          <div className="flex items-center text-neutral-400">{r}</div>
-          {cols.map((c, ci) => {
-            const subject = subjects[(ri * 5 + ci * 3) % subjects.length]
-            const color = SUBJECT_COLORS[subject]
-            return (
-              <motion.div
-                key={`${r}-${c}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: (ri * 5 + ci) * 0.03, duration: 0.3 }}
-                className={`rounded-md border px-1.5 py-2 text-center font-semibold ${color.bg} ${color.text} ${color.border}`}
-              >
-                {subject}
-              </motion.div>
-            )
-          })}
-        </Fragment>
-      ))}
-    </div>
-  )
-}
-
-// Product facts only - each one is true of every school on day one. The
-// earlier "100+ schools / 10,000+ students" figures were placeholders, and a
-// usage claim goes back here only once there are real numbers to report.
 const CAPABILITY_STATS = [
   { n: '01', label: 'Generation time', value: 'Seconds', unit: 'for a whole school' },
   { n: '02', label: 'Teacher and room clashes', value: '0', unit: 'in every timetable' },
