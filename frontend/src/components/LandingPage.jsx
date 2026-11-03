@@ -434,6 +434,14 @@ function WorkflowDemo() {
   )
 }
 
+// The headline of the numbers section. Replace with a school's confirmed
+// figures when there are some, e.g. before: 'From 3 weeks of work by hand.',
+// after: '10 minutes'.
+const TIME_SAVED = {
+  before: 'A timetable that takes weeks by hand.',
+  after: 'Minutes',
+}
+
 // Real numbers so far, across every school using Timetablz. Update them as
 // schools join - they are the claim, so they have to stay true.
 const CAPABILITY_STATS = [
@@ -454,11 +462,14 @@ function MetricsSection() {
           variants={fadeUp}
           transition={{ duration: 0.5 }}
         >
-          <p className="text-2xl text-neutral-900 md:text-3xl">
-            Clashes in a timetable built by Timetablz.
-          </p>
+          {/* The time saved, the number a coordinator cares about most. Until
+              a school confirms its own before-and-after (e.g. "from 3 weeks
+              to 10 minutes"), this stays general: hand-built timetables take
+              weeks, Timetablz takes minutes. Put the confirmed figures in
+              TIME_SAVED below once there are some. */}
+          <p className="text-2xl text-neutral-900 md:text-3xl">{TIME_SAVED.before}</p>
           <p className="mt-4 text-7xl font-semibold tracking-tight text-neutral-900 tabular-nums md:text-8xl">
-            Zero<span className="text-emerald-600">.</span>
+            {TIME_SAVED.after}<span className="text-emerald-600">.</span>
           </p>
         </motion.div>
 
