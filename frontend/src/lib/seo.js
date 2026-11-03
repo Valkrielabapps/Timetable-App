@@ -63,7 +63,7 @@ const ORGANIZATION = {
   '@id': `${SITE_URL}/#organization`,
   name: BRAND,
   url: `${SITE_URL}/`,
-  logo: `${SITE_URL}/apple-touch-icon.png`,
+  logo: `${SITE_URL}/favicon-512.png`,
   email: 'support@timetablz.com',
   address: { '@type': 'PostalAddress', addressLocality: 'Chennai', addressRegion: 'Tamil Nadu', addressCountry: 'IN' },
   contactPoint: {
