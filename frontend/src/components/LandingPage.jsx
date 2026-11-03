@@ -616,7 +616,7 @@ function WhyChoose({ onGetStarted }) {
               src="/media/why-person.jpg"
               alt=""
               onError={() => setPhoto(false)}
-              className="absolute inset-0 h-full w-full object-cover object-[62%_35%] grayscale"
+              className="absolute inset-0 h-full w-full object-cover object-[55%_45%] grayscale"
               loading="lazy"
             />
           )}
