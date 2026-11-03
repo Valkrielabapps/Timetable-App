@@ -546,12 +546,12 @@ function MetricsSection() {
  * broken.
  */
 const WHY_FEATURES = [
-  'Clash-free timetables',
-  'Plain-English rules',
-  'Elective blocks',
-  'Substitute cover',
-  'Drag to adjust',
-  'Excel & PDF',
+  'No double-booking',
+  'Type rules simply',
+  'Handles electives',
+  'Covers absent teachers',
+  'Easy to change',
+  'Print or share',
 ]
 
 function WhyCard({ className = '', delay = 0, children }) {
