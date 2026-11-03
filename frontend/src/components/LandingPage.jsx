@@ -616,7 +616,7 @@ function WhyChoose({ onGetStarted }) {
               src="/media/why-person.jpg"
               alt=""
               onError={() => setPhoto(false)}
-              className="absolute inset-0 h-full w-full object-cover grayscale"
+              className="absolute inset-0 h-full w-full object-cover object-[62%_35%] grayscale"
               loading="lazy"
             />
           )}
@@ -649,7 +649,7 @@ function WhyChoose({ onGetStarted }) {
             </WhyCard>
           ))}
 
-          <WhyCard className="right-6 top-[150px] hidden px-4 py-3 sm:block sm:right-8" delay={0.2}>
+          <WhyCard className="bottom-[150px] left-6 hidden px-4 py-3 sm:block sm:left-8" delay={0.2}>
             <p className="text-[12px] text-neutral-500">Physics Lab · Grade 11 A</p>
             <p className="mt-0.5 text-[15px] font-semibold text-neutral-950">Double period, Tue P3–P4</p>
             <span className="mt-2 inline-block rounded-full border border-neutral-950 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-950">
