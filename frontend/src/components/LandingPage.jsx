@@ -129,7 +129,9 @@ function TypingWords({ words, typingSpeedMs = 90, deletingSpeedMs = 45, pauseMs 
 
 export default function LandingPage({ onGetStarted, onSignIn = onGetStarted, signedIn = false }) {
   return (
-    <div className="min-h-screen bg-white text-neutral-900">
+    // One typeface for the whole homepage - Inter, the font of the numbers
+    // section - headings included.
+    <div className="min-h-screen bg-white text-neutral-900" style={{ fontFamily: 'var(--font-display)' }}>
       <LandingNav onGetStarted={onGetStarted} onSignIn={onSignIn} signedIn={signedIn} />
       <Hero onGetStarted={onGetStarted} signedIn={signedIn} />
       <WorkflowDemo />
@@ -297,7 +299,7 @@ function Hero({ onGetStarted, signedIn }) {
               aria-label, so search engines read "Instant timetables for
               schools and colleges" as the page's H1; the animated version
               beside it is for sighted visitors only. */}
-          <h1 className="font-serif text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl">
+          <h1 className="text-5xl font-medium leading-[1.05] tracking-tight text-white md:text-6xl">
             <span className="sr-only">Instant timetables for schools and colleges</span>
             <span aria-hidden="true">Instant timetables</span>
             <br />
@@ -679,7 +681,7 @@ function WhyChoose() {
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-2xl text-center"
         >
-          <h2 className="font-serif text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
+          <h2 className="text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
             Why schools choose <em className="pr-1 font-light italic text-neutral-500">Timetablz.</em>
           </h2>
           <p className="mt-5 text-[15px] leading-relaxed text-neutral-500">
@@ -888,7 +890,7 @@ function Testimonials() {
           viewport={{ once: true, amount: 0.3 }}
           variants={fadeUp}
           transition={{ duration: 0.5 }}
-          className="mb-10 font-serif text-3xl font-medium tracking-tight text-white md:text-4xl"
+          className="mb-10 text-3xl font-medium tracking-tight text-white md:text-4xl"
         >
           What schools are saying
         </motion.h2>
@@ -971,7 +973,7 @@ function ClosingCta({ onGetStarted, signedIn }) {
         transition={{ duration: 0.5 }}
         className="mx-auto max-w-6xl px-6 py-24 md:py-28"
       >
-        <h2 className="max-w-4xl font-serif text-4xl font-medium leading-[1.1] tracking-tight text-neutral-900 md:text-6xl">
+        <h2 className="max-w-4xl text-4xl font-medium leading-[1.1] tracking-tight text-neutral-900 md:text-6xl">
           Make the hardest timetable feel effortless, with Timetablz<span className="text-emerald-600">.</span>
         </h2>
         <div className="mt-10 flex flex-wrap items-center gap-4">
