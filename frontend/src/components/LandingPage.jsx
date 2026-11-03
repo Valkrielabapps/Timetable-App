@@ -434,11 +434,13 @@ function WorkflowDemo() {
   )
 }
 
+// Real numbers so far, across every school using Timetablz. Update them as
+// schools join - they are the claim, so they have to stay true.
 const CAPABILITY_STATS = [
-  { n: '01', label: 'Generation time', value: 'Seconds', unit: 'for a whole school' },
-  { n: '02', label: 'Teacher and room clashes', value: '0', unit: 'in every timetable' },
-  { n: '03', label: 'Rules', value: 'Plain English', unit: 'no formulas or settings' },
-  { n: '04', label: 'Exports', value: 'Excel & PDF', unit: 'every class and teacher' },
+  { n: '01', label: 'Schools', value: '1', unit: 'running their timetable on Timetablz' },
+  { n: '02', label: 'Students', value: '500+', unit: 'with clash-free timetables' },
+  { n: '03', label: 'Teachers', value: '50+', unit: 'scheduled with no double-booking' },
+  { n: '04', label: 'Generation time', value: 'Minutes', unit: 'for a whole school' },
 ]
 
 function MetricsSection() {
@@ -477,7 +479,7 @@ function MetricsSection() {
             >
               <p className="text-[13px] text-neutral-500">{stat.n}</p>
               <p className="mt-3 text-sm font-semibold uppercase tracking-wide text-neutral-900">{stat.label}</p>
-              <p className="mt-4 text-3xl font-semibold tracking-tight text-neutral-900">{stat.value}</p>
+              <p className="mt-4 text-5xl font-semibold tracking-tight text-neutral-900 tabular-nums">{stat.value}</p>
               <p className="mt-1 text-sm text-neutral-500">{stat.unit}</p>
             </motion.div>
           ))}
