@@ -34,22 +34,26 @@ from sqlalchemy.orm import Session, object_session
 
 from app.models.school import ClassGroup, Subject, SubjectFreeze, Teacher, Timetable, TimetableEntry
 from app.services.elective_sections import blocks_for_sections, options_for_section
-from app.services.freezing import FreezeError, section_label
+from app.services.freezing import FreezeError, blocks_by_section, section_label, sections_with_plans
 from app.services.naming import name_sort_key
 
 SCOPES = ("school", "grades", "sections")
 BLOCK_MODES = ("subject", "block")
 
 
-def _plan(cg: ClassGroup, subject_id: int) -> dict | None:
-    """What the section's plan says about the subject, or None if it has none."""
+def _plan(cg: ClassGroup, subject_id: int, all_blocks: dict | None = None) -> dict | None:
+    """What the section's plan says about the subject, or None if it has none.
+    `all_blocks` is freezing.blocks_by_section, when the caller has it."""
     for r in cg.requirements:
         if r.subject_id == subject_id:
             return {"periods": r.periods_per_week, "teacher": r.preferred_teacher_id, "block_id": None}
     # Blocks the section joins count too, but only the groups its own students
     # are in.
     session = object_session(cg)
-    blocks = blocks_for_sections(session, [cg.id]) if session is not None else list(cg.elective_blocks)
+    if all_blocks is not None:
+        blocks = all_blocks.get(cg.id, [])
+    else:
+        blocks = blocks_for_sections(session, [cg.id]) if session is not None else list(cg.elective_blocks)
     for b in blocks:
         for o in options_for_section(b, cg.id):
             if o.subject_id == subject_id:
@@ -68,7 +72,7 @@ def _kept(entries, cg_id: int, subject_id: int, block_id: int | None, block_mode
 
 
 def _sections_in_scope(db: Session, school_id: int, scope: str, grades, class_group_ids) -> list[ClassGroup]:
-    sections = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+    sections = sections_with_plans(db, school_id).all()
     if scope == "school":
         return sections
     if scope == "grades":
@@ -109,9 +113,10 @@ def freeze_subject(
     if source is None:
         raise FreezeError("Generate a timetable before freezing - there's nothing to keep yet.")
 
+    all_blocks = blocks_by_section(db, school_id)
     sections = [
         cg for cg in _sections_in_scope(db, school_id, scope, grades, class_group_ids)
-        if _plan(cg, subject_id) is not None
+        if _plan(cg, subject_id, all_blocks) is not None
     ]
     if not sections:
         raise FreezeError(f"None of the sections chosen have {subject.name}.")
@@ -130,7 +135,7 @@ def freeze_subject(
     snapshot = {}
     empty = []
     for cg in sections:
-        plan = _plan(cg, subject_id)
+        plan = _plan(cg, subject_id, all_blocks)
         kept = _kept(entries, cg.id, subject_id, plan["block_id"], block_mode)
         if not kept:
             empty.append(section_label(cg))
@@ -171,7 +176,7 @@ class _Check:
 
 
 def check(db: Session, freeze: SubjectFreeze, sections: dict[int, ClassGroup] | None = None,
-          teacher_ids: set[int] | None = None) -> _Check:
+          teacher_ids: set[int] | None = None, all_blocks: dict | None = None) -> _Check:
     """The freeze against the plan as it is now: what's out of date, what's
     noted, and which lessons it keeps."""
     out = _Check()
@@ -194,7 +199,7 @@ def check(db: Session, freeze: SubjectFreeze, sections: dict[int, ClassGroup] | 
         if cg.frozen:
             continue  # kept whole as a frozen section
         label = section_label(cg)
-        plan = _plan(cg, freeze.subject_id)
+        plan = _plan(cg, freeze.subject_id, all_blocks)
         if plan is None:
             out.stale.append(f"{label} no longer has {name}.")
             continue
@@ -293,12 +298,16 @@ def status(db: Session, school_id: int) -> list[dict]:
     from app.services.versions import label as version_label
 
     out = []
-    sections = {cg.id: cg for cg in db.query(ClassGroup).filter(ClassGroup.school_id == school_id)}
+    freezes = db.query(SubjectFreeze).filter(SubjectFreeze.school_id == school_id).all()
+    if not freezes:
+        return out
+    sections = {cg.id: cg for cg in sections_with_plans(db, school_id)}
     teacher_ids = {t.id for t in db.query(Teacher.id).filter(Teacher.school_id == school_id)}
-    for freeze in db.query(SubjectFreeze).filter(SubjectFreeze.school_id == school_id).all():
+    all_blocks = blocks_by_section(db, school_id)
+    for freeze in freezes:
         subject = db.get(Subject, freeze.subject_id)
         source = db.get(Timetable, freeze.from_timetable_id)
-        result = check(db, freeze, sections, teacher_ids)
+        result = check(db, freeze, sections, teacher_ids, all_blocks)
         in_blocks = any(snap.get("block_id") for snap in (freeze.snapshot or {}).values())
         out.append({
             "id": freeze.id,

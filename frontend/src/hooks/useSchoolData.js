@@ -267,16 +267,42 @@ export function useFrozenStatus(schoolId, timetableId) {
 }
 
 /** Freeze or unfreeze sections; the response is every section's new status. */
+// Freezing shows at once and the server is told afterwards, one request at a
+// time and in order, so quick clicks can't overtake each other. Only the last
+// answer is applied: an earlier one doesn't know about the clicks after it.
 export function useSetFrozen(schoolId, timetableId) {
   const queryClient = useQueryClient()
+  const key = keys.frozenStatus(schoolId, timetableId)
+  const mutationKey = ['setFrozen', schoolId]
   const mutation = useMutation({
+    mutationKey,
+    scope: { id: `freeze-${schoolId}` },
     mutationFn: ({ ids, frozen }) => api.setFrozen(schoolId, ids, frozen),
-    onSuccess: (statuses) => queryClient.setQueryData(keys.frozenStatus(schoolId, timetableId), statuses),
+    onMutate: ({ ids, frozen }) => {
+      queryClient.cancelQueries({ queryKey: key })
+      const before = new Map((queryClient.getQueryData(key) ?? []).map((row) => [row.class_group_id, row]))
+      queryClient.setQueryData(key, (rows = []) => {
+        const known = new Set(rows.map((row) => row.class_group_id))
+        const mark = (row) => (frozen
+          ? { ...row, frozen: true, stale_reason: null }
+          : { ...row, frozen: false, frozen_at: null, frozen_from: null, frozen_from_timetable_id: null, stale_reason: null })
+        return [
+          ...rows.map((row) => (ids.includes(row.class_group_id) ? mark(row) : row)),
+          ...ids.filter((id) => !known.has(id)).map((id) => mark({ class_group_id: id })),
+        ]
+      })
+      return { before }
+    },
+    onError: (_err, { ids }, context) => {
+      queryClient.setQueryData(key, (rows = []) => rows
+        .map((row) => (ids.includes(row.class_group_id) ? context?.before.get(row.class_group_id) : row))
+        .filter(Boolean))
+    },
+    onSuccess: (statuses) => {
+      if (queryClient.isMutating({ mutationKey }) <= 1) queryClient.setQueryData(key, statuses)
+    },
   })
-  return {
-    setFrozen: (ids, frozen) => mutation.mutateAsync({ ids, frozen }),
-    isSaving: mutation.isPending,
-  }
+  return { setFrozen: (ids, frozen) => mutation.mutateAsync({ ids, frozen }) }
 }
 
 // ---------------------------------------------------------------------------
@@ -300,16 +326,74 @@ export function useSubjectFreezes(schoolId, timetableId) {
  * lessons are frozen - and so can't be dragged or locked - has changed. */
 export function useSubjectFreezeActions(schoolId, timetableId) {
   const queryClient = useQueryClient()
-  const done = (statuses) => {
-    queryClient.setQueryData(keys.subjectFreezes(schoolId, timetableId), statuses)
-    queryClient.invalidateQueries({ queryKey: keys.timetable(timetableId) })
-    queryClient.invalidateQueries({ queryKey: ['lessons', schoolId] })
+  const key = keys.subjectFreezes(schoolId, timetableId)
+  const mutationKey = ['subjectFreeze', schoolId]
+  const scope = { id: `subject-freeze-${schoolId}` }
+  // The list, and the frozen marks on the lessons that follow from it. The marks
+  // are worked out here rather than by reading the whole timetable again, which
+  // took seconds and could overwrite an edit made in the meantime.
+  const show = (statuses) => {
+    queryClient.setQueryData(key, statuses)
+    queryClient.setQueryData(keys.timetable(timetableId), (prev) => (
+      prev ? { ...prev, entries: markSubjectFrozen(prev.entries, statuses) } : prev
+    ))
   }
-  const freeze = useMutation({ mutationFn: (body) => api.freezeSubject(schoolId, body), onSuccess: done })
-  const unfreeze = useMutation({ mutationFn: (id) => api.unfreezeSubject(schoolId, id), onSuccess: done })
+  const hooks = (optimistic) => ({
+    mutationKey,
+    scope,
+    onMutate: (variables) => {
+      queryClient.cancelQueries({ queryKey: key })
+      const before = queryClient.getQueryData(key) ?? []
+      show(optimistic(before, variables))
+      return { before }
+    },
+    onError: (_err, _variables, context) => {
+      if (context) show(context.before)
+    },
+    onSuccess: (statuses) => {
+      if (queryClient.isMutating({ mutationKey }) <= 1) show(statuses)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lessons', schoolId] }),
+  })
+  const freeze = useMutation({
+    mutationFn: ({ body }) => api.freezeSubject(schoolId, body),
+    ...hooks((rows, { body, shown }) => [...rows, {
+      id: nextPendingFreezeId--, subject_id: body.subject_id, scope: body.scope, grades: body.grades, block_mode: body.block_mode,
+      subject: shown?.subject ?? '', scope_label: shown?.scopeLabel ?? '', class_group_ids: shown?.sectionIds ?? [],
+      section_count: shown?.sectionIds?.length ?? 0, in_blocks: false, frozen_from: null, stale_reasons: [], notes: [], pending: true,
+    }]),
+  })
+  const unfreeze = useMutation({
+    mutationFn: (id) => api.unfreezeSubject(schoolId, id),
+    ...hooks((rows, id) => rows.filter((f) => f.id !== id)),
+  })
   return {
-    freeze: (body) => freeze.mutateAsync(body),
+    // `shown` says how to show it until the server answers.
+    freeze: (body, shown) => freeze.mutateAsync({ body, shown }),
     unfreeze: (id) => unfreeze.mutateAsync(id),
-    isSaving: freeze.isPending || unfreeze.isPending,
   }
+}
+
+let nextPendingFreezeId = -1
+
+/** Which lessons these subject freezes keep. Lessons that don't change keep
+ *  their identity, so only the grids they're in redraw. */
+export function markSubjectFrozen(entries, freezes) {
+  const subjects = new Set()
+  const blocks = new Set()
+  for (const f of freezes) {
+    const sections = new Set(f.class_group_ids)
+    for (const id of sections) subjects.add(`${id}:${f.subject_id}`)
+    if (f.block_mode !== 'block') continue
+    for (const e of entries) {
+      if (e.elective_block_id != null && e.subject_id === f.subject_id && sections.has(e.class_group_id)) {
+        blocks.add(`${e.class_group_id}:${e.elective_block_id}`)
+      }
+    }
+  }
+  return entries.map((e) => {
+    const frozen = subjects.has(`${e.class_group_id}:${e.subject_id}`)
+      || (e.elective_block_id != null && blocks.has(`${e.class_group_id}:${e.elective_block_id}`))
+    return !!e.subject_frozen === frozen ? e : { ...e, subject_frozen: frozen }
+  })
 }

@@ -20,9 +20,9 @@ import json
 from datetime import datetime, timezone
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session, object_session
+from sqlalchemy.orm import Session, object_session, selectinload
 
-from app.models.school import ClassGroup, Timetable, TimetableEntry
+from app.models.school import ClassGroup, ElectiveBlock, Timetable, TimetableEntry
 from app.services.elective_sections import blocks_for_sections
 
 
@@ -34,12 +34,35 @@ def section_label(cg: ClassGroup) -> str:
     return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
 
 
-def plan_signature(cg: ClassGroup) -> str:
+def sections_with_plans(db: Session, school_id: int):
+    """This school's sections with their plans loaded in one go. Reading them
+    one section at a time cost several trips to the database for each frozen
+    section, which is what made freezing take seconds."""
+    return db.query(ClassGroup).filter(ClassGroup.school_id == school_id).options(
+        selectinload(ClassGroup.requirements),
+        selectinload(ClassGroup.elective_blocks).selectinload(ElectiveBlock.options),
+    )
+
+
+def blocks_by_section(db: Session, school_id: int) -> dict[int, list[ElectiveBlock]]:
+    """Section id -> every block it's in, made there or joined: the same answer
+    as blocks_for_sections, for the whole school in one go."""
+    out: dict[int, list[ElectiveBlock]] = {}
+    blocks = db.query(ElectiveBlock).filter(ElectiveBlock.school_id == school_id).options(
+        selectinload(ElectiveBlock.options), selectinload(ElectiveBlock.linked_sections),
+    ).order_by(ElectiveBlock.id).all()
+    for block in blocks:
+        for section_id in block.section_ids:
+            out.setdefault(section_id, []).append(block)
+    return out
+
+
+def plan_signature(cg: ClassGroup, blocks: dict[int, list[ElectiveBlock]] | None = None) -> str:
     """A fingerprint of what the section's timetable is built from.
 
     Its subjects and how many periods each, who is pinned to teach them, and
     its elective blocks. Anything that would make the solver place the section
-    differently changes this.
+    differently changes this. `blocks` is blocks_by_section, when the caller has it.
     """
     plan = {
         "requirements": sorted(
@@ -54,7 +77,8 @@ def plan_signature(cg: ClassGroup) -> str:
     # Blocks shared with other sections, made here or joined: who else is in
     # them and which group each subject is changes this section's timetable too.
     session = object_session(cg)
-    shared = [b for b in blocks_for_sections(session, [cg.id]) if len(b.section_ids) > 1] if session else []
+    mine = blocks.get(cg.id, []) if blocks is not None else blocks_for_sections(session, [cg.id]) if session else []
+    shared = [b for b in mine if len(b.section_ids) > 1]
     if shared:
         plan["shared_blocks"] = sorted(
             (b.periods_per_week, sorted(b.section_ids), sorted(
@@ -108,13 +132,14 @@ def staleness(db: Session, school_id: int, class_groups: list[ClassGroup]) -> di
         return {}
     counts_by_source: dict = {}
     out: dict[int, str] = {}
+    blocks = blocks_by_section(db, school_id)
     for cg in frozen:
         source = frozen_source(db, cg)
         key = source.id if source else None
         if key not in counts_by_source:
             counts_by_source[key] = _lesson_counts(db, source)
         counts = counts_by_source[key]
-        if cg.frozen_signature and plan_signature(cg) != cg.frozen_signature:
+        if cg.frozen_signature and plan_signature(cg, blocks) != cg.frozen_signature:
             out[cg.id] = (
                 "Its plan has changed since it was frozen - unfreeze it to regenerate it with the change."
             )
@@ -133,11 +158,7 @@ def set_frozen(db: Session, school_id: int, class_group_ids: list[int], frozen: 
     current timetable has nothing to freeze, and freezing it anyway would
     promise something the next generation can't keep.
     """
-    sections = (
-        db.query(ClassGroup)
-        .filter(ClassGroup.school_id == school_id, ClassGroup.id.in_(class_group_ids))
-        .all()
-    )
+    sections = sections_with_plans(db, school_id).filter(ClassGroup.id.in_(class_group_ids)).all()
     if len(sections) != len(set(class_group_ids)):
         raise LookupError("Section not found")
 
@@ -151,6 +172,7 @@ def set_frozen(db: Session, school_id: int, class_group_ids: list[int], frozen: 
                 f"{'it' if len(empty) == 1 else 'them'} - there's nothing to keep yet."
             )
         now = datetime.now(timezone.utc)
+        blocks = blocks_by_section(db, school_id)
         for cg in sections:
             # Freezing an already-frozen section keeps its original moment, so
             # re-applying "freeze grade" doesn't hide an out-of-date section.
@@ -158,7 +180,7 @@ def set_frozen(db: Session, school_id: int, class_group_ids: list[int], frozen: 
                 continue
             cg.frozen = True
             cg.frozen_at = now
-            cg.frozen_signature = plan_signature(cg)
+            cg.frozen_signature = plan_signature(cg, blocks)
             cg.frozen_lessons = counts[cg.id]
             cg.frozen_from_timetable_id = timetable.id
     else:
@@ -169,6 +191,4 @@ def set_frozen(db: Session, school_id: int, class_group_ids: list[int], frozen: 
             cg.frozen_lessons = None
             cg.frozen_from_timetable_id = None
     db.commit()
-    for cg in sections:
-        db.refresh(cg)
     return sections

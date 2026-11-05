@@ -220,7 +220,7 @@ export default function TimetableTab({
   const { data: frozenList = [] } = useFrozenStatus(schoolId, timetable?.id)
   const frozenById = useMemo(() => new Map(frozenList.filter((f) => f.frozen).map((f) => [f.class_group_id, f])), [frozenList])
   const frozenSections = useMemo(() => new Set(frozenById.keys()), [frozenById])
-  const { setFrozen, isSaving: freezing } = useSetFrozen(schoolId, timetable?.id)
+  const { setFrozen } = useSetFrozen(schoolId, timetable?.id)
 
   // Frozen subjects keep one subject's lessons in place in the sections chosen
   // - see backend/app/services/subject_freezing.py.
@@ -310,7 +310,9 @@ export default function TimetableTab({
   const solved = !isGenerating && timetable?.status === 'draft'
   const entries = useMemo(() => timetable?.entries ?? [], [timetable?.entries])
 
-  const forecast = useForecast(timetable?.id, selectedTeacherId, edits.revision, solved && !readOnly && mode === 'work' && page === 'schedule')
+  // Asked again when something is frozen or unfrozen, since it says what's blocked.
+  const forecastFor = `${edits.revision}:${[...frozenSections].join()}:${subjectFreezes.map((f) => f.id).join()}`
+  const forecast = useForecast(timetable?.id, selectedTeacherId, forecastFor, solved && !readOnly && mode === 'work' && page === 'schedule')
 
   // Rules this timetable currently breaks, computed server-side on every read
   // (see _violations_for in backend/app/routers/timetables.py). Only RULES
@@ -585,7 +587,6 @@ export default function TimetableTab({
                 subjectName={subjectName}
                 frozenById={frozenById}
                 canFreeze={!readOnly}
-                freezing={freezing}
                 onFreeze={handleFreeze}
                 exporting={exporting}
                 onExport={handleExport}
@@ -701,7 +702,6 @@ export default function TimetableTab({
                       sections={sections.filter((s) => s.grade === cg.grade)}
                       frozenById={frozenById}
                       canFreeze={!readOnly}
-                      busy={freezing}
                       onFreeze={handleFreeze}
                     />
                   )}
@@ -710,7 +710,7 @@ export default function TimetableTab({
                       type="checkbox"
                       id={`freeze-${cg.id}`}
                       checked={frozenById.has(cg.id)}
-                      disabled={readOnly || freezing}
+                      disabled={readOnly}
                       onChange={(e) => handleFreeze([cg.id], e.target.checked)}
                     />
                     <label htmlFor={`freeze-${cg.id}`}>
@@ -728,7 +728,6 @@ export default function TimetableTab({
               entries={entries}
               sections={sections}
               canFreeze={!readOnly}
-              busy={subjectFreezing.isSaving}
               onFreeze={subjectFreezing.freeze}
               onUnfreeze={subjectFreezing.unfreeze}
             />

@@ -81,17 +81,35 @@ export default function SubjectFreezePanel({
 
   const submit = async () => {
     setError(null)
+    const body = {
+      subject_id: subjectId,
+      scope,
+      grades: scope === 'grades' ? grades : null,
+      class_group_ids: scope === 'sections' ? sectionIds : null,
+      block_mode: scopeHasBlock ? blockMode : 'subject',
+    }
+    const shown = {
+      subject: chosen.name,
+      sectionIds: inScope.map((cg) => cg.id),
+      scopeLabel: scope === 'school'
+        ? 'Whole school'
+        : scope === 'grades'
+          ? grades.join(', ')
+          : inScope.map((cg) => (cg.grade ? `${cg.grade} - ${cg.name}` : cg.name)).join(', '),
+    }
+    // It shows in the list straight away, so the form is done with now. If it's
+    // refused the choices come back, to fix and try again.
+    const chosenBefore = { subjectId, scope, grades, sectionIds, blockMode }
+    chooseSubject(null)
+    setScope('school')
     try {
-      await onFreeze({
-        subject_id: subjectId,
-        scope,
-        grades: scope === 'grades' ? grades : null,
-        class_group_ids: scope === 'sections' ? sectionIds : null,
-        block_mode: scopeHasBlock ? blockMode : 'subject',
-      })
-      chooseSubject(null)
-      setScope('school')
+      await onFreeze(body, shown)
     } catch (err) {
+      setSubjectId(chosenBefore.subjectId)
+      setScope(chosenBefore.scope)
+      setGrades(chosenBefore.grades)
+      setSectionIds(chosenBefore.sectionIds)
+      setBlockMode(chosenBefore.blockMode)
       setError(err.message)
     }
   }
@@ -134,7 +152,7 @@ export default function SubjectFreezePanel({
                 {canFreeze && (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || f.pending}
                     onClick={() => unfreeze(f.id)}
                     className="rounded border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                   >

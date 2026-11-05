@@ -12,7 +12,7 @@ import { sectionShort, sectionTitle } from './lessonLogic'
  */
 export default function PlainView({
   kind, id, onKind, onId, sections, sectionsById, teachers, rooms, entries, layout, timetableId, watermark,
-  electiveBlocks, subjectName, frozenById, canFreeze, freezing, onFreeze, exporting, onExport, onError, printSignal,
+  electiveBlocks, subjectName, frozenById, canFreeze, onFreeze, exporting, onExport, onError, printSignal,
 }) {
   const listRef = useRef(null)
   const options = useMemo(() => {
@@ -134,7 +134,6 @@ export default function PlainView({
               combinations={combinationsFor(electiveBlocks, o.id, subjectName)}
               frozen={frozenById.get(o.id) ?? null}
               canFreeze={canFreeze}
-              freezing={freezing}
               onFreeze={onFreeze}
               onError={onError}
               classTeacher={teachers.find((t) => t.id === sectionsById.get(o.id)?.class_teacher_id)?.name}
@@ -163,7 +162,7 @@ const ownerFor = (teacherId, sections) => ({
 })
 
 function SectionBox({
-  section, label, entries, layout, sectionsById, timetableId, watermark, combinations, frozen, canFreeze, freezing, onFreeze, onError, classTeacher,
+  section, label, entries, layout, sectionsById, timetableId, watermark, combinations, frozen, canFreeze, onFreeze, onError, classTeacher,
 }) {
   const [student, setStudent] = useState('')
   const [exporting, setExporting] = useState(null)
@@ -213,7 +212,6 @@ function SectionBox({
           <button
             type="button"
             className="tw-btn"
-            disabled={freezing}
             onClick={() => onFreeze([section.id], !frozen)}
             title={frozen ? 'Let the next Generate change this section again' : 'Keep this section exactly as it is when generating again'}
           >

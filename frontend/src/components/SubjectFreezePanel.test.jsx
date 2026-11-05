@@ -59,7 +59,7 @@ describe('freezing a subject', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Freeze Maths' }))
     await waitFor(() => expect(onFreeze).toHaveBeenCalledWith({
       subject_id: 1, scope: 'school', grades: null, class_group_ids: null, block_mode: 'subject',
-    }))
+    }, expect.anything()))
   })
 
   it('in some grades', async () => {
@@ -74,7 +74,7 @@ describe('freezing a subject', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Freeze Maths in 2 sections' }))
     await waitFor(() => expect(onFreeze).toHaveBeenCalledWith({
       subject_id: 1, scope: 'grades', grades: ['Grade 11'], class_group_ids: null, block_mode: 'subject',
-    }))
+    }, expect.anything()))
   })
 
   it('in some sections', async () => {
@@ -85,7 +85,7 @@ describe('freezing a subject', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Freeze Maths in 1 section' }))
     await waitFor(() => expect(onFreeze).toHaveBeenCalledWith({
       subject_id: 1, scope: 'sections', grades: null, class_group_ids: [102], block_mode: 'subject',
-    }))
+    }, expect.anything()))
   })
 
   it('in an elective block: just the subject, or the whole block', async () => {
@@ -95,7 +95,7 @@ describe('freezing a subject', () => {
     expect(screen.getByLabelText(/Just Physics/)).toBeChecked()
     fireEvent.click(screen.getByLabelText(/The whole block/))
     fireEvent.click(screen.getByRole('button', { name: 'Freeze Physics' }))
-    await waitFor(() => expect(onFreeze).toHaveBeenCalledWith(expect.objectContaining({ block_mode: 'block' })))
+    await waitFor(() => expect(onFreeze).toHaveBeenCalledWith(expect.objectContaining({ block_mode: 'block' }), expect.anything()))
   })
 
   it('asks about the block only when the sections chosen have it', () => {
@@ -117,7 +117,7 @@ describe('freezing a subject', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Freeze Physics in 1 section' }))
     await waitFor(() => expect(onFreeze).toHaveBeenCalledWith(expect.objectContaining({
       class_group_ids: [102], block_mode: 'subject',
-    })))
+    }), expect.anything()))
   })
 
   it('does not offer sections where the subject is already frozen', () => {

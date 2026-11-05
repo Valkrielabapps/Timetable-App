@@ -48,9 +48,9 @@ def list_class_groups(school_id: int, db: Session = Depends(get_db), current_use
 
 
 def _frozen_status(db: Session, school_id: int) -> list[FrozenStatusOut]:
-    sections = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
-    from app.services.freezing import frozen_source
+    from app.services.freezing import frozen_source, sections_with_plans
     from app.services.versions import label
+    sections = sections_with_plans(db, school_id).all()
     stale = staleness(db, school_id, sections)
     out = []
     for cg in sections:
