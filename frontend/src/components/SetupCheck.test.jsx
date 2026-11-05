@@ -14,12 +14,20 @@ vi.mock('../hooks/useSchoolData', () => ({
   useTimetable: () => ({ data: null }),
   useGenerateTimetable: () => ({ generate, isGenerating: false }),
   useApplyEntryUpdates: () => vi.fn(),
-  useOptimisticSlotMove: () => vi.fn(),
+  useRooms: () => ({ data: [] }),
+  useVersionActions: () => ({ open: vi.fn() }),
   useElectiveBlocks: () => ({ data: [] }),
   useFrozenStatus: () => ({ data: [] }),
   useSetFrozen: () => ({ setFrozen: vi.fn(), isSaving: false }),
   useSubjectFreezes: () => ({ data: [] }),
   useSubjectFreezeActions: () => ({ freeze: vi.fn(), unfreeze: vi.fn(), isSaving: false }),
+}))
+
+vi.mock('../hooks/useTimetableEdits', () => ({
+  useTimetableEdits: () => ({ undoCount: 0, revision: 0 }),
+  useLessons: () => ({ data: [] }),
+  useForecast: () => null,
+  useStartBlank: () => vi.fn(),
 }))
 
 const section = { id: 1, grade: 'Grade 9', name: 'A' }
@@ -66,7 +74,7 @@ describe('the setup check above Generate', () => {
   it('asks before generating when a problem is certain to stop it', async () => {
     check.current = { ok: false, errors: [overfull], warnings: [] }
     renderTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Timetable' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate timetable' }))
     expect(generate).not.toHaveBeenCalled()
     const ask = screen.getByRole('alertdialog', { name: 'Setup problems' })
     expect(ask).toHaveTextContent('will stop the timetable')
@@ -77,7 +85,7 @@ describe('the setup check above Generate', () => {
   it('generates straight away when there are only warnings', async () => {
     check.current = { ok: true, errors: [], warnings: [noRoom] }
     renderTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Timetable' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Generate timetable' }))
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('alertdialog', { name: 'Setup problems' })).not.toBeInTheDocument()
   })

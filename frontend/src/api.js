@@ -367,7 +367,35 @@ export const api = {
   // off and returns immediately with status="generating"; getTimetable()
   // polls for the job's current state (TimetableTab.jsx polls this on an
   // interval until status is no longer "generating").
-  generateTimetable: (schoolId) => post(`/timetables/generate?school_id=${schoolId}`),
+  // keepPlaced fills the gaps around what's on the current version.
+  generateTimetable: (schoolId, { keepPlaced = false } = {}) =>
+    post(`/timetables/generate?school_id=${schoolId}${keepPlaced ? '&keep_placed=true' : ''}`),
+  // A new, empty version to build by hand.
+  startBlankTimetable: (schoolId) => post(`/timetables/blank?school_id=${schoolId}`),
+  // The lessons the school's plan asks for, and who can take each.
+  // See backend/app/services/lesson_placing.py.
+  listLessons: (schoolId) => get(`/timetables/lessons?school_id=${schoolId}`),
+  // What a teacher's lessons would break in each period, ahead of a drag.
+  forecast: (timetableId, teacherId) => post(`/timetables/${timetableId}/forecast`, { teacher_id: teacherId }),
+  placeLesson: (timetableId, data) => post(`/timetables/${timetableId}/place-lesson`, data),
+  removeSlot: (timetableId, classGroupId, periodId) =>
+    post(`/timetables/${timetableId}/remove-slot`, { class_group_id: classGroupId, period_id: periodId }),
+  // Undoing a removal: the same lessons back in their places.
+  restoreSlot: (timetableId, entries) =>
+    post(`/timetables/${timetableId}/restore-slot`, {
+      entries: entries.map((e) => ({
+        class_group_id: e.class_group_id,
+        subject_id: e.subject_id,
+        teacher_id: e.teacher_id,
+        assistant_teacher_id: e.assistant_teacher_id ?? null,
+        room_id: e.room_id ?? null,
+        period_id: e.period_id,
+        locked: !!e.locked,
+        lab_batch: e.lab_batch ?? null,
+        elective_block_id: e.elective_block_id ?? null,
+        elective_option_id: e.elective_option_id ?? null,
+      })),
+    }),
   getTimetable: (id) => get(`/timetables/${id}`),
   // Summaries only - no entries. Callers use this to find a timetable (the
   // newest, or the draft) and then fetch that one with getTimetable. See

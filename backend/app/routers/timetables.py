@@ -56,9 +56,13 @@ from app.models.school import (
 from app.models.user import User
 from app.schemas.timetable import (
     EntryUpdateOut,
+    ForecastRequest,
+    LessonPlace,
     SlotLock,
     SlotMove,
     SlotMoveChain,
+    SlotRemove,
+    SlotRestore,
     SlotTargets,
     TimetableSummaryOut,
     EditCommandRequest,
@@ -72,13 +76,13 @@ from app.services.constraint_ir import IRError, rule_from_dict
 from app.services.constraint_ir_checker import Placement, check_rules
 from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
-from app.services import plans, versions
+from app.services import lesson_placing, plans, versions
 from app.services.export import build_excel, build_pdf, build_student_excel, build_student_pdf
 from app.services.student_combinations import TooManyCombinations, combinations_for
 from app.services.subject_freezing import frozen_lessons_index
 from app.services.infeasibility_explainer import explain_infeasibility
 from app.services.solver import (
-    _class_group_labels, find_blocking_rules, generate_school_timetable, generate_with_compromises,
+    KEEP_PLACED, _class_group_labels, find_blocking_rules, generate_school_timetable, generate_with_compromises,
 )
 from app.services.timetable_structure import grade_off_period_ids, lesson_numbers, zero_period_ids_for
 
@@ -220,6 +224,8 @@ def _added_after(constraint: Constraint, timetable: Timetable) -> bool:
     """Whether this rule was saved after the timetable was generated, and so
     played no part in it. Unknown either way (rows from before these times
     were recorded) counts as not after, which keeps the old behaviour."""
+    if timetable.solver_status == "manual":
+        return False  # built by hand: no solve to have missed it, so every rule counts
     made, saved = _utc(timetable.created_at), _utc(constraint.created_at)
     return made is not None and saved is not None and saved > made
 
@@ -264,9 +270,12 @@ def _placements(entries, periods: dict, moved: dict | None = None) -> list[Place
 
 
 def _rule_setup(db: Session, timetable: Timetable, class_groups: dict, subjects: dict, teachers: dict,
-                periods: dict):
+                periods: dict, include_newer: bool = False):
     """The rules this timetable is held to, and the names they resolve
-    against - or None when there are none to check."""
+    against - or None when there are none to check. `include_newer` adds rules
+    saved since it was generated: someone placing a lesson by hand should hear
+    about a rule they've just added, even though the timetable isn't blamed for
+    not having followed it."""
     rows = (
         db.query(Constraint)
         .filter(Constraint.school_id == timetable.school_id, Constraint.type == "ir")
@@ -277,7 +286,7 @@ def _rule_setup(db: Session, timetable: Timetable, class_groups: dict, subjects:
 
     rules = []
     for row in rows:
-        if _added_after(row, timetable):
+        if not include_newer and _added_after(row, timetable):
             continue  # not part of this solve - shown as "generate again", not broken
         try:
             rule = rule_from_dict(row.parameters or {})
@@ -364,13 +373,14 @@ def _prune_old_timetables(db: Session, school_id: int) -> None:
 _GENERATION_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("MAX_CONCURRENT_GENERATIONS", "3"))))
 
 
-def _run_generation_job(timetable_id: int, school_id: int) -> None:
+def _run_generation_job(timetable_id: int, school_id: int, keep_placed: bool = False) -> None:
     """
     Runs on a background thread - must open its own DB session rather
     than reusing the request's (SQLAlchemy sessions aren't thread-safe,
     and the request's session is closed once the response is sent anyway,
     which happens well before this function finishes).
     """
+    KEEP_PLACED.set(keep_placed)  # this thread's own context; nothing else sees it
     with _GENERATION_SLOTS:
         _generate(timetable_id, school_id)
 
@@ -565,19 +575,15 @@ def _log_failed_generation(timetable: Timetable, school_id: int) -> None:
 
 
 @router.post("/generate", response_model=TimetableOut, status_code=201)
-def generate_timetable(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def generate_timetable(school_id: int, keep_placed: bool = False, db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
     """Kicks off generation and returns immediately with status=generating.
-    Poll GET /api/timetables/{id} for the result."""
+    Poll GET /api/timetables/{id} for the result.
+
+    `keep_placed` fills the gaps around every lesson on the school's current
+    version instead of rebuilding it. The result is a new version either way."""
     require_school_access(db, current_user, school_id, min_role="admin")
-    # One at a time per school. A run whose thread died is marked failed
-    # first, so a restart mid-generation never leaves a school locked out.
-    for running in db.query(Timetable).filter(Timetable.school_id == school_id, Timetable.status == "generating"):
-        _reap_if_dead(db, running)
-        if running.status == "generating":
-            raise HTTPException(
-                status_code=409,
-                detail="A timetable is already being generated for this school. Wait for it to finish.",
-            )
+    _refuse_if_generating(db, school_id)
     timetable = Timetable(school_id=school_id, status="generating",
                           version_number=versions.next_version_number(db, school_id))
     db.add(timetable)
@@ -586,12 +592,49 @@ def generate_timetable(school_id: int, db: Session = Depends(get_db), current_us
 
     thread = threading.Thread(
         target=_run_generation_job,
-        args=(timetable.id, school_id),
+        args=(timetable.id, school_id, keep_placed),
         daemon=True,
     )
     thread.start()
 
     return _to_timetable_out(db, timetable)
+
+
+def _refuse_if_generating(db: Session, school_id: int) -> None:
+    """One at a time per school. A run whose thread died is marked failed
+    first, so a restart mid-generation never leaves a school locked out."""
+    for running in db.query(Timetable).filter(Timetable.school_id == school_id, Timetable.status == "generating"):
+        _reap_if_dead(db, running)
+        if running.status == "generating":
+            raise HTTPException(
+                status_code=409,
+                detail="A timetable is already being generated for this school. Wait for it to finish.",
+            )
+
+
+@router.post("/blank", response_model=TimetableOut, status_code=201)
+def start_blank(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """A new, empty version to build by hand. It becomes the one the school
+    works from, and earlier versions stay on the Dashboard."""
+    require_school_access(db, current_user, school_id, min_role="admin")
+    _refuse_if_generating(db, school_id)
+    timetable = Timetable(school_id=school_id, status="draft", solver_status="manual",
+                          version_number=versions.next_version_number(db, school_id))
+    db.add(timetable)
+    db.flush()
+    db.get(School, school_id).current_timetable_id = timetable.id
+    db.commit()
+    db.refresh(timetable)
+    _prune_old_timetables(db, school_id)
+    return _to_timetable_out(db, timetable)
+
+
+@router.get("/lessons")
+def list_lessons(school_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Every lesson the school's plan asks for and who can take it: the cards
+    in the workspace. See app/services/lesson_placing.py."""
+    require_school_access(db, current_user, school_id)
+    return lesson_placing.lessons_for_school(db, school_id)
 
 
 # When this server process started. A generation runs on a thread inside the
@@ -1232,14 +1275,14 @@ def accept_compromise(timetable_id: int, db: Session = Depends(get_db), current_
     return _to_timetable_out(db, timetable)
 
 
-def _board(db: Session, timetable: Timetable):
+def _board(db: Session, timetable: Timetable, include_newer: bool = False):
     from app.services.slot_board import Board
     school_id = timetable.school_id
     cgs = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()}
     subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == school_id).all()}
     teachers = {t.id: t for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()}
     periods = {p.id: p for p in db.query(Period).filter(Period.school_id == school_id).all()}
-    return Board(db, timetable, rules=_rule_setup(db, timetable, cgs, subjects, teachers, periods))
+    return Board(db, timetable, rules=_rule_setup(db, timetable, cgs, subjects, teachers, periods, include_newer))
 
 
 @router.post("/{timetable_id}/move-targets")
@@ -1270,6 +1313,230 @@ def move_targets(
         v = board.judge(payload.class_group_id, src, p.id)
         out.append({"period_id": p.id, "status": v.status, "reason": v.reason})
     return {"from_period_id": src, "targets": out}
+
+
+@router.post("/{timetable_id}/forecast")
+def forecast(
+    timetable_id: int, payload: ForecastRequest, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Which rules this teacher's lessons would break in each period, asked
+    for when the teacher is selected so the colours are ready before a lesson
+    is picked up. Nothing is saved."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    require_in_school(db, Teacher, [payload.teacher_id], timetable.school_id, "teacher")
+    return lesson_placing.forecast(db, timetable, _board(db, timetable, include_newer=True), payload.teacher_id)
+
+
+def _refuse_if_taken(db: Session, timetable: Timetable, section_id: int, period_id: int, teacher_ids: list[int]) -> None:
+    """The section has to be free then, and so do these teachers."""
+    here = db.query(TimetableEntry).filter(
+        TimetableEntry.timetable_id == timetable.id, TimetableEntry.period_id == period_id,
+    ).all()
+    if any(e.class_group_id == section_id for e in here):
+        raise HTTPException(status_code=400, detail="This section already has a lesson in that period.")
+    for e in here:
+        if e.teacher_id is not None and e.teacher_id in teacher_ids:
+            teacher = db.get(Teacher, e.teacher_id)
+            raise HTTPException(status_code=400, detail=f"{teacher.name} is already teaching in that period.")
+
+
+def _place_subject(db: Session, timetable: Timetable, payload: LessonPlace, period: Period) -> list[TimetableEntry]:
+    require_in_school(db, ClassGroup, [payload.class_group_id], timetable.school_id, "section")
+    require_in_school(db, Subject, [payload.subject_id], timetable.school_id, "subject")
+    requirement = db.query(SubjectRequirement).filter(
+        SubjectRequirement.class_group_id == payload.class_group_id,
+        SubjectRequirement.subject_id == payload.subject_id,
+    ).first()
+    if requirement is None:
+        raise HTTPException(status_code=400, detail="This section's plan doesn't include that subject.")
+    section, subject = db.get(ClassGroup, payload.class_group_id), db.get(Subject, payload.subject_id)
+    if (subject.lab_batch_count or 1) > 1:
+        raise HTTPException(status_code=400, detail="Split labs are placed by Generate, since each batch needs its own teacher.")
+    existing = db.query(TimetableEntry).filter(
+        TimetableEntry.timetable_id == timetable.id,
+        TimetableEntry.class_group_id == payload.class_group_id,
+        TimetableEntry.subject_id == payload.subject_id,
+    ).all()
+    if len(existing) >= requirement.periods_per_week:
+        raise HTTPException(status_code=400, detail=f"All of {section.name}'s {subject.name} lessons are placed already.")
+    holder = next((e.teacher_id for e in existing if e.teacher_id is not None), None)
+    if holder is not None and holder != payload.teacher_id:
+        raise HTTPException(status_code=400, detail=f"{db.get(Teacher, holder).name} already teaches this subject in this section.")
+    lesson = next(
+        (x for x in lesson_placing.lessons_for_school(db, timetable.school_id) if x["key"] == f"r{requirement.id}"), None,
+    )
+    if lesson is None or payload.teacher_id not in lesson["teacher_ids"]:
+        raise HTTPException(status_code=400, detail="That teacher isn't set up to teach this subject in this section.")
+    if lesson["frozen"]:
+        raise HTTPException(status_code=400, detail=f"{lesson['frozen']} is frozen.")
+    _refuse_if_frozen(db, payload.class_group_id)
+    _check_lesson_slot(db, period.id, payload.class_group_id)
+    _refuse_if_taken(db, timetable, payload.class_group_id, period.id, [payload.teacher_id])
+    entry = TimetableEntry(
+        timetable_id=timetable.id, class_group_id=payload.class_group_id, subject_id=payload.subject_id,
+        teacher_id=payload.teacher_id, period_id=period.id, assistant_teacher_id=requirement.assistant_teacher_id,
+        room_id=lesson_placing.room_for(db, timetable, subject, section, period.id, set()),
+    )
+    db.add(entry)
+    return [entry]
+
+
+def _place_block(db: Session, timetable: Timetable, payload: LessonPlace, period: Period) -> list[TimetableEntry]:
+    require_in_school(db, ElectiveBlock, [payload.block_id], timetable.school_id, "block")
+    lesson = next(
+        (x for x in lesson_placing.lessons_for_school(db, timetable.school_id) if x["key"] == f"b{payload.block_id}"), None,
+    )
+    if lesson is None or payload.teacher_id not in lesson["teacher_ids"]:
+        raise HTTPException(status_code=400, detail="That teacher isn't set up to teach in this block.")
+    if lesson["frozen"]:
+        raise HTTPException(status_code=400, detail=f"{lesson['frozen']} is frozen.")
+    existing = db.query(TimetableEntry).filter(
+        TimetableEntry.timetable_id == timetable.id, TimetableEntry.elective_block_id == payload.block_id,
+    ).all()
+    if len({e.period_id for e in existing}) >= lesson["periods_per_week"]:
+        raise HTTPException(status_code=400, detail=f"All of {lesson['label']}'s lessons are placed already.")
+    for sid in lesson["section_ids"]:
+        _refuse_if_frozen(db, sid)
+        _check_lesson_slot(db, period.id, sid)
+    busy = {e.teacher_id for e in db.query(TimetableEntry).filter(
+        TimetableEntry.timetable_id == timetable.id, TimetableEntry.period_id == period.id,
+    ) if e.teacher_id is not None}
+    # Each group keeps the teacher it already has. Otherwise the plan's choice,
+    # then the teacher doing the dragging, then anyone qualified who's free. A
+    # group with nobody free is placed with no teacher yet, as the solver does.
+    chosen: dict[int, int | None] = {}
+    used: set[int] = set()
+    for option in lesson["options"]:
+        held = next((e.teacher_id for e in existing if e.elective_option_id == option["option_id"] and e.teacher_id), None)
+        fixed = held or option["preferred_teacher_id"]
+        if fixed:
+            chosen[option["option_id"]] = fixed
+            used.add(fixed)
+    if payload.teacher_id not in used:
+        for option in lesson["options"]:
+            if option["option_id"] not in chosen and payload.teacher_id in option["teacher_ids"]:
+                chosen[option["option_id"]] = payload.teacher_id
+                used.add(payload.teacher_id)
+                break
+    if payload.teacher_id not in used:
+        raise HTTPException(status_code=400, detail="Another teacher already teaches that group in this block.")
+    for option in lesson["options"]:
+        if option["option_id"] not in chosen:
+            pick = next((t for t in option["teacher_ids"] if t not in busy and t not in used), None)
+            chosen[option["option_id"]] = pick
+            if pick is not None:
+                used.add(pick)
+    for sid in lesson["section_ids"]:
+        _refuse_if_taken(db, timetable, sid, period.id, [t for t in chosen.values() if t])
+    subjects = {s.id: s for s in db.query(Subject).filter(Subject.school_id == timetable.school_id).all()}
+    sections = {c.id: c for c in db.query(ClassGroup).filter(ClassGroup.id.in_(lesson["section_ids"])).all()}
+    rooms: set[int] = set()
+    made = []
+    for option in lesson["options"]:
+        members = option["section_ids"]
+        if not members:
+            continue
+        room = lesson_placing.room_for(db, timetable, subjects.get(option["subject_id"]), sections[members[0]], period.id, rooms)
+        if room:
+            rooms.add(room)
+        for sid in members:
+            made.append(TimetableEntry(
+                timetable_id=timetable.id, class_group_id=sid, subject_id=option["subject_id"],
+                teacher_id=chosen[option["option_id"]], period_id=period.id, room_id=room,
+                elective_block_id=payload.block_id, elective_option_id=option["option_id"],
+            ))
+    db.add_all(made)
+    return made
+
+
+@router.post("/{timetable_id}/place-lesson", response_model=EntryUpdateOut)
+def place_lesson(
+    timetable_id: int, payload: LessonPlace, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Put one lesson on the timetable by hand. Refused if it would put a
+    teacher, a section or a frozen lesson in two places; a rule it breaks is
+    allowed, and comes back in `violations`, as for a move."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    require_in_school(db, Period, [payload.period_id], timetable.school_id, "period")
+    require_in_school(db, Teacher, [payload.teacher_id], timetable.school_id, "teacher")
+    period = db.get(Period, payload.period_id)
+    if period.is_break:
+        raise HTTPException(status_code=400, detail=f"Nothing can be scheduled in {_NO_LESSONS_IN.get(period.kind, 'a break')}.")
+    if payload.block_id is not None:
+        made = _place_block(db, timetable, payload, period)
+    elif payload.class_group_id is not None and payload.subject_id is not None:
+        made = _place_subject(db, timetable, payload, period)
+    else:
+        raise HTTPException(status_code=400, detail="Say which lesson to place.")
+    db.commit()
+    for entry in made:
+        db.refresh(entry)
+    db.refresh(timetable)
+    return EntryUpdateOut(entries=[_entry_out(db, e) for e in made], violations=_violations_after_edit(db, timetable))
+
+
+@router.post("/{timetable_id}/remove-slot", response_model=EntryUpdateOut)
+def remove_slot(
+    timetable_id: int, payload: SlotRemove, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Take a slot off the timetable, back to the lesson cards. A block goes
+    for every section sharing it. Frozen and locked lessons stay."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    sections = _sections_moving_together(db, timetable.id, payload.class_group_id, payload.period_id)
+    entries = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.period_id)]
+    if not entries:
+        raise HTTPException(status_code=400, detail="There's nothing in that slot to take off.")
+    for sid in sections:
+        _refuse_if_frozen(db, sid)
+    _refuse_if_subject_frozen(db, entries)
+    locked = [e for e in entries if e.locked]
+    if locked:
+        raise HTTPException(status_code=400, detail=_locked_slots_message(db, locked))
+    removed = [e.id for e in entries]
+    for entry in entries:
+        db.delete(entry)
+    db.commit()
+    db.refresh(timetable)
+    return EntryUpdateOut(entries=[], removed_ids=removed, violations=_violations_after_edit(db, timetable))
+
+
+@router.post("/{timetable_id}/restore-slot", response_model=EntryUpdateOut)
+def restore_slot(
+    timetable_id: int, payload: SlotRestore, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Put lessons back as they were, undoing remove-slot. All or nothing:
+    refused if something else has taken the place since."""
+    timetable = _editable_timetable(db, timetable_id, current_user)
+    if not payload.entries:
+        raise HTTPException(status_code=400, detail="Nothing to put back.")
+    school_id = timetable.school_id
+    require_in_school(db, ClassGroup, [e.class_group_id for e in payload.entries], school_id, "section")
+    require_in_school(db, Subject, [e.subject_id for e in payload.entries], school_id, "subject")
+    require_in_school(db, Period, [e.period_id for e in payload.entries], school_id, "period")
+    people = [t for e in payload.entries for t in (e.teacher_id, e.assistant_teacher_id) if t is not None]
+    if people:
+        require_in_school(db, Teacher, people, school_id, "teacher")
+    rooms = [e.room_id for e in payload.entries if e.room_id is not None]
+    if rooms:
+        require_in_school(db, Room, rooms, school_id, "room")
+    blocks = [e.elective_block_id for e in payload.entries if e.elective_block_id is not None]
+    if blocks:
+        require_in_school(db, ElectiveBlock, blocks, school_id, "block")
+    for e in payload.entries:
+        _refuse_if_frozen(db, e.class_group_id)
+        _check_lesson_slot(db, e.period_id, e.class_group_id)
+        _check_slot_conflict(db, timetable.id, e.class_group_id, e.period_id, e.teacher_id, e.room_id, exclude_entry_ids=set())
+    made = [TimetableEntry(timetable_id=timetable.id, **e.model_dump()) for e in payload.entries]
+    db.add_all(made)
+    db.commit()
+    for entry in made:
+        db.refresh(entry)
+    db.refresh(timetable)
+    return EntryUpdateOut(entries=[_entry_out(db, e) for e in made], violations=_violations_after_edit(db, timetable))
 
 
 @router.post("/{timetable_id}/suggest-move")

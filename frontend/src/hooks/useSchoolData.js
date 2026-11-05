@@ -128,7 +128,7 @@ export function useTimetable(timetableId) {
 export function useGenerateTimetable(schoolId) {
   const queryClient = useQueryClient()
   const generate = useMutation({
-    mutationFn: () => api.generateTimetable(schoolId),
+    mutationFn: (options) => api.generateTimetable(schoolId, options),
     onSuccess: (created) => {
       // Seed the cache with the row the server just returned so the polling
       // query starts from it rather than waiting a round trip to discover a
@@ -145,7 +145,7 @@ export function useGenerateTimetable(schoolId) {
       queryClient.invalidateQueries({ queryKey: keys.timetables(schoolId) })
     },
   })
-  return { generate: () => generate.mutateAsync(), isGenerating: generate.isPending }
+  return { generate: (options) => generate.mutateAsync(options), isGenerating: generate.isPending }
 }
 
 /**
@@ -158,12 +158,17 @@ export function useGenerateTimetable(schoolId) {
  */
 export function useApplyEntryUpdates(timetableId) {
   const queryClient = useQueryClient()
-  return ({ entries = [], violations }) => {
+  return ({ entries = [], violations, removed_ids: removedIds = [] }) => {
     queryClient.setQueryData(keys.timetable(timetableId), (prev) => {
       if (!prev) return prev
       return {
         ...prev,
-        entries: prev.entries.map((e) => entries.find((u) => u.id === e.id) ?? e),
+        entries: [
+          ...prev.entries
+            .filter((e) => !removedIds.includes(e.id))
+            .map((e) => entries.find((u) => u.id === e.id) ?? e),
+          ...entries.filter((u) => !prev.entries.some((e) => e.id === u.id)),
+        ],
         // Recomputed server-side with every edit and patched in alongside the
         // rows. Left out, the warning band would go stale the moment a slot
         // moved - which is exactly when it has something to say.
@@ -173,67 +178,6 @@ export function useApplyEntryUpdates(timetableId) {
   }
 }
 
-/**
- * Move a whole slot in the cache before the server has agreed to it.
- *
- * Dragging used to wait for the round trip before the cell moved, so every
- * drag cost one API call of visible lag on something that should feel like
- * picking a card up and putting it down.
- *
- * The unit is the slot - one section's period - not an entry, matching
- * POST /timetables/{id}/move-slot. An elective block has one entry per option
- * and a split lab one per batch, and they always move together. Whatever is
- * already in the target comes back the other way, so a move into a free cell,
- * a swap of two lessons and a block trading places with a lesson are all the
- * same operation, applied in one cache write so nothing is ever briefly shown
- * twice.
- *
- * Returns a rollback. The move is a guess - the server can still refuse it,
- * usually because the target double-books a teacher - and putting the cells
- * back is the only honest response to that.
- */
-export function useOptimisticSlotMove(timetableId) {
-  const queryClient = useQueryClient()
-  return (classGroupId, fromPeriod, toPeriod) => {
-    const key = keys.timetable(timetableId)
-    const previous = queryClient.getQueryData(key)
-    const at = (period) => ({
-      period_id: period.id,
-      day_of_week: period.day_of_week,
-      order: period.order,
-    })
-    queryClient.setQueryData(key, (prev) => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        entries: prev.entries.map((e) => {
-          if (e.class_group_id !== classGroupId) return e
-          if (e.period_id === fromPeriod.id) return { ...e, ...at(toPeriod) }
-          if (e.period_id === toPeriod.id) return { ...e, ...at(fromPeriod) }
-          return e
-        }),
-        // Deliberately not guessed at. Working out which rules the move breaks
-        // would mean a second implementation of the rule engine in the
-        // browser, and two of those drifting apart is worse than a banner that
-        // settles a moment late. The server sends the real answer back.
-        violations: prev.violations,
-      }
-    })
-    return () => queryClient.setQueryData(key, previous)
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Elective blocks
-// ---------------------------------------------------------------------------
-
-/**
- * Every elective block in the school, each with its options.
- *
- * School-wide rather than per section: the Plan page switches sections
- * without a round trip, and the Timetable tab needs every section's blocks at
- * once to offer each one's student timetables.
- */
 export function useElectiveBlocks(schoolId) {
   return useQuery({
     queryKey: keys.electiveBlocks(schoolId),
@@ -359,6 +303,7 @@ export function useSubjectFreezeActions(schoolId, timetableId) {
   const done = (statuses) => {
     queryClient.setQueryData(keys.subjectFreezes(schoolId, timetableId), statuses)
     queryClient.invalidateQueries({ queryKey: keys.timetable(timetableId) })
+    queryClient.invalidateQueries({ queryKey: ['lessons', schoolId] })
   }
   const freeze = useMutation({ mutationFn: (body) => api.freezeSubject(schoolId, body), onSuccess: done })
   const unfreeze = useMutation({ mutationFn: (id) => api.unfreezeSubject(schoolId, id), onSuccess: done })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api, getToken, setToken } from './api'
 import LandingPage from './components/LandingPage'
@@ -69,6 +69,41 @@ const BASE_TABS = [
  * selected, and which tab is active. Everything else is fetched by the
  * individual tab components so this file doesn't become a god-component.
  */
+// The sidebar on the Timetable step: a thin rail at the left edge that opens it
+// when the pointer gets there. Everywhere else it's just the sidebar.
+function SidebarDrawer({ tucked, children }) {
+  const [open, setOpen] = useState(false)
+  const panel = useRef(null)
+  // Closed by where the pointer is rather than by it leaving the panel: a fast
+  // move can pass the rail without ever being inside the panel to leave it.
+  useEffect(() => {
+    if (!open) return undefined
+    const onMove = (e) => {
+      if (panel.current && e.clientX > panel.current.getBoundingClientRect().right + 8) setOpen(false)
+    }
+    window.addEventListener('pointermove', onMove)
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [open])
+  if (!tucked) return children
+  return (
+    <>
+      <button
+        type="button"
+        className="tw-rail"
+        aria-label="Open sidebar"
+        title="Open sidebar"
+        onMouseEnter={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+      >
+        ›
+      </button>
+      <div ref={panel} className="tw-drawerside" data-open={open ? '1' : undefined}>
+        {children}
+      </div>
+    </>
+  )
+}
+
 function App() {
   const queryClient = useQueryClient()
   const [user, setUser] = useState(null)
@@ -78,6 +113,9 @@ function App() {
   const [selectedSchoolId, setSelectedSchoolId] = useState(null)
   const [classGroups, setClassGroups] = useState([])
   const [selectedClassGroupId, setSelectedClassGroupId] = useState(null)
+  // Goes up each time a section is picked in the sidebar, so the Timetable step
+  // can open it even if it was already the selected one.
+  const [openSectionSignal, setOpenSectionSignal] = useState(0)
   // What a setup-check Fix button asked to open - see handleFix.
   const [focus, setFocus] = useState(null)
   const [teachers, setTeachers] = useState([])
@@ -798,10 +836,14 @@ function App() {
   // Dashboard, Constraints, the whole-school Timetable, Calendar, Settings,
   // Demo - covers the whole school, so no section is shown as selected there.
   const sectionScoped = tab === 'entry' && !inSchoolWideDataEntry
+  // The Timetable step uses the whole window, with the sidebar tucked away at
+  // the left edge until the pointer reaches it.
+  const fullWindow = tab === 'timetable' && !!selectedSchool && schoolDataReady && !locked
 
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+    <div className={`flex bg-slate-50 text-slate-900 ${fullWindow ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       {schools.length > 0 ? (
+        <SidebarDrawer tucked={fullWindow}>
         <Sidebar
           schoolName={selectedSchool?.name}
           institutionType={selectedSchool?.institution_type}
@@ -814,6 +856,7 @@ function App() {
           selectedClassGroupId={sectionScoped ? selectedClassGroupId : null}
           onSelectClassGroup={(id) => {
             setSelectedClassGroupId(id)
+            setOpenSectionSignal((n) => n + 1)
             setDataEntrySubView('plan')
             // From the Dashboard or Settings there's nothing section-
             // specific to show, so picking a section opens its plan.
@@ -838,6 +881,7 @@ function App() {
           onSignOut={handleLogout}
           readOnly={isViewer}
         />
+        </SidebarDrawer>
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -913,7 +957,7 @@ function App() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-10 py-8">
+        <div className={fullWindow ? 'flex min-h-0 flex-1 flex-col' : 'flex-1 overflow-y-auto px-10 py-8'}>
           {!schoolsReady ? (
             <div className="flex items-center gap-2 text-sm text-slate-400">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500" />
@@ -957,6 +1001,7 @@ function App() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
+              className={fullWindow ? 'min-h-0 flex-1' : undefined}
             >
                 {/* Overview is the one tab that still needs a section to
                     do anything (it tracks one section's progress toward a
@@ -1051,9 +1096,10 @@ function App() {
                       readOnly={isViewer}
                       onOpenConstraints={() => setTab('constraints')}
                       onFix={handleFix}
+                      openSectionSignal={openSectionSignal}
                     />
                   ) : (
-                    <p className="text-sm text-slate-500">
+                    <p className="p-8 text-sm text-slate-500">
                       No grades/sections yet. The timetable is generated per section, so add one
                       from the sidebar first.
                     </p>

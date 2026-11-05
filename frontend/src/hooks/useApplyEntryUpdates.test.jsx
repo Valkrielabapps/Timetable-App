@@ -3,7 +3,7 @@ import { renderHook, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { keys } from '../queryClient'
-import { useApplyEntryUpdates, useOptimisticSlotMove } from './useSchoolData'
+import { useApplyEntryUpdates } from './useSchoolData'
 
 vi.mock('../api', () => ({ api: {} }))
 
@@ -53,74 +53,17 @@ function setup(hook) {
 
 const entry = (data, id) => data.entries.find((e) => e.id === id)
 
-describe('useOptimisticSlotMove', () => {
-  it('moves a lesson into a free cell straight away, without waiting for anything', () => {
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    act(() => {
-      result.current(100, P10, P12)
-    })
-    expect(entry(read(), 1)).toMatchObject({ period_id: 12, day_of_week: 1, order: 3 })
-  })
-
-  it('moves every option of a block together', () => {
-    // Moving one option alone would leave the block's subjects in different
-    // periods, which is no longer a block.
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    act(() => {
-      result.current(100, P11, P12)
-    })
-    for (const id of [2, 3, 4]) {
-      expect(entry(read(), id)).toMatchObject({ period_id: 12, day_of_week: 1, order: 3 })
-    }
-  })
-
-  it('sends whatever was in the target back the other way', () => {
-    // A block dropped on a lesson trades places with it, all in one write, so
-    // the two are never shown in the same cell.
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    act(() => {
-      result.current(100, P11, P10)
-    })
-    for (const id of [2, 3, 4]) expect(entry(read(), id)).toMatchObject({ period_id: 10, order: 0 })
-    expect(entry(read(), 1)).toMatchObject({ period_id: 11, order: 1 })
-  })
-
-  it("leaves other sections' lessons in the same period alone", () => {
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    act(() => {
-      result.current(100, P10, P12)
-    })
-    expect(entry(read(), 9)).toMatchObject({ period_id: 10, order: 0 })
-  })
-
-  it('puts every cell back when the server refuses', () => {
-    // A cell that stays where it was dropped after a rejection is worse than
-    // the lag: the screen and the database disagree.
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    let rollback
-    act(() => {
-      rollback = result.current(100, P11, P10)
-    })
-    // Asserted before rolling back, because a move that never happened rolls
-    // back to the same place and this test would pass against a no-op.
-    expect(entry(read(), 2)).toMatchObject({ period_id: 10 })
-    act(() => rollback())
-    expect(read()).toEqual(TIMETABLE)
-  })
-
-  it('does not guess at which rules the move breaks', () => {
-    // Working that out in the browser means a second implementation of the
-    // rule engine, and two of those drifting apart is worse than a banner that
-    // settles a moment late. The server sends the real answer back.
-    const { result, read } = setup(() => useOptimisticSlotMove(3))
-    act(() => {
-      result.current(100, P10, P12)
-    })
-    expect(read().violations).toEqual([])
-  })
-})
-
 describe('useApplyEntryUpdates', () => {
+  it('adds new rows and drops removed ones', () => {
+    const { result, read } = setup(() => useApplyEntryUpdates(3))
+    const before = read().entries
+    act(() => result.current({ entries: [{ id: 999, period_id: 1 }], removed_ids: [before[0].id] }))
+    const ids = read().entries.map((e) => e.id)
+    expect(ids).toContain(999)
+    expect(ids).not.toContain(before[0].id)
+    expect(ids).toHaveLength(before.length)
+  })
+
   it('patches the violations the server sent back with the rows', () => {
     // Without this the warning band goes stale the moment a slot moves, which
     // is exactly when it has something to say.

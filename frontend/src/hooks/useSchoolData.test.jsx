@@ -224,7 +224,7 @@ describe('useGenerateTimetable', () => {
     const created = await result.current.generate()
 
     expect(created.id).toBe(9)
-    expect(api.generateTimetable).toHaveBeenCalledWith(7)
+    expect(api.generateTimetable).toHaveBeenCalledWith(7, undefined)
   })
 
   it('adds the new timetable to the list at once, so the old one is never shown in between', async () => {

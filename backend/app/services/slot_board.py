@@ -82,6 +82,9 @@ class Board:
         self._zero: dict = {}
         self.school_id = school_id
         self.rules = rules
+        # Lessons that don't exist yet, counted while asking what placing one
+        # would break (see rules_broken_by).
+        self.extra: list[Placement] = []
         self.base = self._broken() if rules else set()
         # "P3" - the lesson number in its day, what the grid calls it.
         self.number: dict[int, int] = {}
@@ -262,7 +265,7 @@ class Board:
                 teacher_id=e.teacher_id, period_id=pid, day_of_week=p.day_of_week, order=p.order,
                 occupies_teacher=e.teacher_id is not None,
             ))
-        self._last = check_rules(placements, rules, index)
+        self._last = check_rules(placements + self.extra, rules, index)
         return {(v.constraint_id, v.detail) for v in self._last if v.strength == "required"}
 
     def _new_rule_breaks(self) -> list[str]:
@@ -270,6 +273,18 @@ class Board:
         names = {v.description for v in self._last
                  if v.strength == "required" and (v.constraint_id, v.detail) in now - self.base}
         return [f"Breaks “{n}”" for n in sorted(names)]
+
+    def rules_broken_by(self, extra: list[Placement]) -> list[str]:
+        """The rules that adding these lessons would newly break, by name."""
+        if not self.rules:
+            return []
+        self.extra = extra
+        try:
+            now = self._broken()
+            return sorted({v.description for v in self._last
+                           if v.strength == "required" and (v.constraint_id, v.detail) in now - self.base})
+        finally:
+            self.extra = []
 
     # -- fixing a blocked move ------------------------------------------
 

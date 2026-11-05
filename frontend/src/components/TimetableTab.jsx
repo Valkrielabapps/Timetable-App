@@ -1,35 +1,32 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { pickVersions, versionLabel } from '../lib/versions'
 import { api } from '../api'
-import ScheduleGrid from './ScheduleGrid.jsx'
 import {
   useApplyEntryUpdates,
   useElectiveBlocks,
   useFrozenStatus,
+  useRooms,
   useSetFrozen,
   useSubjectFreezeActions,
   useSubjectFreezes,
-  useOptimisticSlotMove,
   useGenerateTimetable,
   useSetupCheck,
   useTimetable,
   useTimetables,
+  useVersionActions,
 } from '../hooks/useSchoolData'
-import { combinationsFor, keeps, MAX_COMBINATIONS } from '../studentCombinations'
+import { useForecast, useLessons, useStartBlank, useTimetableEdits } from '../hooks/useTimetableEdits'
 import SubstitutionsTab from './SubstitutionsTab'
 import SubjectFreezePanel from './SubjectFreezePanel'
-import SearchableSelect from './SearchableSelect'
 import { sortByName, sortSections } from '../sorting'
-import { teacherLessons } from '../electiveSections'
 import GenerationFailedDialog from './GenerationFailedDialog'
 import SetupCheckPanel from './SetupCheckPanel'
 import SendToSupport from './SendToSupport'
 import { useEntitlements } from '../hooks/useEntitlements'
-
-// Where the sidebar scrolls to. Derived from the id rather than passed around,
-// so selecting a section needs no extra wiring between the two components.
-const sectionAnchorId = (classGroupId) => `timetable-section-${classGroupId}`
+import Workspace from './timetable/Workspace'
+import PlainView from './timetable/PlainView'
+import { buildRows, sectionTitle } from './timetable/lessonLogic'
+import './timetable/workspace.css'
 
 // Failed generations whose reasons have already been shown and closed. Kept
 // outside the component so switching tabs and back doesn't pop the same
@@ -37,82 +34,34 @@ const sectionAnchorId = (classGroupId) => `timetable-section-${classGroupId}`
 const seenFailures = new Set()
 
 /**
- * Generates a timetable for the whole school (every section + every
- * teacher together, so there are no cross-section conflicts - see
- * backend/app/services/solver.py, which already reads every class group
- * in the school in one solve) and displays it as a day x period grid,
- * either for the currently selected section or for a chosen teacher
- * across all their sections.
+ * The Timetable step: build and read the whole school's timetable.
+ *
+ * Workspace is where it's built: one teacher at a time, their lessons dragged
+ * onto their week, with the class timetables beside it. Plain view is for
+ * reading: every section, teacher or room as one large grid. Substitutions
+ * shares the same data, so it's a tab here rather than a step of its own.
  *
  * Generation runs as a background job on the backend (see
- * backend/app/routers/timetables.py) because a large school's solve can
- * take up to a minute - too long to hold an HTTP request open. So instead
- * of awaiting one blocking call, we kick the job off, get back a
- * "generating" row immediately, and poll GET /api/timetables/{id} on an
- * interval until status is no longer "generating".
+ * backend/app/routers/timetables.py) because a large school's solve can take up
+ * to a minute. We kick the job off, get back a "generating" row immediately, and
+ * poll GET /api/timetables/{id} until its status changes. It can rebuild
+ * everything or fill the gaps around what's already placed, and either way the
+ * result is a new version.
  *
- * The Export links download the whole school's timetable as a single
- * file (every section + every teacher, one sheet/page each - see
- * backend/app/services/export.py), not just whatever's currently shown
- * on screen, since that's what an admin printing schedules actually
- * wants.
+ * Exports download the whole school's timetable as one file (see
+ * backend/app/services/export.py), since that's what an admin printing
+ * schedules actually wants.
  *
- * Once a timetable is generated, individual slots can be hand-edited in
- * the "By Section" view: click a slot to lock/unlock it (locked = the next
- * regenerate leaves it exactly where it is - see lock-slot in
- * backend/app/routers/timetables.py, and the locked-entry handling in
- * backend/app/services/solver.py), or drag an unlocked slot to a different
- * period to move it by hand, swapping with whatever is there. The unit is
- * the slot, not the entry: an elective block (one entry per option) or a
- * split lab (one per batch) moves as a whole, because its parts always run
- * together. There's no
- * lock icon - locked/unlocked is shown as a light red/green tint on the
- * whole cell instead, so the state reads at a glance across the whole
- * grid. Moving goes through move-slot, which rejects the change with a
- * message if it would double-book a teacher or a room - that message is
- * what ends up in `error` and shown below the grid. Editing is section-view-only: the "By
- * Teacher" view mixes entries from several different classes, where "move
- * this" is ambiguous (though the red/green tint still shows there, as
- * information).
- *
- * The text box above the grid ("Or describe an edit...") is a
- * conversational alternative to dragging - POST
- * /api/timetables/{id}/edit-command (backend/app/services/
- * edit_command_parser.py) resolves plain English against this
- * timetable's actual entries and the school's actual periods (grounded
- * by id, not fuzzy-matched from text) and performs the SAME lock/move/
- * swap operation the drag-and-drop handlers below call. It can reference
- * any class group in the school by name, not just whichever one is
- * currently selected in the grid. There's no non-LLM fallback for this
- * one (unlike constraint parsing) - with no ANTHROPIC_API_KEY configured
- * it just returns an error telling the admin to drag instead, since
- * there's no fixed-pattern shortcut for "which of potentially hundreds of
- * entries did they mean" worth building.
- *
- * `page` toggles between this generated-schedule view and Substitutions
- * (SubstitutionsTab) - they used to be separate top-level tabs, but
- * Substitutions is really a sibling lens on the same generated timetable
- * (same data: entries, periods, teachers), not a distinct workflow, so it
- * lives here as a second view instead of adding to the top nav's tab
- * count.
+ * The typed edit (POST /api/timetables/{id}/edit-command, see
+ * backend/app/services/edit_command_parser.py) resolves plain English against
+ * this timetable's real entries and performs the same operations a drag does.
  */
 export default function TimetableTab({
   schoolId,
   classGroup,
   classGroups,
   teachers,
-  // Only to name the subjects in each section's elective combinations.
   subjects = [],
-  // periods/timetable/generating are App.jsx's own state now, not fetched
-  // or held locally here - this component gets unmounted every time the
-  // admin switches to another top-level tab
-  // (`{tab === 'timetable' && (...)}` in App.jsx), so a just-generated
-  // timetable kept only in this component's memory was destroyed on every
-  // tab switch, making it look like it "disappeared" and prompting to
-  // generate a new one. App.jsx fetches it once (as part of
-  // loadSchoolData) and owns it from then on, including polling while a
-  // generation is in progress - even while the admin is on a different
-  // tab - so there's nothing left here that a remount can lose.
   periods,
   constraints = [],
   readOnly = false,
@@ -120,62 +69,77 @@ export default function TimetableTab({
   // Opens what a setup-check problem points at: { type, id, ... } - see
   // SetupCheckPanel and App.jsx's handleFix.
   onFix,
+  // Changes each time a section is picked in the sidebar: open it in plain view.
+  openSectionSignal = 0,
 }) {
-  // Constraints saved on the Constraints tab that the solver doesn't
-  // actually apply - most commonly the "scheduling_rule" catch-all for
-  // free-text rules the parser couldn't map to a real constraint type
-  // (see generate_school_timetable's docstring in
-  // backend/app/services/solver.py), but any constraint's `enforced` flag
-  // can come back false (e.g. an availability rule where no day was
-  // recognized). Surfaced here, right before Generate, rather than only on
-  // the Constraints tab itself - an admin who set up rules earlier and
-  // comes straight to Timetable to generate would otherwise have no reason
-  // to suspect some of them are silently no-ops.
+  // Constraints the solver doesn't actually apply - most commonly free-text
+  // rules the parser couldn't map to a real constraint type. Surfaced under
+  // Rules: an admin who set rules up earlier would otherwise have no reason to
+  // suspect some of them are silently no-ops.
   const unenforcedConstraints = constraints.filter((c) => !c.enforced)
   const [page, setPage] = useState('schedule') // 'schedule' | 'substitutions'
-  const [view, setView] = useState('section') // 'section' | 'teacher'
-  // The first teacher alphabetically, like the picker lists them.
-  const [selectedTeacherId, setSelectedTeacherId] = useState(sortByName(teachers)[0]?.id ?? null)
-  const [error, setError] = useState(null)
-  // Where the dragged slot came from: { classGroupId, period }. The section
-  // is kept so a drop into another section's grid can be refused rather than
-  // quietly moving the slot inside its own.
-  const [dragSource, setDragSource] = useState(null)
-  // Where the slot being dragged could go - { classGroupId, fromPeriodId,
-  // byPeriod: Map(periodId -> { status, reason }) } - asked for as soon as
-  // it is picked up, so the grid can colour every cell before the drop.
-  const [dragTargets, setDragTargets] = useState(null)
+  const [mode, setMode] = useState(readOnly ? 'plain' : 'work') // 'work' | 'plain'
+  const sortedTeachers = useMemo(() => sortByName(teachers), [teachers])
+  const [selectedTeacherId, setSelectedTeacherId] = useState(sortedTeachers[0]?.id ?? null)
+  const sections = useMemo(() => sortSections(classGroups), [classGroups])
+  const [plain, setPlain] = useState({ kind: 'section', id: classGroup?.id ?? null })
+  const [menu, setMenu] = useState(null) // null | 'generate' | 'export' | 'edit'
+  const [drawer, setDrawer] = useState(null) // null | 'rules' | 'freeze'
+  const [freezeTab, setFreezeTab] = useState('sections') // 'sections' | 'subjects'
+  const [flashEntry, setFlashEntry] = useState(null)
+  const [printSignal, setPrintSignal] = useState(0)
+  const toasts = useRef(null)
+  const toast = useCallback((...args) => toasts.current?.show(...args), [])
+  const setError = useCallback((message) => { if (message) toast('bad', message) }, [toast])
   // Timetables made with compromises that were accepted here, so the notice
   // goes at once rather than when the timetable is next fetched.
   const [acceptedCompromises, setAcceptedCompromises] = useState(() => new Set())
-  const dragToken = useRef(0)
-  async function startDrag(classGroupId, period) {
-    setDragSource({ classGroupId, period })
-    setDragTargets(null)
-    if (!timetable || !period || !api.moveTargets) return
-    const token = ++dragToken.current
-    try {
-      const res = await api.moveTargets(timetable.id, classGroupId, period.id)
-      if (token !== dragToken.current) return // a newer drag, or this one ended
-      setDragTargets({
-        classGroupId,
-        fromPeriodId: period.id,
-        byPeriod: new Map(res.targets.map((t) => [t.period_id, t])),
-      })
-    } catch {
-      // No colours, and the drop is checked by the server as before.
-    }
-  }
+
+  useEffect(() => {
+    // Re-syncs whenever the teacher list changes. Without this, switching
+    // schools could leave a stale id selected and an empty grid with no
+    // indication why.
+    if (!sortedTeachers.some((t) => t.id === selectedTeacherId)) setSelectedTeacherId(sortedTeachers[0]?.id ?? null)
+  }, [sortedTeachers, selectedTeacherId])
+
+  // Picking a section in the sidebar opens it for reading. Not on arrival:
+  // only when someone has asked to go somewhere.
+  const lastSignal = useRef(openSectionSignal)
+  useEffect(() => {
+    if (lastSignal.current === openSectionSignal) return
+    lastSignal.current = openSectionSignal
+    if (!classGroup) return
+    setPage('schedule')
+    setMode('plain')
+    setPlain({ kind: 'section', id: classGroup.id })
+  }, [openSectionSignal, classGroup])
+
+  // The school's current version, or a generation still running; a failure
+  // after the current version is reported beside it, not instead of it.
+  const { data: timetableList = [] } = useTimetables(schoolId)
+  const { shownId, failure: failedVersion, current: currentVersion } = pickVersions(timetableList)
+  const { data: timetable = null } = useTimetable(shownId)
+  const { data: failureTimetable = null } = useTimetable(failedVersion?.id ?? null)
+  const versionActions = useVersionActions(schoolId)
+
+  const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
+  const startBlank = useStartBlank(schoolId)
+  const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
+  const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
+  const { data: rooms = [] } = useRooms(schoolId)
+  const { data: lessons = [] } = useLessons(schoolId)
+  const subjectName = (id) => subjects.find((s) => s.id === id)?.name ?? '?'
+
+  const periodsById = useMemo(() => new Map(periods.map((p) => [p.id, p])), [periods])
+  const layout = useMemo(() => buildRows(periods), [periods])
+  const sectionsById = useMemo(() => new Map(classGroups.map((c) => [c.id, c])), [classGroups])
+  const teacherName = (id) => teachers.find((t) => t.id === id)?.name ?? null
+
   // A move that can't be made as asked, and ways to make room for it:
   // { reason, suggestions: null while looking | [] | [{ summary, steps, ... }] }
   const [moveFix, setMoveFix] = useState(null)
   const [applyingFix, setApplyingFix] = useState(false)
-  async function offerFix(classGroupId, fromPeriodId, toPeriodId, reason, message = null) {
-    setError(null)
-    if (!api.suggestMove) {
-      setError(message ?? `Can't move it there: ${reason}.`)
-      return
-    }
+  async function offerFix(classGroupId, fromPeriodId, toPeriodId, reason) {
     setMoveFix({ reason, suggestions: null })
     try {
       const res = await api.suggestMove(timetable.id, classGroupId, fromPeriodId, toPeriodId)
@@ -196,13 +160,21 @@ export default function TimetableTab({
       setApplyingFix(false)
     }
   }
-  function endDrag() {
-    dragToken.current += 1
-    setDragSource(null)
-    setDragTargets(null)
-  }
-  // Which export format is currently downloading, if any - guards against
-  // a double-click firing two downloads with no visual feedback either way.
+
+  const edits = useTimetableEdits(timetable?.id, periodsById, {
+    onRefused: (err) => toast('bad', 'That change was not saved', err.message),
+    onMoveRefused: (sectionId, from, to, err) => toast('bad', 'Not moved', err.message, {
+      label: 'Find a way', run: () => offerFix(sectionId, from, to, err.message.replace(/\.$/, '')),
+    }),
+  })
+  const editsWithNames = useMemo(() => ({
+    ...edits,
+    place: (lesson, teacherId, period, teacherIds) => edits.place(lesson, teacherId, period, teacherIds, teacherName),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [edits.undoCount, edits.revision, timetable?.id, teachers])
+
+  // Which export format is currently downloading, if any - guards against a
+  // double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
   // Whether exports carry the Timetablz name. Leaving it off is a paid-plan
   // option; on Free, unticking opens the upgrade prompt instead.
@@ -223,12 +195,8 @@ export default function TimetableTab({
     }
     setWatermark(next)
   }
-  // Conversational editing (POST /api/timetables/{id}/edit-command) - a
-  // plain-English alternative to drag-and-drop, e.g. "move Grade 8's Math
-  // to period 2 on Wednesdays". Section-view-only, same reasoning as
-  // drag-and-drop above. commandFeedback holds the last result (success
-  // description or error message) so the admin gets confirmation of what
-  // actually happened, since there's no visual drag to watch this time.
+  // The typed edit. commandFeedback says what actually happened, since there's
+  // no visual drag to watch this time.
   const [commandText, setCommandText] = useState('')
   const [commandSubmitting, setCommandSubmitting] = useState(false)
   const [commandFeedback, setCommandFeedback] = useState(null) // { ok: bool, text: string } | null
@@ -236,6 +204,7 @@ export default function TimetableTab({
   async function handleExport(format) {
     if (exporting) return
     setExporting(format)
+    setMenu(null)
     try {
       await api.downloadTimetableExport(timetable.id, format, { watermark })
     } catch (err) {
@@ -245,90 +214,71 @@ export default function TimetableTab({
     }
   }
 
-  useEffect(() => {
-    // Re-syncs whenever the teacher list changes - not just when nothing
-    // is selected. Without the "still valid" check, switching schools
-    // could leave selectedTeacherId pointing at a teacher that doesn't
-    // exist in the new school's list at all (a stale id from before),
-    // silently rendering an empty "By Teacher" grid with no indication
-    // why, until the admin happened to reselect manually.
-    const stillValid = teachers.some((t) => t.id === selectedTeacherId)
-    if (!stillValid) setSelectedTeacherId(sortByName(teachers)[0]?.id ?? null)
-  }, [teachers, selectedTeacherId])
-
-  // The latest timetable for this school, polled by useTimetable while the
-  // solver is still working. Replaces App.jsx's setInterval + ref: the
-  // interval is derived from the row's status, so it stops on its own and
-  // resumes by itself after a reload mid-generation.
-  const { data: timetableList = [] } = useTimetables(schoolId)
-  // The school's current version, or a generation still running; a failure
-  // after the current version is reported beside it, not instead of it.
-  const { shownId, failure: failedVersion, current: currentVersion } = pickVersions(timetableList)
-  const { data: timetable = null } = useTimetable(shownId)
-  const { data: failureTimetable = null } = useTimetable(failedVersion?.id ?? null)
-
-  const { generate, isGenerating: isSubmittingGenerate } = useGenerateTimetable(schoolId)
-  const applyEntryUpdates = useApplyEntryUpdates(timetable?.id)
-  const optimisticSlotMove = useOptimisticSlotMove(timetable?.id)
-  const { data: electiveBlocks = [] } = useElectiveBlocks(schoolId)
-  const subjectName = (id) => subjects.find((s) => s.id === id)?.name ?? '?'
-
   // Frozen sections keep their timetable through every later generation -
   // see backend/app/services/freezing.py. Keyed by the timetable on screen so
   // a new one re-checks whether each still matches what it was frozen with.
   const { data: frozenList = [] } = useFrozenStatus(schoolId, timetable?.id)
-  const frozenById = new Map(frozenList.filter((f) => f.frozen).map((f) => [f.class_group_id, f]))
+  const frozenById = useMemo(() => new Map(frozenList.filter((f) => f.frozen).map((f) => [f.class_group_id, f])), [frozenList])
+  const frozenSections = useMemo(() => new Set(frozenById.keys()), [frozenById])
   const { setFrozen, isSaving: freezing } = useSetFrozen(schoolId, timetable?.id)
 
-  // Frozen subjects keep one subject's lessons in place in the sections
-  // chosen - see backend/app/services/subject_freezing.py.
+  // Frozen subjects keep one subject's lessons in place in the sections chosen
+  // - see backend/app/services/subject_freezing.py.
   const { data: subjectFreezes = [] } = useSubjectFreezes(schoolId, timetable?.id)
   const subjectFreezing = useSubjectFreezeActions(schoolId, timetable?.id)
-  const [freezeTab, setFreezeTab] = useState('sections') // 'sections' | 'subjects'
 
-  async function handleFreeze(ids, frozen) {
-    setError(null)
+  const handleFreeze = useCallback(async (ids, frozen) => {
     try {
       await setFrozen(ids, frozen)
     } catch (err) {
       setError(err.message)
     }
-  }
+  }, [setFrozen, setError])
 
   // With sections frozen, say what Generate will keep and what it will build
-  // before it starts.
-  const [confirmGenerate, setConfirmGenerate] = useState(false)
+  // before it starts. Holds whether it's keeping what's placed.
+  const [confirmGenerate, setConfirmGenerate] = useState(null)
   // Problems the setup check is sure will stop generation: Generate asks
   // first, since the answer is already known.
   const { data: setupCheck, isLoading: checkingSetup } = useSetupCheck(schoolId)
   const setupErrors = setupCheck?.errors ?? []
-  const [checkBlocked, setCheckBlocked] = useState(false)
-  async function handleGenerate(skipCheck = false) {
+  const [checkBlocked, setCheckBlocked] = useState(null)
+  async function handleGenerate(keepPlaced, { skipCheck = false, confirmed = false } = {}) {
+    setMenu(null)
     if (!skipCheck && setupErrors.length > 0) {
-      setCheckBlocked(true)
+      setCheckBlocked({ keepPlaced })
       return
     }
-    setCheckBlocked(false)
-    if ((frozenById.size > 0 || subjectFreezes.length > 0) && !confirmGenerate) {
-      setConfirmGenerate(true)
+    setCheckBlocked(null)
+    if ((frozenById.size > 0 || subjectFreezes.length > 0) && !confirmed) {
+      setConfirmGenerate({ keepPlaced })
       return
     }
-    setConfirmGenerate(false)
-    setError(null)
+    setConfirmGenerate(null)
     try {
-      await generate()
+      await generate({ keepPlaced })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  async function handleStartBlank() {
+    setMenu(null)
+    try {
+      await startBlank()
+      setMode('work')
+      toast('ok', 'Blank timetable started', 'Earlier versions are still in the list. Generate can fill the gaps at any time.')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  async function handleOpenVersion(id) {
+    try {
+      await versionActions.open(id)
     } catch (err) {
       setError(err.message)
     }
   }
 
-  // Patches the one (or two, for a swap) entries the server actually
-  // returned into local state instead of re-fetching the whole timetable
-  // - refetching every entry in the school just to reflect a single
-  // lock/move/swap was the cause of the lock toggle visibly taking 5-10
-  // seconds to show its new state (a school-wide timetable can be
-  // hundreds of rows; PATCH/swap already return the exact row(s) that
-  // changed, so there's nothing else here that could have gone stale).
   async function handleEditCommand(e) {
     e.preventDefault()
     const text = commandText.trim()
@@ -347,230 +297,6 @@ export default function TimetableTab({
     }
   }
 
-  // Locks or unlocks everything in the clicked cell - a block's options are
-  // pinned together, since they always run together. Anything already locked
-  // counts as the slot being locked, so a click on a part-locked block frees
-  // all of it rather than locking the rest.
-  async function handleToggleLock(entries) {
-    if (entries.length === 0) return
-    setError(null)
-    const { class_group_id: classGroupId, period_id: periodId } = entries[0]
-    const locked = !entries.some((e) => e.locked)
-    try {
-      applyEntryUpdates(await api.lockSlot(timetable.id, classGroupId, periodId, locked))
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
-  async function handleDrop(day, order, classGroupId) {
-    const source = dragSource
-    const known = dragTargets
-    endDrag()
-    if (!source) return
-    // Every section's grid is on screen at once, so a drop can land in a grid
-    // the dragged slot does not belong to. Moving it would quietly reposition
-    // it inside its OWN section, which is not what dropping it over 8B looks
-    // like it should do.
-    if (source.classGroupId !== classGroupId) {
-      setError("A slot can only be moved within its own section's timetable.")
-      return
-    }
-    const targetPeriod = periodAt(day, order)
-    if (!targetPeriod || targetPeriod.id === source.period.id) return // dropped back on itself
-    if (kindOf(targetPeriod) !== 'lesson') {
-      const what = { class_teacher: 'the class teacher period', zero: 'the zero period' }[kindOf(targetPeriod)]
-      setError(`Nothing can be scheduled in ${what ?? 'a break'}.`)
-      return
-    }
-    if (frozenById.has(classGroupId)) {
-      setError('This section is frozen. Unfreeze it to change its timetable.')
-      return
-    }
-    const section = classGroups.find((cg) => cg.id === classGroupId)
-    if (section && isOffFor(targetPeriod, section)) {
-      setError(`${section.grade}'s school day is over by then, so no lessons go there.`)
-      return
-    }
-    if (section && isZeroFor(targetPeriod, section)) {
-      setError(`That's ${section.grade ?? 'this section'}'s zero period - no lessons are scheduled in it.`)
-      return
-    }
-    if (entriesFor(day, order, classGroupId).some((e) => e.locked)) {
-      setError("That slot is locked. Unlock it before swapping something into it.")
-      return
-    }
-    const frozenThere = entriesFor(day, order, classGroupId).find((e) => e.subject_frozen)
-    if (frozenThere) {
-      setError(`${frozenThere.subject_name} is frozen, so that lesson stays where it is. Unfreeze it under Freezing > Subjects to move it.`)
-      return
-    }
-    // Already known to be refused: say why, and don't ask.
-    const verdict = known?.classGroupId === classGroupId && known.fromPeriodId === source.period.id
-      ? known.byPeriod.get(targetPeriod.id)
-      : null
-    if (verdict?.status === 'blocked') {
-      offerFix(classGroupId, source.period.id, targetPeriod.id, verdict.reason)
-      return
-    }
-    setError(null)
-    // The cells move now, not when the server answers. Waiting for the round
-    // trip put a visible delay on every drag, on an interaction that should
-    // feel like picking a card up and putting it down.
-    //
-    // Whatever was in the target comes back to where the dragged slot was, so
-    // moving into a free cell, swapping two lessons and trading a block for a
-    // lesson are one operation - and one request, which the server applies
-    // all-or-nothing.
-    //
-    // `rollback` restores the cache if the server refuses - usually because
-    // the target double-books a teacher - which is the only honest response to
-    // a move that turned out not to be allowed.
-    const rollback = optimisticSlotMove(classGroupId, source.period, targetPeriod)
-    try {
-      applyEntryUpdates(
-        await api.moveSlot(timetable.id, classGroupId, source.period.id, targetPeriod.id),
-      )
-    } catch (err) {
-      rollback()
-      // Refused after all (the colours weren't in yet, or something changed):
-      // look for a way to make room, as for a red cell.
-      offerFix(classGroupId, source.period.id, targetPeriod.id, err.message.replace(/\.$/, ''), err.message)
-    }
-  }
-
-  const days = [...new Set(periods.map((p) => p.day_of_week))].sort((a, b) => a - b)
-  const orders = [...new Set(periods.map((p) => p.order))].sort((a, b) => a - b)
-
-  function periodAt(day, order) {
-    return periods.find((p) => p.day_of_week === day && p.order === order)
-  }
-
-  // Returns every entry in this slot, not just one - a lab-batch-split
-  // subject (Subject.lab_batch_count >= 2, see backend/app/services/
-  // solver.py) produces several simultaneous entries at the same class
-  // group + period, one per batch, each with its own teacher and room.
-  // The normal, unsplit case is just an array of 0 or 1.
-  function entriesFor(day, order, classGroupId = null) {
-    const period = periodAt(day, order)
-    if (!period || !timetable) return []
-    if (classGroupId != null) {
-      return timetable.entries.filter(
-        (e) => e.period_id === period.id && e.class_group_id === classGroupId
-      )
-    }
-    // Includes slots where this teacher is only the *assistant*, not the
-    // main teacher - their own timetable should show both, not just the
-    // classes they lead solo.
-    // A class pooled from several sections is one lesson for its teacher.
-    return teacherLessons(timetable.entries.filter(
-      (e) =>
-        e.period_id === period.id &&
-        (e.teacher_id === selectedTeacherId || e.assistant_teacher_id === selectedTeacherId)
-    ))
-  }
-
-  const classGroupName = (id) => classGroups.find((c) => c.id === id)?.name
-  // "Class 6 - A", not "Sec A": a teacher takes sections in several grades,
-  // and the section letter alone doesn't say which.
-  const classGroupLabel = (id) => {
-    const cg = classGroups.find((c) => c.id === id)
-    return cg ? [cg.grade, cg.name].filter(Boolean).join(' - ') : ''
-  }
-
-  // What a slot is for: a lesson, a break, the class teacher period or a
-  // whole-school zero period. Older responses only said is_break.
-  const kindOf = (p) => p?.kind ?? (p?.is_break ? 'break' : 'lesson')
-
-  // Only lessons are numbered, so the row after a class teacher period is
-  // "Period 1" - the same numbers saved rules and the exports use.
-  function rowLabel(order) {
-    const here = periods.filter((p) => p.order === order)
-    const lesson = here.find((p) => kindOf(p) === 'lesson')
-    if (lesson) return `Period ${lesson.number ?? order + 1}`
-    const kind = kindOf(here[0])
-    if (kind === 'class_teacher') return 'Class teacher'
-    if (kind === 'zero') return 'Zero period'
-    return here.find((p) => p.label)?.label || 'Break'
-  }
-
-  // A zero period kept free for this section's grade (or everyone) on an
-  // otherwise ordinary lesson slot.
-  const isZeroFor = (period, cg) =>
-    !!period && (period.zero_all || (cg.grade != null && (period.zero_grades ?? []).includes(cg.grade)))
-  // This section's grade has a shorter day and has gone home by this slot.
-  const isOffFor = (period, cg) => !!period && cg.grade != null && (period.off_grades ?? []).includes(cg.grade)
-
-  // What a section's grid shows in a slot that isn't a lesson for it.
-  function sectionSpecial(day, order, cg) {
-    const period = periodAt(day, order)
-    const kind = kindOf(period)
-    if (kind === 'class_teacher') {
-      const teacher = teachers.find((t) => t.id === cg.class_teacher_id)
-      return teacher
-        ? { text: teacher.name, tone: 'class_teacher' }
-        : { text: 'No class teacher set', tone: 'warn' }
-    }
-    if (kind === 'zero') return { text: 'Zero period', tone: 'zero' }
-    if (kind === 'break') return { text: period.label || 'Break', tone: 'muted' }
-    if (isOffFor(period, cg) && entriesFor(day, order, cg.id).length === 0) {
-      return { text: 'No class', tone: 'muted' }
-    }
-    // A lesson left there from before the zero period existed still shows.
-    if (isZeroFor(period, cg) && entriesFor(day, order, cg.id).length === 0) {
-      return { text: 'Zero period', tone: 'zero' }
-    }
-    return null
-  }
-
-  // The same for a teacher's grid: their own sections in the class teacher
-  // period, and the school's breaks and zero period.
-  function teacherSpecial(day, order) {
-    const period = periodAt(day, order)
-    const kind = kindOf(period)
-    if (kind === 'class_teacher') {
-      const own = classGroups.filter((cg) => cg.class_teacher_id === selectedTeacherId)
-      return own.length
-        ? { text: `Class teacher · ${own.map((cg) => (cg.grade ? `${cg.grade} ${cg.name}` : cg.name)).join(', ')}`, tone: 'class_teacher' }
-        : { text: '', tone: 'muted' }
-    }
-    if (kind === 'zero') return { text: 'Zero period', tone: 'zero' }
-    if (kind === 'break') return { text: period.label || 'Break', tone: 'muted' }
-    return null
-  }
-
-
-  // In By Teacher view, an entry can show up because the selected teacher
-  // is the main teacher or because they're only the assistant (see
-  // entriesFor above) - this tells the two apart so the grid can label
-  // "(Assisting)" instead of implying they're leading a class solo.
-  const isSelectedTeacherAssisting = (e) =>
-    view === 'teacher' && e.assistant_teacher_id === selectedTeacherId && e.teacher_id !== selectedTeacherId
-
-  // Sections in the order the sidebar lists them, so scrolling and clicking
-  // agree about what comes next.
-  const sections = sortSections(classGroups)
-
-  // Picking a section in the sidebar scrolls to it rather than swapping what
-  // is on screen. The selection already exists and is already wired - this
-  // just changes what it means here, so the sidebar needs no knowledge of the
-  // timetable view.
-  //
-  // Deliberately not on first paint: arriving at the tab and being thrown past
-  // the Generate button and the warnings above the grid is disorienting, and
-  // the admin has not asked to go anywhere yet.
-  const scrolledOnce = useRef(false)
-  useEffect(() => {
-    if (view !== 'section' || !classGroup) return
-    if (!scrolledOnce.current) {
-      scrolledOnce.current = true
-      return
-    }
-    document
-      .getElementById(sectionAnchorId(classGroup.id))
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [classGroup, view])
-
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
   // The failed run: the one on screen if there is no version to fall back on,
   // otherwise the failure newer than the current version.
@@ -582,199 +308,446 @@ export default function TimetableTab({
     if (failed && failedRun && !seenFailures.has(failedRun.id)) setFailureOpen(true)
   }, [failed, failedRun])
   const solved = !isGenerating && timetable?.status === 'draft'
+  const entries = useMemo(() => timetable?.entries ?? [], [timetable?.entries])
+
+  const forecast = useForecast(timetable?.id, selectedTeacherId, edits.revision, solved && !readOnly && mode === 'work' && page === 'schedule')
+
   // Rules this timetable currently breaks, computed server-side on every read
-  // (see _violations_for in backend/app/routers/timetables.py). Normally
-  // empty: the solver was given the same rules. It fills up when a slot is
-  // moved by hand - a manual move that double-books nobody passes every
-  // physical check while still breaking a rule, and without this the
-  // Constraints tab goes on calling that rule enforced.
-  //
-  // Only RULES count as broken. A preference ("try to...") is allowed to give
-  // way when it can't be fully met - that is what makes it a preference - so
-  // it gets a calm note below rather than the warning, the cell markings and
-  // the per-section counts.
-  const allViolations = timetable?.violations ?? []
-  const violations = allViolations.filter((v) => (v.strength ?? 'required') === 'required')
+  // (see _violations_for in backend/app/routers/timetables.py). Only RULES
+  // count as broken. A preference ("try to...") is allowed to give way, so it
+  // gets a calm note under Rules rather than the warning and the cell markings.
+  const allViolations = useMemo(() => timetable?.violations ?? [], [timetable?.violations])
+  const violations = useMemo(() => allViolations.filter((v) => (v.strength ?? 'required') === 'required'), [allViolations])
   const softViolations = allViolations.filter((v) => (v.strength ?? 'required') !== 'required')
-  // One line per rule, however many places it's broken: a "spread evenly"
-  // rule is checked per teacher, and listing each one buried the message.
+  // One line per rule, however many places it's broken: a "spread evenly" rule
+  // is checked per teacher, and listing each one buried the message.
   const groupByRule = (list) => {
     const byRule = new Map()
     for (const v of list) {
       const key = v.constraint_id ?? v.description
-      const g = byRule.get(key) ?? { description: v.description, details: [] }
+      const g = byRule.get(key) ?? { description: v.description, details: [], entryIds: [] }
       g.details.push(v.detail)
+      g.entryIds.push(...(v.entry_ids ?? []))
       byRule.set(key, g)
     }
     return [...byRule.values()]
   }
   const brokenRules = groupByRule(violations)
+  const unmetPreferences = groupByRule(softViolations)
+  const brokenIds = useMemo(() => new Set(violations.flatMap((v) => v.entry_ids ?? [])), [violations])
   // Subjects nobody is qualified to teach yet are still placed, with no
   // teacher. Listed once each (subject in section), not once per lesson.
   const noTeacherYet = (() => {
     if (!solved) return []
-    const label = (id) => {
-      const cg = classGroups.find((c) => c.id === id)
-      return cg ? [cg.grade, cg.name].filter(Boolean).join(' - ') : ''
-    }
     const seen = new Map()
-    for (const e of timetable?.entries ?? []) {
+    for (const e of entries) {
       if (e.teacher_id != null) continue
       const key = `${e.class_group_id}:${e.subject_id}`
-      if (!seen.has(key)) seen.set(key, `${e.subject_name} in ${label(e.class_group_id)}`)
+      if (!seen.has(key)) seen.set(key, `${e.subject_name} in ${sectionTitle(sectionsById.get(e.class_group_id))}`)
     }
     return [...seen.values()]
   })()
-  const unmetPreferences = groupByRule(softViolations)
-  // Which cells to mark. A slot can break more than one rule, so the entry id
-  // maps to all of them rather than the first found.
-  const violatingEntries = new Map()
-  for (const v of violations) {
-    for (const id of v.entry_ids) {
-      violatingEntries.set(id, [...(violatingEntries.get(id) ?? []), v])
+  const compromise = solved && timetable?.compromise && !timetable.compromise.accepted && !acceptedCompromises.has(timetable.id)
+    ? timetable.compromise
+    : null
+  // A timetable made with compromises says so as soon as it's on screen.
+  const toldCompromise = useRef(new Set())
+  useEffect(() => {
+    if (compromise && !toldCompromise.current.has(timetable.id)) {
+      toldCompromise.current.add(timetable.id)
+      setDrawer('rules')
     }
+  }, [compromise, timetable?.id])
+
+  function showIssue(rule) {
+    const entry = entries.find((e) => rule.entryIds.includes(e.id))
+    setDrawer(null)
+    if (!entry) return
+    setPage('schedule')
+    setMode('work')
+    if (entry.teacher_id != null && entry.teacher_id !== selectedTeacherId) setSelectedTeacherId(entry.teacher_id)
+    setFlashEntry({ id: entry.id, at: Date.now() })
   }
 
-  // Counted in slots, not entries: a block breaking a rule is one cell to
-  // move even when three of its options are named in the violation.
-  const entryById = new Map((timetable?.entries ?? []).map((e) => [e.id, e]))
-  const brokenSlots = new Set(
-    [...violatingEntries.keys()]
-      .map((id) => entryById.get(id))
-      .filter(Boolean)
-      .map((e) => `${e.class_group_id}:${e.period_id}`),
+  const versions = timetableList.filter((t) => t.status === 'draft' || t.status === 'published').sort((a, b) => b.id - a.id)
+  const totalLessons = useMemo(
+    () => lessons.reduce((n, l) => n + l.periods_per_week * (l.kind === 'subject' ? 1 : 1), 0),
+    [lessons],
   )
+  const placedLessons = useMemo(() => {
+    const slots = new Set()
+    for (const e of entries) slots.add(e.elective_block_id != null ? `b${e.elective_block_id}:${e.period_id}` : `${e.class_group_id}:${e.subject_id}:${e.period_id}`)
+    return slots.size
+  }, [entries])
+  const problems = brokenRules.length
 
-  // With every section stacked, the band above the grid says what broke but
-  // not where to scroll. This puts the count on the section's own heading.
-  const sectionViolationCount = (classGroupId) =>
-    [...brokenSlots].filter((key) => key.startsWith(`${classGroupId}:`)).length
-
+  const closeMenusOutside = (e) => {
+    if (menu && !e.target.closest('.tw-menuwrap')) setMenu(null)
+  }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="inline-flex w-fit rounded-md border border-slate-300 p-0.5 text-xs">
-        <button
-          onClick={() => setPage('schedule')}
-          className={`rounded px-3 py-1.5 font-medium ${page === 'schedule' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
-        >
-          Schedule
-        </button>
-        <button
-          onClick={() => setPage('substitutions')}
-          className={`rounded px-3 py-1.5 font-medium ${page === 'substitutions' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
-        >
-          Substitutions
-        </button>
-      </div>
-
-      {page === 'substitutions' ? (
-        <SubstitutionsTab schoolId={schoolId} classGroups={classGroups} teachers={teachers} readOnly={readOnly} />
-      ) : (
-        <>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-medium">Generate timetable</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Solves for the whole school at once, so teachers shared across
-            sections never overlap. Large schools can take up to a minute, 
-            so feel free to switch tabs while it runs. In the By Section view
-            you can drag a slot onto a free cell to move it, drag it onto
-            another slot to swap the two, or click a slot to lock it in
-            place before regenerating.  Locked slots are shown in red,
-            unlocked ones in green. An elective block moves and locks as
-            one slot, since its subjects always run together.
-          </p>
+    <div className="tw-root" onPointerDown={closeMenusOutside}>
+      <div className="tw-toolbar">
+        <div className="tw-seg">
+          <button type="button" className={page === 'schedule' ? 'tw-on' : ''} onClick={() => setPage('schedule')}>Schedule</button>
+          <button type="button" className={page === 'substitutions' ? 'tw-on' : ''} onClick={() => setPage('substitutions')}>Substitutions</button>
         </div>
-        {!readOnly && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => handleGenerate()}
-            disabled={isGenerating}
-            className="flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-          >
-            {isGenerating ? 'Generating…' : 'Generate Timetable'}
-          </motion.button>
+        {page === 'schedule' && (
+          <div className="tw-desktop" style={{ display: 'contents' }}>
+            {!readOnly && (
+              <div className="tw-seg">
+                <button type="button" className={mode === 'work' ? 'tw-on' : ''} onClick={() => setMode('work')}>Workspace</button>
+                <button type="button" className={mode === 'plain' ? 'tw-on' : ''} onClick={() => setMode('plain')}>Plain view</button>
+              </div>
+            )}
+            {!readOnly && (
+              <div className="tw-menuwrap">
+                <button type="button" className="tw-btn tw-primary" disabled={isGenerating} onClick={() => setMenu(menu === 'generate' ? null : 'generate')}>
+                  {isGenerating ? 'Generating…' : 'Generate timetable ▾'}
+                </button>
+                {menu === 'generate' && (
+                  <div className="tw-menu">
+                    <button type="button" disabled={!solved} onClick={() => handleGenerate(true)}>
+                      <b>Fill the empty slots</b>
+                      <small>The scheduler completes the timetable and keeps everything you placed. Saved as a new version.</small>
+                    </button>
+                    <button type="button" onClick={() => handleGenerate(false)}>
+                      <b>Regenerate everything</b>
+                      <small>Keeps only frozen and locked lessons. Saved as a new version.</small>
+                    </button>
+                    <button type="button" onClick={handleStartBlank}>
+                      <b>Start with a blank timetable</b>
+                      <small>Saved as a new version, so nothing is lost.</small>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {versions.length > 0 && (
+              <select
+                className="tw-btn"
+                aria-label="Version"
+                value={currentVersion?.id ?? ''}
+                disabled={readOnly || isGenerating}
+                onChange={(e) => handleOpenVersion(Number(e.target.value))}
+              >
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>{versionLabel(v)}{v.id === currentVersion?.id ? ' (current)' : ''}</option>
+                ))}
+              </select>
+            )}
+            {!readOnly && mode === 'work' && (
+              <button type="button" className="tw-btn" disabled={edits.undoCount === 0} onClick={() => edits.undo()}>Undo</button>
+            )}
+            {failed && (
+              <button type="button" className="tw-btn tw-danger" onClick={() => setFailureOpen(true)}>
+                Last generation failed. See why
+              </button>
+            )}
+            <span className="tw-spacer" />
+            {solved && <span className="tw-count">{placedLessons} of {totalLessons} lessons placed</span>}
+            <button
+              type="button"
+              className={`tw-btn${problems || setupErrors.length ? ' tw-alert' : ''}`}
+              onClick={() => setDrawer(drawer === 'rules' ? null : 'rules')}
+            >
+              {problems ? `! ${problems} rule${problems > 1 ? 's' : ''} broken` : setupErrors.length ? `! ${setupErrors.length} setup problem${setupErrors.length > 1 ? 's' : ''}` : 'No rules broken'}
+            </button>
+            {solved && (
+              <button type="button" className="tw-btn" onClick={() => setDrawer(drawer === 'freeze' ? null : 'freeze')}>❄ Freezing</button>
+            )}
+            {solved && !readOnly && (
+              <div className="tw-menuwrap">
+                <button type="button" className="tw-btn" aria-label="Describe an edit" title="Describe an edit in words" onClick={() => setMenu(menu === 'edit' ? null : 'edit')}>✦ Edit</button>
+                {menu === 'edit' && (
+                  <div className="tw-menu tw-menu-right" style={{ width: 340, padding: 8 }}>
+                    <form onSubmit={handleEditCommand} style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        autoFocus
+                        value={commandText}
+                        onChange={(e) => setCommandText(e.target.value)}
+                        placeholder="Move Maths to period 2 on Wednesday"
+                        aria-label="Describe an edit"
+                        className="tw-btn"
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <button disabled={commandSubmitting} className="tw-btn tw-primary" style={{ width: 'auto' }}>
+                        {commandSubmitting ? 'Applying…' : 'Apply'}
+                      </button>
+                    </form>
+                    {commandFeedback && (
+                      <p style={{ marginTop: 6, fontSize: 12, color: commandFeedback.ok ? '#047857' : '#b91c1c' }}>{commandFeedback.text}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {solved && (
+              <div className="tw-menuwrap">
+                <button type="button" className="tw-btn" onClick={() => setMenu(menu === 'export' ? null : 'export')}>
+                  {exporting ? 'Preparing…' : 'Export ▾'}
+                </button>
+                {menu === 'export' && (
+                  <div className="tw-menu tw-menu-right">
+                    <button type="button" disabled={!!exporting} onClick={() => handleExport('pdf')}>PDF</button>
+                    <button type="button" disabled={!!exporting} onClick={() => handleExport('xlsx')}>Excel</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenu(null)
+                        setMode('plain')
+                        setTimeout(() => setPrintSignal((n) => n + 1), 60)
+                      }}
+                    >
+                      Print
+                    </button>
+                    <label title="Adds the Timetablz name to the header and footer of every page">
+                      <input type="checkbox" checked={watermark} onChange={(e) => toggleWatermark(e.target.checked)} />
+                      Timetablz watermark{!cleanExportsAllowed ? ' (Pro to remove)' : ''}
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} schoolId={schoolId} />
-
-      {checkBlocked && (
-        <div role="alertdialog" aria-label="Setup problems" className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-300 bg-white px-3 py-2.5 text-sm">
-          <span className="text-red-900">
-            {setupErrors.length === 1 ? 'The problem above' : `The ${setupErrors.length} problems above`} will stop the
-            timetable. Fix {setupErrors.length === 1 ? 'it' : 'them'} first, or generate anyway to get the full diagnosis.
-          </span>
-          <span className="flex gap-2">
-            <button type="button" onClick={() => setCheckBlocked(false)} className="rounded border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50">
-              Cancel
-            </button>
-            <button type="button" onClick={() => handleGenerate(true)} className="rounded bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700">
-              Generate anyway
-            </button>
-          </span>
+      {page === 'substitutions' ? (
+        <div className="tw-subs">
+          <SubstitutionsTab schoolId={schoolId} classGroups={classGroups} teachers={teachers} readOnly={readOnly} />
         </div>
-      )}
-
-      <div className="h-px bg-slate-200" />
-
-      {violations.length > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-none">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-            <path d="M12 9v4" />
-            <path d="M12 17h.01" />
-          </svg>
-          <div className="flex flex-col gap-1">
-            <span className="font-medium">
-              {brokenRules.length === 1 ? '1 rule you set is' : `${brokenRules.length} rules you set are`} broken
-              {' '}in {brokenSlots.size === 1 ? '1 slot' : `${brokenSlots.size} slots`}
-            </span>
-            {/* The rule's own confirmed sentence, not a paraphrase - it is what
-                the Constraints tab shows, and a warning that named it
-                differently would send someone looking for a rule they don't
-                have. The numbers say which slot to move. */}
-            <ul className="flex flex-col gap-0.5">
-              {brokenRules.map((r) => (
-                <li key={r.description}>
-                  {r.description}{' '}
-                  <span className="text-amber-700">
-                    ({r.details[0]}
-                    {r.details.length > 1 ? `, and ${r.details.length - 1} more` : ''})
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <span className="text-amber-700">
-              The change is kept. Move the marked slots back, or change the rule on the
-              Constraints tab.
-            </span>
+      ) : (
+        <div style={{ minHeight: 0 }}>
+          <div className="tw-gate">
+            <div>
+              <h2>Building a timetable needs a desktop</h2>
+              <p>Open this page on a laptop or desktop screen, at least 1000 pixels wide.</p>
+            </div>
+          </div>
+          <div className="tw-desktop" style={{ height: '100%', minHeight: 0 }}>
+            {isGenerating ? (
+              <div className="tw-empty" style={{ height: '100%' }}>
+                <div className="tw-spin" />
+                <p>Solving the schedule. This runs in the background, so it&rsquo;s safe to keep working elsewhere and come back.</p>
+              </div>
+            ) : !solved ? (
+              <div className="tw-empty" style={{ height: '100%' }}>
+                <div style={{ width: '100%', maxWidth: 720, textAlign: 'left' }}>
+                  <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} schoolId={schoolId} />
+                </div>
+                <p style={{ fontSize: 14 }}>No timetable yet for this school.</p>
+                {!readOnly && (
+                  <div className="tw-row" style={{ justifyContent: 'center' }}>
+                    <button type="button" className="tw-btn tw-primary" onClick={() => handleGenerate(false)}>Generate timetable</button>
+                    <button type="button" className="tw-btn" onClick={handleStartBlank}>Start with a blank timetable</button>
+                  </div>
+                )}
+              </div>
+            ) : mode === 'work' && !readOnly && sortedTeachers.length > 0 ? (
+              <Workspace
+                teachers={sortedTeachers}
+                teacherId={selectedTeacherId}
+                onSelectTeacher={setSelectedTeacherId}
+                sections={sections}
+                sectionsById={sectionsById}
+                subjects={subjects}
+                lessons={lessons}
+                entries={entries}
+                layout={layout}
+                periodsById={periodsById}
+                forecast={forecast}
+                frozenSections={frozenSections}
+                brokenIds={brokenIds}
+                edits={editsWithNames}
+                toast={toast}
+                onFindAWay={offerFix}
+                flashEntryId={flashEntry}
+              />
+            ) : (
+              <PlainView
+                kind={plain.kind}
+                id={plain.id ?? sections[0]?.id ?? null}
+                onKind={(kind) => setPlain({
+                  kind,
+                  id: kind === 'section' ? (classGroup?.id ?? sections[0]?.id) : kind === 'teacher' ? (selectedTeacherId ?? sortedTeachers[0]?.id) : rooms[0]?.id,
+                })}
+                onId={(id) => setPlain((p) => ({ ...p, id }))}
+                sections={sections}
+                sectionsById={sectionsById}
+                teachers={sortedTeachers}
+                rooms={rooms}
+                entries={entries}
+                layout={layout}
+                timetableId={timetable.id}
+                watermark={watermark}
+                electiveBlocks={electiveBlocks}
+                subjectName={subjectName}
+                frozenById={frozenById}
+                canFreeze={!readOnly}
+                freezing={freezing}
+                onFreeze={handleFreeze}
+                exporting={exporting}
+                onExport={handleExport}
+                onError={setError}
+                printSignal={printSignal}
+              />
+            )}
           </div>
         </div>
       )}
 
-      {unmetPreferences.length > 0 && (
-        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
-          <p className="font-medium">
-            {unmetPreferences.length === 1 ? '1 preference' : `${unmetPreferences.length} preferences`} couldn&rsquo;t be
-            fully met everywhere
-          </p>
-          <ul className="mt-1 flex flex-col gap-0.5 text-sky-800">
-            {unmetPreferences.map((p) => (
-              <li key={p.description}>
-                {p.description}{' '}
-                <span className="text-sky-700">
-                  (not met in {p.details.length} {p.details.length === 1 ? 'case' : 'cases'}, e.g. {p.details[0]})
-                </span>
-              </li>
+      {drawer === 'rules' && (
+        <aside className="tw-drawer" aria-label="Rules">
+          <header>
+            <h2>Rules</h2>
+            <button type="button" className="tw-btn" onClick={() => setDrawer(null)}>Close</button>
+          </header>
+          {compromise && (
+            <CompromiseNotice
+              compromise={compromise}
+              readOnly={readOnly}
+              onAccept={async () => {
+                try {
+                  await api.acceptCompromise(timetable.id)
+                  setAcceptedCompromises((prev) => new Set(prev).add(timetable.id))
+                } catch (err) {
+                  setError(err.message)
+                }
+              }}
+              onOpenConstraints={onOpenConstraints}
+            />
+          )}
+          {solved && (
+            <p className="tw-drawer-note">
+              Showing {versionLabel(timetable)}
+              {timetable.created_at ? `, made ${new Date(timetable.created_at).toLocaleString()}` : ''}. Edits here change this
+              version. Rename or delete versions on the Dashboard.
+            </p>
+          )}
+          <SetupCheckPanel check={setupCheck} loading={checkingSetup} onFix={onFix} readOnly={readOnly} schoolId={schoolId} />
+          {brokenRules.length > 0 ? (
+            <>
+              <p className="tw-drawer-note">A lesson dropped by hand can break a rule. It stays on the timetable and is listed here until you fix it, or change the rule on the Constraints step.</p>
+              {/* The rule's own confirmed sentence, not a paraphrase: it's what
+                  the Constraints step shows. */}
+              {brokenRules.map((r) => (
+                <button key={r.description} type="button" className="tw-issue" onClick={() => showIssue(r)}>
+                  <b>{r.description}</b>
+                  <small>{r.details[0]}{r.details.length > 1 ? `, and ${r.details.length - 1} more` : ''}</small>
+                </button>
+              ))}
+            </>
+          ) : solved ? <p className="tw-drawer-note">No rules broken.</p> : null}
+          {unmetPreferences.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 13, fontWeight: 600 }}>Preferences not met everywhere</h3>
+              {unmetPreferences.map((p) => (
+                <div key={p.description} className="tw-line">
+                  <div>{p.description}<small>Not met in {p.details.length} {p.details.length === 1 ? 'case' : 'cases'}, e.g. {p.details[0]}</small></div>
+                </div>
+              ))}
+              <p className="tw-drawer-note" style={{ marginTop: 6, fontSize: 12 }}>That&rsquo;s allowed for a preference. If one must always hold, reword it on the Constraints step without &ldquo;try to&rdquo; to make it a rule.</p>
+            </div>
+          )}
+          {noTeacherYet.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 13, fontWeight: 600 }}>{noTeacherYet.length === 1 ? '1 subject has' : `${noTeacherYet.length} subjects have`} no teacher yet</h3>
+              <p className="tw-drawer-note">
+                {noTeacherYet.slice(0, 8).join(', ')}{noTeacherYet.length > 8 ? `, and ${noTeacherYet.length - 8} more` : ''}. Add a qualified teacher on the Teachers step and generate again.
+              </p>
+            </div>
+          )}
+          {unenforcedConstraints.length > 0 && (
+            <p className="tw-warnline">
+              {unenforcedConstraints.length === 1
+                ? "1 saved constraint isn't applied when generating"
+                : `${unenforcedConstraints.length} saved constraints aren't applied when generating`}
+              . Check the Constraints step for which ones and why.
+            </p>
+          )}
+          {solved && (timetable.generation_notes?.length > 0 || timetable.frozen_kept?.length > 0) && (
+            <div>
+              <h3 style={{ fontSize: 13, fontWeight: 600 }}>From this generation</h3>
+              {timetable.frozen_kept?.length > 0 && <p className="tw-drawer-note">Kept as frozen: {timetable.frozen_kept.join(', ')}.</p>}
+              {timetable.generation_notes?.map((n) => <p key={n} className="tw-drawer-note">{n}</p>)}
+            </div>
+          )}
+        </aside>
+      )}
+
+      {drawer === 'freeze' && solved && (
+        <aside className="tw-drawer" aria-label="Freezing">
+          <header>
+            <h2>❄ Freezing</h2>
+            <button type="button" className="tw-btn" onClick={() => setDrawer(null)}>Close</button>
+          </header>
+          <p className="tw-drawer-note">Frozen lessons stay where they are when you generate. Nothing can be dropped on them.</p>
+          <div className="tw-seg" style={{ alignSelf: 'flex-start' }} role="tablist" aria-label="Freeze by">
+            {[['sections', 'Sections', frozenById.size], ['subjects', 'Subjects', subjectFreezes.length]].map(([id, label, count]) => (
+              <button key={id} type="button" role="tab" aria-selected={freezeTab === id} className={freezeTab === id ? 'tw-on' : ''} onClick={() => setFreezeTab(id)}>
+                {label}{count > 0 ? ` (${count})` : ''}
+              </button>
             ))}
-          </ul>
-          <p className="mt-1 text-xs text-sky-700">
-            That&rsquo;s allowed for a preference: the timetable follows it as far as it can. If one must always hold,
-            reword it on the Constraints tab without &ldquo;try to&rdquo; to make it a rule.
-          </p>
+          </div>
+          {freezeTab === 'sections' ? (
+            <>
+              <FrozenSummary sections={sections} frozenById={frozenById} />
+              {sections.map((cg, i) => (
+                <div key={cg.id}>
+                  {cg.grade && cg.grade !== sections[i - 1]?.grade && (
+                    <GradeFreezeRow
+                      grade={cg.grade}
+                      sections={sections.filter((s) => s.grade === cg.grade)}
+                      frozenById={frozenById}
+                      canFreeze={!readOnly}
+                      busy={freezing}
+                      onFreeze={handleFreeze}
+                    />
+                  )}
+                  <div className="tw-line">
+                    <input
+                      type="checkbox"
+                      id={`freeze-${cg.id}`}
+                      checked={frozenById.has(cg.id)}
+                      disabled={readOnly || freezing}
+                      onChange={(e) => handleFreeze([cg.id], e.target.checked)}
+                    />
+                    <label htmlFor={`freeze-${cg.id}`}>
+                      {sectionTitle(cg)}
+                      <small>{frozenById.has(cg.id) ? `Frozen${frozenById.get(cg.id).frozen_from ? ` from ${frozenById.get(cg.id).frozen_from}` : ''}` : 'Not frozen'}</small>
+                      {frozenById.get(cg.id)?.stale_reason && <small style={{ color: '#92400e' }}>{frozenById.get(cg.id).stale_reason}</small>}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <SubjectFreezePanel
+              freezes={subjectFreezes}
+              entries={entries}
+              sections={sections}
+              canFreeze={!readOnly}
+              busy={subjectFreezing.isSaving}
+              onFreeze={subjectFreezing.freeze}
+              onUnfreeze={subjectFreezing.unfreeze}
+            />
+          )}
+        </aside>
+      )}
+
+      {checkBlocked && (
+        <div role="alertdialog" aria-label="Setup problems" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 text-sm shadow-xl">
+            <p className="text-red-900">
+              {setupErrors.length === 1 ? 'A setup problem' : `${setupErrors.length} setup problems`} will stop the timetable. See {setupErrors.length === 1 ? 'it' : 'them'} under
+              Rules and fix {setupErrors.length === 1 ? 'it' : 'them'} first, or generate anyway to get the full diagnosis.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => { setCheckBlocked(null); setDrawer('rules') }} className="tw-btn">See the problems</button>
+              <button type="button" onClick={() => handleGenerate(checkBlocked.keepPlaced, { skipCheck: true })} className="tw-btn tw-primary">Generate anyway</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -783,127 +756,16 @@ export default function TimetableTab({
           sections={sections}
           frozenById={frozenById}
           subjectFreezes={subjectFreezes}
-          onCancel={() => setConfirmGenerate(false)}
-          onConfirm={() => handleGenerate(true)}
+          onCancel={() => setConfirmGenerate(null)}
+          onConfirm={() => handleGenerate(confirmGenerate.keepPlaced, { skipCheck: true, confirmed: true })}
         />
-      )}
-
-      {solved && timetable?.compromise && !timetable.compromise.accepted && !acceptedCompromises.has(timetable.id) && (
-        <CompromiseNotice
-          compromise={timetable.compromise}
-          readOnly={readOnly}
-          onAccept={async () => {
-            try {
-              await api.acceptCompromise(timetable.id)
-              setAcceptedCompromises((prev) => new Set(prev).add(timetable.id))
-            } catch (err) {
-              setError(err.message)
-            }
-          }}
-          onOpenConstraints={onOpenConstraints}
-        />
-      )}
-
-      {solved && (
-        <p className="text-sm text-slate-600">
-          Showing <span className="font-medium text-slate-900">{versionLabel(timetable)}</span>
-          {timetable.created_at && (
-            <span className="text-slate-400"> · generated {new Date(timetable.created_at).toLocaleString()}</span>
-          )}
-          . Edits here change this version. Open, rename or delete versions on the Dashboard.
-        </p>
-      )}
-
-      {solved && (timetable?.generation_notes?.length > 0 || timetable?.frozen_kept?.length > 0) && (
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800">
-          {timetable.frozen_kept?.length > 0 && (
-            <p>
-              <span className="font-medium">Kept as frozen:</span> {timetable.frozen_kept.join(', ')}. Their timetables
-              weren&rsquo;t regenerated.
-            </p>
-          )}
-          {timetable.generation_notes?.length > 0 && (
-            <>
-              <p className={`font-medium ${timetable.frozen_kept?.length ? 'mt-1.5' : ''}`}>From this generation</p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-slate-700">
-                {timetable.generation_notes.map((n) => (
-                  <li key={n}>{n}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-
-      {noTeacherYet.length > 0 && (
-        <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900">
-          <p className="font-medium">
-            {noTeacherYet.length === 1 ? '1 subject has' : `${noTeacherYet.length} subjects have`} no teacher yet
-          </p>
-          <p className="mt-1 text-sky-800">
-            {noTeacherYet.slice(0, 8).join(', ')}
-            {noTeacherYet.length > 8 ? `, and ${noTeacherYet.length - 8} more` : ''}.
-          </p>
-          <p className="mt-1 text-xs text-sky-700">
-            Their lessons are in the timetable, marked &ldquo;No teacher yet&rdquo;. Add a teacher qualified for them
-            on the Data Entry tab and generate again to fill them in.
-          </p>
-        </div>
-      )}
-
-      {unenforcedConstraints.length > 0 && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-none">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-            <path d="M12 9v4" />
-            <path d="M12 17h.01" />
-          </svg>
-          <span>
-            {unenforcedConstraints.length === 1
-              ? "1 saved constraint isn't applied when generating"
-              : `${unenforcedConstraints.length} saved constraints aren't applied when generating`}
-            , so the timetable below won't reflect{' '}
-            {unenforcedConstraints.length === 1 ? 'it' : 'them'}. Check the Constraints tab for
-            which ones and why.
-          </span>
-        </div>
-      )}
-
-      {isGenerating && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-          className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-slate-500"
-        >
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-          Solving the schedule. This runs in the background, so it's safe
-          to keep working elsewhere and come back.
-        </motion.div>
-      )}
-
-      {/* Pinned to the bottom of the screen: a lock or a move refused in a
-          section far down the page used to be reported up here, out of
-          sight, and the click looked like it had done nothing. */}
-      {dragSource && (
-        <div className="pointer-events-none fixed bottom-6 left-6 z-40 flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-700 shadow-lg ring-1 ring-slate-200">
-          {dragTargets ? (
-            <>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-emerald-200 ring-1 ring-emerald-500" /> Can go</span>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-amber-200 ring-1 ring-amber-500" /> Allowed, breaks a rule</span>
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-sm bg-red-200 ring-1 ring-red-500" /> Blocked</span>
-            </>
-          ) : (
-            <span>Checking where it can go…</span>
-          )}
-        </div>
       )}
 
       {moveFix && (
         <div
           role="dialog"
           aria-label="Blocked move"
-          className="fixed bottom-6 left-1/2 z-50 flex w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2 rounded-lg bg-white p-4 text-sm shadow-xl ring-1 ring-slate-200"
+          className="fixed bottom-6 left-1/2 z-[80] flex w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2 rounded-lg bg-white p-4 text-sm shadow-xl ring-1 ring-slate-200"
         >
           <p className="font-medium text-red-800">Can&rsquo;t move it there: {moveFix.reason}.</p>
           {moveFix.suggestions === null ? (
@@ -915,13 +777,9 @@ export default function TimetableTab({
               {moveFix.suggestions.map((sug, i) => (
                 <li key={i} className="rounded-md border border-slate-200 p-2.5">
                   <ol className="list-decimal pl-5 text-slate-800">
-                    {sug.steps.map((st, j) => (
-                      <li key={j}>{st.text}</li>
-                    ))}
+                    {sug.steps.map((st, j) => <li key={j}>{st.text}</li>)}
                   </ol>
-                  {sug.warnings?.length > 0 && (
-                    <p className="mt-1 text-xs text-amber-700">Allowed, but: {sug.warnings.join('; ')}</p>
-                  )}
+                  {sug.warnings?.length > 0 && <p className="mt-1 text-xs text-amber-700">Allowed, but: {sug.warnings.join('; ')}</p>}
                   <button
                     type="button"
                     disabled={applyingFix}
@@ -941,38 +799,9 @@ export default function TimetableTab({
                 compact
                 context={{ where: 'a move that couldn’t be made', timetable_id: timetable?.id, reason: moveFix.reason }}
               />
-            ) : (
-              <span />
-            )}
-            <button type="button" onClick={() => setMoveFix(null)} className="flex-none text-xs font-medium text-slate-600 underline">
-              Dismiss
-            </button>
+            ) : <span />}
+            <button type="button" onClick={() => setMoveFix(null)} className="flex-none text-xs font-medium text-slate-600 underline">Dismiss</button>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="fixed bottom-6 left-1/2 z-40 flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg bg-red-700 px-4 py-3 text-sm text-white shadow-lg">
-          <p>{error}</p>
-          <button onClick={() => setError(null)} className="flex-none font-medium underline">Dismiss</button>
-        </div>
-      )}
-
-      {failed && (
-        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-          <span className="inline-flex items-center gap-1.5 font-medium text-red-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-600" aria-hidden="true" />
-            The last generation couldn&rsquo;t build a timetable.
-          </span>
-          {timetable?.status === 'draft' && (
-            <span className="text-slate-500">You&rsquo;re still working from {versionLabel(currentVersion ?? timetable)}.</span>
-          )}
-          <button
-            onClick={() => setFailureOpen(true)}
-            className="font-medium text-neutral-900 underline underline-offset-2 hover:text-neutral-600"
-          >
-            See why
-          </button>
         </div>
       )}
 
@@ -989,243 +818,58 @@ export default function TimetableTab({
         timetableId={failedRun?.id ?? null}
       />
 
-      {solved && (
-        <motion.div
-          key={timetable.id}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex rounded-md border border-slate-300 p-0.5 text-xs">
-                <button
-                  onClick={() => setView('section')}
-                  className={`rounded px-3 py-1 ${view === 'section' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
-                >
-                  By Section
-                </button>
-                <button
-                  onClick={() => setView('teacher')}
-                  className={`rounded px-3 py-1 ${view === 'teacher' ? 'bg-neutral-900 text-white' : 'text-slate-600'}`}
-                >
-                  By Teacher
-                </button>
-              </div>
-              {view === 'teacher' && (
-                <SearchableSelect
-                  ariaLabel="Teacher"
-                  value={selectedTeacherId}
-                  onChange={setSelectedTeacherId}
-                  options={teachers.map((t) => ({ value: t.id, label: t.name }))}
-                  className="min-w-[10rem]"
-                />
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              <label
-                className="mr-1 flex cursor-pointer select-none items-center gap-1.5 text-slate-600"
-                title="Adds the Timetablz name to the header and footer of every page"
-              >
-                <input
-                  type="checkbox"
-                  checked={watermark}
-                  onChange={(e) => toggleWatermark(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-neutral-900"
-                />
-                Timetablz watermark
-                {!cleanExportsAllowed && (
-                  <span className="rounded bg-neutral-900 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-white">
-                    Pro to remove
-                  </span>
-                )}
-              </label>
-              <span className="text-slate-400">Export:</span>
-              <button
-                onClick={() => handleExport('xlsx')}
-                disabled={!!exporting}
-                className="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-              >
-                {exporting === 'xlsx' ? 'Preparing…' : 'Excel'}
-              </button>
-              <button
-                onClick={() => handleExport('pdf')}
-                disabled={!!exporting}
-                className="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-              >
-                {exporting === 'pdf' ? 'Preparing…' : 'PDF'}
-              </button>
-            </div>
-          </div>
-
-          {view === 'section' && !readOnly && (
-            <div className="flex flex-col gap-1.5">
-              <form onSubmit={handleEditCommand} className="flex items-center gap-2.5 rounded-md border border-slate-300 py-1.5 pl-3.5 pr-1.5">
-                <span className="text-slate-400">✦</span>
-                <input
-                  value={commandText}
-                  onChange={(e) => setCommandText(e.target.value)}
-                  placeholder="Or describe an edit, e.g. move Math to period 2 on Wednesday, or lock Mrs. Sharma's Monday classes"
-                  className="flex-1 py-1 text-sm focus:outline-none"
-                />
-                <button
-                  disabled={commandSubmitting}
-                  className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                >
-                  {commandSubmitting ? 'Applying…' : 'Apply'}
-                </button>
-              </form>
-              {commandFeedback && (
-                <p className={`text-xs ${commandFeedback.ok ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {commandFeedback.text}
-                </p>
-              )}
-            </div>
-          )}
-
-          {view === 'section' ? (
-            // Every section, stacked and scrollable, rather than one at a
-            // time. Picking a section in the sidebar scrolls to it instead of
-            // swapping what is on screen - the whole school is one document,
-            // which is how a timetable is read on paper and how it gets
-            // checked against itself.
-            <div className="flex flex-col gap-8">
-              <section aria-label="Freezing" className="flex flex-col gap-3 rounded-md border border-sky-200 bg-sky-50/40 p-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h3 className="text-sm font-semibold text-sky-900">❄ Freezing</h3>
-                  <div role="tablist" aria-label="Freeze by" className="flex gap-1">
-                    {[
-                      ['sections', 'Sections', frozenById.size],
-                      ['subjects', 'Subjects', subjectFreezes.length],
-                    ].map(([id, label, count]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        role="tab"
-                        aria-selected={freezeTab === id}
-                        onClick={() => setFreezeTab(id)}
-                        className={`rounded-full px-3 py-0.5 text-sm ${
-                          freezeTab === id ? 'bg-sky-800 text-white' : 'text-sky-900 hover:bg-sky-100'
-                        }`}
-                      >
-                        {label}{count > 0 ? ` (${count})` : ''}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {freezeTab === 'sections' ? (
-                  frozenById.size > 0 ? (
-                    <FrozenSummary sections={sections} frozenById={frozenById} />
-                  ) : (
-                    <p className="text-sm text-slate-600">
-                      No sections are frozen.{!readOnly && ' Freeze one with the Freeze button beside its timetable, or a whole grade from its heading.'}
-                    </p>
-                  )
-                ) : (
-                  <SubjectFreezePanel
-                    freezes={subjectFreezes}
-                    entries={timetable.entries}
-                    sections={sections}
-                    canFreeze={!readOnly}
-                    busy={subjectFreezing.isSaving}
-                    onFreeze={subjectFreezing.freeze}
-                    onUnfreeze={subjectFreezing.unfreeze}
-                  />
-                )}
-              </section>
-              {sections.map((cg, i) => (
-                <div key={cg.id} className="flex flex-col gap-3">
-                {cg.grade && cg.grade !== sections[i - 1]?.grade && (
-                  <GradeFreezeRow
-                    grade={cg.grade}
-                    sections={sections.filter((s) => s.grade === cg.grade)}
-                    frozenById={frozenById}
-                    canFreeze={!readOnly}
-                    busy={freezing}
-                    onFreeze={handleFreeze}
-                  />
-                )}
-                <SectionTimetable
-                  classGroup={cg}
-                  frozen={frozenById.get(cg.id) ?? null}
-                  canFreeze={!readOnly}
-                  freezing={freezing}
-                  onToggleFreeze={() => handleFreeze([cg.id], !frozenById.has(cg.id))}
-                  timetableId={timetable.id}
-                  watermark={watermark}
-                  combinations={combinationsFor(electiveBlocks, cg.id, subjectName)}
-                  violationCount={sectionViolationCount(cg.id)}
-                  onError={setError}
-                  days={days}
-                  orders={orders}
-                  periodAt={periodAt}
-                  entriesAt={(d, o) => entriesFor(d, o, cg.id)}
-                  editable={!readOnly}
-                  violatingEntries={violatingEntries}
-                  onDragStart={(d, o) => startDrag(cg.id, periodAt(d, o))}
-                  onDragEnd={endDrag}
-                  dropTargets={dragTargets?.classGroupId === cg.id ? dragTargets.byPeriod : null}
-                  dragFromPeriodId={dragSource?.classGroupId === cg.id ? dragSource.period?.id : null}
-                  onDrop={(d, o) => handleDrop(d, o, cg.id)}
-                  onToggleLock={handleToggleLock}
-                  rowLabel={rowLabel}
-                  specialCell={(d, o) => sectionSpecial(d, o, cg)}
-                />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <ScheduleGrid
-              days={days}
-              orders={orders}
-              periodAt={periodAt}
-              entriesAt={(d, o) => entriesFor(d, o)}
-              editable={false}
-              violatingEntries={violatingEntries}
-              onDragStart={() => {}}
-              onDragEnd={() => {}}
-              onDrop={() => {}}
-              onToggleLock={() => {}}
-              secondaryLine={(e) =>
-                `${(e.class_group_ids ?? [e.class_group_id]).map(classGroupLabel).join(', ')}${
-                  isSelectedTeacherAssisting(e) ? ' (Assisting)' : ''
-                }`
-              }
-              showAssistant={false}
-              rowLabel={rowLabel}
-              specialCell={teacherSpecial}
-            />
-          )}
-        </motion.div>
-      )}
-
-      {!isGenerating && !timetable && (
-        <div className="flex flex-col items-center justify-center gap-1 py-16 text-center text-slate-500">
-          <p className="text-sm">No timetable generated yet for this school.</p>
-          <p className="text-xs">Add subjects and constraints, then hit Generate.</p>
-        </div>
-      )}
-        </>
-      )}
+      <Toasts ref={toasts} />
     </div>
   )
 }
 
-/**
- * One section's week, with what each of its students actually attends.
- *
- * A section with elective blocks has one timetable on paper but several in
- * practice: the Physics + Chemistry student and the Accounts + Economics one
- * sit in different rooms during every block. Picking a combination filters
- * the grid to the common subjects plus the chosen option from each block -
- * the same filter the student export prints, in the same order (see
- * src/studentCombinations.js), so "3." here is sheet 3 there.
- *
- * A student's view is read-only. Dragging in it would still move the whole
- * block, which is not what dragging the one subject on screen looks like it
- * should do.
- */
+/** Short messages at the bottom of the screen. Their own state, so showing one
+ *  re-renders nothing else. */
+const Toasts = forwardRef(function Toasts(_props, ref) {
+  const [items, setItems] = useState([])
+  const nextId = useRef(1)
+  const timers = useRef(new Set())
+  useImperativeHandle(ref, () => ({
+    show(kind, title, sub, action) {
+      const id = nextId.current++
+      setItems((prev) => [...prev.slice(-1), { id, kind, title, sub, action }])
+      const timer = setTimeout(() => {
+        timers.current.delete(timer)
+        setItems((prev) => prev.filter((t) => t.id !== id))
+      }, kind === 'ok' || !kind ? 3500 : 7000)
+      timers.current.add(timer)
+    },
+  }), [])
+  useEffect(() => {
+    const running = timers.current
+    return () => running.forEach(clearTimeout)
+  }, [])
+  return (
+    <div className="tw-toasts" aria-live="polite">
+      {items.map((t) => (
+        <div key={t.id} className="tw-toast" data-kind={t.kind}>
+          <div>
+            <b>{t.title}</b>
+            {t.sub && <small>{t.sub}</small>}
+          </div>
+          {t.action && (
+            <button
+              type="button"
+              onClick={() => {
+                setItems((prev) => prev.filter((x) => x.id !== t.id))
+                t.action.run()
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
+          <button type="button" aria-label="Dismiss" onClick={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}>✕</button>
+        </div>
+      ))}
+    </div>
+  )
+})
+
 /**
  * What generating will and won't change, said once above the sections.
  * Whole grades are named as grades, so "Grades 11-12 frozen" reads at a
@@ -1368,148 +1012,6 @@ function GradeFreezeRow({ grade, sections, frozenById, canFreeze, busy, onFreeze
         </button>
       )}
     </div>
-  )
-}
-
-function SectionTimetable({
-  classGroup,
-  // { frozen_at, stale_reason } when frozen, null otherwise.
-  frozen = null,
-  canFreeze = false,
-  freezing = false,
-  onToggleFreeze,
-  timetableId,
-  // [] - no blocks, the same for everyone; null - too many to list.
-  combinations,
-  violationCount,
-  onError,
-  watermark = true,
-  entriesAt,
-  editable,
-  ...gridProps
-}) {
-  const [studentIndex, setStudentIndex] = useState('') // '' = the whole section
-  const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
-  const combination =
-    studentIndex === '' || !combinations ? null : combinations[Number(studentIndex)] ?? null
-  const label = classGroup.grade ? `${classGroup.grade} · ${classGroup.name}` : classGroup.name
-
-  async function handleStudentExport(format) {
-    if (exporting) return
-    setExporting(format)
-    try {
-      await api.downloadStudentTimetables(
-        timetableId,
-        format,
-        classGroup.id,
-        classGroup.grade ? `${classGroup.grade} ${classGroup.name}` : classGroup.name,
-        { watermark },
-      )
-    } catch (err) {
-      onError(err.message)
-    } finally {
-      setExporting(null)
-    }
-  }
-
-  return (
-    <section
-      id={sectionAnchorId(classGroup.id)}
-      aria-label={label}
-      // Clears the sticky header when the sidebar scrolls here.
-      className={`flex scroll-mt-6 flex-col gap-2 ${
-        frozen ? 'rounded-md bg-sky-50/50 p-2 ring-1 ring-sky-200' : ''
-      }`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-medium text-slate-700">
-          {label}
-          {frozen && (
-            <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-normal text-sky-900">
-              ❄ Frozen
-            </span>
-          )}
-          {violationCount > 0 && (
-            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-normal text-amber-900">
-              {violationCount} slot{violationCount === 1 ? '' : 's'} breaking a rule
-            </span>
-          )}
-        </h4>
-        {canFreeze && (
-          <button
-            type="button"
-            disabled={freezing}
-            onClick={onToggleFreeze}
-            title={
-              frozen
-                ? 'Let the next Generate change this section again'
-                : 'Keep this section exactly as it is when generating again'
-            }
-            className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {frozen ? 'Unfreeze' : 'Freeze'}
-          </button>
-        )}
-        {combinations === null && (
-          <span className="text-xs text-slate-400">
-            This section's blocks allow more than {MAX_COMBINATIONS} subject combinations. Check
-            them for a mistake.
-          </span>
-        )}
-        {combinations?.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <label className="flex items-center gap-1.5 text-slate-500">
-              Show
-              <select
-                aria-label={`Whose timetable to show for ${label}`}
-                value={studentIndex}
-                onChange={(e) => setStudentIndex(e.target.value)}
-                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700"
-              >
-                <option value="">Whole section (every option)</option>
-                {combinations.map((c, i) => (
-                  <option key={c.label + i} value={i}>
-                    {i + 1}. {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="text-slate-400">Student timetables:</span>
-            <button
-              onClick={() => handleStudentExport('xlsx')}
-              disabled={!!exporting}
-              className="rounded-md border border-slate-300 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {exporting === 'xlsx' ? 'Preparing…' : 'Excel'}
-            </button>
-            <button
-              onClick={() => handleStudentExport('pdf')}
-              disabled={!!exporting}
-              className="rounded-md border border-slate-300 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-            >
-              {exporting === 'pdf' ? 'Preparing…' : 'PDF'}
-            </button>
-          </div>
-        )}
-      </div>
-      {frozen?.stale_reason && (
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
-          {frozen.stale_reason}
-        </p>
-      )}
-      <ScheduleGrid
-        {...gridProps}
-        entriesAt={
-          combination ? (d, o) => entriesAt(d, o).filter((e) => keeps(combination, e)) : entriesAt
-        }
-        // Frozen means nothing moves it - not a drag, not a lock.
-        editable={editable && !combination && !frozen}
-        sectionFrozen={!!frozen}
-        secondaryLine={(e) => e.teacher_name ?? 'No teacher yet'}
-        showAssistant
-        showBlockName={!combination}
-      />
-    </section>
   )
 }
 

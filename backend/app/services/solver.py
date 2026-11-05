@@ -127,6 +127,11 @@ _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozens
 # requirements, for a timetable made with compromises: kept wherever
 # possible, broken only where they can't all hold. See generate_with_compromises.
 _SOFTEN_RULES: contextvars.ContextVar = contextvars.ContextVar("soften_rules", default=frozenset())
+# Generating around what's already placed: every lesson on the version on screen
+# stays where it is, the way a frozen subject's do, and only the gaps are filled.
+# A context variable like the two above, so the search for a rule to blame and a
+# timetable made with compromises keep the placed lessons too.
+KEEP_PLACED: contextvars.ContextVar = contextvars.ContextVar("keep_placed", default=False)
 # The built-in timetable habits (see _add_default_habits). Off while searching
 # for which rule blocks a school: habits are preferences, they can't make a
 # school impossible, and leaving them on would make every try optimise.
@@ -1303,6 +1308,16 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     ]
     lock_ids = {le.id for le in locked_entries}
     pinned_entries = locked_entries + subject_pins.entries
+    if KEEP_PLACED.get() and previous_timetable:
+        already = {le.id for le in pinned_entries}
+        pinned_entries = pinned_entries + [
+            le for le in previous_timetable.entries
+            if le.id not in already
+            and le.class_group_id not in frozen_ids
+            and le.elective_block_id not in held_block_ids
+            and (le.class_group_id, le.subject_id) not in subject_pins.pairs
+            and (le.class_group_id, le.elective_block_id) not in subject_pins.blocks
+        ]
     model = cp_model.CpModel()
 
     # x[(requirement_id, teacher_id, period_id)] = this requirement's

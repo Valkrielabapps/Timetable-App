@@ -1,4 +1,8 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, notifyManager } from '@tanstack/react-query'
+
+// Tell the screen about a cache change straight away rather than on the next
+// timer, so a dropped lesson appears in the same frame the drag colours clear.
+notifyManager.setScheduler(queueMicrotask)
 
 /**
  * Shared React Query client.

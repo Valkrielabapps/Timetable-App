@@ -72,6 +72,47 @@ class SlotMove(BaseModel):
     to_period_id: int
 
 
+class LessonPlace(BaseModel):
+    """Put a lesson from the workspace's cards into a period: a section's
+    subject, or an elective block (`block_id`), taken by this teacher."""
+
+    period_id: int
+    teacher_id: int
+    class_group_id: int | None = None
+    subject_id: int | None = None
+    block_id: int | None = None
+
+
+class SlotRemove(BaseModel):
+    """Take everything in one section's period off the timetable."""
+
+    class_group_id: int
+    period_id: int
+
+
+class EntryRestore(BaseModel):
+    class_group_id: int
+    subject_id: int
+    teacher_id: int | None = None
+    assistant_teacher_id: int | None = None
+    room_id: int | None = None
+    period_id: int
+    locked: bool = False
+    lab_batch: int | None = None
+    elective_block_id: int | None = None
+    elective_option_id: int | None = None
+
+
+class SlotRestore(BaseModel):
+    """Put lessons back exactly as they were: undoing a removal."""
+
+    entries: list[EntryRestore] = Field(max_length=200)
+
+
+class ForecastRequest(BaseModel):
+    teacher_id: int
+
+
 class SlotMoveChain(BaseModel):
     """Several slot moves made in order, all or nothing - a suggested fix."""
 
@@ -219,6 +260,8 @@ class EntryUpdateOut(BaseModel):
 
     entries: list[TimetableEntryOut]
     violations: list[ViolationOut] = []
+    # Rows the edit deleted: taking a lesson off the timetable.
+    removed_ids: list[int] = []
 
 
 class EditCommandResponse(BaseModel):
