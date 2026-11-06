@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.services.smart_import import smart_rows
 from app.services.uploads import read_upload
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
@@ -12,7 +13,7 @@ from app.models.school import (
 from app.models.user import User
 from app.schemas.bulk_import import BulkImportOut
 from app.schemas.subject import SubjectCreate, SubjectOut, SubjectUpdate
-from app.services.bulk_import import TEMPLATES, import_subjects, parse_rows
+from app.services.bulk_import import TEMPLATES, import_subjects
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 
@@ -130,9 +131,12 @@ async def bulk_import_subjects(
     """
     require_school_access(db, current_user, school_id, min_role="admin")
     content = await read_upload(file)
+    # The school's own sheet, whatever its layout - see app/services/smart_import.py.
     try:
-        rows = parse_rows(file.filename, content)
+        rows, info = smart_rows("subjects", file.filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    new_subjects = []
     result = import_subjects(db, school_id, rows)
-    return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors)
+    return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors,
+                         sheet=info["sheet"], read_as=info["read_as"], new_subjects=new_subjects)

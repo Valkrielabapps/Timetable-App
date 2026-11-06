@@ -2,12 +2,17 @@ import { useState } from 'react'
 import { api } from '../api'
 
 const RESOURCES = {
-  subjects: { label: 'Subjects', columns: 'name, required_room_type' },
+  subjects: {
+    label: 'Subjects',
+    columns: 'name, required_room_type',
+    smart: 'Upload the subject list you already have, in any layout. We find the subject names and room types ourselves.',
+  },
   rooms: { label: 'Rooms', columns: 'name, capacity, room_type' },
   teachers: {
     label: 'Teachers',
     columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
     note: 'A teacher who is already here keeps what they teach: the file adds its subjects and grades to theirs. Remove one on the teacher\u2019s own row.',
+    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, and add any subject that isn\u2019t here yet.',
   },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
@@ -64,8 +69,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
     <div className="rounded-lg border border-slate-200 p-4">
       <h3 className="text-sm font-medium">Bulk import {meta.label.toLowerCase()}</h3>
       <p className="mt-1 text-xs text-slate-500">
-        Upload a CSV or Excel file to add or update many at once instead of
-        one at a time.
+        {meta.smart ?? 'Upload a CSV or Excel file to add or update many at once instead of one at a time.'}
       </p>
       {meta.note && <p className="mt-1 text-xs text-slate-500">{meta.note}</p>}
 
@@ -106,7 +110,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
         </a>
       </form>
 
-      <p className="mt-2 text-xs text-slate-400">Columns: {meta.columns}</p>
+      {!meta.smart && <p className="mt-2 text-xs text-slate-400">Columns: {meta.columns}</p>}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
@@ -116,6 +120,18 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
             {result.created} created, {result.updated} updated
             {result.errors.length > 0 && `, ${result.errors.length} row(s) skipped`}
           </p>
+          {result.read_as?.length > 0 && (
+            <p className="mt-1.5 text-slate-600">
+              Read {result.sheet && result.sheet !== 'CSV' ? `the sheet \u201c${result.sheet}\u201d, ` : ''}
+              taking {result.read_as.join(', ')}.
+            </p>
+          )}
+          {result.new_subjects?.length > 0 && (
+            <p className="mt-1 text-slate-600">
+              Added {result.new_subjects.length === 1 ? 'a new subject' : `${result.new_subjects.length} new subjects`}:{' '}
+              {result.new_subjects.join(', ')}.
+            </p>
+          )}
           {result.errors.length > 0 && (
             <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-amber-700">
               {result.errors.map((msg, i) => (
