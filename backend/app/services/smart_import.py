@@ -510,6 +510,129 @@ def _transpose(rows: list[list[str]], start: int) -> list[list[str]]:
     return [list(col) for col in zip(*block)]
 
 
+# ------------------------------------------------- one small table per class
+
+# The commonest staff sheet in Indian schools: for each class a little table
+# - a label ("CLASS 6-AB"), then Subjects | Periods | Teacher, then a Total -
+# several side by side and several stacked. Read as one big table it gives
+# "Total" and "CLASS 6-AB" as subjects and misses every table but the first.
+
+_SUBJECT_HEADS = {"subjects", "subject", "subjectname"}
+_TEACHER_HEADS = {"teacher", "teachers", "teachername", "faculty", "staff", "subjectteacher", "nameofteacher"}
+_PERIOD_HEADS = {"periods", "period", "periodsperweek", "noofperiods", "periodsweek", "pds", "load"}
+_CLASS_LABEL = re.compile(r"^\s*(?:class|grade|std\.?|standard)\b", re.I)
+_NOT_A_TEACHER = {"classteacher", "ct", "tbd", "tba", "vacant", "new", "newteacher", "none", "na", "nil", "all",
+                  "allteachers"}
+
+
+def is_label(text: str) -> bool:
+    """A heading, total, class label or note, never a subject or teacher."""
+    t = text.strip()
+    k = _key(t)
+    if not k or k.isdigit():
+        return True
+    if k in _SUBJECT_HEADS | _TEACHER_HEADS | _PERIOD_HEADS | {"name", "names", "sno", "srno", "slno"}:
+        return True
+    if k.startswith("total") or k in ("grandtotal", "sum"):
+        return True
+    if _CLASS_LABEL.match(t):
+        return True
+    # A sentence: "Science Practical periods should be together".
+    return len(t.split()) >= 5 or t.endswith(".")
+
+
+def _grade_of(label: str) -> str | None:
+    """"CLASS 6-AB" -> "6", "Class 9 (Sci)" -> "9", "Std IX" -> "IX"."""
+    m = re.search(r"(?:class|grade|std\.?|standard)\s*[-:]?\s*(\d{1,2}|[ivx]{1,4})\b", label, re.I)
+    if m:
+        return m.group(1).upper() if not m.group(1).isdigit() else m.group(1)
+    m = re.search(r"\b(\d{1,2})\b", label)
+    return m.group(1) if m else None
+
+
+def _class_tables(rows: list[list[str]]) -> list[dict]:
+    """Every Subjects | (Periods) | Teacher table in a sheet, with the label
+    above it and the rows under it."""
+    def cell(r, c):
+        return rows[r][c].strip() if r < len(rows) and c < len(rows[r]) else ""
+
+    anchors = []
+    for r, row in enumerate(rows):
+        for c, v in enumerate(row):
+            if _key(v) not in _SUBJECT_HEADS:
+                continue
+            near = {_key(cell(r, c + d)): c + d for d in (1, 2, 3)}
+            tea = next((i for k, i in near.items() if k in _TEACHER_HEADS), None)
+            per = next((i for k, i in near.items() if k in _PERIOD_HEADS), None)
+            if tea is not None or per is not None:
+                anchors.append((r, c, per, tea))
+    tables = []
+    for n, (r, c, per, tea) in enumerate(anchors):
+        label = ""
+        for up in (1, 2, 3):
+            if r - up < 0:
+                break
+            found = next((cell(r - up, cc) for cc in range(c, (tea or per or c) + 1) if cell(r - up, cc)), "")
+            if found:
+                label = found
+                break
+        items, blanks = [], 0
+        for rr in range(r + 1, len(rows)):
+            subj = cell(rr, c)
+            teacher = cell(rr, tea) if tea is not None else ""
+            k = _key(subj)
+            if k in _SUBJECT_HEADS or _CLASS_LABEL.match(subj) or k.startswith("total"):
+                break
+            if not subj and not teacher:
+                blanks += 1
+                if blanks >= 2:
+                    break
+                continue
+            blanks = 0
+            if subj and not is_label(subj):
+                items.append((subj, cell(rr, per) if per is not None else "", teacher))
+        tables.append({"label": label or f"table {n + 1}", "items": items})
+    return [t for t in tables if t["items"]]
+
+
+def _split_people(cell: str) -> list[str]:
+    out = []
+    for p in re.split(r"\s*(?:/|,|&|\band\b|\+)\s*", cell):
+        p = p.strip(" .-")
+        if p and _key(p) not in _NOT_A_TEACHER and not is_label(p):
+            out.append(p)
+    return out
+
+
+def _split_subjects(cell: str) -> list[str]:
+    return [p.strip(" .-") for p in re.split(r"\s*(?:/|,|\+|&)\s*", cell) if p.strip(" .-")]
+
+
+def _from_class_tables(tables: list[dict], kind: str, school_grades: list[str]) -> tuple[list[str], list[list[str]], dict]:
+    """The class tables as one plain table the rest of the importer reads:
+    subjects, or teachers with what and which classes they teach."""
+    if kind == "subjects":
+        names = list(dict.fromkeys(s for t in tables for subj, _, _ in t["items"] for s in _split_subjects(subj)))
+        return ["Subject"], [[n] for n in names], {0: "name"}
+    teachers: dict[str, dict] = {}
+    for t in tables:
+        grade = _grade_of(t["label"])
+        for subj, _, cell in t["items"]:
+            people, subjects = _split_people(cell), _split_subjects(subj)
+            # "Maths/Bio" taught by "Aman/Deepak": Aman Maths, Deepak Bio.
+            paired = len(people) == len(subjects) > 1
+            for i, person in enumerate(people):
+                rec = teachers.setdefault(_key(person), {"name": person, "subjects": [], "grades": []})
+                rec["subjects"] += [subjects[i]] if paired else subjects
+                if grade:
+                    rec["grades"].append(grade)
+    headings = ["Teacher", "Subjects"] + (["Classes"] if school_grades else [])
+    body = [[r["name"], ";".join(dict.fromkeys(r["subjects"]))]
+            + ([";".join(dict.fromkeys(r["grades"]))] if school_grades else []) for r in teachers.values()]
+    mapping = {0: "name", 1: "qualified_subjects"} | ({2: "qualified_grades"} if school_grades else {})
+    return headings, body, mapping
+
+
 def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), school_grades=(),
                ai=None) -> tuple[list[dict], dict]:
     """The file's rows keyed by bulk_import's field names, with subjects and
@@ -518,17 +641,27 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     ai = LiveAI() if ai is None else ai
     school_subjects, school_grades = list(school_subjects), list(school_grades)
 
-    best = None
-    for title, rows in read_sheets(filename, content, kind):
-        idx, mapping = _header_row(rows, kind)
-        score = len(mapping) + (2 if {"name", "first_name"} & set(mapping.values()) else 0)
-        if best is None or score > best[0]:
-            best = (score, title, rows, idx, mapping)
-    _, title, rows, idx, mapping = best
-    headings = rows[idx]
-    body = [r for r in rows[idx + 1:] if any(r)]
+    sheets = read_sheets(filename, content, kind)
+    # One small table per class, anywhere on a sheet: read every one of them.
+    by_class = max(((title, _class_tables(rows)) for title, rows in sheets), key=lambda x: len(x[1]))
+    class_tables = by_class[1] if len(by_class[1]) >= 2 else []
+
     used_ai = False
     layout = "rows"
+    if class_tables:
+        title, layout = by_class[0], "class_tables"
+        headings, body, mapping = _from_class_tables(class_tables, kind, school_grades)
+        rows, idx = [headings] + body, 0
+    else:
+        best = None
+        for title, rows in sheets:
+            idx, mapping = _header_row(rows, kind)
+            score = len(mapping) + (2 if {"name", "first_name"} & set(mapping.values()) else 0)
+            if best is None or score > best[0]:
+                best = (score, title, rows, idx, mapping)
+        _, title, rows, idx, mapping = best
+        headings = rows[idx]
+        body = [r for r in rows[idx + 1:] if any(r)]
 
     def confirm(headings, body, mapping):
         answer = ai.columns(headings, body[:_SAMPLE_ROWS], kind, school_subjects)
@@ -540,8 +673,10 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         merged = {i: f for i, f in merged.items() if f != "ignore"}
         return answer["layout"], merged
 
-    found_layout, confirmed = confirm(headings, body, mapping)
-    if found_layout is None and kind == "teachers":
+    found_layout, confirmed = (layout, mapping) if class_tables else confirm(headings, body, mapping)
+    if class_tables:
+        found_layout = None
+    elif found_layout is None and kind == "teachers":
         mapping = _rule_marks(headings, body, mapping, school_subjects, school_grades)
     if found_layout is not None:
         used_ai = True
@@ -599,7 +734,10 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                 rec.setdefault(field, value)
         if not rec.get("name") and (first or last):
             rec["name"] = f"{first} {last}".strip()
-        if rec.get("name"):
+        # Headings repeated down the sheet, totals, class labels, notes.
+        subjects = [x for x in subjects if not is_label(x)]
+        if rec.get("name") and not is_label(rec["name"]) and _key(rec["name"]) not in (
+                _NOT_A_TEACHER if kind == "teachers" else set()):
             raw_rows.append((rec, subjects, grades))
 
     # What the subject and grade values mean.
@@ -672,6 +810,10 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
 
     read_as = [f"“{headings[i]}” as {FIELDS[kind][f]}" for i, f in sorted(mapping.items())
                if headings[i] and f not in ("subject_mark", "grade_mark")]
+    if class_tables:
+        labels = [t["label"] for t in class_tables]
+        read_as = [f"a table for each class ({len(labels)}: {', '.join(labels[:8])}{'…' if len(labels) > 8 else ''})",
+                   "the subjects in each" + (", and who teaches them" if kind == "teachers" else "")]
     marks = [headings[i] for i, f in sorted(mapping.items()) if f in ("subject_mark", "grade_mark")]
     if marks:
         read_as.append("a mark under " + ", ".join(f"“{m}”" for m in marks) + " as teaching it")
@@ -709,6 +851,26 @@ def look_alike_subjects(names: list[str], school_subjects: list[str]) -> list[tu
             if na == nb or (na in have and nb in have) or min(len(na), len(nb)) < 4 or _variants(na, nb):
                 continue
             if SequenceMatcher(None, na, nb).ratio() >= 0.85 or _key(a) == _key(b):
+                pairs.append((a, b))
+    return pairs
+
+
+def look_alike_people(names: list[str]) -> list[tuple[str, str]]:
+    """"Kavita K" and "Kavita Khana", "Shallu" and "Shalu": perhaps one person."""
+    from difflib import SequenceMatcher
+
+    names = list(dict.fromkeys(n for n in names if n))
+    pairs = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            na, nb = _norm(a), _norm(b)
+            if na == nb:
+                continue
+            wa, wb = na.split(), nb.split()
+            initial = (len(wa) == len(wb) == 2 and wa[0] == wb[0]
+                       and (wa[1].rstrip(".") == wb[1][:len(wa[1].rstrip("."))] or wb[1].rstrip(".") == wa[1][:len(wb[1].rstrip("."))])
+                       and min(len(wa[1].rstrip(".")), len(wb[1].rstrip("."))) <= 2)
+            if initial or (min(len(na), len(nb)) >= 4 and SequenceMatcher(None, na, nb).ratio() >= 0.88):
                 pairs.append((a, b))
     return pairs
 
@@ -761,6 +923,13 @@ def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=()
         names = [s.strip() for r in rows for s in r.get("qualified_subjects", "").split(";") if s.strip()]
     else:
         names = [r["name"] for r in rows if r.get("name")]
+
+    if kind == "teachers":
+        for a, b in look_alike_people([r["name"] for r in rows]):
+            checks.append(f"“{a}” and “{b}” may be the same teacher. If so, use one spelling.")
+            for n, r in enumerate(rows):
+                if r["name"] in (a, b):
+                    notes[n].append(f"Same person as “{b if r['name'] == a else a}”?")
 
     for a, b in look_alike_subjects(list(dict.fromkeys(names)), school_subjects):
         checks.append(f"“{a}” and “{b}” look like the same subject typed two ways.")
