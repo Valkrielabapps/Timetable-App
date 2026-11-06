@@ -521,6 +521,13 @@ _SUBJECT_HEADS = {"subjects", "subject", "subjectname"}
 _TEACHER_HEADS = {"teacher", "teachers", "teachername", "faculty", "staff", "subjectteacher", "nameofteacher"}
 _PERIOD_HEADS = {"periods", "period", "periodsperweek", "noofperiods", "periodsweek", "pds", "load"}
 _CLASS_LABEL = re.compile(r"^\s*(?:class|grade|std\.?|standard)\b", re.I)
+# What a sheet says about itself, above or below the list.
+_SHEET_DETAILS = {
+    "schoolyear", "academicyear", "year", "session", "academicsession", "term", "schoolterm", "semester",
+    "school", "schoolname", "nameofschool", "branch", "campus", "date", "preparedby", "checkedby", "approvedby",
+    "principal", "headmistress", "headmaster", "coordinator", "signature", "remarks", "remark", "note", "notes",
+    "timetable", "timetableincharge", "effectivefrom", "wef", "updatedon", "version", "page",
+}
 _NOT_A_TEACHER = {"classteacher", "ct", "tbd", "tba", "vacant", "new", "newteacher", "none", "na", "nil", "all",
                   "allteachers"}
 
@@ -536,6 +543,11 @@ def is_label(text: str) -> bool:
     if k.startswith("total") or k in ("grandtotal", "sum"):
         return True
     if _CLASS_LABEL.match(t):
+        return True
+    # Form fields at the top of a sheet: "School Year:", "Term: 1".
+    if t.endswith(":") or re.match(r"^[^:]{2,30}:\s*\S", t) and _key(t.split(":")[0]) in _SHEET_DETAILS:
+        return True
+    if k in _SHEET_DETAILS:
         return True
     # A sentence: "Science Practical periods should be together".
     return len(t.split()) >= 5 or t.endswith(".")

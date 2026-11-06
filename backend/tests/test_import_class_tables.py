@@ -27,9 +27,10 @@ SHEET = [
 
 def test_labels_totals_and_notes_are_never_names():
     for junk in ("Total", "TOTAL", "Subjects", "CLASS 6-AB", "CLASS 10 (Sci)", "Class 12 commerce",
-                 "Science Practical periods should be together", "40"):
+                 "Science Practical periods should be together", "40", "School Year:", "School Term:",
+                 "Term: 1", "Session", "Prepared by", "Remarks", "Academic Year 2026-27:"):
         assert is_label(junk), junk
-    for real in ("Maths", "English Lang", "Life skill", "SUPW/PT", "Class Music"[6:]):
+    for real in ("Maths", "English Lang", "Life skill", "SUPW/PT", "Music", "Yearbook", "Ratio: Maths"[7:]):
         assert not is_label(real), real
 
 
@@ -74,3 +75,9 @@ def test_names_that_may_be_one_teacher_are_flagged():
                                         {"name": "Kavita Singh", "qualified_subjects": "Hindi"}])
     assert any("“Kavita K” and “Kavita Khana” may be the same teacher" in c for c in checks)
     assert not any("Kavita Singh" in c for c in checks)
+
+
+def test_form_fields_above_a_plain_list_are_skipped():
+    csv = b"School Year:,2026-27\nSchool Term:,1\n\nSubject,Room\nMaths,\nChemistry,lab\nPrepared by,Anil\n"
+    rows, _ = smart_rows("subjects", "s.csv", csv, ai=NoAI())
+    assert [r["name"] for r in rows] == ["Maths", "Chemistry"]
