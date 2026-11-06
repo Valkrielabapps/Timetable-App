@@ -81,3 +81,28 @@ def test_form_fields_above_a_plain_list_are_skipped():
     csv = b"School Year:,2026-27\nSchool Term:,1\n\nSubject,Room\nMaths,\nChemistry,lab\nPrepared by,Anil\n"
     rows, _ = smart_rows("subjects", "s.csv", csv, ai=NoAI())
     assert [r["name"] for r in rows] == ["Maths", "Chemistry"]
+
+
+def test_the_ai_cannot_fold_a_lab_or_skill_into_another_subject():
+    # What the AI did with this sheet: tidied separate periods away.
+    folded = {"Physics Lab": ["Physics"], "Chemistry Lab": ["Chemistry"], "Mental Maths": ["Mathematics"],
+              "Reading": ["English"], "Cursive": ["English"], "Science Prac": ["Science"],
+              "Eng Gram": ["English"], "Assembly": [], "Maths": ["Mathematics"], "Hist": ["History"],
+              "Lib": ["Library"], "Phy": ["Physics"]}
+    sheet = [["CLASS 2", "", "", "", "CLASS 12 Science", "", ""],
+             ["Subjects", "Periods", "Teacher", "", "Subjects", "Periods", "Teacher"],
+             ["Maths", "5", "Anil", "", "Phy", "6", "Vivek"],
+             ["Mental Maths", "0", "", "", "Physics Lab", "2", ""],
+             ["Reading", "1", "Anjali", "", "Chemistry Lab", "2", ""],
+             ["Cursive", "0", "", "", "Hist", "3", "Ajay"],
+             ["Eng Gram", "2", "Maya", "", "Science Prac", "1", "Akshma"],
+             ["Assembly", "0", "", "", "Lib", "1", "Deepti"]]
+    ai = FakeAI(subjects=folded)
+    rows, _ = smart_rows("subjects", "a.xlsx", xlsx(("S", sheet)), school_subjects=["Mathematics"], ai=ai)
+    names = [r["name"] for r in rows]
+    for kept in ("Mental Maths", "Reading", "Cursive", "Assembly", "Physics Lab", "Chemistry Lab", "English Grammar",
+                 "Science Practical"):
+        assert kept in names, (kept, names)
+    # Plain short forms still take the AI's (or the school's) name.
+    assert {"Mathematics", "Physics", "History", "Library"} <= set(names)
+    assert "Maths" not in names and "English" not in names

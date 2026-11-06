@@ -412,7 +412,11 @@ class LiveAI:
             "same subject (\"Maths\", \"Math\" -> \"Mathematics\" if that is the school's name); otherwise a "
             "clean, properly capitalised name, and the same name every time the same subject appears. A value "
             "can name several (\"Maths and Physics\") or none (\"-\", \"NA\"): then give []. Keep subjects "
-            "the school keeps apart apart (English Language and English Literature are two).\n"
+            "the school keeps apart apart (English Language and English Literature are two). Every value is a "
+            "period on the timetable: never fold one into another subject. A lab, a practical or a skill is its "
+            "own subject - \"Physics Lab\" stays Physics Lab, \"Mental Maths\" stays Mental Maths, \"Science "
+            "Prac\" is Science Practical, \"Reading\", \"Cursive\", \"Assembly\" and \"Library\" stay "
+            "as they are. Only spellings and short forms of the same name are the same subject.\n"
             f"School's subjects: {', '.join(school_subjects) or '(none yet)'}\n"
             f"Values: {json.dumps(subject_items, ensure_ascii=False)}\n\n"
             "GRADES. For each value, list which of the school's grades it means (\"IX\" or \"Std 9\" -> "
@@ -524,6 +528,38 @@ def _rule_subjects(items: list[str], school_subjects: list[str]) -> dict[str, li
             out[item] = [_best_spelling(full) if full else
                          (_CONCEPT_NAMES.get(c) or _best_spelling(new_by_concept[c]))]
     return out
+
+
+# Words that make a period its own subject: "Physics Lab" is not Physics.
+_OWN_PERIOD = ("lab", "prac", "practical", "mental", "reading", "cursive", "writing", "handwriting", "spelling",
+               "dictation", "phonics", "activity", "club", "remedial", "project", "assembly", "library", "skill",
+               "grammar", "gram", "oral", "speaking", "lit", "lang")
+_NOTHING = {"", "-", "--", "na", "nil", "none", "nan", "x"}
+
+
+def _concepts(text: str) -> set[str]:
+    return {_concept(w) for w in re.split(r"[^A-Za-z0-9]+", text) if _concept(w)}
+
+
+def _checked(item: str, means: list[str], by_rule: list[str]) -> list[str]:
+    """The AI's reading of a subject value, unless it folded the value into
+    another subject ("Physics Lab" -> Physics, "Mental Maths" -> Maths) or
+    dropped a real one. Then the rules' reading stands."""
+    if not means:
+        return [] if _key(item) in _NOTHING else by_rule
+    mine = _concepts(item)
+    theirs = set().union(*(_concepts(m) for m in means))
+    # Part of the name dropped: the AI's answer is a smaller piece of it.
+    if theirs and theirs < mine:
+        return by_rule
+    words = [w for w in re.split(r"[^a-z]+", item.lower()) if w]
+    kept = " ".join(means).lower()
+    for w in words:
+        if w in _OWN_PERIOD or any(w.startswith(o) and len(o) >= 4 for o in _OWN_PERIOD):
+            # "Prac" -> "Practical", "Gram" -> "Grammar" are fine; losing it is not.
+            if w not in kept and not any(o in kept for o in _OWN_PERIOD if o.startswith(w) or w.startswith(o)):
+                return by_rule
+    return means
 
 
 def _split_items(cell: str) -> list[str]:
@@ -826,7 +862,8 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         subject_items or unsure_grades) else None
     if answer:
         used_ai = True
-    subject_meaning = {i: (answer["subjects"].get(i, by_rule_subjects[i]) if answer else by_rule_subjects[i])
+    subject_meaning = {i: (_checked(i, answer["subjects"][i], by_rule_subjects[i])
+                           if answer and i in answer["subjects"] else by_rule_subjects[i])
                        for i in subject_items}
     grade_meaning = {g: by_rule_grades[g] or ((answer or {}).get("grades", {}).get(g) or []) for g in grade_items}
 
