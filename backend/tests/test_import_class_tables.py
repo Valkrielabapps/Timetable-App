@@ -106,3 +106,19 @@ def test_the_ai_cannot_fold_a_lab_or_skill_into_another_subject():
     # Plain short forms still take the AI's (or the school's) name.
     assert {"Mathematics", "Physics", "History", "Library"} <= set(names)
     assert "Maths" not in names and "English" not in names
+
+
+def test_the_class_tables_sheet_wins_over_a_finished_timetable_sheet():
+    # A workbook also holding the timetables themselves: Monday | Tuesday …
+    # with Teacher | Subject under each day, one block per class.
+    grid = []
+    for cls in ("6A", "6B", "7A", "7B", "8A"):
+        grid += [["Class:", "", cls], [],
+                 ["", "Monday", "", "Tuesday", "", "Wednesday", "", "Thursday", "", "Friday", ""],
+                 ["Period", "Teacher", "Subject", "Teacher", "Subject", "Teacher", "Subject", "Teacher", "Subject",
+                  "Teacher", "Subject"],
+                 ["1", "Deepti", "Eng Lit", "Muthu", "Maths", "Akshma", "Physics", "Usha", "History", "Ajay", "Geog"],
+                 []]
+    rows, info = smart_rows("subjects", "load.xlsx", xlsx(("Sr class TT", grid), ("allotment", SHEET)), ai=NoAI())
+    assert info["sheet"] == "allotment" and info["layout"] == "class_tables"
+    assert "Tuesday" not in info["read_as"][0]

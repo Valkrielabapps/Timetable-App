@@ -463,14 +463,14 @@ _SUBJECT_ALIASES = {
     "englang": "englang", "englishlang": "englang", "englishlanguage": "englang",
     "enggram": "enggram", "englishgrammar": "enggram", "grammar": "enggram",
     "lib": "library", "library": "library",
-    "hist": "history", "history": "history",
+    "hist": "history", "his": "history", "history": "history",
     "geo": "geography", "geog": "geography", "geography": "geography",
     "civ": "civics", "civics": "civics",
     "histciv": "histciv", "historycivics": "histciv", "historyandcivics": "histciv",
     "eco": "economics", "econ": "economics", "economics": "economics",
     "acc": "accounts", "accts": "accounts", "accounts": "accounts", "accountancy": "accounts",
     "bst": "business", "bstudies": "business", "businessstudies": "business",
-    "comstudies": "commerce", "commercestudies": "commerce", "commerce": "commerce",
+    "comm": "commerce", "com": "commerce", "comstudies": "commerce", "commercestudies": "commerce", "commerce": "commerce",
     "sci": "science", "science": "science",
     "sciprac": "sciprac", "scienceprac": "sciprac", "sciencepractical": "sciprac", "sciencepracticals": "sciprac",
     "lifeskill": "lifeskills", "lifeskills": "lifeskills",
@@ -613,6 +613,8 @@ _SHEET_DETAILS = {
     "principal", "headmistress", "headmaster", "coordinator", "signature", "remarks", "remark", "note", "notes",
     "timetable", "timetableincharge", "effectivefrom", "wef", "updatedon", "version", "page",
 }
+_WEEKDAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+             "mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun", "day"}
 _NOT_A_TEACHER = {"classteacher", "ct", "tbd", "tba", "vacant", "new", "newteacher", "none", "na", "nil", "all",
                   "allteachers"}
 
@@ -655,6 +657,13 @@ def _class_tables(rows: list[list[str]]) -> list[dict]:
 
     anchors = []
     for r, row in enumerate(rows):
+        # A finished timetable - Monday | Tuesday … with Teacher | Subject
+        # under each day - repeats the heading across the row. Not a list.
+        # Side-by-side lists each have their own Periods column; a timetable
+        # has one Period column for the whole row.
+        heads = sum(1 for v in row if _key(v) in _SUBJECT_HEADS)
+        if heads >= 3 and sum(1 for v in row if _key(v) in _PERIOD_HEADS) < heads / 2:
+            continue
         for c, v in enumerate(row):
             if _key(v) not in _SUBJECT_HEADS:
                 continue
@@ -688,8 +697,17 @@ def _class_tables(rows: list[list[str]]) -> list[dict]:
             blanks = 0
             if subj and not is_label(subj):
                 items.append((subj, cell(rr, per) if per is not None else "", teacher))
+        if _key(label) in _WEEKDAYS:
+            continue
         tables.append({"label": label or f"table {n + 1}", "items": items})
     return [t for t in tables if t["items"]]
+
+
+def _class_score(tables: list[dict]) -> int:
+    """How much a sheet looks like a list per class: rows under tables whose
+    label names a class count; a sheet of unlabelled tables counts less."""
+    return sum(len(t["items"]) * (2 if _CLASS_LABEL.match(t["label"]) or _grade_of(t["label"]) else 1)
+               for t in tables)
 
 
 def _split_people(cell: str) -> list[str]:
@@ -752,7 +770,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
 
     sheets = read_sheets(filename, content, kind)
     # One small table per class, anywhere on a sheet: read every one of them.
-    by_class = max(((title, _class_tables(rows)) for title, rows in sheets), key=lambda x: len(x[1]))
+    by_class = max(((title, _class_tables(rows)) for title, rows in sheets), key=lambda x: _class_score(x[1]))
     class_tables = by_class[1] if len(by_class[1]) >= 2 else []
 
     used_ai = False
