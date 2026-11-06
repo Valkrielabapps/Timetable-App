@@ -13,5 +13,7 @@ class BulkImportOut(BaseModel):
     # app/services/smart_import.py): which sheet, and each heading as what.
     sheet: str | None = None
     read_as: list[str] = []
+    # Values read as something else: "“Maths” as Mathematics", "“IX” as Grade 9".
+    matched: list[str] = []
     # Subjects a teacher sheet named that didn't exist yet, now added.
     new_subjects: list[str] = []

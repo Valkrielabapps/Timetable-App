@@ -12,7 +12,7 @@ const RESOURCES = {
     label: 'Teachers',
     columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
     note: 'A teacher who is already here keeps what they teach: the file adds its subjects and grades to theirs. Remove one on the teacher\u2019s own row.',
-    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, and add any subject that isn\u2019t here yet.',
+    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, even from a grid of ticks, match spellings like \u201cMaths\u201d and \u201cStd 9\u201d to yours, and add any subject that isn\u2019t here yet.',
   },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
@@ -125,6 +125,9 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
               Read {result.sheet && result.sheet !== 'CSV' ? `the sheet \u201c${result.sheet}\u201d, ` : ''}
               taking {result.read_as.join(', ')}.
             </p>
+          )}
+          {result.matched?.length > 0 && (
+            <p className="mt-1 text-slate-600">Matched {result.matched.join(', ')}.</p>
           )}
           {result.new_subjects?.length > 0 && (
             <p className="mt-1 text-slate-600">

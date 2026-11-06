@@ -139,10 +139,15 @@ async def bulk_import_teachers(
     content = await read_upload(file)
     # The school's own sheet, whatever its layout - see app/services/smart_import.py.
     try:
-        rows, info = smart_rows("teachers", file.filename, content)
+        rows, info = smart_rows(
+            "teachers", file.filename, content,
+            school_subjects=[x.name for x in db.query(Subject).filter(Subject.school_id == school_id)],
+            school_grades=sorted({g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id) if g}),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     new_subjects = add_missing_subjects(db, school_id, rows)
     result = import_teachers(db, school_id, rows)
     return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors,
-                         sheet=info["sheet"], read_as=info["read_as"], new_subjects=new_subjects)
+                         sheet=info["sheet"], read_as=info["read_as"], matched=info["matched"],
+                         new_subjects=new_subjects)

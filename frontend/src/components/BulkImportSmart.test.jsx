@@ -11,6 +11,7 @@ describe('importing a school’s own staff list', () => {
     api.bulkImport.mockResolvedValue({
       created: 2, updated: 0, errors: [], sheet: 'Staff',
       read_as: ['“Name of Teacher” as teacher’s full name', '“Subject 1” as subjects they teach'],
+      matched: ['“Maths” as Mathematics', '“IX” as Grade 9'],
       new_subjects: ['Maths', 'Physics'],
     })
     const { container } = render(<BulkImportPanel schoolId={1} resource="teachers" />)
@@ -22,5 +23,6 @@ describe('importing a school’s own staff list', () => {
     await waitFor(() => expect(screen.getByText(/2 created/)).toBeInTheDocument())
     expect(screen.getByText(/Read the sheet “Staff”/)).toHaveTextContent('“Name of Teacher” as teacher’s full name')
     expect(screen.getByText(/Added 2 new subjects: Maths, Physics/)).toBeInTheDocument()
+    expect(screen.getByText(/Matched “Maths” as Mathematics, “IX” as Grade 9/)).toBeInTheDocument()
   })
 })
