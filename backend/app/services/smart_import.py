@@ -103,8 +103,10 @@ def _strip_number(key: str) -> str:
     return re.sub(r"\d+$", "", key)
 
 
-def read_sheets(filename: str, content: bytes) -> list[tuple[str, list[list[str]]]]:
-    """Every sheet (one for a CSV) as rows of cell text, blank rows dropped."""
+def read_sheets(filename: str, content: bytes, kind: str = "teachers") -> list[tuple[str, list[list[str]]]]:
+    """Every sheet (one for a CSV; each table of a Word document) as rows
+    of cell text. Blank rows kept, so a row's position is the one the school
+    sees in Excel."""
     lower = filename.lower()
     if lower.endswith(".csv"):
         text = content.decode("utf-8-sig", errors="replace")
@@ -114,17 +116,132 @@ def read_sheets(filename: str, content: bytes) -> list[tuple[str, list[list[str]
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         sheets = [(ws.title, [["" if c is None else str(c) for c in row]
                               for row in capped(ws.iter_rows(values_only=True))]) for ws in wb.worksheets]
+    elif lower.endswith(".docx"):
+        sheets = docx_sheets(content, kind)
+    elif lower.endswith(".doc"):
+        raise ValueError("That's an old Word file (.doc). In Word: File > Save As > Word Document (.docx), "
+                         "then upload that.")
     else:
-        raise ValueError("Upload the sheet as .xlsx or .csv (in Excel: File > Save As > Excel Workbook).")
+        raise ValueError("Upload the list as an Excel sheet (.xlsx), a CSV or a Word document (.docx).")
     out = []
     for title, rows in sheets:
-        # Blank rows kept, so a row's position is the one the school sees in Excel.
         rows = [[str(c).strip() for c in r] for r in rows]
         if any(any(c for c in r) for r in rows):
             out.append((title, rows))
     if not out:
         raise ValueError("The file has no data in it.")
     return out
+
+
+# ------------------------------------------------------- Word documents
+
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+# "Priya Sharma - Maths, Physics", "Priya Sharma: Maths", "Priya Sharma (Maths)"
+_LINE = re.compile(r"^(?:\d+[.)]\s*)?(.+?)\s*(?:\s[-\u2013\u2014]\s|:|\t|\()\s*(.+?)\)?$")
+
+
+def _text(el) -> str:
+    """A paragraph's or cell's text: tabs kept, line breaks as new lines,
+    paragraphs on their own lines."""
+    paras = []
+    for p in el.iter(f"{_W}p"):
+        parts = []
+        for node in p.iter():
+            if node.tag == f"{_W}t" and node.text:
+                parts.append(node.text)
+            elif node.tag == f"{_W}tab":
+                parts.append("\t")
+            elif node.tag in (f"{_W}br", f"{_W}cr"):
+                parts.append("\n")
+        paras.append("".join(parts))
+    return "\n".join(paras)
+
+
+def _table_rows(tbl) -> list[list[str]]:
+    rows, above = [], []
+    for tr in tbl.findall(f"{_W}tr"):
+        row = []
+        for tc in tr.findall(f"{_W}tc"):
+            pr = tc.find(f"{_W}tcPr")
+            span = pr.find(f"{_W}gridSpan") if pr is not None else None
+            merge = pr.find(f"{_W}vMerge") if pr is not None else None
+            text = _text(tc).strip()
+            col = len(row)
+            # A cell merged down from the one above ("Priya Sharma" over two
+            # subject rows) belongs to every row it covers.
+            if merge is not None and merge.get(f"{_W}val") in (None, "continue") and col < len(above):
+                text = above[col]
+            row.append(text)
+            width = int(span.get(f"{_W}val", "1")) if span is not None else 1
+            row += [""] * (width - 1)
+        rows.append(row)
+        above = row
+    return rows
+
+
+def _list_rows(lines: list[str], kind: str) -> list[list[str]] | None:
+    """A list typed as text, one per line: split by tabs, "Name - subjects",
+    "Name: subjects", or just names."""
+    lines = [ln.strip() for ln in lines if ln.strip()]
+    if not lines:
+        return None
+    tabbed = [ln for ln in lines if "\t" in ln]
+    if len(tabbed) >= 0.6 * len(lines):
+        return [re.split(r"\t+", ln) for ln in lines]
+    pairs = [_LINE.match(ln) for ln in lines]
+    second = "Subjects" if kind == "teachers" else "Details"
+    if sum(1 for m in pairs if m) >= 0.6 * len(lines):
+        # A heading line or title above the list has no separator: dropped.
+        return [["Name", second]] + [[m.group(1).strip(), m.group(2).strip()] for m in pairs if m]
+    # Just names. A first line like "Subjects" or "List of teachers" is the
+    # list's title, not one of them.
+    titles = set(SYNONYMS[kind]["name"]) | {"teachers", "subjects", "stafflist", "teacherslist", "subjectlist",
+                                             "subjectslist", "listofteachers", "listofsubjects", "ourteachers",
+                                             "oursubjects", "teachingstaff"}
+    if _key(lines[0]) in titles or _strip_number(_key(lines[0])) in titles:
+        lines = lines[1:]
+    return [["Name"]] + [[re.sub(r"^\d+[.)]\s*", "", ln)] for ln in lines]
+
+
+def docx_sheets(content: bytes, kind: str = "teachers") -> list[tuple[str, list[list[str]]]]:
+    """A Word document read like a workbook: each table is a sheet (tables
+    with the same headings, one per department say, joined into one), and a
+    document without tables is read as a list, one per line."""
+    import zipfile
+    from xml.etree import ElementTree
+
+    check_xlsx(content, what="Word document")
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            xml = archive.read("word/document.xml")
+    except KeyError:
+        raise ValueError("That file isn't a valid Word document (.docx).") from None
+    if b"<!DOCTYPE" in xml or b"<!ENTITY" in xml:
+        raise ValueError("That file isn't a valid Word document (.docx).")
+    body = ElementTree.fromstring(xml).find(f"{_W}body")
+    if body is None:
+        raise ValueError("The file has no data in it.")
+
+    tables: list[tuple[str, list[list[str]]]] = []
+    lines: list[str] = []
+    for el in body:
+        if el.tag == f"{_W}tbl":
+            rows = capped(_table_rows(el))
+            if not any(any(c for c in r) for r in rows):
+                continue
+            head = next((r for r in rows if any(r)), [])
+            same = next((t for t in tables if next((r for r in t[1] if any(r)), None) == head), None)
+            if same is not None and len(head) > 1:
+                start = rows.index(head) + 1
+                same[1].extend(rows[start:])
+            else:
+                tables.append((f"table {len(tables) + 1} of the document", rows))
+        elif el.tag == f"{_W}p":
+            lines += _text(el).split("\n")
+    if tables:
+        return tables
+    rows = _list_rows(capped(lines), kind)
+    return [("the document's text", rows)] if rows else []
 
 
 def _rule_map(headings: list[str], kind: str) -> dict[int, str]:
@@ -402,7 +519,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     school_subjects, school_grades = list(school_subjects), list(school_grades)
 
     best = None
-    for title, rows in read_sheets(filename, content):
+    for title, rows in read_sheets(filename, content, kind):
         idx, mapping = _header_row(rows, kind)
         score = len(mapping) + (2 if {"name", "first_name"} & set(mapping.values()) else 0)
         if best is None or score > best[0]:

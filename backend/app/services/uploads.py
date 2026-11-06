@@ -30,7 +30,7 @@ async def read_upload(file: UploadFile) -> bytes:
     return content
 
 
-def check_xlsx(content: bytes) -> None:
+def check_xlsx(content: bytes, what: str = "spreadsheet") -> None:
     """Raise ValueError if an .xlsx isn't a real one, or would unpack to
     more than MAX_UNZIPPED_BYTES. Read from the zip's own directory, before
     anything is decompressed."""
@@ -38,9 +38,10 @@ def check_xlsx(content: bytes) -> None:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
             total = sum(info.file_size for info in archive.infolist())
     except zipfile.BadZipFile:
-        raise ValueError("That file isn't a valid .xlsx spreadsheet.") from None
+        kind = ".docx Word document" if what == "Word document" else ".xlsx spreadsheet"
+        raise ValueError(f"That file isn't a valid {kind}.") from None
     if total > MAX_UNZIPPED_BYTES:
-        raise ValueError("That spreadsheet is too big to read - split it into smaller files.")
+        raise ValueError(f"That {what} is too big to read - split it into smaller files.")
 
 
 def capped(rows, limit: int = MAX_ROWS):

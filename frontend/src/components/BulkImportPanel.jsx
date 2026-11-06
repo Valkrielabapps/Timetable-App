@@ -5,14 +5,14 @@ const RESOURCES = {
   subjects: {
     label: 'Subjects',
     columns: 'name, required_room_type',
-    smart: 'Upload the subject list you already have, in any layout. We find the subject names and room types ourselves, and show you what we found before anything is saved.',
+    smart: 'Upload the subject list you already have, as an Excel sheet, CSV or Word document, in any layout. We find the subject names and room types ourselves, and show you what we found before anything is saved.',
   },
   rooms: { label: 'Rooms', columns: 'name, capacity, room_type' },
   teachers: {
     label: 'Teachers',
     columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
     note: 'A teacher who is already here keeps what they teach: the file adds its subjects and grades to theirs. Remove one on the teacher\u2019s own row.',
-    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, even from a grid of ticks, match spellings like \u201cMaths\u201d and \u201cStd 9\u201d to yours, and add any subject that isn\u2019t here yet. You see it all before anything is saved.',
+    smart: 'Upload the staff list you already have, as an Excel sheet, CSV or Word document, in any layout. We find the names, subjects, classes and workload ourselves, even from a grid of ticks, match spellings like \u201cMaths\u201d and \u201cStd 9\u201d to yours, and add any subject that isn\u2019t here yet. You see it all before anything is saved.',
   },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
@@ -105,7 +105,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
         <input
           type="file"
           id={`bulk-import-file-${resource}`}
-          accept=".csv,.xlsx"
+          accept={meta.smart ? '.csv,.xlsx,.docx' : '.csv,.xlsx'}
           disabled={uploading || saving}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="sr-only"
@@ -154,7 +154,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
           </p>
           {result.read_as?.length > 0 && (
             <p className="mt-1.5 text-slate-600">
-              Read {result.sheet && result.sheet !== 'CSV' ? `the sheet \u201c${result.sheet}\u201d, ` : ''}
+              Read {source(result.sheet) ? `${source(result.sheet)}, ` : ''}
               taking {result.read_as.join(', ')}.
             </p>
           )}
@@ -181,6 +181,13 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
 }
 
 const FIRST_ROWS = 8
+
+// Where in the file the list was found: an Excel sheet by its name, a Word
+// document's table or text as the backend describes it, nothing for a CSV.
+function source(sheet) {
+  if (!sheet || sheet === 'CSV') return ''
+  return sheet.includes('the document') ? sheet : `the sheet \u201c${sheet}\u201d`
+}
 
 function plural(n, one, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`
@@ -210,7 +217,7 @@ function ImportPreview({ preview, saving, onImport, onCancel }) {
       </p>
       {preview.read_as.length > 0 && (
         <p className="mt-1 text-slate-600">
-          {preview.sheet && preview.sheet !== 'CSV' ? `From the sheet \u201c${preview.sheet}\u201d, taking ` : 'Taking '}
+          {source(preview.sheet) ? `From ${source(preview.sheet)}, taking ` : 'Taking '}
           {preview.read_as.join(', ')}.
         </p>
       )}

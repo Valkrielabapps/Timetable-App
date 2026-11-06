@@ -71,6 +71,15 @@ describe('importing a school’s own staff list', () => {
     expect(api.bulkImportCommit).not.toHaveBeenCalled()
   })
 
+  it('takes a Word document and says which table it read', async () => {
+    api.bulkImportPreview.mockResolvedValue({ ...PREVIEW, sheet: 'table 1 of the document' })
+    const { container } = render(<BulkImportPanel schoolId={1} resource="teachers" />)
+    expect(container.querySelector('input[type="file"]').getAttribute('accept')).toContain('.docx')
+    expect(screen.getByText(/Word document/)).toBeInTheDocument()
+    choose(container)
+    expect(await screen.findByText(/From table 1 of the document, taking/)).toBeInTheDocument()
+  })
+
   it('rooms still import in one step', async () => {
     api.bulkImport.mockResolvedValue({ created: 2, updated: 0, errors: [] })
     const { container } = render(<BulkImportPanel schoolId={1} resource="rooms" />)
