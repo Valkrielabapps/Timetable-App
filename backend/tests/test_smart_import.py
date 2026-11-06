@@ -142,7 +142,7 @@ def test_a_subjects_list_is_matched_to_the_schools_own_names():
     sheet = [["Subject Name", "Room type"], ["Maths", ""], ["Chem", "lab"]]
     rows, info = smart_rows("subjects", "s.csv", "\n".join(",".join(r) for r in sheet).encode(),
                             school_subjects=["Mathematics"], ai=NoAI())
-    assert rows == [{"name": "Mathematics"}, {"name": "Chem", "required_room_type": "lab"}]
+    assert rows == [{"name": "Mathematics"}, {"name": "Chemistry", "required_room_type": "lab"}]
 
 
 def test_no_name_column_says_what_to_do():

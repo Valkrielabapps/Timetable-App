@@ -452,9 +452,45 @@ _SUBJECT_ALIASES = {
     "computerscience": "computer", "computerapplications": "computer",
     "sst": "social", "socialstudies": "social", "socialscience": "social", "sscience": "social",
     "evs": "evs", "environmentalstudies": "evs", "environmentalscience": "evs",
-    "pe": "pe", "pt": "pe", "physicaleducation": "pe", "games": "pe", "sports": "pe",
+    "pe": "pe", "pt": "pe", "physicaleducation": "pe", "games": "pe", "sports": "pe", "ped": "pe",
+    "phyedu": "pe", "pted": "pe", "ptgames": "pe", "physicaltraining": "pe",
     "gk": "gk", "generalknowledge": "gk",
+    "englit": "englit", "englishlit": "englit", "englishliterature": "englit", "lit": "englit",
+    "englang": "englang", "englishlang": "englang", "englishlanguage": "englang",
+    "enggram": "enggram", "englishgrammar": "enggram", "grammar": "enggram",
+    "lib": "library", "library": "library",
+    "hist": "history", "history": "history",
+    "geo": "geography", "geog": "geography", "geography": "geography",
+    "civ": "civics", "civics": "civics",
+    "histciv": "histciv", "historycivics": "histciv", "historyandcivics": "histciv",
+    "eco": "economics", "econ": "economics", "economics": "economics",
+    "acc": "accounts", "accts": "accounts", "accounts": "accounts", "accountancy": "accounts",
+    "bst": "business", "bstudies": "business", "businessstudies": "business",
+    "comstudies": "commerce", "commercestudies": "commerce", "commerce": "commerce",
+    "sci": "science", "science": "science",
+    "sciprac": "sciprac", "scienceprac": "sciprac", "sciencepractical": "sciprac", "sciencepracticals": "sciprac",
+    "lifeskill": "lifeskills", "lifeskills": "lifeskills",
+    "writingskill": "writing", "writingskills": "writing",
+    "art": "art", "arts": "art", "artandcraft": "art", "artcraft": "art",
 }
+
+# A clean name for a known subject the school doesn't have yet, so "PT",
+# "Games" and "P.Ed" all arrive as one "Physical Education".
+_CONCEPT_NAMES = {
+    "math": "Maths", "biology": "Biology", "physics": "Physics", "chemistry": "Chemistry",
+    "computer": "Computer Science", "social": "Social Studies", "evs": "Environmental Studies",
+    "pe": "Physical Education", "gk": "General Knowledge", "englit": "English Literature",
+    "englang": "English Language", "enggram": "English Grammar", "library": "Library", "history": "History",
+    "geography": "Geography", "civics": "Civics", "histciv": "History & Civics", "economics": "Economics",
+    "accounts": "Accountancy", "business": "Business Studies", "commerce": "Commerce", "science": "Science",
+    "sciprac": "Science Practical", "lifeskills": "Life Skills", "writing": "Writing Skills", "art": "Art",
+}
+
+
+_FULL_KEY = {}
+for _k, _c in _SUBJECT_ALIASES.items():
+    if len(_k) > len(_FULL_KEY.get(_c, "")):
+        _FULL_KEY[_c] = _k
 
 
 def _concept(name: str) -> str:
@@ -462,9 +498,18 @@ def _concept(name: str) -> str:
     return _SUBJECT_ALIASES.get(k, k)
 
 
+def _best_spelling(spellings: list[str]) -> str:
+    """"Maths" over "Math", "Art" over "ART", "Computer" over "computer"."""
+    return max(spellings, key=lambda x: (not x.isupper() or len(x) <= 3, not x.islower(), len(x), x))
+
+
 def _rule_subjects(items: list[str], school_subjects: list[str]) -> dict[str, list[str]]:
     by_concept = {_concept(s): s for s in school_subjects}
     out, new_by_concept = {}, {}
+    for item in items:
+        c = _concept(item)
+        if c and c not in by_concept:
+            new_by_concept.setdefault(c, []).append(item.strip())
     for item in items:
         c = _concept(item)
         if not c:
@@ -473,7 +518,11 @@ def _rule_subjects(items: list[str], school_subjects: list[str]) -> dict[str, li
             out[item] = [by_concept[c]]
         else:
             # Two spellings of one new subject become one.
-            out[item] = [new_by_concept.setdefault(c, item.strip())]
+            # The sheet's own full name ("Mathematics") if it has one, else a
+            # clean one for the short forms ("PT", "Games" -> Physical Education).
+            full = [x for x in new_by_concept[c] if _key(x) == _FULL_KEY.get(c)]
+            out[item] = [_best_spelling(full) if full else
+                         (_CONCEPT_NAMES.get(c) or _best_spelling(new_by_concept[c]))]
     return out
 
 
@@ -617,7 +666,19 @@ def _split_people(cell: str) -> list[str]:
 
 
 def _split_subjects(cell: str) -> list[str]:
-    return [p.strip(" .-") for p in re.split(r"\s*(?:/|,|\+|&)\s*", cell) if p.strip(" .-")]
+    """"Maths/Bio" is two, "English Lit + Lib" two; "Eng (Lang/Lit)" stays
+    whole - what's in brackets belongs to the word before it."""
+    parts, depth, cur = [], 0, ""
+    for ch in cell:
+        depth += ch == "("
+        depth -= ch == ")" and depth > 0
+        if depth == 0 and ch in "/,+&":
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    parts.append(cur)
+    return [p.strip(" .-") for p in parts if p.strip(" .-")]
 
 
 def _from_class_tables(tables: list[dict], kind: str, school_grades: list[str]) -> tuple[list[str], list[list[str]], dict]:
@@ -790,7 +851,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             if item in doubtful_grades:
                 doubtful.append(f"“{item}” as {', '.join(means)}")
 
-    out, notes = [], []
+    out, notes, seen_names = [], [], set()
     for rec, subjects, grades in raw_rows:
         row_notes = []
         for item in dict.fromkeys(subjects + ([rec["name"]] if kind == "subjects" else [])):
@@ -803,6 +864,11 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         if kind == "subjects":
             names = subject_meaning.get(rec["name"]) or [rec["name"]]
             rec = {**rec, "name": names[0]}
+            # The same subject from several class tables, or spelt two ways: once.
+            if rec["name"].lower() in seen_names:
+                notes.pop()
+                continue
+            seen_names.add(rec["name"].lower())
         else:
             canon = []
             for s in subjects:

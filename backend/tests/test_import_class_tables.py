@@ -38,8 +38,8 @@ def test_every_class_table_gives_its_subjects():
     rows, info = smart_rows("subjects", "alloc.xlsx", xlsx(("2026", SHEET)), ai=NoAI())
     names = [r["name"] for r in rows]
     assert info["layout"] == "class_tables"
-    assert names == ["Phonics", "Maths", "Art", "English Lang", "Assembly", "Hist", "civ", "Bio", "English Lit",
-                     "Lib", "P.T"]
+    assert names == ["Phonics", "Maths", "Art", "English Language", "Assembly", "History", "Civics", "Biology",
+                     "English Literature", "Library", "Physical Education"]
     assert not {"Total", "TOTAL", "Subjects", "CLASS 6-AB"} & set(names)
     assert "a table for each class (4: CLASS 1-AB, CLASS 7-AB, CLASS 6-AB, CLASS 11 Science)" in info["read_as"][0]
 
