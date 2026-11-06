@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BulkImportOut(BaseModel):
@@ -17,3 +17,30 @@ class BulkImportOut(BaseModel):
     matched: list[str] = []
     # Subjects a teacher sheet named that didn't exist yet, now added.
     new_subjects: list[str] = []
+
+
+class BulkPreviewOut(BaseModel):
+    """A school's own sheet as it would be saved - nothing saved yet. See
+    app/services/smart_import.py:build_preview."""
+
+    kind: str
+    total: int
+    subject_count: int
+    will_update: int
+    rows: list[dict[str, str]]
+    # Per row: doubtful readings ("“Comp Sci” → Computer Science?") and
+    # what the checks found ("No subjects").
+    row_notes: list[list[str]]
+    sheet: str | None = None
+    read_as: list[str] = []
+    matched: list[str] = []
+    doubtful: list[str] = []
+    checks: list[str] = []
+    new_subjects: list[str] = []
+
+
+class BulkCommitIn(BaseModel):
+    """The previewed rows, saved as shown."""
+
+    school_id: int
+    rows: list[dict[str, str]] = Field(max_length=5000)

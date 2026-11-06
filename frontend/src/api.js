@@ -498,6 +498,10 @@ export const api = {
   // "teachers", "class-groups" (matches the router prefix).
   bulkImport: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import`, schoolId, file),
   bulkImportTemplateUrl: (resource) => `/api/${resource}/bulk-import/template`,
+  // A school's own sheet (subjects, teachers): read and shown first, saved
+  // only when the school clicks Import. See app/services/smart_import.py.
+  bulkImportPreview: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import/preview`, schoolId, file),
+  bulkImportCommit: (resource, schoolId, rows) => post(`/${resource}/bulk-import/commit`, { school_id: schoolId, rows }),
 
   // Setup-from-document extraction - upload an arbitrary spreadsheet
   // (not in bulk-import's expected column format) and let Claude propose

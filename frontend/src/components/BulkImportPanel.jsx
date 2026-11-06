@@ -5,14 +5,14 @@ const RESOURCES = {
   subjects: {
     label: 'Subjects',
     columns: 'name, required_room_type',
-    smart: 'Upload the subject list you already have, in any layout. We find the subject names and room types ourselves.',
+    smart: 'Upload the subject list you already have, in any layout. We find the subject names and room types ourselves, and show you what we found before anything is saved.',
   },
   rooms: { label: 'Rooms', columns: 'name, capacity, room_type' },
   teachers: {
     label: 'Teachers',
     columns: 'name, email, max_periods_per_week, qualified_subjects, qualified_grades (empty = every grade)',
     note: 'A teacher who is already here keeps what they teach: the file adds its subjects and grades to theirs. Remove one on the teacher\u2019s own row.',
-    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, even from a grid of ticks, match spellings like \u201cMaths\u201d and \u201cStd 9\u201d to yours, and add any subject that isn\u2019t here yet.',
+    smart: 'Upload the staff list you already have, in any layout. We find the names, subjects, classes and workload ourselves, even from a grid of ticks, match spellings like \u201cMaths\u201d and \u201cStd 9\u201d to yours, and add any subject that isn\u2019t here yet. You see it all before anything is saved.',
   },
   'class-groups': { label: 'Class groups (sections)', columns: 'name, grade, student_count' },
 }
@@ -43,6 +43,9 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  // A school's own sheet is shown first and saved only on Import.
+  const [preview, setPreview] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   const meta = RESOURCES[resource]
 
@@ -52,16 +55,36 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
     setUploading(true)
     setError(null)
     setResult(null)
+    setPreview(null)
     try {
-      const res = await api.bulkImport(resource, schoolId, file)
-      setResult(res)
+      if (meta.smart) {
+        setPreview(await api.bulkImportPreview(resource, schoolId, file))
+      } else {
+        setResult(await api.bulkImport(resource, schoolId, file))
+        if (onImported) await onImported()
+      }
       setFile(null)
       e.target.reset()
-      if (onImported) await onImported()
     } catch (err) {
       setError(err.message)
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function handleCommit() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await api.bulkImportCommit(resource, schoolId, preview.rows)
+      // Keep how it was read alongside what was saved.
+      setResult({ ...res, sheet: preview.sheet, read_as: preview.read_as, matched: preview.matched })
+      setPreview(null)
+      if (onImported) await onImported()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -83,7 +106,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
           type="file"
           id={`bulk-import-file-${resource}`}
           accept=".csv,.xlsx"
-          disabled={uploading}
+          disabled={uploading || saving}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="sr-only"
         />
@@ -97,10 +120,10 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
         </label>
         {file && <span className="max-w-[200px] truncate text-sm text-slate-500">{file.name}</span>}
         <button
-          disabled={!file || uploading}
+          disabled={!file || uploading || saving}
           className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
-          {uploading ? 'Importing…' : 'Import'}
+          {meta.smart ? (uploading ? 'Reading…' : 'Read file') : uploading ? 'Importing…' : 'Import'}
         </button>
         <a
           href={api.bulkImportTemplateUrl(resource)}
@@ -113,6 +136,15 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
       {!meta.smart && <p className="mt-2 text-xs text-slate-400">Columns: {meta.columns}</p>}
 
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+
+      {preview && (
+        <ImportPreview
+          preview={preview}
+          saving={saving}
+          onImport={handleCommit}
+          onCancel={() => setPreview(null)}
+        />
+      )}
 
       {result && (
         <div className="mt-3 rounded-md bg-slate-50 p-3 text-xs">
@@ -145,5 +177,144 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
         </div>
       )}
     </div>
+  )
+}
+
+const FIRST_ROWS = 8
+
+function plural(n, one, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`
+}
+
+/**
+ * The sheet as it will be saved, before anything is: how it was read, the
+ * first rows (and any row with something to check), readings only the AI
+ * made in amber, and what the checks found. Import saves exactly these rows.
+ */
+function ImportPreview({ preview, saving, onImport, onCancel }) {
+  const teachers = preview.kind === 'teachers'
+  const doubtful = new Set(preview.doubtful)
+  const notes = preview.row_notes
+  const shown = preview.rows
+    .map((row, i) => ({ row, i, notes: notes[i] || [] }))
+    .filter(({ i, notes: n }) => i < FIRST_ROWS || n.length > 0)
+    .slice(0, FIRST_ROWS + 12)
+  const hidden = preview.total - shown.length
+  const what = teachers ? 'teacher' : 'subject'
+
+  return (
+    <section aria-label="Check before importing" className="mt-3 rounded-md border border-slate-200 bg-white p-3 text-xs">
+      <p className="text-sm font-medium text-slate-800">
+        We found {plural(preview.total, what)}
+        {teachers && ` and ${plural(preview.subject_count, 'subject')}`}. Here’s how we read it.
+      </p>
+      {preview.read_as.length > 0 && (
+        <p className="mt-1 text-slate-600">
+          {preview.sheet && preview.sheet !== 'CSV' ? `From the sheet \u201c${preview.sheet}\u201d, taking ` : 'Taking '}
+          {preview.read_as.join(', ')}.
+        </p>
+      )}
+      {preview.matched.length > 0 && (
+        <p className="mt-1 text-slate-600">
+          Matched{' '}
+          {preview.matched.map((m, i) => (
+            <span key={m}>
+              {i > 0 && ', '}
+              {doubtful.has(m) ? (
+                <mark className="rounded bg-amber-100 px-0.5 text-amber-900" title="Only the AI read it this way: check it">
+                  {m}?
+                </mark>
+              ) : (
+                m
+              )}
+            </span>
+          ))}
+          .
+        </p>
+      )}
+      {preview.new_subjects.length > 0 && (
+        <p className="mt-1 text-slate-600">
+          {plural(preview.new_subjects.length, 'new subject')} will be added: {preview.new_subjects.join(', ')}.
+        </p>
+      )}
+      {preview.will_update > 0 && (
+        <p className="mt-1 text-slate-600">
+          {plural(preview.will_update, `${what} is`, `${what}s are`)} already here
+          {teachers ? ' and keep what they teach; the sheet adds to it.' : ' and will be updated.'}
+        </p>
+      )}
+
+      {preview.checks.length > 0 && (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900">
+          <p className="font-medium">Worth checking</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {preview.checks.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+          <p className="mt-1">Import anyway, or fix the sheet and read it again.</p>
+        </div>
+      )}
+
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-left">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="py-1 pr-3 font-medium">Name</th>
+              {teachers ? (
+                <>
+                  <th className="py-1 pr-3 font-medium">Subjects</th>
+                  <th className="py-1 pr-3 font-medium">Classes</th>
+                  <th className="py-1 font-medium">Periods a week</th>
+                </>
+              ) : (
+                <th className="py-1 font-medium">Room type</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map(({ row, i, notes: n }) => (
+              <tr key={i} className={`border-t border-slate-100 align-top ${n.length ? 'bg-amber-50' : ''}`}>
+                <td className="py-1 pr-3 text-slate-800">
+                  {row.name}
+                  {n.map((note) => (
+                    <div key={note} className="text-amber-800">{note}</div>
+                  ))}
+                </td>
+                {teachers ? (
+                  <>
+                    <td className="py-1 pr-3">{(row.qualified_subjects || '').split(';').filter(Boolean).join(', ') || '\u2014'}</td>
+                    <td className="py-1 pr-3">{(row.qualified_grades || '').split(';').filter(Boolean).join(', ') || 'All'}</td>
+                    <td className="py-1">{row.max_periods_per_week || '\u2014'}</td>
+                  </>
+                ) : (
+                  <td className="py-1">{row.required_room_type || '\u2014'}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {hidden > 0 && <p className="mt-1 text-slate-500">and {plural(hidden, 'more row')}.</p>}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onImport}
+          disabled={saving || preview.total === 0}
+          className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {saving ? 'Importing…' : `Import ${plural(preview.total, what)}`}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-md border border-slate-300 px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </section>
   )
 }

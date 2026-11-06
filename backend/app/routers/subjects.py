@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.services.smart_import import smart_rows
+from app.services.smart_import import build_preview, smart_rows
 from app.services.uploads import read_upload
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
@@ -12,7 +12,7 @@ from app.models.school import (
     ElectiveBlock, ElectiveOption, Subject, SubjectFreeze, SubjectRequirement, TimetableEntry,
 )
 from app.models.user import User
-from app.schemas.bulk_import import BulkImportOut
+from app.schemas.bulk_import import BulkCommitIn, BulkImportOut, BulkPreviewOut
 from app.schemas.subject import SubjectCreate, SubjectOut, SubjectUpdate
 from app.services.bulk_import import TEMPLATES, import_subjects
 
@@ -145,4 +145,38 @@ async def bulk_import_subjects(
     result = import_subjects(db, school_id, rows)
     return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors,
                          sheet=info["sheet"], read_as=info["read_as"], matched=info["matched"],
+                         new_subjects=new_subjects)
+
+
+@router.post("/bulk-import/preview", response_model=BulkPreviewOut)
+async def preview_subjects_import(
+    school_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read the school's sheet and show it as it would be saved, with
+    anything doubtful flagged. Saves nothing - the school then clicks
+    Import, which sends these rows to /bulk-import/commit."""
+    require_school_access(db, current_user, school_id, min_role="admin")
+    content = await read_upload(file)
+    try:
+        return build_preview(db, school_id, "subjects", file.filename, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/bulk-import/commit", response_model=BulkImportOut)
+def commit_subjects_import(
+    payload: BulkCommitIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save the rows the school saw in the preview, as they were shown."""
+    school_id = payload.school_id
+    require_school_access(db, current_user, school_id, min_role="admin")
+    rows = payload.rows
+    new_subjects = []
+    result = import_subjects(db, school_id, rows)
+    return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors,
                          new_subjects=new_subjects)

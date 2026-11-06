@@ -502,16 +502,37 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                        for i in subject_items}
     grade_meaning = {g: by_rule_grades[g] or ((answer or {}).get("grades", {}).get(g) or []) for g in grade_items}
 
-    matched = []
+    # A reading only the AI made (the rules didn't reach it) is worth a look
+    # before saving: "Comp Sci" -> Computer Science?
+    def low(xs):
+        return [x.lower() for x in xs]
+
+    doubtful_subjects = {i for i in subject_items if answer and i in answer["subjects"]
+                         and subject_meaning[i] and low(subject_meaning[i]) != low(by_rule_subjects[i])}
+    doubtful_grades = {g for g in grade_items if not by_rule_grades[g] and grade_meaning[g]}
+
+    matched, doubtful = [], []
     for item, means in subject_meaning.items():
         if means and [m.lower() for m in means] != [item.lower()]:
             matched.append(f"“{item}” as {', '.join(means)}")
+            if item in doubtful_subjects:
+                doubtful.append(f"“{item}” as {', '.join(means)}")
     for item, means in grade_meaning.items():
         if means and not (len(means) == 1 and means[0].lower() == item.lower()):
             matched.append(f"“{item}” as {', '.join(means)}")
+            if item in doubtful_grades:
+                doubtful.append(f"“{item}” as {', '.join(means)}")
 
-    out = []
+    out, notes = [], []
     for rec, subjects, grades in raw_rows:
+        row_notes = []
+        for item in dict.fromkeys(subjects + ([rec["name"]] if kind == "subjects" else [])):
+            if item in doubtful_subjects:
+                row_notes.append(f"“{item}” → {', '.join(subject_meaning[item])}?")
+        for item in dict.fromkeys(grades):
+            if item in doubtful_grades:
+                row_notes.append(f"“{item}” → {', '.join(grade_meaning[item])}?")
+        notes.append(row_notes)
         if kind == "subjects":
             names = subject_meaning.get(rec["name"]) or [rec["name"]]
             rec = {**rec, "name": names[0]}
@@ -538,7 +559,101 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     if marks:
         read_as.append("a mark under " + ", ".join(f"“{m}”" for m in marks) + " as teaching it")
     return out, {"sheet": title, "header_row": idx + 1, "layout": layout, "read_as": read_as,
-                 "matched": matched, "used_ai": used_ai}
+                 "matched": matched, "doubtful": doubtful, "row_notes": notes, "used_ai": used_ai}
+
+
+# ------------------------------------------------------- checks before saving
+
+_SUFFIX = re.compile(r"^(?:\d+|i{1,3}|iv|v|vi{0,3}|ix|x|[a-c])$")
+
+
+def _norm(name: str) -> str:
+    return " ".join(name.lower().split())
+
+
+def _variants(a: str, b: str) -> bool:
+    """"Hindi I" and "Hindi II", "Science 1" and "Science 2": meant apart."""
+    wa, wb = a.split(), b.split()
+    return len(wa) == len(wb) > 1 and wa[:-1] == wb[:-1] and bool(_SUFFIX.match(wa[-1])) and bool(_SUFFIX.match(wb[-1]))
+
+
+def look_alike_subjects(names: list[str], school_subjects: list[str]) -> list[tuple[str, str]]:
+    """Pairs of subject names that look like one subject typed two ways
+    ("Chemistry" / "Chemestry"), at least one of them new. The school's own
+    subjects are never flagged against each other: it chose those."""
+    from difflib import SequenceMatcher
+
+    have = {_norm(s) for s in school_subjects}
+    every = list(dict.fromkeys([*school_subjects, *names]))
+    pairs = []
+    for i, a in enumerate(every):
+        for b in every[i + 1:]:
+            na, nb = _norm(a), _norm(b)
+            if na == nb or (na in have and nb in have) or min(len(na), len(nb)) < 4 or _variants(na, nb):
+                continue
+            if SequenceMatcher(None, na, nb).ratio() >= 0.85 or _key(a) == _key(b):
+                pairs.append((a, b))
+    return pairs
+
+
+def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=()) -> tuple[list[str], list[list[str]]]:
+    """What a school should look at before saving: names that appear twice,
+    a teacher with no subjects, a grade the school doesn't have, subjects
+    that look like typos of each other. Returns the warnings and, for each
+    row, its own notes."""
+    from collections import Counter
+
+    school_subjects, grades_ok = list(school_subjects), set(school_grades)
+    notes: list[list[str]] = [[] for _ in rows]
+    checks: list[str] = []
+    what = "subject" if kind == "subjects" else "teacher"
+
+    counts = Counter(_norm(r.get("name", "")) for r in rows)
+    seen_dupe = []
+    for n, r in enumerate(rows):
+        name = r.get("name", "")
+        if counts[_norm(name)] > 1:
+            notes[n].append(f"“{name}” is in the sheet {counts[_norm(name)]} times")
+            if _norm(name) not in [_norm(x) for x in seen_dupe]:
+                seen_dupe.append(name)
+    if seen_dupe:
+        checks.append(f"{len(seen_dupe)} {what} name{'s appear' if len(seen_dupe) > 1 else ' appears'} more than once "
+                      f"({', '.join(seen_dupe[:6])}{'…' if len(seen_dupe) > 6 else ''}). They'd be saved as one "
+                      f"{what} each, with everything from every row.")
+
+    if kind == "teachers":
+        none = [r["name"] for r in rows if not r.get("qualified_subjects", "").strip()]
+        for n, r in enumerate(rows):
+            if not r.get("qualified_subjects", "").strip():
+                notes[n].append("No subjects")
+        if none:
+            checks.append(f"{len(none)} teacher{'s have' if len(none) > 1 else ' has'} no subjects "
+                          f"({', '.join(none[:6])}{'…' if len(none) > 6 else ''}). They can't be timetabled "
+                          f"until they're given some.")
+
+        unknown: dict[str, list[str]] = {}
+        if grades_ok:
+            for n, r in enumerate(rows):
+                for g in (x.strip() for x in r.get("qualified_grades", "").split(";")):
+                    if g and g not in grades_ok:
+                        unknown.setdefault(g, []).append(r["name"])
+                        notes[n].append(f"“{g}” isn't one of the school's grades")
+        for g, who in unknown.items():
+            checks.append(f"“{g}” isn't a grade at this school ({', '.join(who[:4])}{'…' if len(who) > 4 else ''}). "
+                          f"Its grades are {', '.join(sorted(grades_ok))}.")
+        names = [s.strip() for r in rows for s in r.get("qualified_subjects", "").split(";") if s.strip()]
+    else:
+        names = [r["name"] for r in rows if r.get("name")]
+
+    for a, b in look_alike_subjects(list(dict.fromkeys(names)), school_subjects):
+        checks.append(f"“{a}” and “{b}” look like the same subject typed two ways.")
+        for n, r in enumerate(rows):
+            mine = ({_norm(s) for s in r.get("qualified_subjects", "").split(";")} if kind == "teachers"
+                    else {_norm(r.get("name", ""))})
+            for x in (a, b):
+                if _norm(x) in mine and _norm(x) not in {_norm(s) for s in school_subjects}:
+                    notes[n].append(f"“{x}” or “{b if x == a else a}”?")
+    return checks, notes
 
 def add_missing_subjects(db: Session, school_id: int, rows: list[dict]) -> list[str]:
     """Subjects a teacher sheet names that the school doesn't have yet,
@@ -555,3 +670,48 @@ def add_missing_subjects(db: Session, school_id: int, rows: list[dict]) -> list[
     if added:
         db.commit()
     return added
+
+
+# ------------------------------------------------------- preview, then save
+
+def school_context(db: Session, school_id: int) -> tuple[list[str], list[str]]:
+    from app.models.school import ClassGroup
+
+    subjects = [x.name for x in db.query(Subject).filter(Subject.school_id == school_id)]
+    grades = sorted({g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id) if g})
+    return subjects, grades
+
+
+def build_preview(db: Session, school_id: int, kind: str, filename: str, content: bytes, ai=None) -> dict:
+    """Everything the school sees before anything is saved: how the sheet
+    was read, every row as it will be saved, what's doubtful and what to
+    check. Nothing is written."""
+    from app.models.school import Teacher
+
+    school_subjects, school_grades = school_context(db, school_id)
+    rows, info = smart_rows(kind, filename, content, school_subjects=school_subjects,
+                            school_grades=school_grades, ai=ai)
+    checks, check_notes = check_rows(kind, rows, school_subjects, school_grades)
+    model = Subject if kind == "subjects" else Teacher
+    have = {_norm(x.name) for x in db.query(model).filter(model.school_id == school_id)}
+    known = {_norm(x) for x in school_subjects}
+    if kind == "teachers":
+        named = list(dict.fromkeys(s.strip() for r in rows for s in r.get("qualified_subjects", "").split(";") if s.strip()))
+        new_subjects = [x for x in named if _norm(x) not in known]
+    else:
+        named = list(dict.fromkeys(r["name"] for r in rows))
+        new_subjects = []
+    return {
+        "kind": kind,
+        "total": len(rows),
+        "subject_count": len(named),
+        "will_update": len({_norm(r["name"]) for r in rows} & have),
+        "rows": rows,
+        "row_notes": [a + b for a, b in zip(info["row_notes"], check_notes)],
+        "sheet": info["sheet"],
+        "read_as": info["read_as"],
+        "matched": info["matched"],
+        "doubtful": info["doubtful"],
+        "checks": checks,
+        "new_subjects": new_subjects,
+    }
