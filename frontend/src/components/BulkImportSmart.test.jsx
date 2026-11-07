@@ -80,6 +80,58 @@ describe('importing a school’s own staff list', () => {
     expect(await screen.findByText(/From table 1 of the document, taking/)).toBeInTheDocument()
   })
 
+  it('asks about look-alike names and imports the answered rows', async () => {
+    api.bulkImportPreview.mockResolvedValue({
+      ...PREVIEW, total: 3, row_notes: [[], [], []], checks: [],
+      rows: [
+        { name: 'Kavita K', qualified_subjects: 'Hindi' },
+        { name: 'Kavita Khana', qualified_subjects: 'Hindi;Computer Science' },
+        { name: 'Anil', qualified_subjects: 'Maths' },
+      ],
+      questions: [
+        {
+          id: 'teacher:Kavita K|Kavita Khana',
+          text: 'Are “Kavita K” and “Kavita Khana” the same teacher?',
+          options: [
+            { label: 'Yes, call them “Kavita Khana”', edits: [{ row: 0, field: 'name', remove: ['Kavita K'], add: ['Kavita Khana'] }] },
+            { label: 'Yes, call them “Kavita K”', edits: [{ row: 1, field: 'name', remove: ['Kavita Khana'], add: ['Kavita K'] }] },
+            { label: 'No, two different teachers', edits: [] },
+          ],
+        },
+        {
+          id: 'meaning:Comp Sci',
+          text: 'Is “Comp Sci” “Computer Science”?',
+          options: [
+            { label: 'Yes', edits: [] },
+            { label: 'No, keep “Comp Sci” as its own subject', edits: [{ row: 1, field: 'qualified_subjects', remove: ['Computer Science'], add: ['Comp Sci'] }] },
+          ],
+        },
+      ],
+    })
+    api.bulkImportCommit.mockResolvedValue({ created: 2, updated: 1, errors: [], new_subjects: [] })
+    const { container } = render(<BulkImportPanel schoolId={1} resource="teachers" />)
+    choose(container)
+    const box = await screen.findByRole('region', { name: 'Check before importing' })
+    expect(within(box).getByText(/2 questions before importing/)).toBeInTheDocument()
+    const importButton = within(box).getByRole('button', { name: 'Answer 2 questions to import' })
+    expect(importButton).toBeDisabled()
+
+    fireEvent.click(within(box).getByLabelText('Yes, call them “Kavita Khana”'))
+    expect(within(box).getByRole('button', { name: 'Answer the question to import' })).toBeDisabled()
+    fireEvent.click(within(box).getByLabelText('No, keep “Comp Sci” as its own subject'))
+    // The table shows the rows as they'll now be saved.
+    expect(within(box).getAllByText('Kavita Khana')).toHaveLength(2)
+    expect(within(box).getByText('Hindi, Comp Sci')).toBeInTheDocument()
+
+    fireEvent.click(within(box).getByRole('button', { name: 'Import 3 teachers' }))
+    await waitFor(() => expect(api.bulkImportCommit).toHaveBeenCalled())
+    expect(api.bulkImportCommit.mock.calls[0][2]).toEqual([
+      { name: 'Kavita Khana', qualified_subjects: 'Hindi' },
+      { name: 'Kavita Khana', qualified_subjects: 'Hindi;Comp Sci' },
+      { name: 'Anil', qualified_subjects: 'Maths' },
+    ])
+  })
+
   it('rooms still import in one step', async () => {
     api.bulkImport.mockResolvedValue({ created: 2, updated: 0, errors: [] })
     const { container } = render(<BulkImportPanel schoolId={1} resource="rooms" />)

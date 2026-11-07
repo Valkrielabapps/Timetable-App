@@ -36,6 +36,9 @@ class BulkPreviewOut(BaseModel):
     matched: list[str] = []
     doubtful: list[str] = []
     checks: list[str] = []
+    # Asked before saving - each option carries the edits to the rows above.
+    # See app/services/smart_import.py:make_questions.
+    questions: list[dict] = []
     new_subjects: list[str] = []
 
 

@@ -906,7 +906,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             if item in doubtful_grades:
                 doubtful.append(f"“{item}” as {', '.join(means)}")
 
-    out, notes, seen_names = [], [], set()
+    out, notes, seen_names, row_items = [], [], set(), []
     for rec, subjects, grades in raw_rows:
         row_notes = []
         for item in dict.fromkeys(subjects + ([rec["name"]] if kind == "subjects" else [])):
@@ -916,12 +916,17 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             if item in doubtful_grades:
                 row_notes.append(f"“{item}” → {', '.join(grade_meaning[item])}?")
         notes.append(row_notes)
+        raw_name = rec["name"]
         if kind == "subjects":
             names = subject_meaning.get(rec["name"]) or [rec["name"]]
             rec = {**rec, "name": names[0]}
             # The same subject from several class tables, or spelt two ways: once.
             if rec["name"].lower() in seen_names:
                 notes.pop()
+                # Still remember which typed names became it.
+                for prev, items in zip(out, row_items):
+                    if prev["name"].lower() == rec["name"].lower():
+                        items.append(raw_name)
                 continue
             seen_names.add(rec["name"].lower())
         else:
@@ -940,6 +945,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                 # Unknown ones are left as typed, so the import names them.
                 rec["qualified_grades"] = ";".join(dict.fromkeys(resolved + unknown))
         out.append(rec)
+        row_items.append([raw_name] if kind == "subjects" else list(dict.fromkeys(subjects)))
 
     read_as = [f"“{headings[i]}” as {FIELDS[kind][f]}" for i, f in sorted(mapping.items())
                if headings[i] and f not in ("subject_mark", "grade_mark")]
@@ -951,7 +957,10 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     if marks:
         read_as.append("a mark under " + ", ".join(f"“{m}”" for m in marks) + " as teaching it")
     return out, {"sheet": title, "header_row": idx + 1, "layout": layout, "read_as": read_as,
-                 "matched": matched, "doubtful": doubtful, "row_notes": notes, "used_ai": used_ai}
+                 "matched": matched, "doubtful": doubtful, "row_notes": notes, "used_ai": used_ai,
+                 # For the questions before saving: what each row was typed as, and
+                 # the readings only the AI made.
+                 "row_items": row_items, "doubtful_items": {i: subject_meaning[i] for i in doubtful_subjects}}
 
 
 # ------------------------------------------------------- checks before saving
@@ -1008,7 +1017,8 @@ def look_alike_people(names: list[str]) -> list[tuple[str, str]]:
     return pairs
 
 
-def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=()) -> tuple[list[str], list[list[str]]]:
+def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=(),
+               look_alikes: bool = True) -> tuple[list[str], list[list[str]]]:
     """What a school should look at before saving: names that appear twice,
     a teacher with no subjects, a grade the school doesn't have, subjects
     that look like typos of each other. Returns the warnings and, for each
@@ -1057,6 +1067,8 @@ def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=()
     else:
         names = [r["name"] for r in rows if r.get("name")]
 
+    if not look_alikes:  # asked as questions instead - see make_questions
+        return checks, notes
     if kind == "teachers":
         for a, b in look_alike_people([r["name"] for r in rows]):
             checks.append(f"“{a}” and “{b}” may be the same teacher. If so, use one spelling.")
@@ -1073,6 +1085,125 @@ def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=()
                 if _norm(x) in mine and _norm(x) not in {_norm(s) for s in school_subjects}:
                     notes[n].append(f"“{x}” or “{b if x == a else a}”?")
     return checks, notes
+
+# ------------------------------------------------- questions before saving
+
+def _subjects_of(kind: str, row: dict) -> list[str]:
+    if kind == "subjects":
+        return [row.get("name", "")]
+    return [x.strip() for x in row.get("qualified_subjects", "").split(";") if x.strip()]
+
+
+def _rename_subject(kind: str, rows: list[dict], old: str, new: str) -> list[dict]:
+    field = "name" if kind == "subjects" else "qualified_subjects"
+    return [{"row": n, "field": field, "remove": [old], "add": [new]}
+            for n, r in enumerate(rows) if _norm(old) in {_norm(x) for x in _subjects_of(kind, r)}]
+
+
+def _rename_teacher(rows: list[dict], old: str, new: str) -> list[dict]:
+    return [{"row": n, "field": "name", "remove": [old], "add": [new]}
+            for n, r in enumerate(rows) if _norm(r.get("name", "")) == _norm(old)]
+
+
+def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), school_teachers=()) -> list[dict]:
+    """What the school is asked before anything is saved, so nothing is
+    guessed: two spellings that may be one teacher or one subject (in the
+    sheet, or the sheet and what's already here), and readings only the AI
+    made. Each answer is a list of edits to the previewed rows:
+    {"row", "field", "remove": [...], "add": [...]}."""
+    questions: list[dict] = []
+    school_subjects, school_teachers = list(school_subjects), list(school_teachers)
+
+    if kind == "teachers":
+        mine = list(dict.fromkeys(r["name"] for r in rows))
+        have = {_norm(t) for t in school_teachers}
+        mine_new = [m for m in mine if _norm(m) not in have]
+        for a, b in look_alike_people(mine_new + [t for t in school_teachers if _norm(t) not in {_norm(m) for m in mine}]):
+            a_here, b_here = _norm(a) in have, _norm(b) in have
+            if a_here and b_here:
+                continue
+            if a_here or b_here:
+                here, sheet = (a, b) if a_here else (b, a)
+                questions.append({
+                    "id": f"teacher:{sheet}|{here}",
+                    "text": f"Is “{sheet}” in the sheet the same teacher as “{here}”, who is already here?",
+                    "options": [
+                        {"label": f"Yes, the same person (keep “{here}”)", "edits": _rename_teacher(rows, sheet, here)},
+                        {"label": f"No, “{sheet}” is someone new", "edits": []},
+                    ],
+                })
+            else:
+                questions.append({
+                    "id": f"teacher:{a}|{b}",
+                    "text": f"Are “{a}” and “{b}” the same teacher?",
+                    "options": [
+                        {"label": f"Yes, call them “{b}”", "edits": _rename_teacher(rows, a, b)},
+                        {"label": f"Yes, call them “{a}”", "edits": _rename_teacher(rows, b, a)},
+                        {"label": "No, two different teachers", "edits": []},
+                    ],
+                })
+
+    named = list(dict.fromkeys(x for r in rows for x in _subjects_of(kind, r) if x))
+    known = {_norm(x) for x in school_subjects}
+    for a, b in look_alike_subjects(named, school_subjects):
+        if _norm(a) in known or _norm(b) in known:
+            here, sheet = (a, b) if _norm(a) in known else (b, a)
+            questions.append({
+                "id": f"subject:{sheet}|{here}",
+                "text": f"Is “{sheet}” in the sheet the same subject as “{here}”, which is already here?",
+                "options": [
+                    {"label": f"Yes, the same (keep “{here}”)", "edits": _rename_subject(kind, rows, sheet, here)},
+                    {"label": f"No, “{sheet}” is a different subject", "edits": []},
+                ],
+            })
+        else:
+            questions.append({
+                "id": f"subject:{a}|{b}",
+                "text": f"Are “{a}” and “{b}” the same subject?",
+                "options": [
+                    {"label": f"Yes, call it “{b}”", "edits": _rename_subject(kind, rows, a, b)},
+                    {"label": f"Yes, call it “{a}”", "edits": _rename_subject(kind, rows, b, a)},
+                    {"label": "No, two different subjects", "edits": []},
+                ],
+            })
+
+    # Readings only the AI made: "Comp Sci" as Computer Science?
+    field = "name" if kind == "subjects" else "qualified_subjects"
+    for item, means in info.get("doubtful_items", {}).items():
+        where = [n for n, items in enumerate(info.get("row_items", [])) if item in items]
+        if not where:
+            continue
+        questions.append({
+            "id": f"meaning:{item}",
+            "text": f"Is “{item}” {' and '.join(f'“{m}”' for m in means)}?",
+            "options": [
+                {"label": "Yes", "edits": []},
+                {"label": f"No, keep “{item}” as its own subject",
+                 "edits": [{"row": n, "field": field, "remove": list(means), "add": [item]} for n in where]},
+            ],
+        })
+    return questions
+
+
+def apply_edits(rows: list[dict], edits: list[dict]) -> list[dict]:
+    """The rows with the chosen answers' edits made (the frontend makes the
+    same ones; this is what the tests and any server-side use rely on)."""
+    out = [dict(r) for r in rows]
+    for e in edits:
+        r = out[e["row"]]
+        if e["field"] == "name":
+            if _norm(r.get("name", "")) in {_norm(x) for x in e["remove"]}:
+                r["name"] = e["add"][0]
+        else:
+            items = [x.strip() for x in r.get(e["field"], "").split(";") if x.strip()]
+            gone = {_norm(x) for x in e["remove"]}
+            items = [x for x in items if _norm(x) not in gone]
+            for a in e["add"]:
+                if _norm(a) not in {_norm(x) for x in items}:
+                    items.append(a)
+            r[e["field"]] = ";".join(items)
+    return out
+
 
 def add_missing_subjects(db: Session, school_id: int, rows: list[dict]) -> list[str]:
     """Subjects a teacher sheet names that the school doesn't have yet,
@@ -1110,9 +1241,11 @@ def build_preview(db: Session, school_id: int, kind: str, filename: str, content
     school_subjects, school_grades = school_context(db, school_id)
     rows, info = smart_rows(kind, filename, content, school_subjects=school_subjects,
                             school_grades=school_grades, ai=ai)
-    checks, check_notes = check_rows(kind, rows, school_subjects, school_grades)
+    checks, check_notes = check_rows(kind, rows, school_subjects, school_grades, look_alikes=False)
     model = Subject if kind == "subjects" else Teacher
-    have = {_norm(x.name) for x in db.query(model).filter(model.school_id == school_id)}
+    existing = [x.name for x in db.query(model).filter(model.school_id == school_id)]
+    have = {_norm(x) for x in existing}
+    questions = make_questions(kind, rows, info, school_subjects, existing if kind == "teachers" else ())
     known = {_norm(x) for x in school_subjects}
     if kind == "teachers":
         named = list(dict.fromkeys(s.strip() for r in rows for s in r.get("qualified_subjects", "").split(";") if s.strip()))
@@ -1132,5 +1265,6 @@ def build_preview(db: Session, school_id: int, kind: str, filename: str, content
         "matched": info["matched"],
         "doubtful": info["doubtful"],
         "checks": checks,
+        "questions": questions,
         "new_subjects": new_subjects,
     }

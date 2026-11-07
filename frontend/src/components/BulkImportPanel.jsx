@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api } from '../api'
 
 const RESOURCES = {
@@ -72,11 +72,11 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
     }
   }
 
-  async function handleCommit() {
+  async function handleCommit(rows) {
     setSaving(true)
     setError(null)
     try {
-      const res = await api.bulkImportCommit(resource, schoolId, preview.rows)
+      const res = await api.bulkImportCommit(resource, schoolId, rows)
       // Keep how it was read alongside what was saved.
       setResult({ ...res, sheet: preview.sheet, read_as: preview.read_as, matched: preview.matched })
       setPreview(null)
@@ -198,11 +198,43 @@ function plural(n, one, many = `${one}s`) {
  * first rows (and any row with something to check), readings only the AI
  * made in amber, and what the checks found. Import saves exactly these rows.
  */
+const NO_QUESTIONS = []
+const norm = (x) => x.trim().toLowerCase().replace(/\s+/g, ' ')
+
+/**
+ * The previewed rows with the chosen answers made: each answer is a list of
+ * {row, field, remove, add} (backend/app/services/smart_import.py:make_questions,
+ * apply_edits does the same there).
+ */
+export function applyEdits(rows, edits) {
+  const out = rows.map((r) => ({ ...r }))
+  for (const e of edits) {
+    const r = out[e.row]
+    if (!r) continue
+    const gone = new Set(e.remove.map(norm))
+    if (e.field === 'name') {
+      if (gone.has(norm(r.name || ''))) r.name = e.add[0]
+    } else {
+      const items = (r[e.field] || '').split(';').map((x) => x.trim()).filter((x) => x && !gone.has(norm(x)))
+      for (const a of e.add) if (!items.some((x) => norm(x) === norm(a))) items.push(a)
+      r[e.field] = items.join(';')
+    }
+  }
+  return out
+}
+
 function ImportPreview({ preview, saving, onImport, onCancel }) {
   const teachers = preview.kind === 'teachers'
+  const questions = preview.questions || NO_QUESTIONS
+  const [answers, setAnswers] = useState({})
+  const unanswered = questions.filter((q) => answers[q.id] === undefined).length
+  const rows = useMemo(
+    () => applyEdits(preview.rows, questions.flatMap((q) => (answers[q.id] === undefined ? [] : q.options[answers[q.id]].edits))),
+    [preview.rows, questions, answers],
+  )
   const doubtful = new Set(preview.doubtful)
   const notes = preview.row_notes
-  const shown = preview.rows
+  const shown = rows
     .map((row, i) => ({ row, i, notes: notes[i] || [] }))
     .filter(({ i, notes: n }) => i < FIRST_ROWS || n.length > 0)
     .slice(0, FIRST_ROWS + 12)
@@ -263,6 +295,37 @@ function ImportPreview({ preview, saving, onImport, onCancel }) {
         </div>
       )}
 
+      {questions.length > 0 && (
+        <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 p-2 text-slate-800">
+          <p className="font-medium">
+            {questions.length === 1 ? 'One question' : `${questions.length} questions`} before importing, so nothing
+            is guessed
+          </p>
+          <ol className="mt-1.5 space-y-2">
+            {questions.map((q, qi) => (
+              <li key={q.id}>
+                <fieldset>
+                  <legend className="font-medium">{qi + 1}. {q.text}</legend>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                    {q.options.map((o, oi) => (
+                      <label key={o.label} className="flex cursor-pointer items-center gap-1.5">
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          checked={answers[q.id] === oi}
+                          onChange={() => setAnswers((a) => ({ ...a, [q.id]: oi }))}
+                        />
+                        {o.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-left">
           <thead className="text-slate-500">
@@ -307,11 +370,15 @@ function ImportPreview({ preview, saving, onImport, onCancel }) {
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          onClick={onImport}
-          disabled={saving || preview.total === 0}
+          onClick={() => onImport(rows)}
+          disabled={saving || preview.total === 0 || unanswered > 0}
           className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
-          {saving ? 'Importing…' : `Import ${plural(preview.total, what)}`}
+          {saving
+            ? 'Importing…'
+            : unanswered > 0
+              ? `Answer ${unanswered === 1 ? 'the question' : `${unanswered} questions`} to import`
+              : `Import ${plural(preview.total, what)}`}
         </button>
         <button
           type="button"

@@ -100,7 +100,11 @@ def test_subjects_preview_and_commit(client, school):
     csv = b"Subject Name,Room type\nChemistry,lab\nChemestry,\n"
     p = client.post("/api/subjects/bulk-import/preview", data={"school_id": sid},
                     files={"file": ("s.csv", csv, "text/csv")}, headers=h).json()
-    assert p["total"] == 2 and any("look like the same subject" in c for c in p["checks"])
+    assert p["total"] == 2 and not any("look like" in c for c in p["checks"])
+    q = p["questions"][0]
+    assert q["text"] == "Are “Chemistry” and “Chemestry” the same subject?"
+    assert [o["label"] for o in q["options"]] == ["Yes, call it “Chemestry”", "Yes, call it “Chemistry”",
+                                                  "No, two different subjects"]
     r = client.post("/api/subjects/bulk-import/commit", json={"school_id": sid, "rows": p["rows"][:1]}, headers=h)
     assert r.json()["created"] == 1
 
@@ -110,3 +114,48 @@ def test_a_viewer_cannot_preview_or_commit(client, school):
     _, other = signup(client, email="other@example.com")
     r = client.post("/api/teachers/bulk-import/commit", json={"school_id": sid, "rows": []}, headers=other)
     assert r.status_code in (403, 404)
+
+
+def test_questions_about_teachers_and_what_each_answer_changes(client, school):
+    sid, h = school  # "Rahul Mehta" is already here
+    sheet = [["Name", "Subjects"], ["Rahul Meta", "Maths"], ["Kavita K", "Hindi"], ["Kavita Khana", "Hindi, Comp Sci"]]
+    ai = FakeAI(columns={0: "name", 1: "qualified_subjects"}, subjects={"Comp Sci": ["Computer Science"]})
+    smart_import_live = smart_import.LiveAI
+    try:
+        smart_import.LiveAI = lambda: ai
+        p = client.post("/api/teachers/bulk-import/preview", data={"school_id": sid},
+                        files={"file": ("s.xlsx", xlsx(("S", sheet)), "application/octet-stream")}, headers=h).json()
+    finally:
+        smart_import.LiveAI = smart_import_live
+    qs = {q["text"]: q for q in p["questions"]}
+    assert set(qs) == {
+        "Is “Rahul Meta” in the sheet the same teacher as “Rahul Mehta”, who is already here?",
+        "Are “Kavita K” and “Kavita Khana” the same teacher?",
+        "Is “Comp Sci” “Computer Science”?",
+    }
+    # Answers: Rahul is the one already here; the Kavitas are one person; Comp Sci stays as typed.
+    edits = (qs["Is “Rahul Meta” in the sheet the same teacher as “Rahul Mehta”, who is already here?"]["options"][0]["edits"]
+             + qs["Are “Kavita K” and “Kavita Khana” the same teacher?"]["options"][0]["edits"]
+             + qs["Is “Comp Sci” “Computer Science”?"]["options"][1]["edits"])
+    rows = smart_import.apply_edits(p["rows"], edits)
+    assert rows == [{"name": "Rahul Mehta", "qualified_subjects": "Maths"},
+                    {"name": "Kavita Khana", "qualified_subjects": "Hindi"},
+                    {"name": "Kavita Khana", "qualified_subjects": "Hindi;Comp Sci"}]
+    r = client.post("/api/teachers/bulk-import/commit", json={"school_id": sid, "rows": rows}, headers=h).json()
+    assert (r["created"], r["updated"]) == (1, 2)  # Kavita once; Rahul and Kavita's second row update
+    db = SessionLocal()
+    try:
+        assert sorted(t.name for t in db.query(Teacher).filter_by(school_id=sid)) == ["Kavita Khana", "Rahul Mehta"]
+    finally:
+        db.close()
+
+
+def test_a_subject_like_one_already_here_is_asked_about(client, school):
+    sid, h = school
+    client.post("/api/subjects", json={"school_id": sid, "name": "Chemistry"}, headers=h)
+    p = client.post("/api/subjects/bulk-import/preview", data={"school_id": sid},
+                    files={"file": ("s.csv", b"Subject\nChemestry\nPhysics\n", "text/csv")}, headers=h).json()
+    (q,) = p["questions"]
+    assert q["text"] == "Is “Chemestry” in the sheet the same subject as “Chemistry”, which is already here?"
+    rows = smart_import.apply_edits(p["rows"], q["options"][0]["edits"])
+    assert [r["name"] for r in rows] == ["Chemistry", "Physics"]
