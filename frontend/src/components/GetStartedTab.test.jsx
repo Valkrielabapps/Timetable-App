@@ -5,9 +5,14 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../api', () => ({ api: { setupCheck: vi.fn(() => Promise.resolve({ errors: [], warnings: [] })) } }))
 vi.mock('./TimetableStructurePanel', () => ({ default: () => <div>Week builder</div> }))
 vi.mock('./BulkAddClassGroups', () => ({ default: () => <div>Add sections</div> }))
-vi.mock('./BulkImportPanel', () => ({ default: ({ resource }) => <div>Upload {resource}</div> }))
+vi.mock('./BulkImportPanel', () => ({
+  default: ({ resource, onFileRead }) => (
+    <button onClick={() => onFileRead(new File(['x'], 'allotment.xlsx'))}>Upload {resource}</button>
+  ),
+}))
 vi.mock('./StandardRules', () => ({ default: () => <div>Common rules</div> }))
 vi.mock('./SetupCheckPanel', () => ({ default: () => <div>Setup check</div> }))
+vi.mock('./ClassPlanImport', () => ({ default: ({ file }) => <div>Plans from file {file ? file.name : 'none'}</div> }))
 import GetStartedTab from './GetStartedTab'
 
 const SCHOOL = { id: 1, name: 'Sunrise', institution_type: 'school', standard_rules: null }
@@ -34,6 +39,10 @@ describe('Get started', () => {
     setup({ periods: [lesson(1), lesson(2), { id: 3, kind: 'break' }], classGroups: [{ id: 5, grade: 'Grade 6', name: 'A' }] })
     expect(screen.getByText('Upload teachers')).toBeInTheDocument()
     expect(screen.getByText('2 lessons a week')).toBeInTheDocument()
+    // The staff sheet goes on to step 4, for every class's plan.
+    fireEvent.click(screen.getByText('Upload teachers'))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }))
+    expect(screen.getByText('Plans from file allotment.xlsx')).toBeInTheDocument()
   })
 
   it('lists every section’s plan and opens one to fill in', () => {

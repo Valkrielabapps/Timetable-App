@@ -5,6 +5,7 @@ import BulkAddClassGroups from './BulkAddClassGroups'
 import BulkImportPanel from './BulkImportPanel'
 import StandardRules from './StandardRules'
 import SetupCheckPanel from './SetupCheckPanel'
+import ClassPlanImport from './ClassPlanImport'
 
 /**
  * "Get started": the whole way from a new school to a timetable on one page,
@@ -97,6 +98,8 @@ export default function GetStartedTab({
   ]
   const firstOpen = steps.find((s) => !s.done && !s.optional)?.key ?? 'build'
   const [open, setOpen] = useState(firstOpen)
+  // The staff sheet from step 3, read again in step 4 for every class's plan.
+  const [staffFile, setStaffFile] = useState(null)
   const requiredLeft = steps.filter((s) => !s.optional && s.key !== 'build' && !s.done)
 
   function next(key) {
@@ -149,6 +152,10 @@ export default function GetStartedTab({
 
                   {s.key === 'classes' && (
                     <div className="flex flex-col gap-3">
+                      <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        Have a sheet with a table for each class (Subjects, Periods, Teacher)? Skip this: step 4 makes the
+                        sections from it.
+                      </p>
                       {classGroups.length > 0 && (
                         <p className="text-sm text-slate-700">
                           Already added:{' '}
@@ -168,7 +175,7 @@ export default function GetStartedTab({
 
                   {s.key === 'staff' && (
                     <div className="flex flex-col gap-3">
-                      {!readOnly && <BulkImportPanel schoolId={schoolId} resource="teachers" onImported={onReload} />}
+                      {!readOnly && <BulkImportPanel schoolId={schoolId} resource="teachers" onImported={onReload} onFileRead={setStaffFile} />}
                       <p className="text-xs text-slate-500">
                         No file?{' '}
                         <button type="button" onClick={() => onOpenTab('entry', 'subjects')} className="underline hover:text-slate-700">
@@ -183,9 +190,14 @@ export default function GetStartedTab({
                     </div>
                   )}
 
+                  {s.key === 'plan' && !readOnly && (
+                    <div className="mb-4">
+                      <ClassPlanImport schoolId={schoolId} file={staffFile} onDone={onReload} />
+                    </div>
+                  )}
                   {s.key === 'plan' && (
                     classGroups.length === 0 ? (
-                      <p className="text-sm text-slate-500">Add your classes in step 2 first.</p>
+                      <p className="text-sm text-slate-500">No sections yet: fill them in from your file above, or add them in step 2.</p>
                     ) : (
                       <div className="flex flex-col gap-2">
                         <table className="w-full text-left text-sm">

@@ -38,7 +38,7 @@ const RESOURCES = {
  * shared panel with a "pick a resource" step; letting the Teachers page
  * import Subjects was actively confusing, not just superfluous.
  */
-export default function BulkImportPanel({ schoolId, onImported, resource }) {
+export default function BulkImportPanel({ schoolId, onImported, resource, onFileRead }) {
   const [file, setFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
@@ -59,6 +59,8 @@ export default function BulkImportPanel({ schoolId, onImported, resource }) {
     try {
       if (meta.smart) {
         setPreview(await api.bulkImportPreview(resource, schoolId, file))
+        // Get started keeps the file: the same sheet often holds every class's plan.
+        onFileRead?.(file)
       } else {
         setResult(await api.bulkImport(resource, schoolId, file))
         if (onImported) await onImported()

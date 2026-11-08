@@ -514,6 +514,10 @@ export const api = {
   // only when the school clicks Import. See app/services/smart_import.py.
   bulkImportPreview: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import/preview`, schoolId, file),
   bulkImportCommit: (resource, schoolId, rows) => post(`/${resource}/bulk-import/commit`, { school_id: schoolId, rows }),
+  // Every section's weekly plan from the allotment sheet (backend
+  // app/services/class_plan.py): read and asked about first, then saved.
+  classPlanPreview: (schoolId, file) => uploadFile('/class-plan/preview', schoolId, file),
+  classPlanCommit: (schoolId, plan, answers) => post('/class-plan/commit', { school_id: schoolId, plan, answers }),
 
   // Setup-from-document extraction - upload an arbitrary spreadsheet
   // (not in bulk-import's expected column format) and let Claude propose
