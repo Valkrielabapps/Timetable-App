@@ -224,6 +224,15 @@ export const api = {
     invoices: () => get('/admin/invoices'),
     stats: () => get('/admin/stats'),
     accounts: (q) => get(`/admin/accounts${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+    account: (id) => get(`/admin/accounts/${id}`),
+    // Deletes for good (backend app/services/erase.py). `confirm` is the
+    // account's email / the school's name, typed out.
+    deleteAccount: (id, confirm, deleteSchools = false) =>
+      request(`/admin/accounts/${id}`, { method: 'DELETE', body: JSON.stringify({ confirm, delete_schools: deleteSchools }) }),
+    schoolData: (id) => get(`/admin/schools/${id}/data`),
+    downloadSchoolData: (school) =>
+      downloadFile(`/admin/schools/${school.id}/data`, `${school.name.replace(/[^A-Za-z0-9]+/g, '-')}-data.json`),
+    deleteSchool: (id, confirm) => request(`/admin/schools/${id}`, { method: 'DELETE', body: JSON.stringify({ confirm }) }),
     ruleEvents: (params = {}) => {
       const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString()
       return get(`/admin/rule-events${qs ? `?${qs}` : ''}`)

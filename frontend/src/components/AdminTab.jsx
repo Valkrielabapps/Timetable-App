@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { formatDate } from './BillingSection'
 import { confirmDialog } from './confirmDialog'
+import { DeleteBox, SchoolData } from './AdminData'
 
 const STATUS_STYLE = {
   free: 'bg-slate-100 text-slate-700',
@@ -205,6 +206,8 @@ function SchoolActions({ school, onChanged }) {
   const [offer, setOffer] = useState({ name: `${school.name} plan`, price_inr: '', period_days: 365, max_sections: '', max_members: '', note: '' })
   const [paid, setPaid] = useState({ kind: school.open_offer ? 'offer' : 'pro', amount_inr: school.open_offer?.price_inr ?? 4999, reference: '' })
   const [days, setDays] = useState(7)
+  const [showData, setShowData] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   async function run(label, fn, success) {
     setBusy(label)
@@ -335,6 +338,34 @@ function SchoolActions({ school, onChanged }) {
           >
             Downgrade (after refund)
           </button>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 lg:col-span-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h4 className="mr-2 text-sm font-semibold">The school’s data</h4>
+          <button type="button" onClick={() => setShowData(!showData)} aria-expanded={showData} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">
+            {showData ? 'Hide data' : 'View data'}
+          </button>
+          <button type="button" onClick={() => api.admin.downloadSchoolData(school).catch((e) => setErr(e.message))} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">
+            Download data (JSON)
+          </button>
+          <button type="button" onClick={() => setDeleting(true)} className="ml-auto rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50">
+            Delete school…
+          </button>
+        </div>
+        {showData && <SchoolData school={school} />}
+        {deleting && (
+          <DeleteBox
+            what="this school"
+            confirmText={school.name}
+            note="Removes its sections, teachers, subjects, rooms, rules, timetables, people’s access and invites. Invoices and payment records are kept, as the law requires. The owner’s account stays."
+            onCancel={() => setDeleting(false)}
+            onDelete={async (typed) => {
+              await api.admin.deleteSchool(school.id, typed)
+              onChanged()
+            }}
+          />
         )}
       </div>
 

@@ -28,7 +28,7 @@ class PaymentOrder(Base):
     # Our id, also sent to Cashfree as its order_id. Unique and unguessable
     # enough that it can sit in the return URL.
     order_id = Column(String(45), nullable=False, unique=True, index=True)
-    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=False, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="SET NULL"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     plan = Column(String(20), nullable=False)
     amount_paise = Column(Integer, nullable=False)
@@ -81,7 +81,7 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True)
     number = Column(String(20), nullable=False, unique=True, index=True)
-    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=False, index=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="SET NULL"), nullable=True, index=True)
     payment_order_id = Column(Integer, ForeignKey("payment_orders.id"), nullable=True)
     description = Column(String(200), nullable=False)
     amount_paise = Column(Integer, nullable=False)

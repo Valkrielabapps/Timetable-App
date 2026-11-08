@@ -15,6 +15,10 @@ not for school admins.
     GET    /api/admin/problems                    where schools get stuck
     PATCH  /api/admin/problems/{id}               mark one fixed / the school's setup / won't fix
     GET    /api/admin/problems/{id}/snapshot      the school's setup when it happened
+    GET    /api/admin/schools/{id}/data           everything a school has entered
+    DELETE /api/admin/schools/{id}                delete a school and all its data
+    GET    /api/admin/accounts/{id}               one account in full
+    DELETE /api/admin/accounts/{id}               delete an account (and, if asked, its schools)
 
 Granting a plan and issuing the invoice go through app/services/billing.py,
 the same functions a Cashfree payment uses.
@@ -221,7 +225,8 @@ def downgrade(school_id: int, db: Session = Depends(get_db), admin: User = Depen
 def recent_invoices(db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)):
     rows = db.query(Invoice).order_by(Invoice.id.desc()).limit(100).all()
     names = {s.id: s.name for s in db.query(School).filter(School.id.in_([i.school_id for i in rows])).all()}
-    return [{**invoice_out(i), "school_name": names.get(i.school_id)} for i in rows]
+    return [{**invoice_out(i), "school_name": names.get(i.school_id)
+             or (i.billed_to or {}).get("name", "") + (" (deleted)" if i.school_id is None else "")} for i in rows]
 
 
 @router.get("/stats")
@@ -488,3 +493,128 @@ def problem_snapshot(problem_id: int, db: Session = Depends(get_db), admin: User
         raise HTTPException(status_code=404, detail="No snapshot for this one")
     return JSONResponse(row.snapshot, headers={
         "Content-Disposition": f'attachment; filename="problem-{row.id}-school-{row.school_id}.json"'})
+
+
+# ---------------------------------------------------------------------------
+# A school's data, and deleting schools and accounts (app/services/erase.py)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/schools/{school_id}/data")
+def school_data(school_id: int, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)):
+    """Everything the school has entered, as plain data: its setup (as the
+    problem log snapshots it, with teachers' emails), people and timetables."""
+    from app.models.school import SchoolInvite, SchoolMembership, Teacher, Timetable, TimetableEntry
+    from app.services.problem_log import _row, snapshot
+
+    school = _school_or_404(db, school_id)
+    data = snapshot(db, school_id)
+    data["teachers"] = [_row(t) for t in db.query(Teacher).filter(Teacher.school_id == school_id).all()]
+    owner = db.get(User, school.owner_id) if school.owner_id else None
+    members = (
+        db.query(SchoolMembership, User).join(User, User.id == SchoolMembership.user_id)
+        .filter(SchoolMembership.school_id == school_id).all()
+    )
+    data["people"] = (
+        ([{"email": owner.email, "name": owner.name, "role": "owner"}] if owner else [])
+        + [{"email": u.email, "name": u.name, "role": m.role} for m, u in members if not owner or u.id != owner.id]
+    )
+    data["invites"] = [
+        {"email": i.email, "role": i.role, "status": i.status}
+        for i in db.query(SchoolInvite).filter(SchoolInvite.school_id == school_id).all()
+    ]
+    tts = db.query(Timetable).filter(Timetable.school_id == school_id).order_by(Timetable.id.desc()).all()
+    data["timetables"] = [
+        {**{k: v for k, v in _row(t).items() if k not in ("generation_notes",)},
+         "lessons": db.query(TimetableEntry).filter(TimetableEntry.timetable_id == t.id).count()}
+        for t in tts
+    ]
+    data["invoices"] = [invoice_out(i) for i in db.query(Invoice).filter(Invoice.school_id == school_id).all()]
+    data["counts"] = {
+        "sections": len(data.get("class_groups", [])), "subjects": len(data.get("subjects", [])),
+        "teachers": len(data["teachers"]), "rooms": len(data.get("rooms", [])),
+        "rules": len(data.get("constraints", [])), "timetables": len(tts), "people": len(data["people"]),
+    }
+    return data
+
+
+class ConfirmDelete(BaseModel):
+    # The school's name or the account's email, typed out - the delete is
+    # refused if it doesn't match, so a wrong click can't delete anything.
+    confirm: str
+    delete_schools: bool = False
+
+
+@router.delete("/schools/{school_id}")
+def delete_school(
+    school_id: int, payload: ConfirmDelete,
+    db: Session = Depends(get_db), admin: User = Depends(require_platform_admin),
+):
+    from app.services import erase
+
+    school = _school_or_404(db, school_id)
+    if payload.confirm.strip().lower() != school.name.strip().lower():
+        raise HTTPException(status_code=400, detail="Type the school's name exactly to delete it.")
+    name = school.name
+    counts = erase.erase(db, "schools", [school_id])
+    return {"deleted": name, "rows": counts}
+
+
+@router.get("/accounts/{user_id}")
+def account_detail(user_id: int, db: Session = Depends(get_db), admin: User = Depends(require_platform_admin)):
+    from app.models.school import SchoolMembership
+    from app.models.user import TermsAcceptance
+
+    u = db.get(User, user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    owned = db.query(School).filter(School.owner_id == user_id).all()
+    rows = (
+        db.query(SchoolMembership.role, School.id, School.name)
+        .join(School, School.id == SchoolMembership.school_id)
+        .filter(SchoolMembership.user_id == user_id).all()
+    )
+    terms = db.query(TermsAcceptance).filter(TermsAcceptance.user_id == user_id).order_by(TermsAcceptance.id).all()
+    return {
+        "id": u.id, "email": u.email, "name": u.name, "google": bool(u.google_sub),
+        "email_verified": bool(u.email_verified), "platform_admin": u.is_platform_admin,
+        "owns": [{"id": s.id, "name": s.name} for s in owned],
+        "member_of": [{"id": sid, "name": n, "role": r} for r, sid, n in rows],
+        "terms": [{"version": t.version, "accepted_at": t.accepted_at, "ip_address": t.ip_address,
+                   "user_agent": t.user_agent} for t in terms],
+    }
+
+
+@router.delete("/accounts/{user_id}")
+def delete_account(
+    user_id: int, payload: ConfirmDelete,
+    db: Session = Depends(get_db), admin: User = Depends(require_platform_admin),
+):
+    """Delete a user account. Schools they own are deleted too only when
+    asked (delete_schools); otherwise the delete is refused, so a school is
+    never left without an owner by accident."""
+    from app.services import erase
+
+    u = db.get(User, user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if u.id == admin.id:
+        raise HTTPException(status_code=400, detail="You can't delete the account you're signed in with.")
+    if payload.confirm.strip().lower() != u.email.lower():
+        raise HTTPException(status_code=400, detail="Type the account's email exactly to delete it.")
+    owned = db.query(School).filter(School.owner_id == user_id).all()
+    if owned and not payload.delete_schools:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This account owns {', '.join(s.name for s in owned)}. Tick “also delete their schools” to delete "
+                   "them too.",
+        )
+    deleted_schools = [s.name for s in owned]
+    counts: dict[str, int] = {}
+    if owned:
+        for k, v in erase.erase(db, "schools", [s.id for s in owned]).items():
+            counts[k] = counts.get(k, 0) + v
+    email = u.email
+    for k, v in erase.erase(db, "users", [user_id]).items():
+        counts[k] = counts.get(k, 0) + v
+    return {"deleted": email, "schools": deleted_schools, "rows": counts}

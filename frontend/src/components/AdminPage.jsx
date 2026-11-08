@@ -5,6 +5,7 @@ import AdminTab from './AdminTab'
 import AdminRuleEvents from './AdminRuleEvents'
 import AdminProblems from './AdminProblems'
 import AdminOutreach from './AdminOutreach'
+import { DeleteBox } from './AdminData'
 
 /**
  * timetablz.com/admin - the Valkyrie Labs console. A page of its own, outside
@@ -200,6 +201,7 @@ function Stat({ label, value, hint }) {
 
 function Accounts() {
   const [rows, setRows] = useState(null)
+  const [openId, setOpenId] = useState(null)
   const [q, setQ] = useState('')
   const [error, setError] = useState(null)
 
@@ -244,33 +246,116 @@ function Accounts() {
               <th className="px-4 py-2.5 font-medium">Sign-in</th>
               <th className="px-4 py-2.5 font-medium">Owns</th>
               <th className="px-4 py-2.5 font-medium">Member of</th>
+              <th className="px-4 py-2.5 font-medium" />
             </tr>
           </thead>
           <tbody>
             {rows == null && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">Loading…</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">Loading…</td>
               </tr>
             )}
             {rows?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">No accounts found.</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">No accounts found.</td>
               </tr>
             )}
             {rows?.map((a) => (
-              <tr key={a.id} className="border-t border-slate-100">
-                <td className="px-4 py-3">
-                  <p className="font-medium">{a.name || '-'}</p>
-                  <p className="text-xs text-slate-500">{a.email}</p>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{a.google ? 'Google' : 'Email'}</td>
-                <td className="px-4 py-3 text-slate-600">{a.owns.length ? a.owns.join(', ') : '-'}</td>
-                <td className="px-4 py-3 text-slate-600">{a.member_of.length ? a.member_of.join(', ') : '-'}</td>
-              </tr>
+              <AccountRow key={a.id} account={a} open={openId === a.id} onToggle={() => setOpenId(openId === a.id ? null : a.id)} onDeleted={() => { setOpenId(null); load() }} />
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+function AccountRow({ account: a, open, onToggle, onDeleted }) {
+  const [detail, setDetail] = useState(null)
+  const [err, setErr] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [alsoSchools, setAlsoSchools] = useState(false)
+  useEffect(() => {
+    if (open && !detail) api.admin.account(a.id).then(setDetail).catch((e) => setErr(e.message))
+  }, [open, detail, a.id])
+  return (
+    <>
+      <tr className="border-t border-slate-100">
+        <td className="px-4 py-3">
+          <p className="font-medium">{a.name || '-'}</p>
+          <p className="text-xs text-slate-500">{a.email}</p>
+        </td>
+        <td className="px-4 py-3 text-slate-600">{a.google ? 'Google' : 'Email'}</td>
+        <td className="px-4 py-3 text-slate-600">{a.owns.length ? a.owns.join(', ') : '-'}</td>
+        <td className="px-4 py-3 text-slate-600">{a.member_of.length ? a.member_of.join(', ') : '-'}</td>
+        <td className="px-4 py-3 text-right">
+          <button onClick={onToggle} aria-expanded={open} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-50">
+            {open ? 'Close' : 'Details'}
+          </button>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-t border-slate-100 bg-slate-50/60">
+          <td colSpan={5} className="px-4 py-4">
+            {err && <p className="text-sm text-red-600">{err}</p>}
+            {!detail && !err && <p className="text-sm text-slate-500">Loading…</p>}
+            {detail && (
+              <div className="flex flex-col gap-3 text-sm">
+                <p className="text-slate-700">
+                  Email {detail.email_verified ? 'verified' : 'not verified'} · signs in with {detail.google ? 'Google' : 'email and password'}
+                  {detail.platform_admin && ' · Timetablz admin'}
+                </p>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Terms accepted</p>
+                  {detail.terms.length === 0 ? (
+                    <p className="text-slate-600">Not yet.</p>
+                  ) : (
+                    <ul className="text-slate-600">
+                      {detail.terms.map((t) => (
+                        <li key={t.version + t.accepted_at}>
+                          Version {t.version} on {new Date(t.accepted_at).toLocaleString('en-IN')} from {t.ip_address || 'unknown IP'}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {!deleting ? (
+                  <button
+                    onClick={() => setDeleting(true)}
+                    disabled={detail.platform_admin}
+                    title={detail.platform_admin ? 'Admin accounts can’t be deleted here' : undefined}
+                    className="w-fit rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Delete account…
+                  </button>
+                ) : (
+                  <DeleteBox
+                    what="this account"
+                    confirmText={detail.email}
+                    note="Removes the login and their access to every school. Their terms acceptances are kept as a record."
+                    extra={
+                      detail.owns.length > 0 && (
+                        <label className="flex items-start gap-2 text-red-800">
+                          <input type="checkbox" checked={alsoSchools} onChange={(e) => setAlsoSchools(e.target.checked)} className="mt-0.5" />
+                          <span>
+                            Also delete the {detail.owns.length === 1 ? 'school' : 'schools'} they own ({detail.owns.map((s) => s.name).join(', ')}) and
+                            all {detail.owns.length === 1 ? 'its' : 'their'} data. Without this the account can’t be deleted.
+                          </span>
+                        </label>
+                      )
+                    }
+                    onCancel={() => setDeleting(false)}
+                    onDelete={async (typed) => {
+                      await api.admin.deleteAccount(a.id, typed, alsoSchools)
+                      onDeleted()
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
