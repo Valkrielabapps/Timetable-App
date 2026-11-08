@@ -45,6 +45,11 @@ class UserOut(BaseModel):
     name: str | None
     # Timetablz staff: sees the admin page. Read off User.is_platform_admin.
     is_platform_admin: bool = False
+    # Must accept the current Terms before using the app (first sign-in, or
+    # the terms changed). Read off User.needs_terms.
+    needs_terms: bool = False
+    terms_version: str = ""
+    has_accepted_before: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -66,3 +71,8 @@ class ResetPasswordRequest(BaseModel):
 
 class UserProfileUpdate(BaseModel):
     name: str
+
+
+class AcceptTermsRequest(BaseModel):
+    # The version the person was shown, so an old page can't accept new terms.
+    version: str

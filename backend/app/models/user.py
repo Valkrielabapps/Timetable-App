@@ -33,6 +33,26 @@ class User(Base):
     token_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     schools = relationship("School", back_populates="owner")
+    terms_acceptances = relationship("TermsAcceptance", back_populates="user", lazy="selectin")
+
+    @property
+    def needs_terms(self) -> bool:
+        """Hasn't accepted the current Terms of Service yet (first sign-in, or
+        the terms changed since) - see app/core/terms.py."""
+        from app.core.terms import CURRENT_TERMS_VERSION
+
+        return not any(a.version == CURRENT_TERMS_VERSION for a in self.terms_acceptances)
+
+    @property
+    def has_accepted_before(self) -> bool:
+        """Accepted an earlier version: told "we've updated our terms"."""
+        return bool(self.terms_acceptances)
+
+    @property
+    def terms_version(self) -> str:
+        from app.core.terms import CURRENT_TERMS_VERSION
+
+        return CURRENT_TERMS_VERSION
 
     @property
     def is_platform_admin(self) -> bool:
@@ -74,3 +94,23 @@ class PasswordResetToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User")
+
+
+class TermsAcceptance(Base):
+    """
+    One person accepting one version of the Terms of Service and Privacy
+    Policy: the record that shows, if it is ever needed, who agreed to what
+    and when. Never edited. Kept if the account is deleted (user_id is then
+    cleared; the email stays), since that is when it may be needed most.
+    """
+    __tablename__ = "terms_acceptances"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    email = Column(String, nullable=False)
+    version = Column(String(32), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    ip_address = Column(String(64), nullable=True)
+    user_agent = Column(String(400), nullable=True)
+
+    user = relationship("User", back_populates="terms_acceptances")

@@ -7,6 +7,7 @@ import AcceptInvitePage from './components/AcceptInvitePage'
 import ResetPasswordPage from './components/ResetPasswordPage'
 import PrivacyPolicyPage from './components/PrivacyPolicyPage'
 import TermsOfServicePage from './components/TermsOfServicePage'
+import AcceptTermsPage from './components/AcceptTermsPage'
 import PricingPage from './components/PricingPage'
 import SupportPage from './components/SupportPage'
 import WhyTimetablzPage from './components/WhyTimetablzPage'
@@ -754,6 +755,12 @@ function App() {
       )
     }
     return <LandingPage onGetStarted={() => setShowPlans(true)} onSignIn={signIn} />
+  }
+
+  // The current Terms must be accepted before anything else: first sign-in,
+  // or the terms changed since (backend/app/core/terms.py).
+  if (user.needs_terms && enteredApp) {
+    return <AcceptTermsPage user={user} onAccepted={setUser} onSignOut={handleLogout} />
   }
 
   // Signed in, but arrived fresh at timetablz.com: show the homepage, with

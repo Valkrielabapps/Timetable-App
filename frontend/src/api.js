@@ -175,6 +175,9 @@ export const api = {
   // it server-side rather than trusting it as-is.
   loginWithGoogle: (credential) => post("/auth/google", { credential }),
   me: () => get("/auth/me"),
+  // Records that the signed-in person accepted this version of the Terms of
+  // Service and Privacy Policy - see backend/app/core/terms.py.
+  acceptTerms: (version) => post("/auth/accept-terms", { version }),
   updateMe: (data) => patch("/auth/me", data),
   forgotPassword: (email) => post("/auth/forgot-password", { email }),
   resetPassword: (token, newPassword) => post("/auth/reset-password", { token, new_password: newPassword }),

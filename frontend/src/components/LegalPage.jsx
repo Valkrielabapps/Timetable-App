@@ -32,7 +32,7 @@ function renderInline(text, keyPrefix) {
   })
 }
 
-function renderMarkdown(source) {
+export function renderMarkdown(source) {
   // Strip the leading HTML comment (the "PLACEHOLDER GUIDE" block) - it's
   // authoring guidance for whoever fills the doc in, not page content.
   const withoutComment = source.replace(/<!--[\s\S]*?-->/, '').trim()

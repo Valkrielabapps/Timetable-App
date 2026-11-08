@@ -16,14 +16,16 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import check_quota, limiter
+from app.core.rate_limit import check_quota, client_ip, limiter
 from app.core.auth import (
     create_access_token, get_current_user, hash_password, hash_token, sign_out_everywhere, verify_password,
 )
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.user import PasswordResetToken, User
+from app.core.terms import CURRENT_TERMS_VERSION
+from app.models.user import PasswordResetToken, TermsAcceptance, User
 from app.schemas.auth import (
+    AcceptTermsRequest,
     ForgotPasswordRequest,
     GoogleLoginRequest,
     LoginRequest,
@@ -142,6 +144,31 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
 
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.post("/accept-terms", response_model=UserOut)
+def accept_terms(
+    payload: AcceptTermsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The signed-in person accepts the current Terms of Service and Privacy
+    Policy. Recorded with the time, IP address and browser - see
+    TermsAcceptance and app/core/terms.py."""
+    if payload.version != CURRENT_TERMS_VERSION:
+        raise HTTPException(status_code=409, detail="The terms have been updated. Reload the page to see the new version.")
+    if current_user.needs_terms:
+        db.add(TermsAcceptance(
+            user_id=current_user.id,
+            email=current_user.email,
+            version=CURRENT_TERMS_VERSION,
+            ip_address=client_ip(request)[:64],
+            user_agent=(request.headers.get("user-agent") or "")[:400],
+        ))
+        db.commit()
+        db.refresh(current_user)
     return current_user
 
 
