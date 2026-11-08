@@ -21,6 +21,7 @@ from app.routers import (
     admin,
     auth,
     class_groups,
+    class_plan,
     constraints,
     elective_blocks,
     grade_categories,
@@ -106,6 +107,7 @@ app.include_router(periods.router)
 app.include_router(timetable_structure.router)
 app.include_router(teachers.router)
 app.include_router(class_groups.router)
+app.include_router(class_plan.router)
 app.include_router(elective_blocks.router)
 app.include_router(constraints.router)
 app.include_router(timetables.router)
