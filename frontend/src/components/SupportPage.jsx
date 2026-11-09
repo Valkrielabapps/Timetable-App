@@ -29,7 +29,7 @@ export const FAQ_GROUPS = [
       },
       {
         q: 'Can more than one person work on the same school?',
-        a: 'Yes, on the Pro plan (up to 5 people). Invite colleagues by email as an admin, who can edit everything, or a viewer, who can only look. You can see who has access from Settings at any time.',
+        a: 'Yes, on every plan, with no limit on people. Invite colleagues by email as an admin, who can edit everything, or a viewer, who can only look. You can see who has access from Settings at any time.',
       },
     ],
   },
@@ -58,7 +58,7 @@ export const FAQ_GROUPS = [
       },
       {
         q: 'Can I export the finished timetable?',
-        a: 'Yes, as Excel or PDF: one page per section in grade order, followed by one per teacher, ready to print or send. On Pro you can leave off the Timetablz watermark.',
+        a: 'Yes, as Excel or PDF: one page per section in grade order, followed by one per teacher, ready to print or send. On a paid plan you can leave off the Timetablz watermark.',
       },
     ],
   },
@@ -70,15 +70,15 @@ export const FAQ_GROUPS = [
         a: 'Every new school gets a 14-day free period on the Free plan: up to 5 sections, one admin and 10 AI actions a month. After 14 days the school is locked until you upgrade - your data is kept and comes back the moment you do.',
       },
       {
-        q: "What's included in Pro?",
-        a: 'Pro is ₹4,999 a year: up to 60 sections, 5 people, unlimited AI actions and exports without the watermark. Larger schools and groups can ask us for a Business plan priced to their size.',
+        q: 'How much does it cost?',
+        a: 'Plans are priced by the number of sections, per year: Starter ₹9,999 (up to 30), Standard ₹14,999 (31 to 50), Plus ₹19,999 (51 to 80). Over 80 sections or several schools: ₹19,999 plus ₹250 for each section above 80. Every plan has every feature, unlimited people and AI, and clean exports. Done for you, where we set everything up, is ₹17,999, ₹26,999 or ₹34,999 for the first year.',
       },
       {
         q: 'How do I pay, and do I get an invoice?',
         a: 'Go to Settings > Plan & billing and click Pay now. Payment is through Cashfree Payments (UPI, cards or net banking). An invoice is issued for every payment and can be downloaded from the same page.',
       },
       {
-        q: 'Does Pro renew automatically?',
+        q: 'Does my plan renew automatically?',
         a: "No, nothing is charged automatically. When your year is up you get a 15-day grace period with everything still working, so there's time to renew.",
       },
       {
@@ -248,8 +248,7 @@ export default function SupportPage({ onBack, onGetStarted }) {
                   </a>
                 }
               >
-                More than 60 sections, or several schools in a group? Write to us for a Business plan priced to
-                your size.
+                More than 80 sections, or several schools in a group? Write to us for the Large / Group plan.
               </ContactCard>
             </div>
           </Row>

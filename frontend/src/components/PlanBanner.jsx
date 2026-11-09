@@ -1,8 +1,9 @@
 import { formatDate } from './BillingSection'
+import { PLAN_NAMES } from '../lib/plans'
 
 /**
  * A strip above the working area during a paid plan's 15-day grace period:
- * "Your Pro plan ended on X. Renew by Y to keep Pro features." After that the
+ * "Your Standard plan ended on X. Renew by Y to keep using Timetablz." After that the
  * school is locked and LockedScreen takes over; free schools see the
  * countdown in the sidebar instead (FreeCountdown).
  */
@@ -10,7 +11,7 @@ export default function PlanBanner({ entitlements, isAdmin, onRenew }) {
   if (!entitlements) return null
   const { status, paid_plan: paidPlan, plan_valid_until: validUntil, grace_ends_at: graceEnds } = entitlements
   if (!paidPlan || status !== 'grace') return null
-  const name = paidPlan === 'business' ? 'Business' : 'Pro'
+  const name = PLAN_NAMES[paidPlan] ?? 'paid'
 
   const text = `Your ${name} plan ended on ${formatDate(validUntil)}. Renew by ${formatDate(graceEnds)} to keep using Timetablz without interruption.`
 

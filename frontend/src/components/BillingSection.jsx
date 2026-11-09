@@ -3,8 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import { startCheckout } from '../payments'
 import { useEntitlements } from '../hooks/useEntitlements'
-
-const FALLBACK_PRO_PRICE = 4999
+import { DONE_FOR_YOU, LARGE, PLANS, PLAN_NAMES, inr } from '../lib/plans'
 
 // The API sends UTC timestamps without a zone suffix.
 export function parseUtc(value) {
@@ -17,7 +16,6 @@ export function formatDate(value) {
   return date ? date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : ''
 }
 
-const PLAN_NAMES = { free: 'Free', pro: 'Pro', business: 'Business' }
 
 /**
  * Settings > Plan & billing: the school's plan, where it is in its year
@@ -36,12 +34,19 @@ export default function BillingSection({ school, isAdmin }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
-  const price = ent?.pro_price_inr ?? FALLBACK_PRO_PRICE
-  const priceText = `₹${price.toLocaleString('en-IN')}`
   const status = ent?.status ?? 'free'
   const paidPlan = ent?.paid_plan
   const onBusiness = paidPlan === 'business' && status !== 'locked'
-  const renewing = paidPlan === 'pro'
+  const sections = ent?.usage?.sections ?? 0
+  const renewing = PLANS.some((p) => p.id === paidPlan)
+  // Renewing: the same plan, software only. Otherwise the plan the school's
+  // sections fit, which the server suggests.
+  const [choice, setChoice] = useState(null)
+  const plan = choice?.plan ?? (renewing ? paidPlan : ent?.suggested_plan && ent.suggested_plan !== 'business' ? ent.suggested_plan : 'starter')
+  const service = choice?.service ?? 'software'
+  const chosen = PLANS.find((p) => p.id === plan) ?? PLANS[0]
+  const price = service === 'done_for_you' ? chosen.doneForYou : chosen.price
+  const tooBig = ent?.suggested_plan === 'business'
   // A custom plan offered to this school from the admin page. When there is
   // one, Pay now pays it (price, length and limits come from the offer).
   const offer = ent?.offer ?? null
@@ -61,7 +66,7 @@ export default function BillingSection({ school, isAdmin }) {
     }
     setBusy(true)
     try {
-      await startCheckout({ schoolId: school.id, phone: digits, ...(offer ? { offerId: offer.id } : {}) })
+      await startCheckout({ schoolId: school.id, phone: digits, plan, service, ...(offer ? { offerId: offer.id } : {}) })
       // _self: the browser is leaving for Cashfree. _modal: we've navigated
       // to the status page. Either way there's nothing more to do here.
     } catch (err) {
@@ -76,7 +81,7 @@ export default function BillingSection({ school, isAdmin }) {
       : null,
     locked: paidPlan
       ? `Your ${PLAN_NAMES[paidPlan] ?? 'paid'} plan has ended. Renew to unlock the school.`
-      : 'Your 14 free days are over. Upgrade to unlock the school.',
+      : 'Your 14 free days are over. Choose a plan to unlock the school.',
     active: ent?.plan_valid_until ? `Active until ${formatDate(ent.plan_valid_until)}` : 'Active',
     grace: `Ended on ${formatDate(ent?.plan_valid_until)}. ${PLAN_NAMES[paidPlan] ?? 'Paid'} features stay on until ${formatDate(ent?.grace_ends_at)}.`,
   }[status]
@@ -95,7 +100,7 @@ export default function BillingSection({ school, isAdmin }) {
           <div>
             <p className="text-sm text-slate-500">Current plan</p>
             <p className="mt-0.5 text-lg font-semibold">
-              {isLoading ? '…' : status === 'locked' ? 'Paused' : PLAN_NAMES[ent?.plan] ?? 'Free'}
+              {isLoading ? '…' : status === 'locked' ? 'Paused' : PLAN_NAMES[ent?.plan] ?? 'Free trial'}
             </p>
           </div>
           {statusLine && <p className="text-sm text-slate-600">{statusLine}</p>}
@@ -131,56 +136,104 @@ export default function BillingSection({ school, isAdmin }) {
 
       {onBusiness && !offer ? (
         <p className="mt-5 text-sm text-slate-500">
-          Your school is on a Business plan. For changes, write to{' '}
+          Your school is on the Large / Group plan. For changes, write to{' '}
           <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a>.
         </p>
       ) : isAdmin ? (
         <form onSubmit={handlePay} className="mt-6 flex flex-col gap-4">
-          <div>
-            <p className="text-sm font-medium text-slate-900">
-              {offer ? `Pay for ${offer.name}` : renewing ? 'Renew Pro for a year' : 'Upgrade to Pro'}
+          {offer ? (
+            <div>
+              <p className="text-sm font-medium text-slate-900">Pay for {offer.name}</p>
+              <p className="mt-1 text-sm text-slate-500">Your plan starts as soon as the payment is confirmed.</p>
+            </div>
+          ) : tooBig ? (
+            <p className="text-sm text-slate-600">
+              Your school has {sections} sections, more than the Plus plan’s 80. The {LARGE.name} plan is{' '}
+              {inr(LARGE.base)} + {inr(LARGE.perSection)} a year for each section above {LARGE.from}.{' '}
+              <a className="underline" href="/contact">Contact us</a> and we’ll send you an offer to pay here.
             </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {offer
-                ? 'Your plan starts as soon as the payment is confirmed.'
-                : <>
-                    {priceText} for one year.{' '}
-                    {renewing && status === 'active'
-                      ? 'The new year starts when your current one ends, so renewing early loses nothing.'
-                      : 'Up to 60 sections, up to 5 people, every AI feature, and clean exports.'}
-                  </>}
-            </p>
-          </div>
-          <label className="flex max-w-xs flex-col gap-1">
-            <span className="text-xs font-medium text-slate-500">Mobile number for the payment receipt</span>
-            <input
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="98765 43210"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
-            />
-          </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div>
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-60"
-            >
-              {busy
-                ? 'Opening secure checkout…'
-                : offer
-                  ? `Pay now · ₹${offer.price_inr.toLocaleString('en-IN')}`
-                  : `${renewing ? 'Renew now' : 'Pay now'} · ${priceText}`}
-            </button>
-            <p className="mt-2 text-xs text-slate-400">
-              Payments are processed securely by Cashfree. Need more than 60 sections or several schools?{' '}
-              <a className="underline" href="/contact">Contact us about Business</a>.
-            </p>
-          </div>
+          ) : (
+            <fieldset>
+              <legend className="text-sm font-medium text-slate-900">
+                {renewing ? 'Renew for a year' : 'Choose your plan'}
+              </legend>
+              <p className="mt-1 text-sm text-slate-500">
+                Priced by sections; every plan has every feature, unlimited people and AI, and clean exports. Your
+                school has {sections} {sections === 1 ? 'section' : 'sections'}.
+                {renewing && status === 'active' && ' The new year starts when your current one ends, so renewing early loses nothing.'}
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {PLANS.map((p) => {
+                  const fits = sections <= p.maxSections
+                  return (
+                    <div
+                      key={p.id}
+                      className={`rounded-lg border p-3 ${plan === p.id ? 'border-neutral-900' : 'border-slate-200'} ${fits ? '' : 'opacity-50'}`}
+                    >
+                      <p className="font-semibold">{p.name}</p>
+                      <p className="text-xs text-slate-500">{p.sections}</p>
+                      <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="plan-choice"
+                          disabled={!fits}
+                          checked={plan === p.id && service === 'software'}
+                          onChange={() => setChoice({ plan: p.id, service: 'software' })}
+                        />
+                        Software · {inr(p.price)}/year
+                      </label>
+                      <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="plan-choice"
+                          disabled={!fits}
+                          checked={plan === p.id && service === 'done_for_you'}
+                          onChange={() => setChoice({ plan: p.id, service: 'done_for_you' })}
+                        />
+                        Done for you · {inr(p.doneForYou)}
+                      </label>
+                      {!fits && <p className="mt-1 text-xs text-slate-500">Too small for your {sections} sections</p>}
+                    </div>
+                  )
+                })}
+              </div>
+              {service === 'done_for_you' && <p className="mt-2 text-xs text-slate-500">{DONE_FOR_YOU}</p>}
+            </fieldset>
+          )}
+          {!tooBig || offer ? (
+            <>
+              <label className="flex max-w-xs flex-col gap-1">
+                <span className="text-xs font-medium text-slate-500">Mobile number for the payment receipt</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="98765 43210"
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+                />
+              </label>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <div>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-60"
+                >
+                  {busy
+                    ? 'Opening secure checkout…'
+                    : offer
+                      ? `Pay now · ${inr(offer.price_inr)}`
+                      : `${renewing ? 'Renew now' : 'Pay now'} · ${chosen.name}${service === 'done_for_you' ? ', done for you' : ''} · ${inr(price)}`}
+                </button>
+                <p className="mt-2 text-xs text-slate-400">
+                  Payments are processed securely by Cashfree. More than 80 sections or several schools?{' '}
+                  <a className="underline" href="/contact">Contact us about {LARGE.name}</a>.
+                </p>
+              </div>
+            </>
+          ) : null}
         </form>
       ) : (
         <p className="mt-5 text-sm text-slate-500">Only a school admin can change the plan.</p>

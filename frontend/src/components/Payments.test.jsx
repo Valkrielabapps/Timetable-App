@@ -19,6 +19,7 @@ const FREE = {
   limits: { max_sections: 5, max_members: 1, ai_actions_per_month: 10, clean_exports: false },
   usage: { sections: 5, members: 1, ai_actions_this_month: 3 },
   pro_price_inr: 4999,
+  suggested_plan: 'starter',
 }
 
 import { api } from '../api'
@@ -40,7 +41,7 @@ describe('BillingSection', () => {
     render(<BillingSection school={school} isAdmin />)
     fireEvent.click(screen.getByRole('button', { name: /pay now/i }))
     await waitFor(() => expect(checkout).toHaveBeenCalled())
-    expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'pro' })
+    expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'starter', service: 'software' })
     expect(checkout).toHaveBeenCalledWith({ paymentSessionId: 'session_1', redirectTarget: '_self' })
   })
 
@@ -64,13 +65,32 @@ describe('BillingSection', () => {
     expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
   })
 
-  it('shows Pro when the plan is active', () => {
-    entitlements.current = { ...FREE, plan: 'pro', paid_plan: 'pro', status: 'active', plan_valid_until: '2099-01-01T00:00:00',
-      limits: { ...FREE.limits, max_sections: 60, ai_actions_per_month: null } }
+  it('renews the plan the school is on', () => {
+    entitlements.current = { ...FREE, plan: 'standard', paid_plan: 'standard', status: 'active', plan_valid_until: '2099-01-01T00:00:00',
+      suggested_plan: 'standard', usage: { ...FREE.usage, sections: 40 },
+      limits: { ...FREE.limits, max_sections: 50, ai_actions_per_month: null } }
     render(<BillingSection school={school} isAdmin />)
-    expect(screen.getByText('Pro')).toBeInTheDocument()
-    expect(screen.getByText(/renew pro/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /renew now/i })).toBeInTheDocument()
+    expect(screen.getByText('Standard', { selector: 'p.text-lg' })).toBeInTheDocument()
+    expect(screen.getByText(/renew for a year/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Renew now · Standard · ₹14,999' })).toBeInTheDocument()
+    // Starter is too small for 40 sections.
+    expect(screen.getAllByRole('radio')[0]).toBeDisabled()
+  })
+
+  it('offers done for you at its price', async () => {
+    api.createPaymentOrder.mockResolvedValue({ order_id: 'tz_1', payment_session_id: 'session_1' })
+    render(<BillingSection school={school} isAdmin />)
+    fireEvent.click(screen.getByLabelText(/Done for you · ₹26,999/))
+    expect(screen.getByText(/We set it up for you/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Pay now · Standard, done for you · ₹26,999' }))
+    await waitFor(() => expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'standard', service: 'done_for_you' }))
+  })
+
+  it('sends a school bigger than Plus to the Large / Group plan', () => {
+    entitlements.current = { ...FREE, suggested_plan: 'business', usage: { ...FREE.usage, sections: 95 } }
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.getByText(/95 sections, more than the Plus plan’s 80/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
   })
 
   it('shows usage against the plan limits', () => {
@@ -95,14 +115,14 @@ describe('BillingSection', () => {
     expect(screen.getByText('Your custom plan')).toBeInTheDocument()
     expect(screen.getByText(/up to 150 sections/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /pay now · ₹18,000/i }))
-    await waitFor(() => expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'pro', offer_id: 42 }))
+    await waitFor(() => expect(api.createPaymentOrder).toHaveBeenCalledWith(expect.objectContaining({ school_id: 7, phone: '9876543210', offer_id: 42 })))
   })
 
-  it('does not offer checkout to a Business school', () => {
+  it('does not offer checkout to a Large / Group school', () => {
     entitlements.current = { ...FREE, plan: 'business', paid_plan: 'business', status: 'active' }
     render(<BillingSection school={school} isAdmin />)
     expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
-    expect(screen.getByText(/business plan/i)).toBeInTheDocument()
+    expect(screen.getByText(/Large \/ Group plan/i)).toBeInTheDocument()
   })
 })
 

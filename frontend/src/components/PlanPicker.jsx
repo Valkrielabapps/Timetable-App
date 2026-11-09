@@ -1,46 +1,36 @@
 import { motion } from 'framer-motion'
 
+import { EVERY_PLAN, LARGE, PLANS as PRICED, inr } from '../lib/plans'
+
 /**
- * The first step after "Get started free": choose a plan, then create an
- * account. Matches the landing page's look (black, white type).
+ * The first step after "Get started": see the plans, then create an account.
+ * Matches the landing page's look.
  *
- *   Free     -> sign up, 14 free days on Free limits, countdown in the app
- *   Pro      -> sign up, name the school, then straight to checkout
- *               (Settings > Plan & billing; the payment needs a school)
- *   Business -> Contact page
- *
- * The numbers mirror backend app/services/plans.py, which is what the app
- * actually enforces.
+ * Every school starts with the 14-day free trial (everything unlocked), so
+ * "Start free trial" just signs up. "Buy now" signs up too and then opens
+ * Settings > Plan & billing to pay (the payment needs a school). Large /
+ * Group goes to the Contact page. Prices come from src/lib/plans.js.
  */
-// Same wording as the Pricing page (PricingPage.jsx's PRICING_TIERS), so a
-// school sees one description of each plan wherever it looks.
 const PLANS = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: '₹0',
-    period: 'for 14 days',
-    blurb: 'Free for 14 days, no card needed',
-    features: ['Up to 5 sections', '1 admin', '10 AI actions a month', 'Unlimited timetables', 'Exports carry "Made with Timetablz"'],
-    cta: 'Start free',
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '₹4,999',
+  ...PRICED.map((p) => ({
+    id: p.id,
+    name: p.name,
+    price: inr(p.price),
     period: '/year',
-    blurb: 'For a school that needs more room to grow',
-    features: ['Up to 60 sections', 'Up to 5 people with access', 'Unlimited AI setup, rules and edits', 'Clean PDF and Excel exports', 'Priority support'],
-    cta: 'Choose Pro',
-    highlighted: true,
-  },
+    blurb: p.sections,
+    doneForYou: `Done for you: ${inr(p.doneForYou)} first year`,
+    features: EVERY_PLAN,
+    cta: 'Start free trial',
+    highlighted: p.id === 'standard',
+  })),
   {
     id: 'business',
-    name: 'Business',
-    price: 'Custom',
-    period: '',
-    blurb: 'For a group running several schools',
-    features: ['Everything in Pro, plus:', 'Unlimited sections and people', 'Several schools in one account', 'Dedicated onboarding', 'Custom terms'],
+    name: LARGE.name,
+    price: `From ${inr(LARGE.base)}`,
+    period: '/year',
+    blurb: LARGE.sections,
+    doneForYou: `+ ${inr(LARGE.perSection)} a year per section above ${LARGE.from}. Done for you: quoted`,
+    features: [...EVERY_PLAN, 'Several schools in one account'],
     cta: 'Get in touch',
   },
 ]
@@ -51,7 +41,7 @@ const fadeUp = {
 }
 
 // Styled exactly like the Pricing page's cards (PricingCard in
-// PricingPage.jsx): dark cards, Pro outlined in white, the button above the
+// PricingPage.jsx): Standard outlined, the button above the
 // feature list, features under a divider.
 function PlanCard({ plan, onChoose, delay }) {
   return (
@@ -67,7 +57,7 @@ function PlanCard({ plan, onChoose, delay }) {
       <div className="flex items-center gap-2.5">
         <p className="text-lg font-semibold text-neutral-900">{plan.name}</p>
         {plan.highlighted && (
-          <span className="rounded-full bg-neutral-900 px-2.5 py-0.5 text-[11px] font-medium text-white">Most chosen</span>
+          <span className="rounded-full bg-neutral-900 px-2.5 py-0.5 text-[11px] font-medium text-white">Mid-size schools</span>
         )}
       </div>
       <p className="mt-1 text-sm text-neutral-600">{plan.blurb}</p>
@@ -76,6 +66,7 @@ function PlanCard({ plan, onChoose, delay }) {
         <span className="text-3xl font-semibold tracking-tight text-neutral-900">{plan.price}</span>
         {plan.period && <span className="ml-1 text-sm text-neutral-500">{plan.period}</span>}
       </p>
+      {plan.doneForYou && <p className="mt-2 text-xs text-neutral-500">{plan.doneForYou}</p>}
 
       <button
         onClick={() => onChoose(plan.id)}
@@ -85,6 +76,11 @@ function PlanCard({ plan, onChoose, delay }) {
       >
         {plan.cta}
       </button>
+      {plan.id !== 'business' && (
+        <button onClick={() => onChoose(plan.id, { buy: true })} className="mt-2 text-sm text-neutral-600 underline underline-offset-2 hover:text-neutral-900">
+          Buy now instead
+        </button>
+      )}
 
       <ul className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
         {plan.features.map((f) => (
@@ -122,18 +118,19 @@ export default function PlanPicker({ onChoose, onBack, onSignIn }) {
             Choose how you want to start
           </h1>
           <p className="mt-4 max-w-xl text-neutral-600">
-            Start free for 14 days, no card needed. Upgrade to Pro whenever you&rsquo;re ready.
+            Every plan starts with 14 days free, everything unlocked, no card needed. Plans are priced by the number
+            of sections in your school; choose one whenever you&rsquo;re ready.
           </p>
         </motion.div>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((plan, i) => (
             <PlanCard key={plan.id} plan={plan} onChoose={onChoose} delay={i * 0.08} />
           ))}
         </div>
 
         <p className="mt-8 text-sm text-neutral-500">
-          After 14 days, a Free school is paused until it upgrades. Nothing you&rsquo;ve set up is deleted.
+          After 14 days the school is paused until you choose a plan. Nothing you&rsquo;ve set up is deleted.
         </p>
       </div>
     </div>

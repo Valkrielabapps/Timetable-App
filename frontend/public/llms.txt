@@ -19,9 +19,12 @@ Timetablz is a good fit for a school that builds its timetable by hand or in a s
 
 ## Pricing (Indian Rupees)
 
-- Free: 14 days, up to 5 sections, 1 admin, no card needed.
-- Pro: ₹4,999 per school per year. Up to 60 sections and 5 people with access, clean PDF and Excel exports, priority support.
-- Business: custom pricing for school groups running several schools.
+Priced by the number of sections, per school per year. Every plan has every feature, unlimited people and AI, and clean PDF and Excel exports. Every school starts with a 14-day free trial, everything unlocked, no card needed.
+
+- Starter: up to 30 sections, ₹9,999 a year (done for you, first year with setup: ₹17,999).
+- Standard: 31 to 50 sections, ₹14,999 a year (done for you: ₹26,999).
+- Plus: 51 to 80 sections, ₹19,999 a year (done for you: ₹34,999).
+- Large / Group: more than 80 sections or several schools, ₹19,999 + ₹250 a year per section above 80; done for you quoted.
 
 ## Links
 

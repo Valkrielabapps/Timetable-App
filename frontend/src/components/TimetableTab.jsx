@@ -190,7 +190,7 @@ export default function TimetableTab({
         new CustomEvent('timetablz:plan-limit', {
           detail: {
             message:
-              'Exporting without the Timetablz watermark is part of the Pro plan. Upgrade in Settings > Plan & billing.',
+              'Exporting without the Timetablz watermark is part of every paid plan. Choose a plan in Settings > Plan & billing.',
           },
         }),
       )
@@ -517,7 +517,7 @@ export default function TimetableTab({
                     </button>
                     <label title="Adds the Timetablz name to the header and footer of every page">
                       <input type="checkbox" checked={watermark} onChange={(e) => toggleWatermark(e.target.checked)} />
-                      Timetablz watermark{!cleanExportsAllowed ? ' (Pro to remove)' : ''}
+                      Timetablz watermark{!cleanExportsAllowed ? ' (paid plans can remove it)' : ''}
                     </label>
                   </div>
                 )}

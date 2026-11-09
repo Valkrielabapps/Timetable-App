@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Version 2026-11-08 · Effective date: 8 November 2026**
+**Version 2026-11-09 · Effective date: 9 November 2026**
 
 These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). They form a binding agreement between us and you, the person using the Service, and, where you use it for a school, college or other institution, that institution as well (together "**you**").
 
@@ -50,15 +50,17 @@ We may remove content, or suspend or terminate accounts, that break these rules.
 
 ## 7. Plans and pricing
 
-The Service is offered under the plans described on our website at https://timetablz.com (Free; Pro at ₹4,999 per year; and Business at custom pricing), which may change from time to time. We will give reasonable advance notice before a price change takes effect for an existing subscription. Prices are in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
+Every new school gets a 14-day free trial with everything unlocked. After that the Service is offered under the plans described on our website at https://timetablz.com, priced by the number of sections in the school, per year: Starter (up to 30 sections) ₹9,999; Standard (31 to 50) ₹14,999; Plus (51 to 80) ₹19,999; and Large / Group (more than 80 sections, or several schools) ₹19,999 plus ₹250 for each section above 80, priced individually. Each plan can also be bought "done for you" (₹17,999, ₹26,999 and ₹34,999 respectively; quoted for Large / Group), which covers the plan's first year and our team setting the school up; it renews at the software price. Plans and prices may change from time to time; we will give reasonable advance notice before a price change takes effect for an existing plan. Prices are in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
+
+A plan covers up to its number of sections. If your school grows past it, you move to the next plan to add more.
 
 ## 8. Payment and billing
 
-The Pro plan is paid in advance for one year at a time, through our payment processor, Cashfree Payments. It does not renew automatically: you renew by making a new payment, and an early renewal is added on after your current year ends. Payment card, UPI and net banking details are entered on Cashfree's secure checkout and are never seen or stored by us. The plan is activated only after the payment is confirmed.
+Plans are paid in advance for one year at a time, through our payment processor, Cashfree Payments. They do not renew automatically: you renew by making a new payment, and an early renewal of the same plan is added on after your current year ends. Payment card, UPI and net banking details are entered on Cashfree's secure checkout and are never seen or stored by us. A plan is activated only after the payment is confirmed. For Done for you, we will contact you after payment to collect what we need to set the school up.
 
 ## 9. Refunds and cancellations
 
-You can cancel the Pro plan at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of your current year on a pro-rata basis: the amount paid, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and your school moves to the Free plan when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
+You can cancel at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of the software for your current year on a pro-rata basis: the software price, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. The setup part of a Done for you purchase is refunded in full if you cancel before we have started setting the school up, and not after. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and the school's plan ends when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
 
 ## 10. Free trials, pilots and new features
 

@@ -51,7 +51,10 @@ describe('AdminTab', () => {
     render(<AdminTab />)
     fireEvent.click(await screen.findByRole('button', { name: 'Manage' }))
     fireEvent.change(screen.getByLabelText('Reference (UTR / cheque no.)'), { target: { value: 'UTR9' } })
+    fireEvent.change(screen.getByLabelText('Service'), { target: { value: 'done_for_you' } })
     fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }))
-    await waitFor(() => expect(api.admin.markPaid).toHaveBeenCalledWith(3, { kind: 'pro', amount_inr: 4999, reference: 'UTR9' }))
+    await waitFor(() => expect(api.admin.markPaid).toHaveBeenCalledWith(3, {
+      kind: 'starter', service: 'done_for_you', amount_inr: 17999, reference: 'UTR9',
+    }))
   })
 })

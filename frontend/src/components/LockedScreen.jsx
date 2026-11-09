@@ -4,9 +4,11 @@
  * ended (backend app/services/plans.py). Settings stays reachable, since
  * Plan & billing is how the school unlocks.
  */
+import { PLAN_NAMES } from '../lib/plans'
+
 export default function LockedScreen({ entitlements, isAdmin, onUpgrade }) {
   const paid = entitlements?.paid_plan
-  const title = paid ? `Your ${paid === 'business' ? 'Business' : 'Pro'} plan has ended` : 'Your 14-day free period has ended'
+  const title = paid ? `Your ${PLAN_NAMES[paid] ?? 'paid'} plan has ended` : 'Your 14-day free trial has ended'
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center">
@@ -18,18 +20,18 @@ export default function LockedScreen({ entitlements, isAdmin, onUpgrade }) {
         </div>
         <h2 className="mt-5 text-xl font-semibold">{title}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Upgrade to Pro to keep building and editing timetables. Everything you&rsquo;ve set up is saved and comes
-          straight back the moment you upgrade.
+          Choose a plan to keep building and editing timetables. Plans start at ₹9,999 a year, priced by the number
+          of sections. Everything you&rsquo;ve set up is saved and comes straight back the moment you pay.
         </p>
         {isAdmin ? (
           <button
             onClick={onUpgrade}
             className="mt-6 rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
-            Upgrade to Pro · ₹{(entitlements?.pro_price_inr ?? 4999).toLocaleString('en-IN')} a year
+            {paid ? 'Renew your plan' : 'Choose a plan'}
           </button>
         ) : (
-          <p className="mt-6 text-sm text-slate-500">Ask a school admin to upgrade.</p>
+          <p className="mt-6 text-sm text-slate-500">Ask a school admin to choose a plan.</p>
         )}
         <p className="mt-4 text-xs text-slate-400">
           Questions? <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a>

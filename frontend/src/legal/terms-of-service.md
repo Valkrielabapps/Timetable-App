@@ -2,95 +2,125 @@
 
 # Terms of Service
 
-**Effective date: 12 October 2026**
+**Version 2026-11-09 · Effective date: 9 November 2026**
 
-These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). By creating an account or using the Service, you agree to these Terms. If you do not agree, do not use the Service.
+These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). They form a binding agreement between us and you, the person using the Service, and, where you use it for a school, college or other institution, that institution as well (together "**you**").
+
+You accept these Terms by ticking the box and clicking **I agree** when the Service asks you to, or by using the Service. That acceptance is an electronic contract under the Information Technology Act, 2000, and we keep a record of it (the version accepted, the date and time, and the IP address it came from). If you do not agree, do not use the Service.
 
 ## 1. Who may use the Service
 
-The Service is intended for use by schools, colleges, and their authorized staff to build and manage timetables. You must be at least 18 years old and authorized to act on behalf of your school or institution to create an account. You are responsible for the accuracy of the information you provide and for maintaining the confidentiality of your login credentials.
+The Service is intended for schools, colleges and their authorised staff, to build and manage timetables. To use it you must be at least 18 years old. If you create an account for an institution or enter its data, you confirm that you are authorised to act for it and to bind it to these Terms. You are responsible for the accuracy of the information you provide and for keeping your login credentials confidential. Tell us at once at support@timetablz.com if you believe your account has been used without your permission.
 
 ## 2. Accounts and roles
 
-Each school's account has an **owner** (the person who created it) and may have additional **admins** and **viewers**, invited by the owner or an existing admin. Owners and admins can enter and edit school data and generate timetables; viewers have read-only access. You are responsible for the actions taken under your account, including by anyone you invite.
+Each school's account has an **owner** (the person who created it) and may have additional **admins** and **viewers**, invited by the owner or an existing admin. Owners and admins can enter and edit school data and generate timetables; viewers have read-only access. You are responsible for everything done under your account, including by anyone you invite, and for removing access from people who should no longer have it.
 
 ## 3. The Service
 
-The Service allows you to enter your school's subjects, teachers, rooms, periods, and scheduling rules, and to generate a proposed weekly timetable using an automated constraint-solving engine. The Service also offers optional AI-assisted features (plain-language rule entry, infeasibility explanations, conversational editing, and document-based setup extraction) described further in our Privacy Policy.
+The Service lets you enter your school's subjects, teachers, rooms, periods and scheduling rules, import them from your own spreadsheets or documents, and generate a proposed weekly timetable with an automated scheduling engine. It also offers AI-assisted features, including reading rules written in plain language, reading uploaded files, explaining why rules cannot all be met, suggesting changes and conversational editing.
 
-**The Service is a planning tool, not a guarantee.** A generated timetable is only as good as the rules and data you provide. You are responsible for reviewing any generated timetable before relying on it or publishing it to your staff and students. We do not guarantee that a timetable will be generated for every set of rules. Some combinations of rules are mathematically impossible to satisfy simultaneously, and the Service will tell you when this happens rather than producing an incorrect result.
+**The Service is a planning tool, not a guarantee.** A generated timetable is only as good as the rules and data you give it. You are responsible for reviewing every timetable, import and suggestion before you rely on it, publish it or share it with staff, students or parents. We do not guarantee that a timetable can be generated for every set of rules: some combinations cannot all be met, and the Service will tell you so, or, where you choose, produce a timetable that relaxes some rules and says which.
 
-## 4. Your content and data
+## 4. AI features
 
-You retain ownership of all data you enter into the Service ("**Your Content**"). You grant us a limited license to host, process, and display Your Content solely to provide the Service to you. You are responsible for ensuring you have the right to enter any information you upload or type into the Service, including that you have appropriate authorization from your school to do so.
+Some features send parts of Your Content (for example the headings and sample rows of an uploaded sheet, or a rule you typed) to our AI provider to be processed, as described in our Privacy Policy. AI output can be wrong, incomplete or inconsistent. The Service shows you what it read or suggests before anything is saved or changed where it can, and asks you when it is unsure; you remain responsible for checking it. Do not enter information into the Service that you are not allowed to share with a processor of this kind.
 
-You must not use the Service to store or process information you are not authorized to hold, including individually identifying student data beyond what the Service is designed for (see our Privacy Policy, Section 2.3).
+## 5. Your content and data
 
-## 5. Acceptable use
+You, or your institution, own the data you enter into the Service ("**Your Content**"). You grant us a limited, non-exclusive licence to host, copy, process and display Your Content only to provide, secure and support the Service for you, and to keep it as the law requires.
+
+**Personal data.** Your Content may include personal data about your staff, such as names, email addresses, subjects taught and availability. For that data your institution decides why and how it is processed, and is the **Data Fiduciary** under the Digital Personal Data Protection Act, 2023; we process it on your institution's behalf and on its instructions as set out in these Terms and our Privacy Policy. Your institution is responsible for having a lawful basis to give us that data, and for any notice to or consent from the people it concerns. We will use reasonable security practices and procedures to protect it, will not sell it, will not use it for any other purpose, and will tell you without undue delay if we become aware of a personal data breach affecting it.
+
+**Students.** The Service is designed to work without individual student records. Do not upload students' names, contact details, marks or other information about individual students; only class-level information (such as a section and its size) is needed.
+
+**Your copy and deletion.** You can download your timetables at any time while your account is active. If your account is closed, we will delete or anonymise Your Content within 90 days, except where the law requires us to keep it longer (for example payment and invoice records), and except for backups, which are overwritten in the normal course.
+
+## 6. Acceptable use
 
 You agree not to:
-- Use the Service for any unlawful purpose or in violation of any applicable law or regulation.
-- Attempt to gain unauthorized access to any part of the Service, other accounts, or our systems.
-- Interfere with or disrupt the integrity or performance of the Service.
-- Reverse-engineer, decompile, or attempt to extract the source code of the Service, except where applicable law permits it.
-- Use automated means (bots, scrapers) to access the Service without our prior written consent.
-- Resell or white-label the Service without a separate written agreement with us.
+- use the Service for any unlawful purpose, or in breach of any law, including data protection law;
+- upload content you have no right to share, or that is unlawful, defamatory, obscene, or harmful to minors;
+- upload viruses or other harmful code, or attempt to gain unauthorised access to the Service, other accounts or our systems;
+- interfere with or disrupt the integrity, security or performance of the Service, including by testing its vulnerabilities without our written permission;
+- reverse-engineer, decompile, or attempt to extract the source code of the Service, except where the law permits it;
+- use automated means (bots, scrapers) to access the Service without our prior written consent;
+- resell, sublicense or white-label the Service without a separate written agreement with us; or
+- use the Service to build a competing product.
 
-We may suspend or terminate accounts that violate these Terms.
+We may remove content, or suspend or terminate accounts, that break these rules.
 
-## 6. Plans and pricing
+## 7. Plans and pricing
 
-The Service is offered under the pricing plans described on our website at https://timetablz.com (Free; Pro at ₹4,999 per year; and Business at custom pricing), which may be updated from time to time. We will give reasonable advance notice before any price change takes effect for existing subscriptions. Prices are shown in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
+Every new school gets a 14-day free trial with everything unlocked. After that the Service is offered under the plans described on our website at https://timetablz.com, priced by the number of sections in the school, per year: Starter (up to 30 sections) ₹9,999; Standard (31 to 50) ₹14,999; Plus (51 to 80) ₹19,999; and Large / Group (more than 80 sections, or several schools) ₹19,999 plus ₹250 for each section above 80, priced individually. Each plan can also be bought "done for you" (₹17,999, ₹26,999 and ₹34,999 respectively; quoted for Large / Group), which covers the plan's first year and our team setting the school up; it renews at the software price. Plans and prices may change from time to time; we will give reasonable advance notice before a price change takes effect for an existing plan. Prices are in Indian Rupees (INR). If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
 
-## 7. Payment and billing
+A plan covers up to its number of sections. If your school grows past it, you move to the next plan to add more.
 
-The Pro plan is paid in advance for one year at a time, through our payment processor, Cashfree Payments. It does not renew automatically: you renew by making a new payment, and an early renewal is added on after your current year ends. Payment card, UPI and net banking details are entered on Cashfree's secure checkout and are never seen or stored by us. The plan is activated only after the payment is confirmed.
+## 8. Payment and billing
 
-## 8. Refunds and cancellations
+Plans are paid in advance for one year at a time, through our payment processor, Cashfree Payments. They do not renew automatically: you renew by making a new payment, and an early renewal of the same plan is added on after your current year ends. Payment card, UPI and net banking details are entered on Cashfree's secure checkout and are never seen or stored by us. A plan is activated only after the payment is confirmed. For Done for you, we will contact you after payment to collect what we need to set the school up.
 
-You can cancel the Pro plan at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of your current year on a pro-rata basis: the amount paid, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and your school moves to the Free plan when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
+## 9. Refunds and cancellations
 
-## 9. Free trials and pilots
+You can cancel at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of the software for your current year on a pro-rata basis: the software price, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. The setup part of a Done for you purchase is refunded in full if you cancel before we have started setting the school up, and not after. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and the school's plan ends when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
 
-We may offer free trial periods or pilot programs at our discretion. We reserve the right to modify or discontinue trial/pilot terms, or to decline to extend them, at any time.
+## 10. Free trials, pilots and new features
 
-## 10. Intellectual property
+We may offer free trial periods or pilot programmes at our discretion, and may change, end or decline to extend them at any time. Features marked as beta, preview or experimental are offered as they are, may change or be withdrawn, and may not work as expected.
 
-The Service, including its software, design, and underlying scheduling engine, is our property or that of our licensors, and is protected by applicable intellectual property laws. These Terms do not grant you any rights to our trademarks, logos, or branding.
+## 11. Intellectual property and feedback
 
-## 11. Third-party services
+The Service, including its software, design and scheduling engine, belongs to us or our licensors and is protected by intellectual property law. These Terms give you no rights to our trademarks, logos or branding. If you send us suggestions or feedback, we may use them freely to improve the Service, without any obligation to you.
 
-The Service relies on third-party infrastructure and processors, including hosting (Railway, Vercel, Supabase), AI processing (Anthropic), email delivery (Resend), payments (Cashfree Payments), and optional sign-in (Google). We are not responsible for outages or failures caused solely by these third parties, though we will make reasonable efforts to minimize any impact on you.
+## 12. Third-party services
 
-## 12. Availability and support
+The Service relies on third-party providers, including hosting (Railway, Vercel, Supabase), AI processing (Anthropic), email delivery (Resend, Zoho), payments (Cashfree Payments) and optional sign-in (Google). Their handling of data is described in our Privacy Policy. We are not responsible for outages or failures caused solely by these providers, though we will make reasonable efforts to limit any impact on you.
 
-We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is provided by email at support@timetablz.com; response times may vary by plan.
+## 13. Availability and support
 
-## 13. Disclaimer of warranties
+We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is by email at support@timetablz.com; response times may vary by plan.
 
-THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE ERROR-FREE, UNINTERRUPTED, OR THAT ANY GENERATED TIMETABLE WILL MEET YOUR SPECIFIC REQUIREMENTS WITHOUT REVIEW.
+## 14. Disclaimer of warranties
 
-## 14. Limitation of liability
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, ACCURACY OR NON-INFRINGEMENT. WE DO NOT WARRANT THAT THE SERVICE WILL BE ERROR-FREE OR UNINTERRUPTED, THAT ANY IMPORT, AI OUTPUT OR GENERATED TIMETABLE WILL BE CORRECT OR COMPLETE, OR THAT IT WILL MEET YOUR REQUIREMENTS WITHOUT REVIEW.
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, Arpith David Ratnaraj, sole proprietor, trading as Timetablz SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF DATA, REVENUE, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY FOR ANY CLAIM RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS PRECEDING THE CLAIM.
+## 15. Limitation of liability
 
-Nothing in these Terms limits liability that cannot be limited under applicable law.
+TO THE MAXIMUM EXTENT PERMITTED BY LAW:
+- WE SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA, GOODWILL OR REPUTATION, OR FOR ANY DISRUPTION TO TEACHING OR SCHOOL OPERATIONS, ARISING FROM OR RELATED TO THE SERVICE, EVEN IF WE WERE TOLD THEY WERE POSSIBLE;
+- WE SHALL NOT BE LIABLE FOR ANY LOSS CAUSED BY A TIMETABLE, IMPORT OR AI OUTPUT THAT YOU DID NOT REVIEW BEFORE RELYING ON IT, OR BY DATA OR RULES YOU ENTERED; AND
+- OUR TOTAL LIABILITY FOR ALL CLAIMS RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT YOU PAID US FOR THE SERVICE IN THE TWELVE (12) MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM, OR ₹1,000 IF YOU HAVE PAID NOTHING.
 
-## 15. Termination
+Nothing in these Terms limits any liability that cannot be limited under applicable law.
 
-You may stop using the Service and close your account at any time. We may suspend or terminate your access if you breach these Terms, or with reasonable notice for any other reason. Upon termination, your right to use the Service ends immediately; provisions of these Terms that by their nature should survive (e.g. intellectual property, disclaimers, limitation of liability) will continue to apply.
+## 16. Indemnity
 
-## 16. Changes to these Terms
+You agree to indemnify and hold us harmless from any claim, loss, damage, penalty or cost (including reasonable legal fees) brought by a third party, including a member of your staff or a regulator, arising from: Your Content; your use of the Service in breach of these Terms or of any law; or your failure to have the authority, notices or consents needed for the data you entered.
 
-We may update these Terms from time to time. If we make material changes, we will notify Account Holders by email or through a notice on the Service. Continued use of the Service after changes take effect constitutes acceptance of the updated Terms.
+## 17. Suspension and termination
 
-## 17. Governing law
+You may stop using the Service and close your account at any time. We may suspend or terminate your access immediately if you breach these Terms, if we must do so by law, or to protect the Service or other users; and otherwise with reasonable notice. When your access ends, your right to use the Service ends, Section 5 governs Your Content, and any sections that by their nature should continue (including 5, 11, 14, 15, 16, 19 and 20) continue to apply.
 
-These Terms are governed by the laws of India, without regard to conflict-of-law principles. Any disputes arising from these Terms or the Service shall be subject to the exclusive jurisdiction of the courts of Chennai, Tamil Nadu, India.
+## 18. Changes to these Terms
 
-## 18. Contact us
+We may update these Terms from time to time. When we make a material change, we will ask you to accept the new version the next time you sign in, and may also tell account owners by email. If you do not accept the new version, you must stop using the Service; you may close your account, and any refund due is given under Section 9.
 
-Questions about these Terms can be sent to **support@timetablz.com**, or by mail to:
+## 19. Governing law and disputes
+
+These Terms are governed by the laws of India. If a dispute arises, we will first try to resolve it with you in good faith by email for at least 30 days. If it is not resolved, it shall be referred to arbitration by a sole arbitrator appointed by mutual agreement, under the Arbitration and Conciliation Act, 1996. The seat and venue of arbitration shall be Chennai, Tamil Nadu, and the language English. Subject to this, the courts of Chennai, Tamil Nadu shall have exclusive jurisdiction. Either party may seek urgent interim relief from those courts.
+
+## 20. General
+
+- **Force majeure.** We are not liable for any delay or failure caused by events beyond our reasonable control, such as natural disasters, epidemics, war, government action, power or internet failures, or failures of third-party providers.
+- **Entire agreement.** These Terms, together with our Privacy Policy and Refund and Cancellation Policy, are the whole agreement between you and us about the Service, unless we have signed a separate written agreement with your institution, which then prevails where it differs.
+- **Severability.** If any part of these Terms is found unenforceable, the rest stays in effect, and that part is applied as far as the law allows.
+- **No waiver.** Not enforcing a right at one time does not waive it.
+- **Assignment.** You may not transfer your rights under these Terms without our written consent. We may transfer ours as part of a reorganisation, sale or transfer of the business, with notice to you.
+- **Notices.** We may send notices to the email address on your account or show them in the Service. Send notices to us at support@timetablz.com.
+
+## 21. Grievances and contact
+
+Questions, complaints or grievances about the Service, these Terms, or the handling of personal data can be sent to our Grievance Officer, Arpith David Ratnaraj, at **support@timetablz.com**. We will acknowledge a grievance within 48 hours and aim to resolve it within 30 days. By mail:
 
 Arpith David Ratnaraj, sole proprietor, trading as Timetablz
 Chennai, Tamil Nadu, India

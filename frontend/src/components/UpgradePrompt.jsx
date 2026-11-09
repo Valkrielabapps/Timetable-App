@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 /**
  * Appears whenever the backend refuses something because of the school's
  * plan (HTTP 402, see api.js). The message comes from the backend as-is,
- * e.g. "The Free plan includes up to 5 sections. Upgrade to Pro ...", so
+ * e.g. "The Starter plan includes up to 30 sections. Move to Standard ...", so
  * every limit in the app gets the same prompt without each screen having to
  * know about plans.
  */

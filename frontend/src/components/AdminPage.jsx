@@ -150,8 +150,8 @@ function Dashboard() {
         <Stat label="Schools" value={stats?.schools} hint={stats ? `${stats.accounts} user accounts` : ''} />
         <Stat
           label="Paying"
-          value={stats ? stats.paying.pro + stats.paying.business : null}
-          hint={stats ? `${stats.paying.pro} Pro · ${stats.paying.business} Business` : ''}
+          value={stats ? Object.values(stats.paying).reduce((a, b) => a + b, 0) : null}
+          hint={stats ? `${stats.paying.starter ?? 0} Starter · ${stats.paying.standard ?? 0} Standard · ${stats.paying.plus ?? 0} Plus · ${stats.paying.business ?? 0} Large${stats.paying.pro ? ` · ${stats.paying.pro} Pro` : ''}` : ''}
         />
         <Stat
           label="On free period"

@@ -20,7 +20,7 @@ import { api, getToken } from '../api'
 import AdminPage from './AdminPage'
 
 const STATS = {
-  schools: 3, accounts: 4, by_status: { free: 1, active: 1, grace: 0, locked: 1 }, paying: { pro: 1, business: 0 },
+  schools: 3, accounts: 4, by_status: { free: 1, active: 1, grace: 0, locked: 1 }, paying: { starter: 1, standard: 0, plus: 0, business: 0, pro: 0 },
   free_ending_within_3_days: 1, open_offers: 0, revenue_total_inr: 4999, revenue_this_month_inr: 4999, invoices: 1,
 }
 
@@ -50,7 +50,7 @@ describe('AdminPage', () => {
     render(<AdminPage />)
     expect(await screen.findByText('Revenue to date')).toBeInTheDocument()
     expect((await screen.findAllByText('₹4,999')).length).toBe(2)
-    expect(screen.getByText('1 Pro · 0 Business')).toBeInTheDocument()
+    expect(screen.getByText('1 Starter · 0 Standard · 0 Plus · 0 Large')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Accounts' }))
     expect(await screen.findByText('head@school.in')).toBeInTheDocument()
   })

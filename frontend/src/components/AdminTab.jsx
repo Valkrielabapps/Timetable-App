@@ -3,6 +3,7 @@ import { api } from '../api'
 import { formatDate } from './BillingSection'
 import { confirmDialog } from './confirmDialog'
 import { DeleteBox, SchoolData } from './AdminData'
+import { PLANS } from '../lib/plans'
 
 const STATUS_STYLE = {
   free: 'bg-slate-100 text-slate-700',
@@ -167,6 +168,9 @@ function SchoolRow({ school, open, onToggle, onChanged }) {
         <td className="px-4 py-3">
           <p className="font-medium">{s.name}</p>
           <p className="text-xs text-slate-500">{s.owner_email ?? 'no owner'}</p>
+          {s.done_for_you && (
+            <p className="mt-1 w-fit rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800">Done for you: set them up</p>
+          )}
         </td>
         <td className="px-4 py-3">
           {s.plan_name}
@@ -204,7 +208,18 @@ function SchoolActions({ school, onChanged }) {
   const [msg, setMsg] = useState(null)
   const [err, setErr] = useState(null)
   const [offer, setOffer] = useState({ name: `${school.name} plan`, price_inr: '', period_days: 365, max_sections: '', max_members: '', note: '' })
-  const [paid, setPaid] = useState({ kind: school.open_offer ? 'offer' : 'pro', amount_inr: school.open_offer?.price_inr ?? 4999, reference: '' })
+  const suggested = PLANS.find((p) => p.id === school.suggested_plan) ?? PLANS[0]
+  const priceFor = (kind, service) => {
+    if (kind === 'offer') return school.open_offer?.price_inr ?? ''
+    const p = PLANS.find((x) => x.id === kind)
+    return p ? (service === 'done_for_you' ? p.doneForYou : p.price) : ''
+  }
+  const [paid, setPaid] = useState({
+    kind: school.open_offer ? 'offer' : suggested.id,
+    service: 'software',
+    amount_inr: school.open_offer?.price_inr ?? suggested.price,
+    reference: '',
+  })
   const [days, setDays] = useState(7)
   const [showData, setShowData] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -279,6 +294,7 @@ function SchoolActions({ school, onChanged }) {
           e.preventDefault()
           run('paid', () => api.admin.markPaid(school.id, {
             kind: paid.kind,
+            service: paid.service,
             amount_inr: Number(paid.amount_inr),
             reference: paid.reference.trim() || null,
           }), 'Payment recorded, plan applied and invoice issued.')
@@ -289,13 +305,29 @@ function SchoolActions({ school, onChanged }) {
           For
           <select
             value={paid.kind}
-            onChange={(e) => setPaid({ ...paid, kind: e.target.value, amount_inr: e.target.value === 'offer' ? school.open_offer?.price_inr ?? '' : 4999 })}
+            onChange={(e) => setPaid({ ...paid, kind: e.target.value, amount_inr: priceFor(e.target.value, paid.service) })}
             className="rounded-md border border-slate-300 px-2 py-2 text-sm text-slate-900"
           >
-            <option value="pro">Pro, 1 year</option>
+            {PLANS.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}, 1 year ({p.sections.toLowerCase()})</option>
+            ))}
+            {school.paid_plan === 'pro' && <option value="pro">Pro (earlier plan), 1 year</option>}
             {school.open_offer && <option value="offer">The open offer ({school.open_offer.name})</option>}
           </select>
         </label>
+        {paid.kind !== 'offer' && paid.kind !== 'pro' && (
+          <label className="flex flex-col gap-1 text-xs text-slate-500">
+            Service
+            <select
+              value={paid.service}
+              onChange={(e) => setPaid({ ...paid, service: e.target.value, amount_inr: priceFor(paid.kind, e.target.value) })}
+              className="rounded-md border border-slate-300 px-2 py-2 text-sm text-slate-900"
+            >
+              <option value="software">Software</option>
+              <option value="done_for_you">Done for you (first year, setup included)</option>
+            </select>
+          </label>
+        )}
         <Field label="Amount received (₹)" type="number" value={paid.amount_inr} onChange={(v) => setPaid({ ...paid, amount_inr: v })} required />
         <Field label="Reference (UTR / cheque no.)" value={paid.reference} onChange={(v) => setPaid({ ...paid, reference: v })} />
         <div>

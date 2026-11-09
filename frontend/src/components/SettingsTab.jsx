@@ -36,7 +36,7 @@ export default function SettingsTab({
   const sections = [
     { id: 'school', label: 'School profile', hint: 'Details, contact, address' },
     { id: 'account', label: 'My account', hint: 'Name, email, password' },
-    { id: 'billing', label: 'Plan & billing', hint: 'Your plan, upgrade to Pro' },
+    { id: 'billing', label: 'Plan & billing', hint: 'Your plan, invoices, renew or change plan' },
     ...(isAdmin ? [{ id: 'team', label: 'Team', hint: 'Who has access' }] : []),
     { id: 'categories', label: 'School categories', hint: 'Grades by part of the school' },
   ]

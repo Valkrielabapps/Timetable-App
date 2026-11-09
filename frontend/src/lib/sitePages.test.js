@@ -29,7 +29,7 @@ describe('public page addresses', () => {
   it('describes the product and its price for search engines', () => {
     const graph = structuredData('pricing', [{ q: 'Q?', a: 'A.' }])['@graph']
     const app = graph.find((n) => n['@type'] === 'SoftwareApplication')
-    expect(app.offers.find((o) => o.name === 'Pro').price).toBe('4999')
+    expect(app.offers.find((o) => o.name === 'Standard').price).toBe('14999')
     expect(graph.find((n) => n['@type'] === 'FAQPage').mainEntity).toHaveLength(1)
   })
 })

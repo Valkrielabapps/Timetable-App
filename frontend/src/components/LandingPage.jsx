@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import { EVERY_PLAN, LARGE, PLANS, inr } from '../lib/plans'
 import { Fragment, useEffect, useState } from 'react'
 import shishyaPublicSchoolPhoto from '../assets/shishya-public-school.png'
 import shishyaPublicSchoolGatePhoto from '../assets/shishya-public-school-gate.png'
@@ -33,31 +34,18 @@ import SiteFooter from './SiteFooter'
  *     once the app is hosted somewhere presentable.
  */
 
+// Not shown right now (see the note in the page below); kept in step with
+// the real plans in src/lib/plans.js so it's correct if it comes back.
 const PRICING_TIERS = [
-  {
-    name: 'Starter',
-    price: '₹1,999',
-    period: '+ GST /month',
-    tagline: 'For a single school finding its feet',
-    features: ['1 school', 'Up to 500 students', 'Unlimited timetables', 'Email support'],
-    highlighted: false,
-  },
-  {
-    name: 'Growth',
-    price: '₹4,999',
-    period: '+ GST /month',
-    tagline: 'For schools that need more hands on deck',
-    features: ['1 school', 'Unlimited students', 'Multiple admins & viewers', 'Priority support'],
-    highlighted: true,
-  },
-  {
-    name: 'Group',
-    price: 'Contact us',
-    period: '',
-    tagline: 'For a group running several schools',
-    features: ['Multiple schools', 'Everything in Growth', 'Dedicated onboarding', 'Custom terms'],
-    highlighted: false,
-  },
+  ...PLANS.map((p) => ({
+    name: p.name,
+    price: inr(p.price),
+    period: '/year',
+    tagline: p.sections,
+    features: EVERY_PLAN,
+    highlighted: p.id === 'standard',
+  })),
+  { name: LARGE.name, price: `From ${inr(LARGE.base)}`, period: '/year', tagline: LARGE.sections, features: EVERY_PLAN, highlighted: false },
 ]
 
 const TESTIMONIALS = [

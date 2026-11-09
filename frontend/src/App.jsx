@@ -52,7 +52,7 @@ import { pageFromLocation } from './lib/sitePages'
 // The header's numbered steps, in the order the work is done. The first
 // three are pages of the same Data Entry screen (tab 'entry' + a sub-view),
 // so each step names both; Constraints and Timetable are tabs of their own.
-// Set when someone picks Pro on the plan picker before signing up; read
+// Set when someone picks "Buy now" on the plan picker before signing up; read
 // once they have a school, to send them to checkout.
 // Set once the visitor has gone from the homepage into the app this tab.
 const IN_APP_KEY = 'timetablz:in-app'
@@ -599,12 +599,12 @@ function App() {
     setSettingsSection('billing')
     setTab('settings')
   }
-  // Chose Pro on the plan picker: once signed up with a school selected,
+  // Chose "Buy now" on the plan picker: once signed up with a school selected,
   // go straight to Plan & billing to pay (the order needs a school, and
   // Cashfree needs a phone number, which that page asks for).
   useEffect(() => {
     if (!user || !selectedSchoolId) return
-    if (sessionStorage.getItem(PLAN_INTENT_KEY) === 'pro') {
+    if (sessionStorage.getItem(PLAN_INTENT_KEY)) {
       sessionStorage.removeItem(PLAN_INTENT_KEY)
       openBilling()
     }
@@ -754,12 +754,12 @@ function App() {
         <PlanPicker
           onBack={() => setShowPlans(false)}
           onSignIn={signIn}
-          onChoose={(planId) => {
+          onChoose={(planId, opts) => {
             if (planId === 'business') {
               window.location.assign('/contact')
               return
             }
-            if (planId === 'pro') sessionStorage.setItem(PLAN_INTENT_KEY, 'pro')
+            if (opts?.buy) sessionStorage.setItem(PLAN_INTENT_KEY, planId)
             else sessionStorage.removeItem(PLAN_INTENT_KEY)
             setAuthMode('signup')
             setShowAuth(true)

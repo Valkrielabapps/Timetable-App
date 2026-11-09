@@ -24,7 +24,7 @@ export const PAGE_META = {
   pricing: {
     title: 'Pricing | Timetablz School Timetable Software',
     description:
-      'Timetablz pricing: free for 14 days (up to 5 sections), Pro at ₹4,999 a year for up to 60 sections and 5 staff, and Business plans for larger schools and school groups.',
+      'Timetablz pricing by school size: Starter ₹9,999 a year (up to 30 sections), Standard ₹14,999 (31 to 50), Plus ₹19,999 (51 to 80) and Large for bigger schools and groups. Done for you setup available. 14-day free trial.',
   },
   customers: {
     title: 'Customers | Schools Using Timetablz',
@@ -96,20 +96,10 @@ const SOFTWARE = {
     'Explains which rule makes a timetable impossible',
   ],
   offers: [
-    {
-      '@type': 'Offer',
-      name: 'Free',
-      price: '0',
-      priceCurrency: 'INR',
-      description: '14 days free, up to 5 sections, no card needed',
-    },
-    {
-      '@type': 'Offer',
-      name: 'Pro',
-      price: '4999',
-      priceCurrency: 'INR',
-      description: 'Per school per year: up to 60 sections and 5 staff',
-    },
+    { '@type': 'Offer', name: 'Free trial', price: '0', priceCurrency: 'INR', description: '14 days, everything unlocked, no card needed' },
+    { '@type': 'Offer', name: 'Starter', price: '9999', priceCurrency: 'INR', description: 'Per school per year, up to 30 sections' },
+    { '@type': 'Offer', name: 'Standard', price: '14999', priceCurrency: 'INR', description: 'Per school per year, 31 to 50 sections' },
+    { '@type': 'Offer', name: 'Plus', price: '19999', priceCurrency: 'INR', description: 'Per school per year, 51 to 80 sections' },
   ],
 }
 

@@ -6,14 +6,16 @@ import FreeCountdown from './FreeCountdown'
 import LockedScreen from './LockedScreen'
 
 describe('PlanPicker', () => {
-  it('offers Free, Pro and Business and reports the choice', () => {
+  it('shows the four plans by size, and reports trial, buy and contact choices', () => {
     const onChoose = vi.fn()
     render(<PlanPicker onChoose={onChoose} onBack={() => {}} onSignIn={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Start free' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Choose Pro' }))
+    expect(screen.getByText('₹9,999')).toBeInTheDocument()
+    expect(screen.getByText('Done for you: ₹26,999 first year')).toBeInTheDocument()
+    expect(screen.getByText('From ₹19,999')).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Start free trial' })[1])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Buy now instead' })[2])
     fireEvent.click(screen.getByRole('button', { name: 'Get in touch' }))
-    expect(onChoose.mock.calls.map((c) => c[0])).toEqual(['free', 'pro', 'business'])
-    expect(screen.getByText('for 14 days')).toBeInTheDocument()
+    expect(onChoose.mock.calls).toEqual([['standard'], ['plus', { buy: true }], ['business']])
   })
 })
 
@@ -22,7 +24,7 @@ describe('FreeCountdown', () => {
     const onUpgrade = vi.fn()
     render(<FreeCountdown entitlements={{ status: 'free', free_days_left: 9 }} onUpgrade={onUpgrade} />)
     expect(screen.getByText('9 days left')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /upgrade to pro/i }))
+    fireEvent.click(screen.getByRole('button', { name: /choose a plan/i }))
     expect(onUpgrade).toHaveBeenCalled()
   })
 
@@ -38,8 +40,8 @@ describe('LockedScreen', () => {
   it('explains the free period has ended and offers the upgrade to admins', () => {
     const onUpgrade = vi.fn()
     render(<LockedScreen entitlements={{ status: 'locked', paid_plan: null, pro_price_inr: 4999 }} isAdmin onUpgrade={onUpgrade} />)
-    expect(screen.getByText('Your 14-day free period has ended')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /upgrade to pro/i }))
+    expect(screen.getByText('Your 14-day free trial has ended')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /choose a plan/i }))
     expect(onUpgrade).toHaveBeenCalled()
   })
 

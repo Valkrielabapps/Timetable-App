@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PLAN_NAMES } from '../lib/plans'
 import { api, getToken } from '../api'
 import { formatDate } from './BillingSection'
 
@@ -74,7 +75,7 @@ export default function PaymentStatusPage({ orderId, onDone }) {
     },
     paid: {
       title: 'Payment successful',
-      body: `Thank you. ${amount} received and your school is now on Pro${
+      body: `Thank you. ${amount} received and your school is now on ${PLAN_NAMES[order?.plan] ?? 'its new plan'}${
         order?.plan_valid_until ? ` until ${formatDate(order.plan_valid_until)}` : ''
       }.`,
       tone: 'good',

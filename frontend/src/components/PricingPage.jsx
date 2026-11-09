@@ -2,19 +2,16 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
+import { DONE_FOR_YOU, EVERY_PLAN, LARGE, PLANS } from '../lib/plans'
 
 /**
  * Standalone pricing page - reached via `?page=pricing` (see App.jsx,
  * same no-router pattern as AboutPage/SupportPage).
  *
  * Dark theme (bg-white, white text) matching About/Support/Customers/Why
- * Timetablz, by explicit request. Back to a three-card grid (Free / Pro /
- * Business side by side, Pro highlighted) rather than the single-column
- * row layout this page used before - also by explicit request, reverting
- * an earlier "de-templatify" pass that had swapped the card grid for
- * rows. Three tiers is a real, deliberate business decision (Free / Pro /
- * Business), not filler; the card grid is just how that decision reads
- * best now.
+ * Timetablz, by explicit request. Four plans priced by the number of
+ * sections (Starter / Standard / Plus / Large), each with a software price
+ * and a "done for you" price; the numbers live in src/lib/plans.js.
  *
  * Still left out, same reasoning as before:
  *   - The top logo strip / "70,000+ companies" trust line - no comparable
@@ -29,40 +26,37 @@ import SiteFooter from './SiteFooter'
  */
 
 // Rough, clearly-labeled reference rate for *display* only - this does
-// NOT mean Pro is separately priced in USD, or that a foreign school
+// NOT mean the plans are separately priced in USD, or that a foreign school
 // would actually be billed in dollars today (Razorpay billing is INR - 
 // see the business-setup conversation). It just converts the one real
-// price (₹4,999) so a visitor thinking in USD has a ballpark figure,
+// prices so a visitor thinking in USD has a ballpark figure,
 // same as any "approx. $X" conversion widget. Update this if the real
 // rate drifts far enough that $60 stops being a fair approximation.
 const USD_PER_INR = 1 / 83
 
 const PRICING_TIERS = [
-  {
-    name: 'Free',
-    priceInr: 0,
-    period: 'for 14 days',
-    tagline: 'Free for 14 days, no card needed',
-    highlights: ['Up to 5 sections', '1 admin', '10 AI actions a month', 'Unlimited timetables', 'Exports carry "Made with Timetablz"'],
-    highlighted: false,
-    ctaLabel: 'Get started free',
-  },
-  {
-    name: 'Pro',
-    priceInr: 4999,
+  ...PLANS.map((p) => ({
+    name: p.name,
+    priceInr: p.price,
     period: '/year',
-    tagline: 'For a school that needs more room to grow',
-    highlights: ['Up to 60 sections', 'Up to 5 people with access', 'Unlimited AI setup, rules and edits', 'Clean PDF and Excel exports', 'Priority support'],
-    highlighted: true,
-    ctaLabel: 'Get started',
-  },
+    doneForYouInr: p.doneForYou,
+    tagline: p.sections,
+    highlights: EVERY_PLAN,
+    highlighted: p.id === 'standard',
+    ctaLabel: 'Start free trial',
+  })),
   {
-    name: 'Business',
-    priceInr: null,
-    tagline: 'For a group running several schools',
-    highlights: ['Everything in Pro, plus:', 'Unlimited sections and people', 'Several schools in one account', 'Dedicated onboarding', 'Custom terms'],
+    name: LARGE.name,
+    priceInr: LARGE.base,
+    period: '/year',
+    pricePrefix: 'From ',
+    priceNote: `+ ₹${LARGE.perSection} a year for each section above ${LARGE.from}`,
+    doneForYouText: 'Done for you: quoted',
+    tagline: LARGE.sections,
+    highlights: [...EVERY_PLAN, 'Several schools in one account'],
     highlighted: false,
     ctaLabel: 'Get in touch',
+    href: '/contact',
   },
 ]
 
@@ -80,28 +74,32 @@ const fadeUp = {
 // update this once that's decided.
 export const BILLING_FAQS = [
   {
+    q: 'How do I pick a plan?',
+    a: `By the number of sections in your school (each class division, like 6A or 6B, is a section). Starter is up to 30, Standard 31 to 50, Plus 51 to 80. Over 80, or several schools in a group, the ${LARGE.name} plan is ₹${LARGE.base.toLocaleString('en-IN')} plus ₹${LARGE.perSection} a year for each section above ${LARGE.from}. Every plan has every feature.`,
+  },
+  {
+    q: 'What is “Done for you”?',
+    a: `${DONE_FOR_YOU} You send us your staff and allotment sheets; we do the rest and hand you a working timetable.`,
+  },
+  {
     q: 'Does the price include GST?',
     a: 'The price shown is what you pay, in Indian Rupees. If GST becomes applicable to us, it will be shown separately at checkout and on your invoice.',
   },
   {
-    q: 'Can I switch plans later?',
-    a: "Yes. You can move from Free to Pro (or request a Business plan) at any point as your school's needs grow. You're not locked into whatever you pick today.",
+    q: 'How does the free trial work?',
+    a: 'Every new school gets 14 days with everything unlocked, no card needed. After 14 days the school is paused until you choose a plan. Nothing you set up is deleted.',
   },
   {
-    q: 'How does billing actually work?',
-    a: 'Pro is paid in advance for one year at a time through Cashfree, our payment processor, and it does not renew automatically. If you cancel during the year, we refund the unused full months (see our Refund and Cancellation Policy).',
+    q: 'How does billing work?',
+    a: 'Plans are paid in advance for one year at a time through Cashfree, our payment processor, and do not renew automatically. If you cancel during the year, we refund the unused full months (see our Refund and Cancellation Policy).',
   },
   {
-    q: 'What happens when my year of Pro ends?',
-    a: "Nothing is deleted. For 15 days after the end date everything keeps working while you renew. After that the school is paused until you renew, and everything comes back exactly as you left it.",
+    q: 'Can I change plans later?',
+    a: 'Yes. If your school grows past your plan’s sections, move up to the next plan at any time from Settings > Plan & billing.',
   },
   {
-    q: 'How does the free plan work?',
-    a: 'Every new school gets 14 days free on the Free plan: up to 5 sections, one admin and 10 AI actions a month, no card needed. After 14 days the school is paused until it upgrades to Pro. Nothing you set up is deleted.',
-  },
-  {
-    q: 'What happens if I cancel?',
-    a: "Your school's data isn't deleted immediately. You keep access through the end of the period you've already paid for, and can export your timetables at any point before or after.",
+    q: 'What happens when my year ends?',
+    a: 'Nothing is deleted. For 15 days after the end date everything keeps working while you renew. After that the school is paused until you renew, and everything comes back exactly as you left it.',
   },
 ]
 
@@ -164,18 +162,25 @@ function PricingCard({ tier, currency, onGetStarted, delay }) {
       <div className="flex items-center gap-2.5">
         <p className="text-lg font-semibold text-neutral-900">{tier.name}</p>
         {tier.highlighted && (
-          <span className="rounded-full bg-neutral-900 px-2.5 py-0.5 text-[11px] font-medium text-white">Most chosen</span>
+          <span className="rounded-full bg-neutral-900 px-2.5 py-0.5 text-[11px] font-medium text-white">Mid-size schools</span>
         )}
       </div>
       <p className="mt-1 text-sm text-neutral-600">{tier.tagline}</p>
 
       <p className="mt-6">
+        {tier.pricePrefix && <span className="text-sm text-neutral-500">{tier.pricePrefix}</span>}
         <span className="text-3xl font-semibold tracking-tight text-neutral-900">{formatPrice(tier.priceInr, currency)}</span>
         {tier.period && tier.priceInr !== null && <span className="ml-1 text-sm text-neutral-500">{tier.period}</span>}
       </p>
+      {tier.priceNote && <p className="mt-1 text-xs text-neutral-500">{tier.priceNote}</p>}
+      <p className="mt-2 rounded-md bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
+        {tier.doneForYouInr
+          ? <>Done for you: <strong>{formatPrice(tier.doneForYouInr, currency)}</strong> <span className="text-neutral-500">first year, setup included</span></>
+          : tier.doneForYouText}
+      </p>
 
       <button
-        onClick={onGetStarted}
+        onClick={() => (tier.href ? window.location.assign(tier.href) : onGetStarted())}
         className={`mt-6 rounded-md px-5 py-2.5 text-sm font-medium ${
           tier.highlighted ? 'bg-neutral-900 text-white hover:bg-neutral-700' : 'border border-neutral-300 text-neutral-900 hover:bg-neutral-50'
         }`}
@@ -210,11 +215,13 @@ export default function PricingPage({ onBack, onGetStarted }) {
           <h1 className="font-serif text-4xl font-medium tracking-tight text-neutral-900 md:text-5xl">
             Find the plan that works for your school
           </h1>
-          <p className="mt-4 max-w-xl text-neutral-600">
-            Every plan includes <strong className="text-neutral-800">unlimited timetables</strong>,{' '}
-            <strong className="text-neutral-800">conflict-free generation</strong>, and{' '}
-            <strong className="text-neutral-800">role-based access</strong>. Cancel anytime.
+          <p className="mt-4 max-w-2xl text-neutral-600">
+            Priced by the number of sections in your school. Every plan has{' '}
+            <strong className="text-neutral-800">every feature</strong>,{' '}
+            <strong className="text-neutral-800">unlimited people and AI</strong>, and clean exports. Choose{' '}
+            <strong className="text-neutral-800">Done for you</strong> and we set it all up.
           </p>
+          <p className="mt-2 text-sm text-neutral-500">Start with a 14-day free trial, everything unlocked, no card needed. Prices are per year.</p>
 
           {/* See USD_PER_INR above - this converts the display, it isn't
               a second, separately-decided USD price point. */}
@@ -233,7 +240,7 @@ export default function PricingPage({ onBack, onGetStarted }) {
           </div>
         </motion.div>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {PRICING_TIERS.map((tier, i) => (
             <PricingCard key={tier.name} tier={tier} currency={currency} onGetStarted={onGetStarted} delay={i * 0.08} />
           ))}
@@ -268,9 +275,9 @@ export default function PricingPage({ onBack, onGetStarted }) {
           transition={{ duration: 0.5 }}
           className="mt-16 flex flex-col items-start justify-between gap-4 rounded-xl border border-neutral-200 px-8 py-8 md:flex-row md:items-center"
         >
-          <p className="text-lg font-medium text-neutral-900">Running several schools, or need something custom?</p>
+          <p className="text-lg font-medium text-neutral-900">More than 80 sections, or running several schools?</p>
           <button
-            onClick={onGetStarted}
+            onClick={() => window.location.assign('/contact')}
             className="rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             Get in touch

@@ -7,4 +7,4 @@ frontend/src/legal/): everyone is then asked to accept again the next time
 they open the app. Keep it equal to the "Version" line at the top of the
 terms. Each acceptance is recorded in terms_acceptances.
 """
-CURRENT_TERMS_VERSION = "2026-11-08"
+CURRENT_TERMS_VERSION = "2026-11-09"
