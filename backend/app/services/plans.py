@@ -18,7 +18,7 @@ Lifecycle:
              pays (see is_locked; enforced in app/core/access.py). Data is
              kept and can still be viewed by signing in.
 
-A Business plan with no plan_valid_until never expires (set by hand for a
+A Large / Group ("business") plan with no plan_valid_until never expires (set by hand for a
 school on custom terms). Nothing is ever deleted.
 """
 from dataclasses import asdict, dataclass, replace
@@ -47,33 +47,84 @@ class Plan:
     clean_exports: bool
     max_owned_schools: int | None
     description: str
+    # The same plan with the Timetablz team setting the school up: the first
+    # year including setup (renewals are at price_inr). None = not offered online.
+    done_for_you_inr: int | None = None
+    # Shown on the pricing page and in Plan & billing. Pro is kept only for
+    # schools that bought it before the current plans.
+    listed: bool = True
 
 
 def _pro_price() -> int:
     return settings.pro_plan_price_inr
 
 
+# Large / Group: Plus's price, plus this much for each section above Plus's 80.
+LARGE_BASE_INR = 19_999
+LARGE_PER_SECTION_INR = 250
+LARGE_FROM_SECTIONS = 80
+
+# Plans a school can be on and pay for (Free is the 14-day trial).
+PAID_PLANS = ("starter", "standard", "plus", "pro", "business")
+
+
+def large_price(sections: int) -> int:
+    """₹19,999 + ₹250 for each section above 80."""
+    return LARGE_BASE_INR + LARGE_PER_SECTION_INR * max(0, sections - LARGE_FROM_SECTIONS)
+
+
 def catalogue() -> dict[str, Plan]:
+    every = "Every feature, unlimited people and AI, clean exports."
     return {
         "free": Plan(
-            id="free", name="Free", price_inr=0, period_days=None, sold_online=False,
-            max_sections=5, max_members=1, ai_actions_per_month=10, clean_exports=False,
-            max_owned_schools=1,
-            description="Try Timetablz with a small school or a few sections.",
+            id="free", name="Free trial", price_inr=0, period_days=None, sold_online=False,
+            max_sections=None, max_members=None, ai_actions_per_month=None, clean_exports=True,
+            max_owned_schools=1, listed=False,
+            description="14 days with everything unlocked, then choose a plan. Nothing is deleted.",
         ),
-        "pro": Plan(
-            id="pro", name="Pro", price_inr=_pro_price(), period_days=365, sold_online=True,
-            max_sections=60, max_members=5, ai_actions_per_month=None, clean_exports=True,
-            max_owned_schools=1,
-            description="For a whole school: up to 60 sections, a small team, and every AI feature.",
+        "starter": Plan(
+            id="starter", name="Starter", price_inr=9_999, period_days=365, sold_online=True,
+            max_sections=30, max_members=None, ai_actions_per_month=None, clean_exports=True,
+            max_owned_schools=1, done_for_you_inr=17_999,
+            description=f"Up to 30 sections. {every}",
+        ),
+        "standard": Plan(
+            id="standard", name="Standard", price_inr=14_999, period_days=365, sold_online=True,
+            max_sections=50, max_members=None, ai_actions_per_month=None, clean_exports=True,
+            max_owned_schools=1, done_for_you_inr=26_999,
+            description=f"31 to 50 sections. {every}",
+        ),
+        "plus": Plan(
+            id="plus", name="Plus", price_inr=19_999, period_days=365, sold_online=True,
+            max_sections=80, max_members=None, ai_actions_per_month=None, clean_exports=True,
+            max_owned_schools=1, done_for_you_inr=34_999,
+            description=f"51 to 80 sections. {every}",
         ),
         "business": Plan(
-            id="business", name="Business", price_inr=None, period_days=None, sold_online=False,
+            id="business", name="Large / Group", price_inr=None, period_days=None, sold_online=False,
             max_sections=None, max_members=None, ai_actions_per_month=None, clean_exports=True,
             max_owned_schools=None,
-            description="For groups running several schools, on custom terms.",
+            description=f"More than 80 sections, or several schools: ₹{LARGE_BASE_INR:,} + "
+                        f"₹{LARGE_PER_SECTION_INR} a year for each section above {LARGE_FROM_SECTIONS}. "
+                        "Done for you is quoted.",
+        ),
+        "pro": Plan(
+            id="pro", name="Pro", price_inr=_pro_price(), period_days=365, sold_online=False,
+            max_sections=60, max_members=5, ai_actions_per_month=None, clean_exports=True,
+            max_owned_schools=1, listed=False,
+            description="The earlier Pro plan, kept for schools that bought it.",
         ),
     }
+
+
+def online_plans() -> list[Plan]:
+    """The plans a school can buy here, smallest first."""
+    return sorted((p for p in catalogue().values() if p.sold_online), key=lambda p: p.max_sections or 10**9)
+
+
+def plan_for_sections(sections: int) -> Plan | None:
+    """The smallest plan a school this size fits, or None (Large)."""
+    return next((p for p in online_plans() if p.max_sections is None or sections <= p.max_sections), None)
 
 
 def get_plan(plan_id: str | None) -> Plan:
@@ -136,7 +187,7 @@ class Entitlements:
 def effective_plan(school: School, now: datetime | None = None) -> tuple[Plan, str, datetime | None]:
     """(plan whose limits apply, status, grace end)."""
     now = now or datetime.now(timezone.utc)
-    paid = school.plan if school.plan in ("pro", "business") else None
+    paid = school.plan if school.plan in PAID_PLANS else None
     if paid is None:
         trial_end = _aware(school.free_trial_ends_at)
         # No end date recorded = treated as still free; every school gets one
@@ -168,7 +219,7 @@ def new_school_trial_end(now: datetime | None = None) -> datetime:
 
 
 LOCKED_MESSAGE = (
-    "This school's free period has ended. Upgrade to Pro to keep building and editing timetables. "
+    "This school's free period has ended. Choose a plan to keep building and editing timetables. "
     "Nothing has been deleted."
 )
 
@@ -193,7 +244,7 @@ def entitlements(db: Session, school: School, now: datetime | None = None) -> En
     plan, status, grace_end = effective_plan(school, now)
     return Entitlements(
         plan=plan.id,
-        paid_plan=school.plan if school.plan in ("pro", "business") else None,
+        paid_plan=school.plan if school.plan in PAID_PLANS else None,
         status=status,
         plan_valid_until=school.plan_valid_until,
         grace_ends_at=grace_end.replace(tzinfo=None) if grace_end else None,
@@ -222,10 +273,11 @@ def entitlements(db: Session, school: School, now: datetime | None = None) -> En
 
 
 def _upgrade_hint(plan: Plan) -> str:
-    if plan.id == "free":
-        pro = get_plan("pro")
-        return f" Upgrade to Pro (₹{pro.price_inr:,} a year) for more."
-    return " Contact support@timetablz.com about the Business plan."
+    bigger = next((p for p in online_plans()
+                   if p.max_sections is not None and p.max_sections > (plan.max_sections or 0)), None)
+    if plan.max_sections is not None and bigger is not None:
+        return f" Move to {bigger.name} (₹{bigger.price_inr:,} a year, up to {bigger.max_sections} sections) for more."
+    return " Contact support@timetablz.com about the Large / Group plan."
 
 
 def plan_limit(message: str) -> HTTPException:
@@ -284,7 +336,7 @@ def require_school_capacity(db: Session, user_id: int) -> None:
     if len(owned) >= allowed:
         raise plan_limit(
             "Each account can run one school. To manage several schools from one account, "
-            "contact support@timetablz.com about the Business plan."
+            "contact support@timetablz.com about the Large / Group plan."
         )
 
 

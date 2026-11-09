@@ -41,6 +41,9 @@ class PaymentOrder(Base):
     # limits and length are applied when it's paid.
     offer_id = Column(Integer, ForeignKey("plan_offers.id"), nullable=True)
     period_days = Column(Integer, nullable=True)
+    # "software" or "done_for_you" (the first year with the team setting the
+    # school up; app/services/plans.py).
+    service = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=_now, nullable=False)
     updated_at = Column(DateTime, default=_now, onupdate=_now, nullable=False)
     paid_at = Column(DateTime, nullable=True)

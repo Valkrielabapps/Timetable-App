@@ -42,6 +42,7 @@ def school_entitlements(
         raise HTTPException(status_code=404, detail="School not found")
     ent = plans.entitlements(db, school)
     pro = plans.get_plan("pro")
+    fits = plans.plan_for_sections(ent.usage["sections"])
     offer = (
         db.query(PlanOffer)
         .filter(PlanOffer.school_id == school_id, PlanOffer.status == "open")
@@ -51,6 +52,8 @@ def school_entitlements(
     return {
         **ent.as_dict(),
         "pro_price_inr": pro.price_inr,
+        # The smallest plan this school's sections fit (None: Large / Group).
+        "suggested_plan": fits.id if fits else "business",
         "grace_days": plans.GRACE_DAYS,
         "offer": offer_out(offer) if offer else None,
     }

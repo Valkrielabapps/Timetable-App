@@ -132,7 +132,13 @@ def issue_invoice(
 def plan_label(plan_id: str, offer: PlanOffer | None = None) -> str:
     if offer is not None:
         return offer.name
-    return {"pro": "Timetablz Pro", "business": "Timetablz Business"}.get(plan_id, plan_id.title())
+    from app.services import plans
+
+    return f"Timetablz {plans.get_plan(plan_id).name}" if plan_id in plans.catalogue() else plan_id.title()
+
+
+def service_label(service: str | None) -> str:
+    return ", done for you (first year, including setup)" if service == "done_for_you" else ""
 
 
 # ---------------------------------------------------------------------------

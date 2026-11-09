@@ -48,9 +48,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-# Plan -> (price in rupees, how long one payment lasts). Only Pro is sold
-# online; Business is "talk to us".
-PLAN_DAYS = {"pro": 365}
+# How long one payment lasts, for each plan sold online (app/services/plans.py).
+# Large / Group is "talk to us", settled through a custom offer.
+PLAN_DAYS = {p.id: p.period_days or 365 for p in plans.online_plans()}
+SERVICES = ("software", "done_for_you")
 
 # Cashfree order_status -> ours. ACTIVE means "no successful payment yet",
 # which is still pending from the customer's point of view.
@@ -63,10 +64,14 @@ _STATUS_MAP = {
 }
 
 
-def _price_rupees(plan: str) -> int:
+def _price_rupees(plan: str, service: str = "software") -> int:
     p = plans.get_plan(plan)
     if p.id != plan or not p.sold_online or not p.price_inr:
         raise HTTPException(status_code=422, detail="That plan can't be bought online.")
+    if service == "done_for_you":
+        if not p.done_for_you_inr:
+            raise HTTPException(status_code=422, detail="Done for you isn't available online for that plan.")
+        return p.done_for_you_inr
     return p.price_inr
 
 
@@ -89,7 +94,10 @@ def _naive_utc(dt: datetime) -> datetime:
 
 class CreateOrderIn(BaseModel):
     school_id: int
-    plan: str = "pro"
+    plan: str = "standard"
+    # "software", or "done_for_you": the first year with the team setting the
+    # school up.
+    service: str = "software"
     # Cashfree requires a phone number for every order. Ten digits, Indian
     # mobile, optionally written with +91 / 0 / spaces / dashes.
     phone: str = Field(min_length=10, max_length=20)
@@ -110,6 +118,13 @@ class CreateOrderIn(BaseModel):
         if not re.fullmatch(r"[6-9]\d{9}", digits):
             raise ValueError("Enter a valid 10-digit Indian mobile number.")
         return digits
+
+    @field_validator("service")
+    @classmethod
+    def _service(cls, value: str) -> str:
+        if value not in SERVICES:
+            raise ValueError("Unknown service.")
+        return value
 
     @field_validator("plan")
     @classmethod
@@ -177,7 +192,8 @@ def _apply_cashfree_status(db: Session, order: PaymentOrder, fetched: cashfree.F
             db.commit()
             billing.issue_invoice(
                 db, school,
-                description=f"{billing.plan_label(order.plan, offer)}, {(order.period_days or 365)} days",
+                description=f"{billing.plan_label(order.plan, offer)}{billing.service_label(order.service)}, "
+                            f"{(order.period_days or 365)} days",
                 amount_paise=order.amount_paise,
                 method="online",
                 reference=order.cf_order_id or order.order_id,
@@ -229,8 +245,19 @@ def create_order(
         price, plan_id, period_days = offer.price_inr, "business", offer.period_days
         note = f"{offer.name}, {period_days} days"
     else:
-        price, plan_id, period_days = _price_rupees(payload.plan), payload.plan, PLAN_DAYS[payload.plan]
-        note = f"Timetablz {payload.plan.title()} plan, 1 year"
+        price, plan_id, period_days = _price_rupees(payload.plan, payload.service), payload.plan, PLAN_DAYS[payload.plan]
+        # A plan smaller than the school would lock it out of its own sections.
+        from app.models.school import ClassGroup
+
+        chosen = plans.get_plan(plan_id)
+        used = db.query(ClassGroup).filter(ClassGroup.school_id == payload.school_id).count()
+        if chosen.max_sections is not None and used > chosen.max_sections:
+            fits = plans.plan_for_sections(used)
+            raise HTTPException(status_code=400, detail=(
+                f"Your school has {used} sections; {chosen.name} covers up to {chosen.max_sections}. "
+                + (f"Choose {fits.name} instead." if fits else "Contact support@timetablz.com about the Large / Group plan.")
+            ))
+        note = f"Timetablz {chosen.name}, 1 year" + (" (done for you)" if payload.service == "done_for_you" else "")
 
     # Alphanumeric plus '_'; Cashfree allows 3-45 characters. Random part so
     # the id in the return URL can't be guessed to probe other orders.
@@ -245,6 +272,7 @@ def create_order(
         status="PENDING",
         offer_id=offer.id if offer else None,
         period_days=period_days,
+        service=None if offer else payload.service,
     )
     db.add(order)
     db.commit()

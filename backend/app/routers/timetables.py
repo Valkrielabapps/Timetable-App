@@ -1827,8 +1827,8 @@ def export_timetable(
         school = db.get(School, timetable.school_id)
         if school is not None and not plans.clean_exports(school):
             raise plans.plan_limit(
-                "Exporting without the Timetablz watermark is part of the Pro plan. "
-                "Upgrade in Settings > Plan & billing."
+                "Exporting without the Timetablz watermark is part of every paid plan. "
+                "Choose a plan in Settings > Plan & billing."
             )
 
     if student_combinations:

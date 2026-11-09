@@ -34,10 +34,24 @@ def test_catalogue_is_public_and_uses_sections(client):
     r = client.get("/api/plans")
     assert r.status_code == 200
     by_id = {p["id"]: p for p in r.json()["plans"]}
-    assert by_id["free"]["max_sections"] == 5
-    assert by_id["pro"]["max_sections"] == 60 and by_id["pro"]["price_inr"] == 4999
-    assert by_id["business"]["sold_online"] is False
+    # The 14-day trial has everything unlocked.
+    assert by_id["free"]["max_sections"] is None and by_id["free"]["listed"] is False
+    assert (by_id["starter"]["max_sections"], by_id["starter"]["price_inr"], by_id["starter"]["done_for_you_inr"]) == (30, 9999, 17999)
+    assert (by_id["standard"]["max_sections"], by_id["standard"]["price_inr"], by_id["standard"]["done_for_you_inr"]) == (50, 14999, 26999)
+    assert (by_id["plus"]["max_sections"], by_id["plus"]["price_inr"], by_id["plus"]["done_for_you_inr"]) == (80, 19999, 34999)
+    assert by_id["business"]["name"] == "Large / Group" and by_id["business"]["sold_online"] is False
+    assert by_id["pro"]["listed"] is False and by_id["pro"]["sold_online"] is False  # kept for earlier buyers
+    for pid in ("starter", "standard", "plus"):
+        assert by_id[pid]["max_members"] is None and by_id[pid]["ai_actions_per_month"] is None
     assert r.json()["grace_days"] == 15
+
+
+def test_large_price_and_the_plan_a_school_fits():
+    assert plans.large_price(80) == 19999 and plans.large_price(100) == 24999
+    assert plans.plan_for_sections(30).id == "starter"
+    assert plans.plan_for_sections(31).id == "standard"
+    assert plans.plan_for_sections(80).id == "plus"
+    assert plans.plan_for_sections(81) is None
 
 
 @pytest.mark.parametrize("offset_days,status,plan", [
@@ -56,14 +70,22 @@ def test_business_without_end_date_never_expires():
     assert (effective.id, status) == ("business", "active")
 
 
-def test_free_school_stops_at_five_sections(client, limits_on):
+def test_starter_stops_at_thirty_sections_and_names_the_next_plan(client, limits_on):
     _, h = signup(client)
     school = create_school(client, h)
-    for i in range(5):
+    _set_plan(school["id"], "starter", datetime.utcnow() + timedelta(days=100))
+    for i in range(30):
         assert _add_section(client, h, school["id"], f"S{i}").status_code == 201
-    r = _add_section(client, h, school["id"], "S5")
+    r = _add_section(client, h, school["id"], "S30")
     assert r.status_code == 402
-    assert "5 sections" in r.json()["detail"] and "Pro" in r.json()["detail"]
+    assert "30 sections" in r.json()["detail"] and "Standard (₹14,999 a year" in r.json()["detail"]
+
+
+def test_the_trial_has_no_section_limit(client, limits_on):
+    _, h = signup(client)
+    school = create_school(client, h)
+    for i in range(35):
+        assert _add_section(client, h, school["id"], f"S{i}").status_code == 201
 
 
 def test_pro_school_can_add_more(client, limits_on):
@@ -96,19 +118,21 @@ def test_grace_keeps_pro_limits_and_expiry_drops_to_free(client, limits_on):
 def test_bulk_import_stops_at_the_limit_and_says_so(client, limits_on):
     _, h = signup(client)
     school = create_school(client, h)
-    csv = "name,grade\n" + "\n".join(f"S{i},8" for i in range(8))
+    _set_plan(school["id"], "starter", datetime.utcnow() + timedelta(days=100))
+    csv = "name,grade\n" + "\n".join(f"S{i},8" for i in range(33))
     r = client.post("/api/class-groups/bulk-import", data={"school_id": school["id"]},
                     files={"file": ("s.csv", csv, "text/csv")}, headers=h)
     assert r.status_code == 200, r.text
-    assert r.json()["created"] == 5
+    assert r.json()["created"] == 30
     assert any("3 sections not added" in e for e in r.json()["errors"])
 
 
-def test_free_plan_cannot_invite(client, limits_on):
+def test_trial_and_new_plans_can_invite_anyone(client, limits_on):
     _, h = signup(client)
     school = create_school(client, h)
-    r = client.post(f"/api/schools/{school['id']}/invites", json={"email": "x@y.com", "role": "viewer"}, headers=h)
-    assert r.status_code == 402
+    for i in range(7):
+        r = client.post(f"/api/schools/{school['id']}/invites", json={"email": f"x{i}@y.com", "role": "viewer"}, headers=h)
+        assert r.status_code == 201, r.text
 
 
 def test_pro_plan_allows_invites_up_to_five_people(client, limits_on):
@@ -136,31 +160,28 @@ def test_business_owner_can_add_schools(client, limits_on):
     assert client.post("/api/schools", json={"name": "Second"}, headers=h).status_code == 201
 
 
-def test_ai_allowance_counts_and_resets_monthly(limits_on, monkeypatch):
+def test_ai_is_unlimited_on_the_trial_and_every_plan(limits_on, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
     db = SessionLocal()
     try:
         s = School(name="ai")
         db.add(s)
         db.commit()
-        assert all(plans.use_ai(db, s) for _ in range(10))
-        assert plans.use_ai(db, s) is False
-        s.ai_usage_month = "2000-01"  # a past month: allowance starts again
+        assert all(plans.use_ai(db, s) for _ in range(50))
+        s.plan, s.plan_valid_until = "starter", datetime.utcnow() + timedelta(days=10)
         db.commit()
-        assert plans.use_ai(db, s) is True
-        s.plan, s.plan_valid_until = "pro", datetime.utcnow() + timedelta(days=10)
-        db.commit()
-        assert all(plans.use_ai(db, s) for _ in range(50))  # unlimited on Pro
+        assert all(plans.use_ai(db, s) for _ in range(50))
     finally:
         db.close()
 
 
-def test_payment_price_comes_from_the_catalogue(monkeypatch):
+def test_payment_price_comes_from_the_catalogue():
     from app.routers.payments import _price_rupees
-    monkeypatch.setattr(settings, "pro_plan_price_inr", 1)
-    assert _price_rupees("pro") == 1
-    with pytest.raises(Exception):
-        _price_rupees("business")
+    assert _price_rupees("starter") == 9999 and _price_rupees("starter", "done_for_you") == 17999
+    assert _price_rupees("plus", "done_for_you") == 34999
+    for gone in ("pro", "business", "free"):
+        with pytest.raises(Exception):
+            _price_rupees(gone)
 
 
 def _set_trial_end(school_id, when):

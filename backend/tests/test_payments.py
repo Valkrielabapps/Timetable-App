@@ -15,6 +15,7 @@ import json
 import pytest
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.services import cashfree_service
 from tests.conftest import create_school, signup
 
@@ -27,7 +28,7 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "cashfree_secret_key", SECRET)
     monkeypatch.setattr(settings, "cashfree_env", "sandbox")
     monkeypatch.setattr(settings, "frontend_base_url", "https://www.timetablz.com")
-    calls = {"create": [], "status": "ACTIVE", "amount": 4999.0}
+    calls = {"create": [], "status": "ACTIVE", "amount": 14999.0}
 
     def fake_create(**kwargs):
         calls["create"].append(kwargs)
@@ -72,7 +73,7 @@ def test_create_order_returns_only_session_and_order_id(client, configured):
     assert r.json()["payment_session_id"] == "session_abc"
 
     sent = configured["create"][0]
-    assert sent["amount_rupees"] == 4999  # server-side price, not the client's
+    assert sent["amount_rupees"] == 14999  # server-side price, not the client's
     assert sent["customer_phone"] == "9876543210"
     assert sent["return_url"] == "https://www.timetablz.com/?page=payment-status&order_id={order_id}"
 
@@ -83,7 +84,7 @@ def test_client_cannot_set_the_amount(client, configured):
     r = client.post("/api/payments/create-order",
                     json={"school_id": school["id"], "phone": "9876543210", "amount": 1}, headers=h)
     assert r.status_code == 201
-    assert configured["create"][0]["amount_rupees"] == 4999
+    assert configured["create"][0]["amount_rupees"] == 14999
 
 
 @pytest.mark.parametrize("phone", ["12345", "1234567890", "98765432101", "abcdefghij"])
@@ -113,7 +114,7 @@ def test_pending_until_cashfree_says_paid(client, configured):
     r = client.get(f"/api/payments/orders/{order_id}", headers=h)
     assert r.json()["status"] == "PAID"
     s = _school(client, h, school["id"])
-    assert s["plan"] == "pro" and s["plan_valid_until"]
+    assert s["plan"] == "standard" and s["plan_valid_until"]
 
 
 def test_verifying_twice_grants_the_year_once(client, configured):
@@ -161,7 +162,7 @@ def test_webhook_with_valid_signature_grants_the_plan(client, configured):
     raw, headers = _signed({"type": "PAYMENT_SUCCESS", "data": {"order": {"order_id": order_id}}})
     r = client.post("/api/payments/webhook", content=raw, headers=headers)
     assert r.status_code == 200
-    assert _school(client, h, school["id"])["plan"] == "pro"
+    assert _school(client, h, school["id"])["plan"] == "standard"
 
     # Delivered again: still fine, still one year.
     until = _school(client, h, school["id"])["plan_valid_until"]
@@ -194,3 +195,33 @@ def test_webhook_with_bad_signature_is_rejected(client, configured):
 def test_webhook_for_unknown_order_is_acknowledged(client, configured):
     raw, headers = _signed({"type": "PAYMENT_SUCCESS", "data": {"order": {"order_id": "tz_9_nope"}}})
     assert client.post("/api/payments/webhook", content=raw, headers=headers).status_code == 200
+
+
+def test_a_plan_smaller_than_the_school_is_refused(client, configured):
+    _, h = signup(client)
+    school = create_school(client, h)
+    for i in range(31):
+        client.post("/api/class-groups", json={"school_id": school["id"], "name": f"S{i}", "grade": "8"}, headers=h)
+    r = client.post("/api/payments/create-order",
+                    json={"school_id": school["id"], "phone": "9876543210", "plan": "starter"}, headers=h)
+    assert r.status_code == 400 and "31 sections; Starter covers up to 30. Choose Standard" in r.json()["detail"]
+
+
+def test_done_for_you_charges_its_price_and_says_so_on_the_invoice(client, configured):
+    from app.models.payment import Invoice
+
+    _, h = signup(client)
+    school = create_school(client, h)
+    configured["amount"] = 34999.0
+    r = client.post("/api/payments/create-order", json={"school_id": school["id"], "phone": "9876543210",
+                                                        "plan": "plus", "service": "done_for_you"}, headers=h)
+    assert r.status_code == 201, r.text
+    assert configured["create"][-1]["amount_rupees"] == 34999
+    configured["status"] = "PAID"
+    client.get(f"/api/payments/orders/{r.json()['order_id']}", headers=h)
+    db = SessionLocal()
+    try:
+        (inv,) = db.query(Invoice).filter_by(school_id=school["id"]).all()
+        assert "Timetablz Plus, done for you (first year, including setup)" in inv.description
+    finally:
+        db.close()

@@ -77,6 +77,13 @@ def list_schools(
         o.school_id: o
         for o in db.query(PlanOffer).filter(PlanOffer.status == "open", PlanOffer.school_id.in_([s.id for s in schools])).all()
     }
+    year_ago = _naive_now() - timedelta(days=365)
+    dfy = {
+        i.school_id for i in db.query(Invoice).filter(
+            Invoice.school_id.in_([s.id for s in schools]), Invoice.issued_at >= year_ago,
+            Invoice.description.ilike("%done for you%"),
+        ).all()
+    }
     out = []
     for s in schools:
         ent = plans.entitlements(db, s)
@@ -97,6 +104,9 @@ def list_schools(
             "members": ent.usage["members"],
             "limits": ent.limits,
             "open_offer": offer_out(offers[s.id]) if s.id in offers else None,
+            # Bought "done for you" in the last year: the team sets them up.
+            "done_for_you": s.id in dfy,
+            "suggested_plan": (plans.plan_for_sections(ent.usage["sections"]) or plans.get_plan("business")).id,
         })
     return out
 
@@ -142,8 +152,10 @@ def cancel_offer(offer_id: int, db: Session = Depends(get_db), admin: User = Dep
 
 
 class MarkPaidIn(BaseModel):
-    # "pro" for a Pro year, or "offer" to settle the school's open custom offer.
-    kind: str = Field(pattern="^(pro|offer)$")
+    # A plan's year ("starter", "standard", "plus"; "pro" for schools still on
+    # it), or "offer" to settle the school's open custom offer.
+    kind: str = Field(pattern="^(starter|standard|plus|pro|offer)$")
+    service: str = Field(default="software", pattern="^(software|done_for_you)$")
     amount_inr: int = Field(ge=1, le=10_000_000)
     method: str = Field(default="bank_transfer", pattern="^(bank_transfer|other)$")
     reference: str | None = Field(default=None, max_length=100)
@@ -171,13 +183,14 @@ def mark_paid(
             raise HTTPException(status_code=409, detail="This school has no open offer.")
         plan_id, period_days = "business", offer.period_days
     else:
-        plan_id, period_days = "pro", 365
+        plan_id, period_days = payload.kind, 365
 
     period = billing.grant_plan(db, school, plan_id, period_days, offer=offer)
     db.commit()
+    service = billing.service_label(payload.service) if offer is None else ""
     invoice = billing.issue_invoice(
         db, school,
-        description=f"{billing.plan_label(plan_id, offer)}, {period_days} days",
+        description=f"{billing.plan_label(plan_id, offer)}{service}, {period_days} days",
         amount_paise=payload.amount_inr * 100,
         method=payload.method,
         reference=payload.reference,
@@ -236,7 +249,7 @@ def stats(db: Session = Depends(get_db), admin: User = Depends(require_platform_
 
     now = datetime.now(timezone.utc)
     by_status = {"free": 0, "active": 0, "grace": 0, "locked": 0}
-    by_plan = {"pro": 0, "business": 0}
+    by_plan = {p: 0 for p in plans.PAID_PLANS}
     ending_soon = 0
     for s in db.query(School).all():
         plan, status, _ = plans.effective_plan(s, now)
