@@ -29,6 +29,7 @@ import html as _html
 import logging
 
 import threading
+import time
 
 import requests
 
@@ -90,12 +91,18 @@ def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: st
         payload["attachments"] = attachments
 
     try:
-        response = requests.post(
-            _RESEND_API_URL,
-            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json=payload,
-            timeout=10,
-        )
+        # Resend allows a few requests a second; a day's cover emails go out
+        # one after another, so a "too many" answer waits and tries again.
+        for attempt in range(4):
+            response = requests.post(
+                _RESEND_API_URL,
+                headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+                json=payload,
+                timeout=10,
+            )
+            if response.status_code != 429:
+                break
+            time.sleep(1.0 * (attempt + 1))
         if response.status_code >= 400:
             logger.warning(
                 "Resend rejected %s to %s: %s %s",
@@ -247,6 +254,8 @@ def send_cover_email(to_email: str, subject: str, html: str, ics: str | None, re
         attachments = [{
             "filename": "invite.ics",
             "content": base64.b64encode(ics.encode("utf-8")).decode("ascii"),
-            "content_type": "text/calendar; charset=utf-8; method=" + ("CANCEL" if "METHOD:CANCEL" in ics else "REQUEST"),
+            # Plain type only: Resend validates it, and the METHOD inside the
+            # file is what makes mail apps treat it as an invite or cancellation.
+            "content_type": "text/calendar",
         }]
     return _send(to_email, subject, html, "cover email", reply_to=reply_to, attachments=attachments)

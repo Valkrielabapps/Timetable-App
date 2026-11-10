@@ -24,6 +24,9 @@ def test_times_are_read_from_period_labels(label, expected):
 
 @pytest.fixture
 def day(client, monkeypatch):
+    from app.services import substitution_notify
+
+    monkeypatch.setattr(substitution_notify, "_pace", lambda: None)
     monkeypatch.setattr(settings, "resend_api_key", "test")
     sent = []
     monkeypatch.setattr(email_service, "send_cover_email",
@@ -132,3 +135,22 @@ def test_a_refusal_from_resend_is_explained(client, day, monkeypatch):
     _save(client, w, h, [("p1", "iyer")])
     r = _notify(client, w, h)
     assert r["failed"] == ["Mr. Iyer"] and "isn't verified in Resend" in r["errors"][0]
+
+
+def test_too_many_at_once_is_retried(monkeypatch):
+    calls = []
+
+    class Busy:
+        status_code = 429
+        text = "rate limited"
+
+    class Ok:
+        status_code = 200
+        text = "{}"
+
+    monkeypatch.setattr(settings, "resend_api_key", "test")
+    monkeypatch.setattr(email_service.time, "sleep", lambda s: None)
+    monkeypatch.setattr(email_service.requests, "post", lambda *a, **k: calls.append(k["json"]) or (Busy() if len(calls) < 3 else Ok()))
+    assert _real_send_cover_email("a@b.c", "Cover", "<p>x</p>", "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR") is True
+    assert len(calls) == 3
+    assert calls[0]["attachments"][0]["content_type"] == "text/calendar"

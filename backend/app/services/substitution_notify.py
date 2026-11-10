@@ -84,6 +84,19 @@ def _ics(events: list[dict], method: str, organizer: str, tz: str) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
+_last_send = [0.0]
+
+
+def _pace() -> None:
+    """At most about two emails a second: Resend's default rate limit."""
+    import time
+
+    wait = 0.55 - (time.monotonic() - _last_send[0])
+    if wait > 0:
+        time.sleep(wait)
+    _last_send[0] = time.monotonic()
+
+
 def _organizer() -> str:
     m = re.search(r"<([^>]+)>", settings.email_from_address or "")
     return m.group(1) if m else (settings.email_from_address or "noreply@timetablz.com")
@@ -154,6 +167,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         body = (f"<p>Dear {html.escape(t.name)},</p><p>On <b>{nice_day}</b> you are covering:</p><ul>{items}</ul>"
                 f"<p>The calendar invite attached puts {'this' if len(events) == 1 else 'these'} in your calendar.</p>"
                 f"<p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Timetablz.</p>")
+        _pace()
         ok = email_service.send_cover_email(
             t.email, f"Cover on {nice_day}: {len(events)} {'period' if len(events) == 1 else 'periods'}",
             body, _ics(events, "REQUEST", organizer, tz))
@@ -179,6 +193,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         body = (f"<p>Dear {html.escape(t.name)},</p><p>{'A cover' if len(uids) == 1 else f'{len(uids)} covers'} "
                 f"you were given for <b>{nice_day}</b> {'is' if len(uids) == 1 else 'are'} no longer needed, and "
                 "the calendar entry is removed.</p>")
+        _pace()
         if email_service.send_cover_email(t.email, f"Cover on {nice_day} cancelled", body,
                                           _ics(events, "CANCEL", organizer, tz)):
             cancelled += len(uids)
@@ -199,6 +214,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         covering = set(events_by_teacher)
         for t in teachers.values():
             if t.email and t.id not in covering:
+                _pace()
                 if email_service.send_cover_email(t.email, f"Cover arrangement for {nice_day}", body, None):
                     summary_sent += 1
                 else:
