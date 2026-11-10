@@ -551,6 +551,9 @@ export const api = {
   // Substitutions
   listSubstitutionLogs: (schoolId) => get(`/schools/${schoolId}/substitutions`),
   saveSubstitutionLog: (schoolId, data) => post(`/schools/${schoolId}/substitutions`, data),
+  // Email each covering teacher their cover with calendar invites
+  // (backend app/services/substitution_notify.py).
+  notifySubstitutions: (schoolId, data) => post(`/schools/${schoolId}/substitutions/notify`, data),
   // One date's cover - for a part of the school ("primary", ...) or, with no
   // category, the whole school.
   getSubstitutionSummary: (schoolId, date, category) =>

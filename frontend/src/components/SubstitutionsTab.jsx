@@ -437,7 +437,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
       </div>
 
       {view === 'summary' && summary ? (
-        <SubstitutionSummary schoolId={schoolId} summary={summary} />
+        <SubstitutionSummary schoolId={schoolId} summary={summary} readOnly={readOnly} />
       ) : view === 'new' ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="space-y-6">

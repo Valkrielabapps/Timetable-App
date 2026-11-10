@@ -10,7 +10,7 @@ import { copyText, formatDate, groupRows, leaveText, printSummary, summaryText }
  *
  * Print, Download PDF and Copy for WhatsApp all carry exactly this.
  */
-export default function SubstitutionSummary({ schoolId, schoolName, summary }) {
+export default function SubstitutionSummary({ schoolId, schoolName, summary, readOnly = false }) {
   const [message, setMessage] = useState(null)
   const date = summary.date
   const category = summary.category
@@ -34,6 +34,21 @@ export default function SubstitutionSummary({ schoolId, schoolName, summary }) {
     }
   }
 
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [everyone, setEveryone] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [emailed, setEmailed] = useState(null)
+  const sendEmails = async () => {
+    setSending(true)
+    try {
+      setEmailed(await api.notifySubstitutions(schoolId, { date, category, everyone }))
+    } catch (err) {
+      setEmailed({ error: err.message })
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
     <section aria-label="Substitution summary" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -51,8 +66,50 @@ export default function SubstitutionSummary({ schoolId, schoolName, summary }) {
           <button onClick={copy} className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700">
             Copy for WhatsApp
           </button>
+          {!readOnly && summary.rows.some((r) => r.substitute) && (
+            <button onClick={() => setEmailOpen(!emailOpen)} aria-expanded={emailOpen} className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700">
+              Email teachers
+            </button>
+          )}
         </div>
       </div>
+      {emailOpen && (
+        <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+          <p className="text-gray-700">
+            Each covering teacher gets an email with their periods and a calendar invite, so the cover shows up in
+            their Google Calendar. Emailing again after a change updates their calendar, and anyone no longer covering
+            gets a cancellation.
+          </p>
+          <label className="mt-2 flex items-center gap-2 text-gray-700">
+            <input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
+            Also send the whole day&rsquo;s arrangement to every other teacher
+          </label>
+          <button onClick={sendEmails} disabled={sending} className="mt-2 rounded bg-neutral-900 px-3 py-1.5 font-medium text-white hover:bg-neutral-700 disabled:opacity-50">
+            {sending ? 'Sending…' : 'Send emails'}
+          </button>
+          {emailed && (
+            <div role="status" className="mt-2 space-y-1">
+              {emailed.error ? (
+                <p className="text-red-700">{emailed.error}</p>
+              ) : !emailed.email_configured ? (
+                <p className="text-amber-800">Email isn&rsquo;t set up on the server yet, so nothing was sent.</p>
+              ) : (
+                <>
+                  <p className="text-emerald-800">
+                    {emailed.sent.length > 0 ? `Sent to ${emailed.sent.join(', ')}.` : 'No covering teacher had an email to send to.'}
+                    {emailed.cancelled > 0 && ` ${emailed.cancelled} cancelled cover${emailed.cancelled === 1 ? '' : 's'} removed from calendars.`}
+                    {emailed.summary_sent > 0 && ` The day’s arrangement went to ${emailed.summary_sent} other teacher${emailed.summary_sent === 1 ? '' : 's'}.`}
+                  </p>
+                  {emailed.no_email.length > 0 && (
+                    <p className="text-amber-800">No email address for {emailed.no_email.join(', ')}. Add one on the Teachers page.</p>
+                  )}
+                  {emailed.failed.length > 0 && <p className="text-red-700">Couldn&rsquo;t send to {emailed.failed.join(', ')}. Try again.</p>}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {message && <p role="status" className="mt-2 text-sm text-gray-600">{message}</p>}
 
       <div className="mt-4 text-sm text-gray-800">

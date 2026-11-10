@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import SubstitutionSummary from './SubstitutionSummary'
 import { formatDate, groupRows, summaryHtml, summaryText, weekdayOf } from '../substitutionSummary'
 
-const api = vi.hoisted(() => ({ downloadSubstitutionSummaryPdf: vi.fn() }))
+const api = vi.hoisted(() => ({ downloadSubstitutionSummaryPdf: vi.fn(), notifySubstitutions: vi.fn() }))
 vi.mock('../api', () => ({ api }))
 
 const row = (period, cls, category, label, absent, sub) => ({
@@ -118,5 +118,30 @@ describe('the summary on screen', () => {
     render(<SubstitutionSummary schoolId={1} summary={WHOLE} />)
     fireEvent.click(screen.getByText('Print'))
     expect(await screen.findByRole('status')).toHaveTextContent('Allow pop-ups')
+  })
+})
+
+
+describe('emailing the cover', () => {
+  it('emails the covering teachers, optionally everyone, and says who had no email', async () => {
+    api.notifySubstitutions.mockResolvedValue({
+      email_configured: true, sent: ['Dr. Sen', 'Ms. Iyer'], no_email: ['Mr. Khan'], failed: [], cancelled: 1, summary_sent: 12,
+    })
+    render(<SubstitutionSummary schoolId={1} summary={WHOLE} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Email teachers' }))
+    expect(screen.getByText(/shows up in their Google Calendar/)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/whole day’s arrangement to every other teacher/))
+    fireEvent.click(screen.getByRole('button', { name: 'Send emails' }))
+    await waitFor(() => expect(api.notifySubstitutions).toHaveBeenCalledWith(1, { date: '2026-10-26', category: null, everyone: true }))
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Sent to Dr. Sen, Ms. Iyer.')
+    expect(status).toHaveTextContent('1 cancelled cover removed from calendars.')
+    expect(status).toHaveTextContent('went to 12 other teachers')
+    expect(status).toHaveTextContent('No email address for Mr. Khan')
+  })
+
+  it('is not offered to viewers', () => {
+    render(<SubstitutionSummary schoolId={1} summary={WHOLE} readOnly />)
+    expect(screen.queryByRole('button', { name: 'Email teachers' })).not.toBeInTheDocument()
   })
 })
