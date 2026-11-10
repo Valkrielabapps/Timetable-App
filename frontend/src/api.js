@@ -382,6 +382,12 @@ export const api = {
   // keepPlaced fills the gaps around what's on the current version.
   generateTimetable: (schoolId, { keepPlaced = false } = {}) =>
     post(`/timetables/generate?school_id=${schoolId}${keepPlaced ? '&keep_placed=true' : ''}`),
+  // Small changes without rebuilding (backend app/services/adjust.py): what
+  // the plan says that the timetable doesn't; a new version keeping every
+  // lesson still right; one teacher in another's place.
+  timetableChanges: (schoolId) => get(`/timetable-updates/changes?school_id=${schoolId}`),
+  updateTimetable: (schoolId) => post(`/timetable-updates/update?school_id=${schoolId}`),
+  replaceTeacher: (data) => post('/timetable-updates/replace-teacher', data),
   // A new, empty version to build by hand.
   startBlankTimetable: (schoolId) => post(`/timetables/blank?school_id=${schoolId}`),
   // The lessons the school's plan asks for, and who can take each.

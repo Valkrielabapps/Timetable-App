@@ -128,7 +128,8 @@ export function useTimetable(timetableId) {
 export function useGenerateTimetable(schoolId) {
   const queryClient = useQueryClient()
   const generate = useMutation({
-    mutationFn: (options) => api.generateTimetable(schoolId, options),
+    // { update: true }: keep every lesson that's still right (the plan changed).
+    mutationFn: (options) => (options?.update ? api.updateTimetable(schoolId) : api.generateTimetable(schoolId, options)),
     onSuccess: (created) => {
       // Seed the cache with the row the server just returned so the polling
       // query starts from it rather than waiting a round trip to discover a
@@ -396,4 +397,23 @@ export function markSubjectFrozen(entries, freezes) {
       || (e.elective_block_id != null && blocks.has(`${e.class_group_id}:${e.elective_block_id}`))
     return !!e.subject_frozen === frozen ? e : { ...e, subject_frozen: frozen }
   })
+}
+
+
+/**
+ * What the plan now says that the shown timetable doesn't (backend
+ * app/services/adjust.py), for the "the plan has changed" bar.
+ */
+export function usePlanChanges(schoolId, timetable, enabled = true) {
+  return useQuery({
+    queryKey: ['timetable-changes', schoolId, timetable?.id, timetable?.status],
+    queryFn: () => api.timetableChanges(schoolId),
+    enabled: enabled && schoolId != null && timetable?.status === 'draft',
+  })
+}
+
+/** Everything fetched again - after a change made outside the cache (replacing a teacher). */
+export function useRefreshAll() {
+  const queryClient = useQueryClient()
+  return () => queryClient.invalidateQueries()
 }

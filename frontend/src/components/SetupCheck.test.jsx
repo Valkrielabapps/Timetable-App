@@ -9,6 +9,8 @@ vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: und
 const generate = vi.fn(() => Promise.resolve())
 const check = vi.hoisted(() => ({ current: null }))
 vi.mock('../hooks/useSchoolData', () => ({
+  usePlanChanges: () => ({ data: null }),
+  useRefreshAll: () => () => {},
   useSetupCheck: () => ({ data: check.current, isLoading: false }),
   useTimetables: () => ({ data: [] }),
   useTimetable: () => ({ data: null }),

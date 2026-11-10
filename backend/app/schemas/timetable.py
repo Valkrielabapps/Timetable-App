@@ -221,6 +221,9 @@ class TimetableOut(BaseModel):
     # they were loosened - {"rules": [...], "reason": [...], "accepted": bool}.
     # None for an ordinary timetable.
     compromise: dict | None = None
+    # Made by "update for changes" (app/routers/timetable_updates.py): which
+    # stage it took and how many lessons stayed where they were.
+    update: dict | None = None
     entries: list[TimetableEntryOut]
     # Rules saved after this timetable was generated: not applied to it yet,
     # and so left out of `violations` - "generate again" rather than "broken".

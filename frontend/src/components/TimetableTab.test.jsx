@@ -24,6 +24,8 @@ const m = vi.hoisted(() => ({
 vi.mock('./SubstitutionsTab', () => ({ default: () => <div data-testid="subs" /> }))
 vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: m.entitlements }) }))
 vi.mock('../hooks/useSchoolData', () => ({
+  usePlanChanges: () => ({ data: null }),
+  useRefreshAll: () => () => {},
   useSetupCheck: () => ({ data: m.check, isLoading: false }),
   useTimetables: () => ({ data: m.list }),
   useTimetable: (id) => ({ data: id != null ? m.timetable : null }),

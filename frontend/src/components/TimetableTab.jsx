@@ -10,6 +10,8 @@ import {
   useSubjectFreezeActions,
   useSubjectFreezes,
   useGenerateTimetable,
+  usePlanChanges,
+  useRefreshAll,
   useSetupCheck,
   useTimetable,
   useTimetables,
@@ -23,6 +25,7 @@ import GenerationFailedDialog from './GenerationFailedDialog'
 import SetupCheckPanel from './SetupCheckPanel'
 import SendToSupport from './SendToSupport'
 import { useEntitlements } from '../hooks/useEntitlements'
+import ReplaceTeacherDialog from './ReplaceTeacherDialog'
 import Workspace from './timetable/Workspace'
 import PlainView from './timetable/PlainView'
 import { buildRows, sectionTitle } from './timetable/lessonLogic'
@@ -302,6 +305,21 @@ export default function TimetableTab({
 
   const isGenerating = isSubmittingGenerate || timetable?.status === 'generating'
 
+  // What the plan now says that this timetable doesn't (a period added, a
+  // teacher changed): offered as an update that keeps everything else.
+  const refreshAll = useRefreshAll()
+  const { data: planChanges } = usePlanChanges(schoolId, timetable, !readOnly && !isGenerating)
+  const changes = planChanges?.timetable_id === timetable?.id ? planChanges?.changes ?? [] : []
+  const [replaceOpen, setReplaceOpen] = useState(false)
+  async function handleUpdate() {
+    setMenu(null)
+    try {
+      await generate({ update: true })
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const autoStarted = useRef(false)
   useEffect(() => {
     if (!autoGenerate || autoStarted.current || readOnly) return
@@ -421,6 +439,10 @@ export default function TimetableTab({
                 </button>
                 {menu === 'generate' && (
                   <div className="tw-menu">
+                    <button type="button" disabled={!solved} onClick={handleUpdate}>
+                      <b>Update for changes</b>
+                      <small>Keeps every lesson that&rsquo;s still right and places only what changed in the plan. Saved as a new version.</small>
+                    </button>
                     <button type="button" disabled={!solved} onClick={() => handleGenerate(true)}>
                       <b>Fill the empty slots</b>
                       <small>The scheduler completes the timetable and keeps everything you placed. Saved as a new version.</small>
@@ -469,6 +491,9 @@ export default function TimetableTab({
             </button>
             {solved && (
               <button type="button" className="tw-btn" onClick={() => setDrawer(drawer === 'freeze' ? null : 'freeze')}>❄ Freezing</button>
+            )}
+            {solved && !readOnly && (
+              <button type="button" className="tw-btn" onClick={() => setReplaceOpen(true)}>Replace a teacher</button>
             )}
             {solved && !readOnly && (
               <div className="tw-menuwrap">
@@ -525,7 +550,27 @@ export default function TimetableTab({
             )}
           </div>
         )}
+        {page === 'schedule' && solved && !readOnly && (changes.length > 0 || timetable?.update) && (
+          <div style={{ flexBasis: '100%' }}>
+            <PlanChangedBar changes={changes} update={timetable?.update} onUpdate={handleUpdate} busy={isGenerating} />
+          </div>
+        )}
       </div>
+
+      {replaceOpen && (
+        <ReplaceTeacherDialog
+          schoolId={schoolId}
+          teachers={sortedTeachers}
+          classGroups={sections}
+          entries={timetable?.entries ?? []}
+          onClose={() => setReplaceOpen(false)}
+          onDone={() => refreshAll()}
+          onUpdate={() => {
+            setReplaceOpen(false)
+            handleUpdate()
+          }}
+        />
+      )}
 
       {page === 'substitutions' ? (
         <div className="tw-subs">
@@ -1090,5 +1135,45 @@ function CompromiseNotice({ compromise, readOnly, onAccept, onOpenConstraints })
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * Above the timetable when the plan has changed since it was made, and after
+ * an update: what changed, and what the update kept.
+ */
+export function PlanChangedBar({ changes, update, onUpdate, busy }) {
+  const [all, setAll] = useState(false)
+  if (changes.length > 0) {
+    const shown = all ? changes : changes.slice(0, 3)
+    return (
+      <section aria-label="The plan has changed" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">The plan has changed since this timetable was made</p>
+            <ul className="mt-0.5 list-disc pl-4">
+              {shown.map((c) => <li key={c.text}>{c.text}</li>)}
+            </ul>
+            {changes.length > 3 && (
+              <button type="button" className="text-xs underline" onClick={() => setAll(!all)}>
+                {all ? 'Show fewer' : `and ${changes.length - 3} more`}
+              </button>
+            )}
+          </div>
+          <div className="text-right">
+            <button type="button" className="tw-btn tw-primary" disabled={busy} onClick={onUpdate}>Update the timetable</button>
+            <p className="mt-1 max-w-[16rem] text-xs text-amber-900">Keeps every lesson that&rsquo;s still right; only the changes are placed.</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+  if (!update) return null
+  return (
+    <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+      {update.stage === 3
+        ? 'The changes couldn’t fit around the existing timetable, so it was built again.'
+        : `Updated for your changes: ${update.unchanged} lessons stayed exactly where they were and ${update.placed} ${update.placed === 1 ? 'was' : 'were'} placed${update.stage === 2 ? ' (the sections and teachers the changes touched were rearranged)' : ''}.`}
+    </p>
   )
 }

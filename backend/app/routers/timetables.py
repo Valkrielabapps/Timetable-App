@@ -204,6 +204,7 @@ def _to_timetable_out(db: Session, timetable: Timetable) -> TimetableOut:
         generation_notes=list((timetable.generation_notes or {}).get("notes", [])),
         frozen_kept=list((timetable.generation_notes or {}).get("frozen_kept", [])),
         compromise=(timetable.generation_notes or {}).get("compromise"),
+        update=(timetable.generation_notes or {}).get("update"),
         entries=entries,
         violations=_violations_for(db, timetable, class_groups, subjects, teachers, periods),
         pending_constraint_ids=sorted(
