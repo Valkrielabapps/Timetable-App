@@ -132,6 +132,12 @@ _SOFTEN_RULES: contextvars.ContextVar = contextvars.ContextVar("soften_rules", d
 # A context variable like the two above, so the search for a rule to blame and a
 # timetable made with compromises keep the placed lessons too.
 KEEP_PLACED: contextvars.ContextVar = contextvars.ContextVar("keep_placed", default=False)
+# "Update for changes" (app/services/adjust.py): with KEEP_PLACED, the current
+# timetable's lessons are kept only where they are still valid - a lesson
+# whose teacher can no longer take it, or one more than its subject now has,
+# is placed again instead of being forced - and the lessons of these
+# sections and teachers are freed altogether: {"sections": set, "teachers": set}.
+UPDATE_MODE: contextvars.ContextVar = contextvars.ContextVar("update_mode", default=None)
 # The built-in timetable habits (see _add_default_habits). Off while searching
 # for which rule blocks a school: habits are preferences, they can't make a
 # school impossible, and leaving them on would make every try optimise.
@@ -1308,16 +1314,26 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     ]
     lock_ids = {le.id for le in locked_entries}
     pinned_entries = locked_entries + subject_pins.entries
+    update = UPDATE_MODE.get()
+    kept_ids: set[int] = set()
     if KEEP_PLACED.get() and previous_timetable:
         already = {le.id for le in pinned_entries}
-        pinned_entries = pinned_entries + [
+        free_sections = set((update or {}).get("sections") or ())
+        free_teachers = set((update or {}).get("teachers") or ())
+        kept = [
             le for le in previous_timetable.entries
             if le.id not in already
+            and le.class_group_id not in free_sections
+            and (le.teacher_id is None or le.teacher_id not in free_teachers)
             and le.class_group_id not in frozen_ids
             and le.elective_block_id not in held_block_ids
             and (le.class_group_id, le.subject_id) not in subject_pins.pairs
             and (le.class_group_id, le.elective_block_id) not in subject_pins.blocks
         ]
+        if update is not None:
+            kept_ids = {le.id for le in kept}
+        pinned_entries = pinned_entries + kept
+    kept_count: dict[int, int] = {}
     model = cp_model.CpModel()
 
     # x[(requirement_id, teacher_id, period_id)] = this requirement's
@@ -1712,6 +1728,20 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             req = req_by_class_subject.get((le.class_group_id, le.subject_id))
             if not req:
                 continue  # the requirement this was locked against no longer exists
+            if le.id in kept_ids:
+                # Update mode: kept only while still right. One more than the
+                # subject now has, or a teacher who can't take it there any
+                # more, and it's placed again instead.
+                if kept_count.get(req.id, 0) >= req.periods_per_week:
+                    continue
+                if _batch_count(req) > 1:
+                    continue
+                if le.teacher_id is not None and (req.id, le.teacher_id, le.period_id) not in x:
+                    continue
+                if le.teacher_id is None and (
+                        (req.id, le.period_id) not in no_teacher or candidate_ids_by_req.get(req.id)):
+                    continue  # a teacher can take it now
+                kept_count[req.id] = kept_count.get(req.id, 0) + 1
             if _batch_count(req) > 1 and not is_lock:
                 # A frozen lab lesson: the session, and each batch's teacher.
                 if le.lab_batch is None or le.teacher_id not in teachers_by_id:

@@ -385,10 +385,12 @@ def _run_generation_job(timetable_id: int, school_id: int, keep_placed: bool = F
         _generate(timetable_id, school_id)
 
 
-def _generate(timetable_id: int, school_id: int) -> None:
+def _generate(timetable_id: int, school_id: int, solve=None) -> None:
+    """`solve(db)` makes the result; by default a full generation. The
+    "update for changes" job passes its own (app/routers/timetable_updates.py)."""
     db = SessionLocal()
     try:
-        result = generate_school_timetable(db, school_id)
+        result = solve(db) if solve is not None else generate_school_timetable(db, school_id)
         timetable = db.get(Timetable, timetable_id)
         if timetable is None:
             return  # deleted while generating; nothing to update
