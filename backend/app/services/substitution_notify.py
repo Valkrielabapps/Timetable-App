@@ -88,10 +88,10 @@ _last_send = [0.0]
 
 
 def _pace() -> None:
-    """At most about two emails a second: Resend's default rate limit."""
+    """Under Resend's limit of 10 requests a second (about 8)."""
     import time
 
-    wait = 0.55 - (time.monotonic() - _last_send[0])
+    wait = 0.12 - (time.monotonic() - _last_send[0])
     if wait > 0:
         time.sleep(wait)
     _last_send[0] = time.monotonic()
@@ -212,14 +212,18 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
                 "<tr><th>Period</th><th>Class</th><th>Subject</th><th>For</th><th>Covered by</th></tr>"
                 f"{rows}</table><p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Timetablz.</p>")
         covering = set(events_by_teacher)
-        for t in teachers.values():
-            if t.email and t.id not in covering:
-                _pace()
-                if email_service.send_cover_email(t.email, f"Cover arrangement for {nice_day}", body, None):
-                    summary_sent += 1
-                else:
-                    summary_failed.append(t.name)
-                    reasons.add(email_service.last_error() or "unknown")
+        others = [t for t in teachers.values() if t.email and t.id not in covering]
+        # One request per hundred teachers (Resend's batch endpoint).
+        results = email_service.send_batch(
+            [{"to": t.email, "subject": f"Cover arrangement for {nice_day}", "html": body} for t in others],
+            "cover arrangement")
+        for t, ok in zip(others, results):
+            if ok:
+                summary_sent += 1
+            else:
+                summary_failed.append(t.name)
+        if summary_failed:
+            reasons.add(email_service.last_error() or "unknown")
 
     newest = logs[-1]
     newest.notified = now_notified

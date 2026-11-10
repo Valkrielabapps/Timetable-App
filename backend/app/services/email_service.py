@@ -51,6 +51,11 @@ def last_error() -> str | None:
 
 def _reason(status: int, text: str) -> str:
     low = (text or "").lower()
+    if "daily_quota" in low:
+        return ("Resend's daily limit is used up (100 emails a day on its free plan). Upgrade Resend to Pro, or wait "
+                "until 5:30 am India time when it resets")
+    if "monthly_quota" in low:
+        return "Resend's monthly email limit is used up. Upgrade the Resend plan or turn on pay-as-you-go"
     if "verify a domain" in low or "testing emails" in low or "own email address" in low:
         return ("the sending domain isn't verified in Resend yet, so it only delivers to the Resend account's own "
                 "address. Verify timetablz.com in Resend and set EMAIL_FROM_ADDRESS to an address on it")
@@ -100,8 +105,8 @@ def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: st
                 json=payload,
                 timeout=10,
             )
-            if response.status_code != 429:
-                break
+            if response.status_code != 429 or "quota" in (response.text or "").lower():
+                break  # a quota doesn't come back by waiting a second
             time.sleep(1.0 * (attempt + 1))
         if response.status_code >= 400:
             logger.warning(
@@ -259,3 +264,45 @@ def send_cover_email(to_email: str, subject: str, html: str, ics: str | None, re
             "content_type": "text/calendar",
         }]
     return _send(to_email, subject, html, "cover email", reply_to=reply_to, attachments=attachments)
+
+
+_RESEND_BATCH_URL = "https://api.resend.com/emails/batch"
+
+
+def send_batch(messages: list[dict], log_context: str = "batch email") -> list[bool]:
+    """Many emails without attachments, up to 100 per request (Resend's batch
+    endpoint): [{"to", "subject", "html"}] -> whether each was accepted."""
+    import time as _time
+
+    _local.error = None
+    if not settings.resend_api_key:
+        _local.error = "email isn't set up on the server (RESEND_API_KEY)"
+        return [False] * len(messages)
+    results: list[bool] = []
+    for start in range(0, len(messages), 100):
+        chunk = messages[start:start + 100]
+        payload = [{"from": settings.email_from_address, "to": [m["to"]], "subject": m["subject"], "html": m["html"]}
+                   for m in chunk]
+        ok = False
+        try:
+            for attempt in range(4):
+                response = requests.post(
+                    _RESEND_BATCH_URL,
+                    headers={"Authorization": f"Bearer {settings.resend_api_key}"},
+                    json=payload,
+                    timeout=30,
+                )
+                if response.status_code != 429 or "quota" in (response.text or "").lower():
+                    break
+                _time.sleep(1.0 * (attempt + 1))
+            if response.status_code >= 400:
+                logger.warning("Resend rejected %s (%d emails): %s %s", log_context, len(chunk),
+                               response.status_code, response.text)
+                _local.error = _reason(response.status_code, response.text)
+            else:
+                ok = True
+        except Exception:
+            logger.exception("Failed to send %s", log_context)
+            _local.error = "couldn't reach Resend. Try again in a minute"
+        results += [ok] * len(chunk)
+    return results

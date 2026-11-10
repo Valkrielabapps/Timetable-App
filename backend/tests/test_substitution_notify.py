@@ -31,6 +31,8 @@ def day(client, monkeypatch):
     sent = []
     monkeypatch.setattr(email_service, "send_cover_email",
                         lambda to, subject, html, ics, reply_to=None: sent.append((to, subject, html, ics)) or True)
+    monkeypatch.setattr(email_service, "send_batch",
+                        lambda msgs, ctx="": [sent.append((m["to"], m["subject"], m["html"], None)) or True for m in msgs])
     _, h = signup(client)
     sid = create_school(client, h)["id"]
     db = SessionLocal()
@@ -154,3 +156,29 @@ def test_too_many_at_once_is_retried(monkeypatch):
     assert _real_send_cover_email("a@b.c", "Cover", "<p>x</p>", "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR") is True
     assert len(calls) == 3
     assert calls[0]["attachments"][0]["content_type"] == "text/calendar"
+
+
+def test_a_hundred_and_fifty_go_in_two_requests(monkeypatch):
+    calls = []
+
+    class Ok:
+        status_code = 200
+        text = "{}"
+
+    monkeypatch.setattr(settings, "resend_api_key", "test")
+    monkeypatch.setattr(email_service.requests, "post", lambda url, **k: calls.append((url, len(k["json"]))) or Ok())
+    out = email_service.send_batch([{"to": f"t{i}@s.in", "subject": "s", "html": "h"} for i in range(150)])
+    assert out == [True] * 150 and calls == [(email_service._RESEND_BATCH_URL, 100), (email_service._RESEND_BATCH_URL, 50)]
+
+
+def test_a_used_up_quota_is_said_plainly_and_not_retried(monkeypatch):
+    calls = []
+
+    class Quota:
+        status_code = 429
+        text = '{"name":"daily_quota_exceeded","message":"You have reached your daily email sending quota."}'
+
+    monkeypatch.setattr(settings, "resend_api_key", "test")
+    monkeypatch.setattr(email_service.requests, "post", lambda *a, **k: calls.append(1) or Quota())
+    assert email_service.send_batch([{"to": "a@b.c", "subject": "s", "html": "h"}]) == [False]
+    assert len(calls) == 1 and "Upgrade Resend to Pro" in email_service.last_error()
