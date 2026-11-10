@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import check_ai_quota
 from app.services.smart_import import add_missing_subjects, build_preview, smart_rows
 from app.services.uploads import read_upload
 from app.core.access import require_in_school, require_school_access
@@ -136,6 +137,8 @@ async def bulk_import_teachers(
     subject name (the teacher still gets created, with a warning).
     """
     require_school_access(db, current_user, school_id, min_role="admin")
+    # Reading the sheet can call the AI model.
+    check_ai_quota("ai-import", current_user.id, per_hour=30)
     content = await read_upload(file)
     # The school's own sheet, whatever its layout - see app/services/smart_import.py.
     try:
@@ -164,6 +167,8 @@ async def preview_teachers_import(
     anything doubtful flagged. Saves nothing - the school then clicks
     Import, which sends these rows to /bulk-import/commit."""
     require_school_access(db, current_user, school_id, min_role="admin")
+    # Reading the sheet can call the AI model.
+    check_ai_quota("ai-import", current_user.id, per_hour=30)
     content = await read_upload(file)
     try:
         return build_preview(db, school_id, "teachers", file.filename, content)

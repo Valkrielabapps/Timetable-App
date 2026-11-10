@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
+from app.core.rate_limit import check_quota
 from app.core.database import get_db
 from app.models.school import ClassGroup, Period, School, Subject, SubstitutionLog, Teacher
 from app.models.user import User
@@ -180,6 +181,9 @@ def notify_teachers(
 
     require_school_access(db, current_user, school_id, min_role="admin")
     _check_category(data.category)
+    # Each click can email a whole staff room, through a paid email service.
+    check_quota(f"cover-email:{current_user.id}", limit=30, window_seconds=3600)
+    check_quota(f"cover-email-school:{school_id}", limit=100, window_seconds=86400)
     try:
         return substitution_notify.notify(db, school_id, data.date, data.category, data.everyone)
     except ValueError as exc:

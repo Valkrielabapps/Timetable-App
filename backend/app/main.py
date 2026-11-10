@@ -15,7 +15,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import check_production_secrets, settings
 from app.core.observability import init_sentry, log_llm_availability
-from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.core.rate_limit import general_limit, limiter, rate_limit_exceeded_handler
 from app.models import outreach as outreach_models, payment, problems as problem_models, school, user  # noqa: F401 - registers mappers before first request
 from app.routers import (
     admin,
@@ -90,6 +90,7 @@ async def security_headers(request, call_next):
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.middleware("http")(general_limit)
 
 app.add_middleware(
     CORSMiddleware,

@@ -36,7 +36,7 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.rate_limit import check_quota
+from app.core.rate_limit import check_quota, limiter
 from app.models.payment import PaymentOrder, PlanOffer
 from app.services import billing
 from app.models.school import School
@@ -334,6 +334,7 @@ def get_order_status(
 
 
 @router.post("/webhook")
+@limiter.exempt  # Cashfree's own servers: a payment notice must never be turned away.
 async def cashfree_webhook(request: Request, db: Session = Depends(get_db)):
     """Server-to-server notification from Cashfree.
 

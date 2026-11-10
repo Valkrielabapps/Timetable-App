@@ -36,7 +36,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.access import require_in_school, require_school_access
-from app.core.rate_limit import check_quota
+from app.core.rate_limit import ai_budget_left, check_ai_quota, check_quota
 from app.core.auth import get_current_user
 from app.core.database import SessionLocal, get_db
 from app.models.school import (
@@ -507,8 +507,9 @@ def _generate(timetable_id: int, school_id: int, solve=None) -> None:
                 # why this never raises and just leaves error_explanation
                 # null on any failure (no API key, network issue, etc.).
                 # Run once here, not on every GET, since this result never
-                # changes for this timetable once computed.
-                timetable.error_explanation = explain_infeasibility(result.errors)
+                # changes for this timetable once computed. Skipped once the
+                # site's AI allowance is used up - the errors still show.
+                timetable.error_explanation = explain_infeasibility(result.errors) if ai_budget_left() else None
             elif result.status == "infeasible":
                 # _diagnose_infeasibility ran and came up empty - a real
                 # conflict exists, but it's an interaction between several
@@ -587,6 +588,9 @@ def generate_timetable(school_id: int, keep_placed: bool = False, db: Session = 
     version instead of rebuilding it. The result is a new version either way."""
     require_school_access(db, current_user, school_id, min_role="admin")
     _refuse_if_generating(db, school_id)
+    # Generating is the heaviest work the server does, and every school shares
+    # a few slots for it; far more than anyone needs while setting up.
+    check_quota(f"generate:{school_id}", limit=30, window_seconds=3600)
     timetable = Timetable(school_id=school_id, status="generating",
                           version_number=versions.next_version_number(db, school_id))
     db.add(timetable)
@@ -1712,7 +1716,7 @@ def edit_command(timetable_id: int, payload: EditCommandRequest, db: Session = D
         )
     # Sends the timetable's entries as context on every call, so this is a
     # larger prompt than constraint parsing and worth its own allowance.
-    check_quota(f"llm-edit:{current_user.id}", limit=40, window_seconds=3600)
+    check_ai_quota("llm-edit", current_user.id, per_hour=40)
     plans.require_ai(db, db.get(School, timetable.school_id))
 
     entries = db.query(TimetableEntry).filter(TimetableEntry.timetable_id == timetable_id).all()

@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # escape hatch: if a limit turns out to be set too low for a real school,
     # this buys time to retune it without a rollback.
     rate_limit_enabled: bool = True
+    # Calls to the AI model the whole site may make, whatever the number of
+    # accounts - the ceiling on the AI bill. Raise them if real use gets near.
+    ai_calls_per_hour: int = 300
+    ai_calls_per_day: int = 2000
 
     # Sentry DSN for error tracking. Unset by default, which disables Sentry
     # entirely (see app/core/observability.py) - so local dev, tests and CI

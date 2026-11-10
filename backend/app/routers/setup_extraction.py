@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.services.uploads import read_upload
 from app.core.access import require_school_access
-from app.core.rate_limit import check_quota
+from app.core.rate_limit import check_ai_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
@@ -40,7 +40,7 @@ async def extract_setup(
     # The most expensive LLM call in the app - a whole document per
     # request, not a sentence. Deliberately low: a school sets itself up
     # once, so a legitimate admin never approaches this.
-    check_quota(f"llm-extract:{current_user.id}", limit=10, window_seconds=3600)
+    check_ai_quota("llm-extract", current_user.id, per_hour=10)
     content = await read_upload(file)
     try:
         rows = read_spreadsheet_rows(file.filename, content)
