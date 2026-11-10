@@ -710,6 +710,10 @@ class SubstitutionLog(Base):
     # day, or the periods they were away for.
     absences = Column(JSON, default=list)
     changes = Column(JSON, default=list)
+    # What teachers were last emailed for this date (app/services/
+    # substitution_notify.py): {event uid: teacher_id}, so a cover that moves
+    # to someone else is cancelled in the first teacher's calendar.
+    notified = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     school = relationship("School")

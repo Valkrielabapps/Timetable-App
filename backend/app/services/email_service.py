@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 _RESEND_API_URL = "https://api.resend.com/emails"
 
 
-def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: str | None = None) -> bool:
+def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: str | None = None,
+          attachments: list[dict] | None = None) -> bool:
     """Shared send path for every email this service sends - the part
     that's identical regardless of which template/recipient is involved:
     no-op if unconfigured, POST to Resend, swallow every failure mode into
@@ -55,6 +56,9 @@ def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: st
     }
     if reply_to:
         payload["reply_to"] = reply_to
+    if attachments:
+        # [{"filename", "content" (base64), "content_type"}] - Resend's format.
+        payload["attachments"] = attachments
 
     try:
         response = requests.post(
@@ -200,3 +204,18 @@ def send_support_ticket(
         log_context="support ticket",
         reply_to=from_email,
     )
+
+
+def send_cover_email(to_email: str, subject: str, html: str, ics: str | None, reply_to: str | None = None) -> bool:
+    """A teacher's cover for a day, with a calendar invite (.ics) that Gmail,
+    Outlook and Apple Mail add to the teacher's calendar."""
+    import base64
+
+    attachments = None
+    if ics:
+        attachments = [{
+            "filename": "invite.ics",
+            "content": base64.b64encode(ics.encode("utf-8")).decode("ascii"),
+            "content_type": "text/calendar; charset=utf-8; method=" + ("CANCEL" if "METHOD:CANCEL" in ics else "REQUEST"),
+        }]
+    return _send(to_email, subject, html, "cover email", reply_to=reply_to, attachments=attachments)

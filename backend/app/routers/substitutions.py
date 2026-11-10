@@ -155,3 +155,32 @@ def substitution_summary_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="substitutions-{date.isoformat()}-{part}.pdf"'},
     )
+
+
+from pydantic import BaseModel as _Base  # noqa: E402
+
+
+class NotifyIn(_Base):
+    date: date_type
+    category: str | None = None
+    # Also send the whole day's arrangement to every teacher with an email.
+    everyone: bool = False
+
+
+@router.post("/notify")
+def notify_teachers(
+    school_id: int,
+    data: NotifyIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Email each covering teacher their cover for the date, with calendar
+    invites - see app/services/substitution_notify.py."""
+    from app.services import substitution_notify
+
+    require_school_access(db, current_user, school_id, min_role="admin")
+    _check_category(data.category)
+    try:
+        return substitution_notify.notify(db, school_id, data.date, data.category, data.everyone)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
