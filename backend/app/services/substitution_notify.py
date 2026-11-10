@@ -140,6 +140,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
     school_name = school.name if school else "your school"
     nice_day = day.strftime("%A %d %B %Y").replace(" 0", " ")
     sent, no_email, failed = [], [], []
+    reasons: set[str] = set()
     now_notified: dict[str, int] = {}
     for tid, events in events_by_teacher.items():
         events.sort(key=lambda e: e["order"])
@@ -156,7 +157,11 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         ok = email_service.send_cover_email(
             t.email, f"Cover on {nice_day}: {len(events)} {'period' if len(events) == 1 else 'periods'}",
             body, _ics(events, "REQUEST", organizer, tz))
-        (sent if ok else failed).append(t.name)
+        if ok:
+            sent.append(t.name)
+        else:
+            failed.append(t.name)
+            reasons.add(email_service.last_error() or "unknown")
 
     # Cover that moved away from someone since they were last emailed.
     before: dict[str, int] = {}
@@ -178,7 +183,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
                                           _ics(events, "CANCEL", organizer, tz)):
             cancelled += len(uids)
 
-    summary_sent = 0
+    summary_sent, summary_failed = 0, []
     if everyone:
         s = build_summary(db, school_id, day, category)
         rows = "".join(
@@ -196,6 +201,9 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
             if t.email and t.id not in covering:
                 if email_service.send_cover_email(t.email, f"Cover arrangement for {nice_day}", body, None):
                     summary_sent += 1
+                else:
+                    summary_failed.append(t.name)
+                    reasons.add(email_service.last_error() or "unknown")
 
     newest = logs[-1]
     newest.notified = now_notified
@@ -209,4 +217,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         "failed": sorted(failed),
         "cancelled": cancelled,
         "summary_sent": summary_sent,
+        "summary_failed": sorted(summary_failed),
+        # Why sending failed, if it did: the same reason usually applies to all.
+        "errors": sorted(reasons),
     }

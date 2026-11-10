@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.school import ClassGroup, Period, Subject, Teacher
 from app.services import email_service
+from app.services.email_service import send_cover_email as _real_send_cover_email
 from app.services.substitution_notify import _times
 from tests.conftest import create_school, signup
 
@@ -117,3 +118,17 @@ def test_nothing_saved_says_so_and_viewers_cannot_send(client, day):
     _, other = signup(client, email="o@x.com")
     r = client.post(f"/api/schools/{w['school']}/substitutions/notify", json={"date": "2026-11-17"}, headers=other)
     assert r.status_code in (403, 404)
+
+
+def test_a_refusal_from_resend_is_explained(client, day, monkeypatch):
+    w, h, _ = day
+    monkeypatch.setattr(email_service, "send_cover_email", _real_send_cover_email)  # the real one, this time
+
+    class Refused:
+        status_code = 403
+        text = '{"message":"You can only send testing emails to your own email address. To send emails to other recipients, please verify a domain"}'
+
+    monkeypatch.setattr(email_service.requests, "post", lambda *a, **k: Refused())
+    _save(client, w, h, [("p1", "iyer")])
+    r = _notify(client, w, h)
+    assert r["failed"] == ["Mr. Iyer"] and "isn't verified in Resend" in r["errors"][0]

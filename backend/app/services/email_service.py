@@ -28,6 +28,8 @@ Design choices (mirrors app/services/llm_constraint_parser.py):
 import html as _html
 import logging
 
+import threading
+
 import requests
 
 from app.core.config import settings
@@ -37,6 +39,31 @@ logger = logging.getLogger(__name__)
 _RESEND_API_URL = "https://api.resend.com/emails"
 
 
+# Why the last send on this thread failed, in words a school admin can act on
+# (see last_error). Thread-local: requests run on several threads.
+_local = threading.local()
+
+
+def last_error() -> str | None:
+    return getattr(_local, "error", None)
+
+
+def _reason(status: int, text: str) -> str:
+    low = (text or "").lower()
+    if "verify a domain" in low or "testing emails" in low or "own email address" in low:
+        return ("the sending domain isn't verified in Resend yet, so it only delivers to the Resend account's own "
+                "address. Verify timetablz.com in Resend and set EMAIL_FROM_ADDRESS to an address on it")
+    if "domain is not verified" in low or "not verified" in low:
+        return "the sending domain isn't verified in Resend. Verify it, then try again"
+    if status == 401 or status == 403 and "api key" in low:
+        return "the Resend API key is wrong or revoked"
+    if status == 422:
+        return f"Resend didn't accept the message ({text[:160]})"
+    if status == 429:
+        return "too many emails at once. Wait a minute and try again"
+    return f"Resend answered {status}: {text[:160]}"
+
+
 def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: str | None = None,
           attachments: list[dict] | None = None) -> bool:
     """Shared send path for every email this service sends - the part
@@ -44,8 +71,10 @@ def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: st
     no-op if unconfigured, POST to Resend, swallow every failure mode into
     False. `log_context` is just a short label (e.g. "invite email",
     "password reset email") so log lines are distinguishable."""
+    _local.error = None
     if not settings.resend_api_key:
         logger.info("RESEND_API_KEY not set; skipping %s to %s", log_context, to_email)
+        _local.error = "email isn't set up on the server (RESEND_API_KEY)"
         return False
 
     payload = {
@@ -72,10 +101,12 @@ def _send(to_email: str, subject: str, html: str, log_context: str, reply_to: st
                 "Resend rejected %s to %s: %s %s",
                 log_context, to_email, response.status_code, response.text,
             )
+            _local.error = _reason(response.status_code, response.text)
             return False
         return True
     except Exception:
         logger.exception("Failed to send %s to %s", log_context, to_email)
+        _local.error = "couldn't reach Resend. Try again in a minute"
         return False
 
 

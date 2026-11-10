@@ -145,3 +145,17 @@ describe('emailing the cover', () => {
     expect(screen.queryByRole('button', { name: 'Email teachers' })).not.toBeInTheDocument()
   })
 })
+
+
+describe('when sending fails', () => {
+  it('says why, for every teacher it failed for', async () => {
+    api.notifySubstitutions.mockResolvedValue({
+      email_configured: true, sent: [], no_email: [], failed: ['Sumriti'], cancelled: 0, summary_sent: 0,
+      summary_failed: ['Rao'], errors: ["the sending domain isn't verified in Resend yet"],
+    })
+    render(<SubstitutionSummary schoolId={1} summary={WHOLE} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Email teachers' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send emails' }))
+    expect(await screen.findByText(/Couldn’t send to Sumriti, Rao: the sending domain isn't verified in Resend yet\./)).toBeInTheDocument()
+  })
+})

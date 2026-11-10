@@ -103,7 +103,12 @@ export default function SubstitutionSummary({ schoolId, schoolName, summary, rea
                   {emailed.no_email.length > 0 && (
                     <p className="text-amber-800">No email address for {emailed.no_email.join(', ')}. Add one on the Teachers page.</p>
                   )}
-                  {emailed.failed.length > 0 && <p className="text-red-700">Couldn&rsquo;t send to {emailed.failed.join(', ')}. Try again.</p>}
+                  {(emailed.failed.length > 0 || emailed.summary_failed?.length > 0) && (
+                    <p className="text-red-700">
+                      Couldn&rsquo;t send to {[...emailed.failed, ...(emailed.summary_failed ?? [])].join(', ')}
+                      {emailed.errors?.length > 0 ? `: ${emailed.errors.join('; ')}.` : '. Try again.'}
+                    </p>
+                  )}
                 </>
               )}
             </div>
