@@ -914,6 +914,14 @@ def _refuse_if_subject_frozen(db: Session, entries: list[TimetableEntry]) -> Non
             )
 
 
+def _require_slot(db: Session, timetable: Timetable, class_group_id: int, *period_ids: int) -> None:
+    """The section and periods a slot edit names are this timetable's school's.
+    Checked before anything reads them, so another school's section can't be
+    probed through the replies (its name, or whether it's frozen)."""
+    require_in_school(db, ClassGroup, class_group_id, timetable.school_id, "Section")
+    require_in_school(db, Period, list(period_ids), timetable.school_id, "Period")
+
+
 def _refuse_if_frozen(db: Session, class_group_id: int) -> None:
     """A frozen section's timetable doesn't change - by drag, lock, swap or the
     edit box - until it is unfrozen. See app/services/freezing.py."""
@@ -998,11 +1006,12 @@ def swap_entries(entry_id: int, other_entry_id: int, db: Session = Depends(get_d
     other = db.get(TimetableEntry, other_entry_id)
     if not entry or not other:
         raise HTTPException(status_code=404, detail="Timetable entry not found")
-    if entry.timetable_id != other.timetable_id:
-        raise HTTPException(status_code=400, detail="Both entries must belong to the same timetable.")
-
     timetable = db.get(Timetable, entry.timetable_id)
     require_school_access(db, current_user, timetable.school_id, min_role="admin")
+    # Not found, the same as a missing one, so this can't confirm that an id
+    # from another school exists.
+    if entry.timetable_id != other.timetable_id:
+        raise HTTPException(status_code=404, detail="Timetable entry not found")
     if timetable.status != "draft":
         raise HTTPException(
             status_code=400,
@@ -1136,6 +1145,7 @@ def _apply_slot_move(db: Session, timetable: Timetable, payload: SlotMove) -> li
     """The checks and the change behind move-slot, without committing, so
     move-chain can make several in one all-or-nothing transaction. Raises a
     400 naming the problem if the move isn't allowed."""
+    _require_slot(db, timetable, payload.class_group_id, payload.from_period_id, payload.to_period_id)
     _refuse_if_frozen(db, payload.class_group_id)
     if payload.from_period_id == payload.to_period_id:
         raise HTTPException(status_code=400, detail="That's the same period.")
@@ -1232,6 +1242,7 @@ def lock_slot(
     unclear which teachers were meant to stay.
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _require_slot(db, timetable, payload.class_group_id, payload.period_id)
     _refuse_if_frozen(db, payload.class_group_id)
     sections = _sections_moving_together(db, timetable.id, payload.class_group_id, payload.period_id)
     # A frozen section sharing the block is kept as it is either way; its own
@@ -1305,6 +1316,7 @@ def move_targets(
     for every target at once, and nothing is saved.
     """
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _require_slot(db, timetable, payload.class_group_id, payload.from_period_id)
     board = _board(db, timetable)
     src = payload.from_period_id
     if src not in board.periods:
@@ -1488,6 +1500,7 @@ def remove_slot(
     """Take a slot off the timetable, back to the lesson cards. A block goes
     for every section sharing it. Frozen and locked lessons stay."""
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _require_slot(db, timetable, payload.class_group_id, payload.period_id)
     sections = _sections_moving_together(db, timetable.id, payload.class_group_id, payload.period_id)
     entries = [e for sid in sections for e in _slot_entries(db, timetable.id, sid, payload.period_id)]
     if not entries:
@@ -1553,6 +1566,7 @@ def suggest_move(
     every other period, up to three moves in all. Nothing is saved - apply
     one with move-chain."""
     timetable = _editable_timetable(db, timetable_id, current_user)
+    _require_slot(db, timetable, payload.class_group_id, payload.from_period_id, payload.to_period_id)
     board = _board(db, timetable)
     if payload.from_period_id not in board.periods or payload.to_period_id not in board.periods:
         raise HTTPException(status_code=404, detail="Period not found")
