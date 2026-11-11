@@ -65,7 +65,7 @@ def test_a_table_in_a_word_document_reads_like_a_sheet():
     # The merged name cell covers both of Priya's rows.
     assert [r["name"] for r in rows] == ["Priya Sharma", "Priya Sharma", "Rahul Mehta"]
     assert rows[0]["qualified_subjects"] == "Mathematics" and rows[1]["qualified_subjects"] == "Physics"
-    assert rows[2]["qualified_subjects"] == "Eng;Hindi"  # two lines in one cell are two subjects
+    assert rows[2]["qualified_subjects"] == "English;Hindi"  # two lines in one cell are two subjects
     assert rows[2]["qualified_grades"] == "Grade 6;Grade 7;Grade 8"
 
 

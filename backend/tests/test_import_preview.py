@@ -73,7 +73,7 @@ def test_preview_saves_nothing_and_import_saves_what_was_shown(client, school):
     assert r.status_code == 200, r.text
     p = r.json()
     assert (p["total"], p["subject_count"], p["will_update"]) == (3, 2, 1)
-    assert p["new_subjects"] == ["Maths", "Eng"]
+    assert p["new_subjects"] == ["Maths", "English"]
     assert p["rows"][0] == {"name": "Priya Sharma", "qualified_subjects": "Maths", "qualified_grades": "Grade 9"}
     assert p["row_notes"][2] == ["No subjects"]
     assert any("no subjects (Anil Kumar)" in c for c in p["checks"])
@@ -87,7 +87,7 @@ def test_preview_saves_nothing_and_import_saves_what_was_shown(client, school):
     r = client.post("/api/teachers/bulk-import/commit", json={"school_id": sid, "rows": p["rows"]}, headers=h)
     assert r.status_code == 200, r.text
     assert (r.json()["created"], r.json()["updated"]) == (2, 1)
-    assert sorted(r.json()["new_subjects"]) == ["Eng", "Maths"]
+    assert sorted(r.json()["new_subjects"]) == ["English", "Maths"]
     db = SessionLocal()
     try:
         assert db.query(Teacher).filter_by(school_id=sid).count() == 3

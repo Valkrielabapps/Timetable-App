@@ -39,7 +39,7 @@ from app.models.school import (
     ClassGroup, ElectiveBlock, ElectiveOption, Period, Subject, SubjectRequirement, Teacher,
 )
 from app.services.smart_import import (
-    _NOT_A_TEACHER, _class_score, _class_tables, _concept, _key, _norm, _rule_subjects, _split_people,
+    _NOT_A_TEACHER, _concept, count_of, plan_tables, _key, _norm, _rule_subjects, _split_people,
     _split_subjects, look_alike_people, read_sheets,
 )
 
@@ -49,7 +49,9 @@ _EARLY = {"kg": "KG", "lkg": "LKG", "ukg": "UKG", "nursery": "Nursery", "pg": "P
           "playgroup": "Play Group", "prep": "Prep", "pp1": "PP1", "pp2": "PP2"}
 _STREAMS = {"sci": "Science", "science": "Science", "com": "Commerce", "comm": "Commerce", "commerce": "Commerce",
             "hum": "Humanities", "humanities": "Humanities", "arts": "Arts", "art": "Arts", "bio": "Biology",
-            "cs": "Computer Science", "maths": "Maths", "math": "Maths", "pcm": "PCM", "pcb": "PCB"}
+            "cs": "Computer Science", "maths": "Maths", "math": "Maths", "pcm": "PCM", "pcb": "PCB",
+            "neet": "NEET", "jee": "JEE", "nj": "NEET/JEE", "neetjee": "NEET/JEE", "cuet": "CUET",
+            "iit": "IIT", "foundation": "Foundation"}
 _CLASS_TEACHER = {"classteacher", "ct"}
 
 
@@ -109,6 +111,9 @@ def _grade_name(token: str, school_grades: list[str]) -> str:
 
 
 def _periods(cell: str) -> int:
+    # "3+3": two parts of one subject, six periods.
+    if count_of(cell or ""):
+        return count_of(cell)
     try:
         return max(0, int(round(float(cell))))
     except (TypeError, ValueError):
@@ -147,10 +152,15 @@ def _splits(n: int, a: str, b: str) -> list[dict]:
 
 def build_preview(db: Session, school_id: int, filename: str, content: bytes) -> dict:
     sheets = read_sheets(filename, content, "teachers")
-    title, tables = max(((t, _class_tables(rows)) for t, rows in sheets), key=lambda x: _class_score(x[1]))
+    # A table per class, a grid of counts (classes down, subjects across, or
+    # the other way), or a column of subjects per stream.
+    title, tables = plan_tables(sheets)
     if not tables:
-        raise ValueError("Couldn't find a table for each class in this file (a class name, then Subjects, Periods "
-                         "and Teacher). Fill in the plans by hand instead, or upload the allotment sheet.")
+        raise ValueError("Couldn't find the periods for each class in this file. It can read a table per class "
+                         "(Subjects, Periods, Teacher), a grid with classes down one side and subjects across "
+                         "the top (or the other way round) with the periods in the cells, or a column of subjects "
+                         "with a column of periods for each class. Fill in the plans by hand instead, or upload "
+                         "the allotment sheet.")
     s = _school(db, school_id)
     subject_names = [x.name for x in s["subjects"]]
     teacher_names = [t.name for t in s["teachers"]]

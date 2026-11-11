@@ -189,4 +189,4 @@ def test_a_file_without_class_tables_says_what_to_do(client, school):
     sid, h = school
     r = client.post("/api/class-plan/preview", data={"school_id": sid},
                     files={"file": ("s.csv", b"Name,Subject\nAnil,Maths\n", "text/csv")}, headers=h)
-    assert r.status_code == 400 and "table for each class" in r.json()["detail"]
+    assert r.status_code == 400 and "table per class" in r.json()["detail"]

@@ -166,7 +166,7 @@ def test_uploading_the_staff_list_adds_teachers_and_their_new_subjects(client, s
                     files={"file": ("staff.xlsx", xlsx(("Sheet1", STAFF)), "application/octet-stream")}, headers=h)
     assert r.status_code == 200, r.text
     out = r.json()
-    assert out["created"] == 2 and sorted(out["new_subjects"]) == ["Eng", "Maths", "Physics"]
+    assert out["created"] == 2 and sorted(out["new_subjects"]) == ["English", "Maths", "Physics"]
     db = SessionLocal()
     try:
         priya = db.query(Teacher).filter_by(school_id=sid, name="Priya Sharma").one()

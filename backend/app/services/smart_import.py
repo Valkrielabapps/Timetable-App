@@ -470,12 +470,21 @@ _SUBJECT_ALIASES = {
     "eco": "economics", "econ": "economics", "economics": "economics",
     "acc": "accounts", "accts": "accounts", "accounts": "accounts", "accountancy": "accounts",
     "bst": "business", "bstudies": "business", "businessstudies": "business",
-    "comm": "commerce", "com": "commerce", "comstudies": "commerce", "commercestudies": "commerce", "commerce": "commerce",
+    # "Com" alone is Computer in a primary table and Commerce in Class 11: not guessed.
+    "comm": "commerce", "comstudies": "commerce", "commercestudies": "commerce", "commerce": "commerce",
     "sci": "science", "science": "science",
     "sciprac": "sciprac", "scienceprac": "sciprac", "sciencepractical": "sciprac", "sciencepracticals": "sciprac",
     "lifeskill": "lifeskills", "lifeskills": "lifeskills",
     "writingskill": "writing", "writingskills": "writing",
     "art": "art", "arts": "art", "artandcraft": "art", "artcraft": "art",
+    "eng": "english", "engl": "english", "english": "english",
+    "hin": "hindi", "hindi": "hindi", "tam": "tamil", "tamil": "tamil", "kan": "kannada", "kannada": "kannada",
+    "tel": "telugu", "telugu": "telugu", "mal": "malayalam", "malayalam": "malayalam", "skt": "sanskrit",
+    "sans": "sanskrit", "sanskrit": "sanskrit", "fre": "french", "french": "french",
+    "mat": "math", "mths": "math", "soc": "social", "socsci": "social", "game": "pe",
+    "robo": "robotics", "robotics": "robotics", "ai": "ai", "artificialintelligence": "ai",
+    "acco": "accounts", "bs": "business", "ip": "ip", "informaticspractices": "ip",
+    "read": "reading", "reading": "reading", "lis": "listening", "listening": "listening", "speak": "speaking", "speaking": "speaking",
 }
 
 # A clean name for a known subject the school doesn't have yet, so "PT",
@@ -488,6 +497,10 @@ _CONCEPT_NAMES = {
     "geography": "Geography", "civics": "Civics", "histciv": "History & Civics", "economics": "Economics",
     "accounts": "Accountancy", "business": "Business Studies", "commerce": "Commerce", "science": "Science",
     "sciprac": "Science Practical", "lifeskills": "Life Skills", "writing": "Writing Skills", "art": "Art",
+    "english": "English", "hindi": "Hindi", "tamil": "Tamil", "kannada": "Kannada", "telugu": "Telugu",
+    "malayalam": "Malayalam", "sanskrit": "Sanskrit", "french": "French", "robotics": "Robotics",
+    "ai": "Artificial Intelligence", "ip": "Informatics Practices", "reading": "Reading", "listening": "Listening",
+    "speaking": "Speaking",
 }
 
 
@@ -525,8 +538,11 @@ def _rule_subjects(items: list[str], school_subjects: list[str]) -> dict[str, li
             # The sheet's own full name ("Mathematics") if it has one, else a
             # clean one for the short forms ("PT", "Games" -> Physical Education).
             full = [x for x in new_by_concept[c] if _key(x) == _FULL_KEY.get(c)]
-            out[item] = [_best_spelling(full) if full else
-                         (_CONCEPT_NAMES.get(c) or _best_spelling(new_by_concept[c]))]
+            best = _best_spelling(full) if full else (_CONCEPT_NAMES.get(c) or _best_spelling(new_by_concept[c]))
+            # "PHYSICS" typed in capitals arrives as "Physics".
+            if best.isupper() and len(best) > 3 and _CONCEPT_NAMES.get(c):
+                best = _CONCEPT_NAMES[c]
+            out[item] = [best]
     return out
 
 
@@ -710,6 +726,184 @@ def _class_score(tables: list[dict]) -> int:
                for t in tables)
 
 
+# ------------------------------------------- allotment grids and side blocks
+#
+# Two more ways schools write the same plan, with numbers instead of a
+# Periods column:
+#
+#   a grid      CLASS | ENG | TAMIL | MAT | ... | TOTAL     (classes down,
+#               VI    | 3+3 | 4     | 6   | ... | 40         subjects across)
+#               - or the other way round, subjects down and classes across;
+#   side blocks GRADE XI AND XII                            (a column of
+#               NEET     |   | JEE       |   | CUET  |       subjects and a
+#               ENGLISH  | 4 | ENGLISH   | 4 | ENG   | 7     column of numbers,
+#               PHYSICS  | 9 | PHYSICS   | 9 | ECO   | 8     one pair per class)
+#
+# Both come out as the same class tables as above (label, then subject,
+# periods, teacher - no teacher here), so everything downstream reads them.
+
+_COUNT = re.compile(r"^\s*\d{1,2}(?:\s*\+\s*\d{1,2})*\s*$")
+_EMPTY = re.compile(r"^\s*(?:-+|–|—|nil|na|n/a|x)?\s*$", re.I)
+_ROMAN_N = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
+            "xi": 11, "xii": 12}
+_EARLY_N = {"kg", "lkg", "ukg", "nursery", "prekg", "pp1", "pp2", "playgroup", "prep"}
+
+
+def count_of(cell: str) -> int:
+    """"6" -> 6, "3+3" -> 6, "-" -> 0."""
+    if not _COUNT.match(cell or ""):
+        return 0
+    return sum(int(x) for x in re.findall(r"\d+", cell))
+
+
+def _countish(cell: str) -> bool:
+    return bool(_COUNT.match(cell)) or bool(_EMPTY.match(cell))
+
+
+def _class_token(text: str) -> tuple[str, str] | None:
+    """The class a label names, and what else it says: "N/J VIII" -> ("VIII",
+    "N/J"); "Class 6" -> ("6", ""); "CUET X" -> ("X", "CUET"); "Maths" -> None."""
+    words = re.split(r"\s+", re.sub(r"(?i)\b(class|grade|std\.?|standard)\b", " ", text).strip())
+    for i, w in enumerate(words):
+        k = w.strip(".-:()").lower()
+        if k in _ROMAN_N or (k.isdigit() and 1 <= int(k) <= 12) or k in _EARLY_N:
+            rest = " ".join(words[:i] + words[i + 1:]).strip(" -:()")
+            return w.strip(".-:()").upper() if not k.isdigit() else k, rest
+    return None
+
+
+def _class_label(text: str) -> str:
+    """A grid's row label as a class table label the class plan reads:
+    "N/J VIII" -> "Class VIII (N/J)"."""
+    tok = _class_token(text)
+    if not tok:
+        return text.strip()
+    grade, rest = tok
+    return f"Class {grade} ({rest})" if rest else f"Class {grade}"
+
+
+def _grid(rows: list[list[str]]) -> list[dict]:
+    """A heading row of subjects (or classes) over rows of counts."""
+    best: list[dict] = []
+    for h, head in enumerate(rows):
+        cols = [c for c in range(1, len(head)) if head[c].strip() and not _COUNT.match(head[c])]
+        if len(cols) < 3:
+            continue
+        body = []
+        for r in range(h + 1, len(rows)):
+            row = rows[r]
+            first = row[0].strip() if row else ""
+            cells = [row[c].strip() if c < len(row) else "" for c in cols]
+            filled = [v for v in cells if v]
+            if not first and not filled:
+                continue
+            numbers = [v for v in cells if _COUNT.match(v)]
+            if first and len(numbers) >= 2 and all(_countish(v) for v in cells):
+                body.append((first, cells))
+            else:
+                break
+        if len(body) < 2:
+            continue
+        heads = [head[c].strip() for c in cols]
+        # Classes across the top and subjects down the side: the other way round.
+        across = sum(1 for x in heads if _class_token(x)) > len(heads) / 2 and \
+            sum(1 for f, _ in body if _class_token(f)) < len(body) / 2
+        tables = []
+        if across:
+            for j, cls in enumerate(heads):
+                if is_label(cls) and not _class_token(cls):
+                    continue
+                items = [(subj, cells[j], "") for subj, cells in body
+                         if count_of(cells[j]) and not is_label(subj)]
+                if items:
+                    tables.append({"label": _class_label(cls), "items": items})
+        else:
+            for cls, cells in body:
+                if _key(cls).startswith("total"):
+                    continue
+                items = [(heads[j], v, "") for j, v in enumerate(cells)
+                         if count_of(v) and not is_label(heads[j])]
+                if items:
+                    tables.append({"label": _class_label(cls), "items": items})
+        if sum(len(t["items"]) for t in tables) > sum(len(t["items"]) for t in best):
+            best = tables
+    return best
+
+
+def _side_blocks(rows: list[list[str]]) -> list[dict]:
+    """Pairs of columns - a subject, then its number - one pair per class or
+    stream, with the stream's name above it and the classes in a title."""
+    width = max((len(r) for r in rows), default=0)
+
+    def cell(r, c):
+        return rows[r][c].strip() if r < len(rows) and c < len(rows[r]) else ""
+
+    pairs = []
+    for c in range(width - 1):
+        # A class label with a number beside it ("VI | 6") is a grid's row, not a subject.
+        hits = [r for r in range(len(rows)) if cell(r, c) and not _COUNT.match(cell(r, c))
+                and _COUNT.match(cell(r, c + 1)) and not is_label(cell(r, c))
+                and not (_class_token(cell(r, c)) and len(cell(r, c).split()) <= 2)]
+        if len(hits) >= 3:
+            pairs.append((c, hits))
+    if not pairs:
+        return []
+    # Classes the blocks are for, from a title above them: "GRADE XI AND XII".
+    top = min(h[0] for _, h in pairs)
+    title_classes: list[str] = []
+    for r in range(top):
+        for w in re.split(r"[\s,&/–—-]+", " ".join(rows[r])):
+            k = w.strip(".:()").lower()
+            if (k in _ROMAN_N or (k.isdigit() and 1 <= int(k) <= 12)) and w.upper() not in title_classes:
+                title_classes.append(w.strip(".:()").upper())
+    tables = []
+    first_col = pairs[0][0]
+    for c, hits in pairs:
+        stream = ""
+        for r in range(hits[0] - 1, -1, -1):
+            if cell(r, c) and not cell(r, c + 1):
+                stream = cell(r, c)
+                break
+        items = []
+        for r in range(hits[0], max(hits) + 2):
+            name, n = cell(r, c), cell(r, c + 1)
+            if not count_of(n):
+                continue
+            # A row only the first block names ("AI | 2 |  | 2"): the same subject.
+            if not name and c != first_col:
+                name = cell(r, first_col)
+            if name and not is_label(name):
+                items.append((name, n, ""))
+        if not items:
+            continue
+        tok = _class_token(stream) if stream else None
+        if tok:
+            tables.append({"label": _class_label(stream), "items": items})
+        elif title_classes:
+            for g in title_classes:
+                tables.append({"label": f"Class {g} ({stream})" if stream else f"Class {g}", "items": items})
+        else:
+            tables.append({"label": stream or f"table {len(tables) + 1}", "items": items})
+    return tables
+
+
+def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[dict]]:
+    """Every class table in the file, whichever way it's written: the
+    Subjects | Periods | Teacher tables, a grid of counts, side blocks.
+    The best sheet's, plus any other sheet nearly as full (a Word document's
+    tables are often one class range each)."""
+    proper = max(((_class_score(tb), t, tb) for t, rows in sheets for tb in [_class_tables(rows)]),
+                 key=lambda x: x[0], default=(0, "", []))
+    if len(proper[2]) >= 2:
+        return proper[1], proper[2]
+    scored = [(_class_score(tb), t, tb) for t, rows in sheets for tb in [_grid(rows) or _side_blocks(rows)]]
+    top = max((s for s, _, _ in scored), default=0)
+    if top == 0:
+        return proper[1], proper[2]
+    keep = [(t, tb) for s, t, tb in scored if s and s >= top * 0.2]
+    return ", ".join(t for t, _ in keep), [x for _, tb in keep for x in tb]
+
+
 def _split_people(cell: str) -> list[str]:
     out = []
     for p in re.split(r"\s*(?:/|,|&|\band\b|\+)\s*", cell):
@@ -770,8 +964,15 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
 
     sheets = read_sheets(filename, content, kind)
     # One small table per class, anywhere on a sheet: read every one of them.
-    by_class = max(((title, _class_tables(rows)) for title, rows in sheets), key=lambda x: _class_score(x[1]))
+    # Or a grid of counts per class, or a column of subjects per stream.
+    by_class = plan_tables(sheets)
     class_tables = by_class[1] if len(by_class[1]) >= 2 else []
+    if class_tables and kind == "teachers" and not any(cell for t in class_tables for _, _, cell in t["items"]):
+        raise ValueError(
+            "This file has the periods for each class but no teachers' names in it. Upload it under "
+            "Subjects to add its subjects, or in Get started step 4 (What each class needs) to fill in "
+            "every class's periods. Then upload a staff list here."
+        )
 
     used_ai = False
     layout = "rows"
@@ -825,6 +1026,16 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                 del mapping[i]
             seen_single.add(f)
 
+    if not ({"name", "first_name"} & set(mapping.values())) and kind == "subjects" and not class_tables:
+        # No heading anywhere - a bare list of subjects: the column with the
+        # most names in it.
+        all_rows = [r for r in rows if any(r)]
+        width = max((len(r) for r in all_rows), default=0)
+        counts = [sum(1 for r in all_rows if i < len(r) and r[i].strip() and not _COUNT.match(r[i])
+                      and not is_label(r[i])) for i in range(width)]
+        if counts and max(counts) >= 2:
+            col = counts.index(max(counts))
+            headings, body, mapping, idx = [""] * width, all_rows, {col: "name"}, -1
     if not ({"name", "first_name"} & set(mapping.values())):
         what = "subject" if kind == "subjects" else "teacher"
         raise ValueError(
@@ -953,6 +1164,8 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         labels = [t["label"] for t in class_tables]
         read_as = [f"a table for each class ({len(labels)}: {', '.join(labels[:8])}{'…' if len(labels) > 8 else ''})",
                    "the subjects in each" + (", and who teaches them" if kind == "teachers" else "")]
+    if not read_as and not class_tables:
+        read_as = ["the column of subject names (it has no heading)"]
     marks = [headings[i] for i, f in sorted(mapping.items()) if f in ("subject_mark", "grade_mark")]
     if marks:
         read_as.append("a mark under " + ", ".join(f"“{m}”" for m in marks) + " as teaching it")
