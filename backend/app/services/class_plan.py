@@ -173,6 +173,8 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
     # Teachers named in the sheet, matched to the school's.
     raw_people: dict[str, None] = {}
     for t in tables:
+        if t.get("class_teacher"):
+            raw_people.setdefault(t["class_teacher"], None)
         for _, _, cell in t["items"]:
             for p in _split_people(cell) + [x for x in re.split(r"\s*/\s*", cell) if _key(x) in _CLASS_TEACHER]:
                 raw_people.setdefault(p, None)
@@ -184,6 +186,10 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
             people[raw] = {"match": by_teacher[_norm(raw)]}
         else:
             cands = [b if a == raw else a for a, b in look_alike_people([raw] + teacher_names) if raw in (a, b)]
+            if not cands:
+                # Nobody here it could be: a new teacher, without asking.
+                people[raw] = {"match": None, "new": True}
+                continue
             qid = f"teacher:{raw}"
             people[raw] = {"match": None, "q": qid}
             questions.append({
@@ -208,7 +214,8 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
         grade = _grade_name(token, s["grades"]) if token else None
         letters = _sections_from(rest)
         have = [g for g in s["groups"] if grade and _norm(g.grade or "") == _norm(grade)]
-        table = {"id": tid, "label": t["label"], "grade": grade or t["label"], "sections": letters, "items": []}
+        table = {"id": tid, "label": t["label"], "grade": grade or t["label"], "sections": letters, "items": [],
+                 "class_teacher": t.get("class_teacher") or ""}
         if not letters and have:
             table["sections"] = [g.name for g in have]
         elif not letters:
@@ -309,7 +316,12 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
         })
 
     # What would make generating fail, found now (choices counted once).
+    # A school with no week yet is checked against last year's, if that's
+    # what the file is.
     lessons = s["lessons"]
+    file_week = next((t["week"] for t in tables if t.get("week")), None)
+    if not lessons and file_week:
+        lessons = len(file_week.get("days") or []) * int(file_week.get("periods") or 0)
     load: dict[str, int] = defaultdict(int)
     for table in out_tables:
         nsec = max(1, len(table["sections"]))
@@ -330,9 +342,15 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
                           "Share some of them with another teacher, or generating will fail.")
 
     sections_total = sum(len(t["sections"]) for t in out_tables if not t.get("sections_q"))
+    # From last year's timetable: the shape of the week, used if the school
+    # hasn't set one up yet.
+    week = file_week if file_week and not s["lessons"] else None
     return {
         "sheet": title,
-        "plan": {"tables": out_tables, "people": people, "ask_existing": bool(existing_with_plan)},
+        "plan": {"tables": out_tables, "people": people, "ask_existing": bool(existing_with_plan), "week": week},
+        "week": week,
+        "new_teachers": sorted(p for p, v in people.items() if v.get("new")),
+        "from_timetable": any(t.get("timetable") for t in tables),
         "questions": questions,
         "checks": checks,
         "skipped": skipped,
@@ -373,7 +391,7 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
     s = _school(db, school_id)
     subjects = {_norm(x.name): x for x in s["subjects"]}
     teachers = {_norm(t.name): t for t in s["teachers"]}
-    created = {"sections": [], "subjects": [], "teachers": [], "requirements": 0, "blocks": 0}
+    created = {"sections": [], "subjects": [], "teachers": [], "requirements": 0, "blocks": 0, "periods": 0}
 
     def subject(name: str) -> Subject:
         if _norm(name) not in subjects:
@@ -414,6 +432,14 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             t.qualified_grades = gs + [grade]
 
     replace = bool(plan.get("ask_existing")) and _answer(answers, "existing", ("replace", "add")) == "replace"
+    week = plan.get("week") or {}
+    if week.get("periods") and not s["lessons"]:
+        days = list(week.get("days") or range(5))
+        for d in days:
+            for o in range(int(week["periods"])):
+                db.add(Period(school_id=school_id, day_of_week=int(d), order=o, label=f"Period {o + 1}", kind="lesson"))
+        db.flush()
+        created["periods"] = len(days) * int(week["periods"])
     groups_by_key = {(_norm(g.grade or ""), _norm(g.name)): g for g in s["groups"]}
 
     for table in plan.get("tables", []):
@@ -439,6 +465,11 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
                 db.flush()
             sections.append(g)
         in_order = table.get("shared_q") and _answer(answers, table["shared_q"], ("order", "either")) == "order"
+        if table.get("class_teacher"):
+            ct = teacher(table["class_teacher"])
+            if isinstance(ct, Teacher):
+                for g in sections:
+                    g.class_teacher_id = ct.id
 
         def put(g: ClassGroup, sub: Subject, periods: int, who: list):
             """One section's periods of one subject, with its teacher(s)."""

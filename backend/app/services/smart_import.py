@@ -484,7 +484,8 @@ _SUBJECT_ALIASES = {
     "mat": "math", "mths": "math", "soc": "social", "socsci": "social", "game": "pe",
     "robo": "robotics", "robotics": "robotics", "ai": "ai", "artificialintelligence": "ai",
     "acco": "accounts", "bs": "business", "ip": "ip", "informaticspractices": "ip",
-    "read": "reading", "reading": "reading", "lis": "listening", "listening": "listening", "speak": "speaking", "speaking": "speaking",
+    "2ln": "lang2", "secondlanguage": "lang2", "2ndlanguage": "lang2", "3ln": "lang3", "thirdlanguage": "lang3",
+    "3rdlanguage": "lang3", "read": "reading", "reading": "reading", "lis": "listening", "listening": "listening", "speak": "speaking", "speaking": "speaking",
 }
 
 # A clean name for a known subject the school doesn't have yet, so "PT",
@@ -500,7 +501,7 @@ _CONCEPT_NAMES = {
     "english": "English", "hindi": "Hindi", "tamil": "Tamil", "kannada": "Kannada", "telugu": "Telugu",
     "malayalam": "Malayalam", "sanskrit": "Sanskrit", "french": "French", "robotics": "Robotics",
     "ai": "Artificial Intelligence", "ip": "Informatics Practices", "reading": "Reading", "listening": "Listening",
-    "speaking": "Speaking",
+    "speaking": "Speaking", "lang2": "2nd Language", "lang3": "3rd Language",
 }
 
 
@@ -1012,6 +1013,264 @@ def _teacher_lists(rows: list[list[str]]) -> list[dict]:
     return [{"label": label, "items": items, "by_teacher": True} for label, items in tables.items()]
 
 
+# ------------------------------------------------- last year's timetable
+#
+# Each section's week, the way schools print it:
+#
+#   Tr's Name :  MRS.ROSEE-   XI A               (the class teacher, the class)
+#            1             2        3 ...         (period numbers)
+#   Mon   BIO-ROS,BHAG   BHAGYA   PHY-KARTHIGAI  (subject-teacher in each cell)
+#   Tue   ...
+#
+# Counting the cells gives each section's periods of each subject, and who
+# taught it - the whole plan, ready to be used again. Teachers are written
+# short and differently from cell to cell ("KRITHI", "KRITHIKA"; "KAL,JO";
+# "V'G" for Vijaya Geetha), so every spelling is matched to one person.
+
+_DAY_PREFIX = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+_SECTION_OF = re.compile(r"\b(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I|1[0-2]|[1-9])\s*[-–]?\s*([A-H])\b")
+_TITLED = re.compile(r"\b(?:mrs|mr|mra|ms|miss|dr|sr)\b\.?\s*([A-Za-z][A-Za-z .']{1,40})", re.I)
+
+
+def _day_of(cell: str) -> int | None:
+    k = re.sub(r"[^a-z]", "", cell.lower())[:3]
+    return _DAY_PREFIX.get(k) if len(re.sub(r"[^a-z]", "", cell.lower())) <= 9 else None
+
+
+def _timetable_blocks(rows: list[list[str]]) -> list[dict]:
+    """Each section's grid: {"section": ("XI", "A"), "class_teacher", "cells": {(day, n): text}}."""
+    blocks, cur, numbers = [], None, {}
+    for row in rows:
+        cells = [v.strip() if isinstance(v, str) else str(v or "").strip() for v in row]
+        if not any(cells):
+            continue
+        day = _day_of(cells[0]) if cells[0] else None
+        nums = {c: int(float(v)) for c, v in enumerate(cells) if c and re.fullmatch(r"\d{1,2}(\.0)?", v)}
+        if day is not None and cur is not None:
+            for c, v in enumerate(cells[1:], start=1):
+                n = numbers.get(c, c)
+                if v:
+                    cur["cells"][(day, n)] = v
+                cur["days"].add(day)
+            continue
+        if len(nums) >= 4 and len(nums) >= len([v for v in cells if v]) - 1:
+            numbers = nums
+            continue
+        joined = " ".join(v for v in cells if v)
+        found = list(_SECTION_OF.finditer(joined))
+        if found and re.search(r"name|class|tr'?s", joined, re.I) or (found and len(joined) < 40):
+            m = found[-1]
+            teacher = ""
+            titled = [t for t in (_TITLED.search(v) for v in cells if v) if t]
+            if titled:
+                teacher = titled[0].group(1)
+            else:
+                after = re.split(r"name\s*[-:]*", joined, flags=re.I)
+                if len(after) > 1:
+                    teacher = _SECTION_OF.sub(" ", after[1])
+            teacher = re.sub(r"[-–:]+$", "", _SECTION_OF.sub(" ", teacher)).strip(" .-:")
+            teacher = re.sub(r"\s+", " ", teacher)
+            cur = {"section": (m.group(1), m.group(2)), "class_teacher": teacher, "cells": {}, "days": set()}
+            blocks.append(cur)
+            numbers = {}
+    return [b for b in blocks if len(b["cells"]) >= 10]
+
+
+def _split_cell(text: str) -> tuple[str, list[str]]:
+    """"BIO-ROS,BHAG" -> ("BIO", ["ROS", "BHAG"]); "BHAGYA" -> ("", ["BHAGYA"])."""
+    t = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
+    # "ENG-2-SOFIA": English 2, taught by Sofia.
+    m = re.match(r"^([^-–]+?)\s*[-–]\s*(\d)\s*[-–]\s*(.+)$", t) or re.match(r"^([^-–]+?)\s*[-–]\s*(.+)$", t)
+    if not m:
+        return "", [t] if t else []
+    subj, rest = (f"{m.group(1).strip()} {m.group(2)}", m.group(3)) if m.lastindex == 3 else (m.group(1), m.group(2))
+    if re.search(r"[-–]", rest):
+        return "?", []  # several subjects run together in one cell: not readable
+    who = [w.strip(" .") for w in re.split(r"[,/&]", rest) if w.strip(" .")]
+    return subj.strip(" ."), who
+
+
+def _lk(name: str) -> str:
+    return re.sub(r"[^a-z]", "", name.lower())
+
+
+def _close(a: str, b: str) -> bool:
+    import difflib
+    return a[:1] == b[:1] and min(len(a), len(b)) >= 4 and difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
+def _ck(code: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", code.lower())
+
+
+def _timetables(rows: list[list[str]]) -> list[dict]:
+    return _timetables_from(_timetable_blocks(rows))
+
+
+def _timetables_from(blocks: list[dict]) -> list[dict]:
+    if len(blocks) < 2:
+        return []
+    from collections import Counter
+    # Who appears as a teacher anywhere ("BIO-BHAGYA"), so a name alone in a
+    # cell ("BHAGYA") can be told from a subject alone ("ELECTIVES").
+    known = set()
+    for b in blocks:
+        for text in b["cells"].values():
+            subj, who = _split_cell(text)
+            if subj:
+                known.update(_lk(w) for w in who)
+
+    def is_person(word: str) -> bool:
+        k = _lk(word)
+        return bool(k) and any(n == k or n.startswith(k) or k.startswith(n) for n in known if len(n) >= 3)
+
+    # Every cell as (section, subject code, teacher spellings).
+    raw = []
+    for b in blocks:
+        last = {}
+        for (day, n), text in sorted(b["cells"].items()):
+            subj, who = _split_cell(text)
+            if subj == "?":
+                continue
+            if not subj:
+                if who and is_person(who[0]) and last.get(day):
+                    subj = last[day]  # a name alone continues the period before: a double lab
+                else:
+                    subj, who = (who[0] if who else ""), []
+            last[day] = subj
+            if subj:
+                raw.append((b, subj, who))
+    # Subject codes: rare typos join a common spelling ("BIP" -> "BIO",
+    # "EN 2" -> "ENG 2").
+    codes = Counter(_ck(s) for _, s, _ in raw)
+    spelt = {}
+    for _, s, _ in raw:
+        spelt.setdefault(_ck(s), s.upper())
+
+    def letters(c):
+        return re.sub(r"\d", "", c)
+
+    def digits(c):
+        return re.sub(r"\D", "", c)
+
+    code_of = {}
+    for c in codes:
+        better = [d for d in codes if d != c and digits(c) == digits(d) and (
+            (codes[d] >= 3 * codes[c] and (_close(c, d) or (
+                len(c) >= 3 and len(d) >= 3 and abs(len(c) - len(d)) == 1 and (c in d or d in c) and c[:1] == d[:1])))
+            or (digits(c) and len(letters(d)) > len(letters(c)) and letters(d).startswith(letters(c))
+                and codes[d] >= codes[c])
+            # One letter slipped: "GANE" for "GAME", "BIP" for "BIO".
+            or (codes[d] >= 3 * codes[c] and len(c) == len(d) >= 3 and c[0] == d[0]
+                and sum(x != y for x, y in zip(c, d)) == 1))]
+        code_of[c] = max(better, key=lambda d: codes[d]) if better else c
+    # Teachers: the class teachers' full names, and every spelling in the cells.
+    full = {}
+    for b in blocks:
+        if b["class_teacher"]:
+            full[_lk(b["class_teacher"])] = b["class_teacher"]
+    count = Counter(_lk(w) for _, _, ws in raw for w in ws if _lk(w))
+    by_subject: dict[str, set] = {}
+    by_place: dict[tuple, set] = {}
+    for b, s, ws in raw:
+        for w in ws:
+            by_subject.setdefault(code_of[_ck(s)], set()).add(_lk(w))
+            by_place.setdefault((b["section"], code_of[_ck(s)]), set()).add(_lk(w))
+    names = set(count) | set(full)
+    subject_codes = set(codes)
+
+    def initials(k_full: str) -> str:
+        return "".join(p[0] for p in full[k_full].lower().split() if p)
+
+    def resolve_once(k: str, sec, code, apostrophe: str = "") -> str:
+        if apostrophe:
+            # "V'G" is Vijaya Geetha; "R'SUDHA" is R. Sudha (Ragasudha).
+            a, b2 = apostrophe
+            by_initials = [f for f in full if len(full[f].split()) > 1 and initials(f) == a + b2]
+            if len(by_initials) == 1:
+                return by_initials[0]
+            cand = [n for n in names if n.startswith(a) and n != k and len(b2) >= 2 and b2 in n[len(a):]]
+            if len(set(cand)) == 1:
+                return cand[0]
+        longer = [n for n in names if n != k and n.startswith(k)]
+        if not longer or len(k) < 2:
+            return k
+        for pool in (by_place.get((sec, code), set()), by_subject.get(code, set())):
+            cand = [n for n in longer if n in pool]
+            if cand:
+                return max(cand, key=lambda n: (n in full, count.get(n, 0), len(n)))
+        in_full = [n for n in longer if n in full]
+        if len(in_full) == 1:
+            return in_full[0]
+        return longer[0] if len(longer) == 1 else k
+
+    def resolve(w: str, sec, code) -> str:
+        k = _lk(w)
+        if not k:
+            return ""
+        parts = re.split(r"['’`]", w.lower())
+        apostrophe = (_lk(parts[0]), _lk("".join(parts[1:]))) if len(parts) > 1 and _lk(parts[0]) else ""
+        for _ in range(3):
+            nk = resolve_once(k, sec, code, apostrophe)
+            apostrophe = ""
+            if nk == k:
+                break
+            k = nk
+        return k
+
+    resolved = []
+    for b, s, ws in raw:
+        code = code_of[_ck(s)]
+        who = [resolve(w, b["section"], code) for w in ws]
+        resolved.append((b, code, [x for x in who if x and x not in subject_codes]))
+    # Spelling slips between whole names: "ISSAC" and "ISAAC", "SWATHI" and "SWATHY".
+    tally = Counter(x for _, _, ws in resolved for x in ws)
+    same = {}
+    for a in tally:
+        for c in tally:
+            if a != c and _close(a, c) and (c in full or tally[c] > tally[a] or (tally[c] == tally[a] and c > a)) \
+                    and a not in full:
+                same[a] = c
+                break
+    # One readable spelling for each person: the class teacher's own, else the longest seen.
+    shown: dict[str, str] = {}
+    for _, _, ws in raw:
+        for w in ws:
+            k = _lk(w)
+            if k and (k not in shown or len(w) > len(shown[k])):
+                shown[k] = w
+    shown.update(full)
+
+    def display(k: str) -> str:
+        k = same.get(k, k)
+        n = shown.get(k, k)
+        n = re.sub(r"\s+", " ", n).strip(" .")
+        return n.title() if n.isupper() or n.islower() else n
+
+    tables = []
+    days = sorted({d for b in blocks for d in b["days"]})
+    periods = max((n for b in blocks for (_, n) in b["cells"]), default=0)
+    for b in blocks:
+        per: dict[str, Counter] = {}
+        n_cells = Counter()
+        for bb, code, who in resolved:
+            if bb is not b:
+                continue
+            n_cells[code] += 1
+            per.setdefault(code, Counter()).update(display(x) for x in who)
+        grade, sec = b["section"]
+        if grade.isdigit():
+            grade = next(r for r, n in _ROMAN_N.items() if n == int(grade)).upper()
+        items = []
+        for code, n in n_cells.items():
+            teachers = [t for t, _ in per[code].most_common()]
+            items.append((spelt.get(code, code.upper()), str(n), "/".join(teachers)))
+        tables.append({"label": f"Class {grade} {sec}", "items": items, "by_teacher": False,
+                       "timetable": True, "class_teacher": display(_lk(b["class_teacher"])) if b["class_teacher"] else "",
+                       "week": {"days": days, "periods": periods}})
+    return tables
+
+
 def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[dict]]:
     """Every class table in the file, whichever way it's written: the
     Subjects | Periods | Teacher tables, a grid of counts, side blocks.
@@ -1021,8 +1280,14 @@ def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[di
                  key=lambda x: x[0], default=(0, "", []))
     if len(proper[2]) >= 2:
         return proper[1], proper[2]
+    # Last year's timetable, every sheet together: one teacher is written
+    # the same short way on the primary sheet and the senior one.
+    blocks = [b for _, rows in sheets for b in _timetable_blocks(rows)]
+    timetable = _timetables_from(blocks)
     scored = [(_class_score(tb), t, tb) for t, rows in sheets
               for tb in [max([_grid(rows) or _side_blocks(rows), _teacher_lists(rows)], key=_class_score)]]
+    if timetable and _class_score(timetable) >= sum(sc for sc, _, _ in scored):
+        return ", ".join(t for t, rows in sheets if _timetable_blocks(rows)), timetable
     top = max((s for s, _, _ in scored), default=0)
     if top == 0:
         return proper[1], proper[2]

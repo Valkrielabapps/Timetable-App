@@ -116,6 +116,16 @@ export default function GetStartedTab({
         </p>
       </header>
 
+      {!readOnly && (
+        <ClassPlanImport
+          schoolId={schoolId}
+          inputId="last-year-file-start"
+          title="Have last year’s timetable? Start from it"
+          blurb="Upload it first and we set up every section and class teacher, the subjects, the teachers, each subject’s periods and who taught them, and your week. The steps below then show as done, and you only change what’s different this year."
+          onDone={onReload}
+        />
+      )}
+
       <ol className="flex flex-col gap-3">
         {steps.map((s, i) => {
           const isOpen = open === s.key

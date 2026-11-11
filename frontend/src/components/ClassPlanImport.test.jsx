@@ -26,6 +26,19 @@ const PREVIEW = {
 }
 
 describe('filling in every class from the allotment sheet', () => {
+  it('from last year’s timetable: says so, shows the week and the new teachers, and saves with no questions', async () => {
+    const preview = { ...PREVIEW, questions: [], checks: [], skipped: [], from_timetable: true,
+      week: { days: [0, 1, 2, 3, 4], periods: 9 }, new_teachers: ['Deva', 'Rosee'] }
+    api.classPlanPreview.mockResolvedValue(preview)
+    api.classPlanCommit.mockResolvedValue({ sections: ['Grade 11 A'], subjects: [], teachers: ['Deva', 'Rosee'], requirements: 7, blocks: 0, periods: 45 })
+    render(<ClassPlanImport schoolId={1} file={new File(['x'], 'last year.xlsx')} title="Start from last year’s timetable" />)
+    expect(await screen.findByText(/Read as last year’s timetable/)).toBeInTheDocument()
+    expect(screen.getByText(/Mon, Tue, Wed, Thu, Fri, 9 periods a day/)).toBeInTheDocument()
+    expect(screen.getByText(/New teachers that will be added \(2\): Deva, Rosee/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('your week (45 periods)')
+  })
+
   it('reads the file from step 3, asks, and saves only once everything is answered', async () => {
     api.classPlanPreview.mockResolvedValue(PREVIEW)
     api.classPlanCommit.mockResolvedValue({ sections: ['Grade 3 A', 'Grade 6 A', 'Grade 6 B'], subjects: ['Civics'], teachers: [], requirements: 3, blocks: 0 })

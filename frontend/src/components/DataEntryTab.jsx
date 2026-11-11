@@ -17,6 +17,7 @@ import SearchableSelect from './SearchableSelect'
 import { rankMatches, sortByName, sortSections } from '../sorting'
 import { DEFAULT_STRUCTURE } from '../timetableStructure'
 import SetupExtractionPanel from './SetupExtractionPanel'
+import ClassPlanImport from './ClassPlanImport'
 import SubjectsSection from './SubjectsSection'
 import TeachersSection from './TeachersSection'
 
@@ -679,6 +680,19 @@ function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimit
           add subjects and teachers.
         </p>
       </div>
+
+      {!readOnly && (
+        <ClassPlanImport
+          schoolId={schoolId}
+          inputId="last-year-file-setup"
+          title="Start from last year’s timetable"
+          blurb="Upload last year’s timetable and we set up everything it shows: every section and its class teacher, the subjects, the teachers, how many periods each subject had and who taught it, and the shape of the week if you haven’t set one. You can change anything afterwards."
+          onDone={async () => {
+            await onPeriodsSaved?.()
+            await onImported?.()
+          }}
+        />
+      )}
 
       <div className="divide-y divide-slate-200 rounded-md border border-slate-200">
         <div className="p-4">

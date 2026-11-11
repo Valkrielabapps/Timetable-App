@@ -10,7 +10,16 @@ import { api } from '../api'
  * sections, how a combined entry like "Maths/Bio" should go). Nothing is saved
  * until every question is answered and the school clicks Fill in.
  */
-export default function ClassPlanImport({ schoolId, file: givenFile, onDone }) {
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+export default function ClassPlanImport({
+  schoolId,
+  file: givenFile,
+  onDone,
+  inputId = 'class-plan-file',
+  title = 'Fill in every class from your file',
+  blurb = 'Upload your allotment or staff sheet, in any layout: a table per class, a grid of periods, a list under each teacher, or last year’s timetable. We make the sections and fill in every plan from it.',
+}) {
   const [file, setFile] = useState(givenFile ?? null)
   const [reading, setReading] = useState(false)
   const [preview, setPreview] = useState(null)
@@ -62,12 +71,9 @@ export default function ClassPlanImport({ schoolId, file: givenFile, onDone }) {
   const unanswered = questions.filter((q) => !answers[q.id]).length
 
   return (
-    <section aria-label="Fill in every class from your file" className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-      <p className="font-medium text-slate-900">Fill in every class from your file</p>
-      <p className="mt-0.5 text-xs text-slate-600">
-        If your staff sheet has a table for each class (Subjects, Periods, Teacher), we make the sections and fill in
-        every plan from it.
-      </p>
+    <section aria-label={title} className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+      <p className="font-medium text-slate-900">{title}</p>
+      <p className="mt-0.5 text-xs text-slate-600">{blurb}</p>
 
       {!preview && (
         <form
@@ -79,12 +85,12 @@ export default function ClassPlanImport({ schoolId, file: givenFile, onDone }) {
         >
           <input
             type="file"
-            id="class-plan-file"
+            id={inputId}
             accept=".xlsx,.csv,.docx"
             className="sr-only"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
-          <label htmlFor="class-plan-file" className="cursor-pointer rounded-md border border-slate-300 bg-white px-3.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50">
+          <label htmlFor={inputId} className="cursor-pointer rounded-md border border-slate-300 bg-white px-3.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50">
             Choose file
           </label>
           {file && <span className="max-w-[220px] truncate text-slate-500">{file.name}</span>}
@@ -102,7 +108,8 @@ export default function ClassPlanImport({ schoolId, file: givenFile, onDone }) {
           {result.requirements} subject plans
           {result.blocks > 0 && `, ${result.blocks} choice blocks`}
           {result.subjects.length > 0 && `, ${result.subjects.length} new subjects`}
-          {result.teachers.length > 0 && `, ${result.teachers.length} new teachers`}.
+          {result.teachers.length > 0 && `, ${result.teachers.length} new teachers`}
+          {result.periods > 0 && `, and your week (${result.periods} periods)`}.
         </p>
       )}
 
@@ -114,6 +121,24 @@ export default function ClassPlanImport({ schoolId, file: givenFile, onDone }) {
           </p>
           {preview.skipped.length > 0 && (
             <p className="text-xs text-slate-600">Left out because they have 0 periods: {preview.skipped.join(', ')}.</p>
+          )}
+          {preview.from_timetable && (
+            <p className="text-xs text-slate-600">
+              Read as last year’s timetable: each section’s periods of every subject counted from its week, with the
+              teacher who took them and the class teacher.
+            </p>
+          )}
+          {preview.week && (
+            <p className="text-xs text-slate-600">
+              Your week isn’t set up yet, so we’ll use last year’s:{' '}
+              {preview.week.days.map((d) => DAY_NAMES[d]).join(', ')}, {preview.week.periods} periods a day. You can add
+              breaks and timings afterwards in Setup.
+            </p>
+          )}
+          {preview.new_teachers?.length > 0 && (
+            <p className="text-xs text-slate-600">
+              New teachers that will be added ({preview.new_teachers.length}): {preview.new_teachers.join(', ')}.
+            </p>
           )}
           {preview.new_subjects.length > 0 && (
             <p className="text-xs text-slate-600">New subjects that will be added: {preview.new_subjects.join(', ')}.</p>
