@@ -1228,6 +1228,13 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         for cg in class_groups
     }
 
+    # Subjects held at a fixed period for some grades (the class teacher
+    # period in period 8 for Grades 1-5): that subject only there, nothing
+    # else there, for those grades' sections. See School.fixed_periods.
+    from app.services.timetable_structure import fixed_period_slots
+    grade_of_cg = {cg.id: cg.grade for cg in class_groups}
+    fixed_rules = fixed_period_slots(periods, school_row.fixed_periods if school_row else None)
+
     req_restricted_periods: dict[int, set[int]] = {}
     req_required_periods: dict[int, set[int] | None] = {}
     # Soft placement preferences, as period_id -> accumulated penalty weight.
@@ -1277,6 +1284,14 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         # A zero period kept free for this section's grade (or the whole
         # school) is a slot it has no lessons in, whatever the subject.
         restricted |= zero_period_ids_by_class_group.get(req.class_group_id, set())
+        grade = grade_of_cg.get(req.class_group_id)
+        for subject_id, grades, slots in fixed_rules:
+            if grade not in grades:
+                continue
+            if req.subject_id == subject_id:
+                required = slots if required is None else (required & slots)
+            else:
+                restricted |= slots
 
         if required is not None:
             required -= restricted  # a ban always wins over a same-subject requirement

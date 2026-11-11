@@ -156,6 +156,27 @@ def _check(db: Session, school_id: int, school: School | None) -> list[dict]:
             ))
 
     # ------------------------------------------------------------------
+    # A subject fixed at a period for some grades: its periods a week must
+    # be exactly the slots it's fixed to (5 slots, 5 periods).
+    # ------------------------------------------------------------------
+    from app.services.timetable_structure import fixed_period_slots
+    for subject_id, grades, slots in fixed_period_slots(lessons, school.fixed_periods if school else None):
+        for cg in class_groups:
+            if cg.grade not in grades or cg.id in frozen_ids:
+                continue
+            free = slots - off_by_cg.get(cg.id, set())
+            have = sum(r.periods_per_week or 0 for r in cg.requirements if r.subject_id == subject_id)
+            if have != len(free):
+                issues.append(_issue(
+                    "error" if have > len(free) else "warning", "fixed_period_count",
+                    f"{_label(cg)} has {have} periods a week of {sname(subject_id)}, but it's fixed to "
+                    f"{len(free)} {'period' if len(free) == 1 else 'periods'} a week. "
+                    + ("Make them the same, or the timetable can't be made." if have > len(free)
+                       else "The rest of those periods will be left empty."),
+                    _section_fix(cg),
+                ))
+
+    # ------------------------------------------------------------------
     # Who can teach what. Mirrors the solver's own rules for "qualified".
     # ------------------------------------------------------------------
     requirements = [r for cg in class_groups if cg.id not in frozen_ids for r in cg.requirements

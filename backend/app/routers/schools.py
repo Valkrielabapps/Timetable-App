@@ -29,7 +29,7 @@ from app.models.user import User
 from app.schemas.membership import InviteCreate, InviteOut, MemberOut, MemberRoleUpdate
 from app.schemas.school import (
     SchoolCreate,
-    SchoolGradeDayLimitsUpdate,
+    SchoolGradeDayLimitsUpdate, SchoolFixedPeriodsUpdate,
     SchoolGradeOrderUpdate,
     SchoolInstitutionTypeUpdate,
     SchoolNameUpdate,
@@ -48,6 +48,7 @@ def _school_out(school: School, role: str) -> SchoolOut:
         id=school.id, name=school.name, institution_type=school.institution_type,
         grade_order=school.grade_order, profile=school.profile, role=role,
         grade_day_limits=school.grade_day_limits,
+        fixed_periods=school.fixed_periods,
         standard_rules=standard_rules.merged(school.standard_rules),
         plan=school.plan, plan_valid_until=school.plan_valid_until,
     )
@@ -230,6 +231,53 @@ def update_grade_day_limits(
             "by_day": {str(d): n for d, n in sorted(rule.by_day.items())},
         })
     school.grade_day_limits = out or None
+    db.commit()
+    db.refresh(school)
+    return _school_out(school, role)
+
+
+@router.put("/{school_id}/fixed-periods", response_model=SchoolOut)
+def update_fixed_periods(
+    school_id: int, payload: SchoolFixedPeriodsUpdate,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+):
+    """Subjects held at a fixed period for some grades - see
+    School.fixed_periods. Full replace: the Setup editor sends every rule."""
+    from app.models.school import Subject
+
+    role = require_school_access(db, current_user, school_id, min_role="admin")
+    school = db.get(School, school_id)
+    known = {g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id).distinct() if g}
+    subjects = {x.id for x in db.query(Subject).filter(Subject.school_id == school_id)}
+    lessons_per_day: dict[int, int] = {}
+    for p in db.query(Period).filter(Period.school_id == school_id).all():
+        if not p.is_break:
+            lessons_per_day[p.day_of_week] = lessons_per_day.get(p.day_of_week, 0) + 1
+    taken: dict[tuple, int] = {}
+    out = []
+    for rule in payload.rules:
+        if rule.subject_id not in subjects:
+            raise HTTPException(status_code=400, detail="Choose a subject of this school for each fixed period.")
+        grades = list(dict.fromkeys(g for g in rule.grades if g))
+        if not grades:
+            raise HTTPException(status_code=400, detail="Choose at least one grade for each fixed period.")
+        unknown = [g for g in grades if g not in known]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"This school has no {', '.join(unknown)}.")
+        days = sorted(set(rule.days)) if rule.days else None
+        if days and any(d not in lessons_per_day for d in days):
+            raise HTTPException(status_code=400, detail="A day was chosen that isn't a school day.")
+        longest = max((lessons_per_day[d] for d in (days or lessons_per_day)), default=0)
+        if rule.period < 1 or rule.period > longest:
+            raise HTTPException(status_code=400, detail=f"Choose a period from 1 to {longest}.")
+        for g in grades:
+            for d in days or lessons_per_day:
+                if (g, d, rule.period) in taken:
+                    raise HTTPException(
+                        status_code=400, detail=f"{g} already has something fixed in period {rule.period}.")
+                taken[(g, d, rule.period)] = rule.subject_id
+        out.append({"subject_id": rule.subject_id, "grades": grades, "period": rule.period, "days": days})
+    school.fixed_periods = out or None
     db.commit()
     db.refresh(school)
     return _school_out(school, role)

@@ -4,6 +4,7 @@ import BulkImportPanel from './BulkImportPanel'
 import { confirmDialog } from './confirmDialog'
 import TimetableStructurePanel from './TimetableStructurePanel'
 import GradeDayLimitsPanel from './GradeDayLimitsPanel'
+import FixedPeriodsPanel from './FixedPeriodsPanel'
 import RoomsPanel from './RoomsPanel'
 import {
   useElectiveBlockMutations,
@@ -72,6 +73,9 @@ export default function DataEntryTab({
   // School.grade_day_limits, and saving it - owned by App.jsx with the school.
   gradeDayLimits = null,
   onSaveGradeDayLimits,
+  // School.fixed_periods (a subject at a fixed period for some grades), and saving it.
+  fixedPeriods = null,
+  onSaveFixedPeriods,
   // Subjects/teachers/periods/rooms/classGroups are owned by App.jsx now,
   // not fetched here - this component gets unmounted every time the
   // admin switches to another top-level tab, so state kept locally here
@@ -573,6 +577,9 @@ export default function DataEntryTab({
           grades={grades}
           onPeriodsSaved={reloadPeriods}
           gradeDayLimits={gradeDayLimits}
+          subjects={subjects}
+          fixedPeriods={fixedPeriods}
+          onSaveFixedPeriods={onSaveFixedPeriods}
           onSaveGradeDayLimits={
             onSaveGradeDayLimits &&
             (async (limits) => {
@@ -666,7 +673,7 @@ export default function DataEntryTab({
  * entry" as those two - a school can't get a working timetable without
  * its periods and rooms configured.
  */
-function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimits, onSaveGradeDayLimits, rooms, onRoomsChanged, onImported, readOnly }) {
+function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimits, onSaveGradeDayLimits, subjects = [], fixedPeriods, onSaveFixedPeriods, rooms, onRoomsChanged, onImported, readOnly }) {
   const lessonsByDay = {}
   for (const p of periods) {
     if (!(p.kind && p.kind !== 'lesson') && !p.is_break) lessonsByDay[p.day_of_week] = (lessonsByDay[p.day_of_week] ?? 0) + 1
@@ -716,6 +723,19 @@ function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimit
               limits={gradeDayLimits}
               lessonsByDay={lessonsByDay}
               onSave={onSaveGradeDayLimits}
+              readOnly={readOnly}
+            />
+          </div>
+        )}
+        {onSaveFixedPeriods && (
+          <div className="p-4">
+            <h5 className="mb-3 text-sm font-medium text-slate-700">Fixed periods for some grades</h5>
+            <FixedPeriodsPanel
+              grades={grades}
+              subjects={subjects}
+              rules={fixedPeriods}
+              lessonsByDay={lessonsByDay}
+              onSave={onSaveFixedPeriods}
               readOnly={readOnly}
             />
           </div>

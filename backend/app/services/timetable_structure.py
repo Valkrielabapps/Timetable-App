@@ -111,6 +111,20 @@ def grade_off_period_ids(periods, limits) -> dict[str, set[int]]:
     return out
 
 
+def fixed_period_slots(periods, rules) -> list[tuple[int, set[str], set[int]]]:
+    """School.fixed_periods as (subject id, grades, lesson slot ids): the
+    period-number-th lesson of each chosen day."""
+    numbers = lesson_numbers(periods)
+    out = []
+    for rule in rules or []:
+        days = set(rule.get("days") or []) or None
+        slots = {p.id for p in periods if numbers.get(p.id) == rule.get("period")
+                 and (days is None or p.day_of_week in days)}
+        if slots:
+            out.append((rule.get("subject_id"), set(rule.get("grades") or []), slots))
+    return out
+
+
 def describe_periods(db: Session, school_id: int, periods=None) -> list[dict]:
     """Every period of a school as the API shows it: with its number and the
     zero periods reserved on it, which no single row can work out alone."""

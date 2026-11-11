@@ -1105,6 +1105,11 @@ function App() {
                       const updated = await api.updateGradeDayLimits(selectedSchoolId, limits)
                       setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
                     }}
+                    fixedPeriods={selectedSchool?.fixed_periods ?? null}
+                    onSaveFixedPeriods={async (rules) => {
+                      const updated = await api.updateFixedPeriods(selectedSchoolId, rules)
+                      setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
+                    }}
                     subjects={subjects}
                     setSubjects={setSubjects}
                     teachers={teachers}

@@ -230,7 +230,7 @@ export default function TimetableStructurePanel({ schoolId, grades, onSaved, rea
 
         <Row
           label="Class teacher period"
-          hint="Each section with its own class teacher - attendance and the like. Not counted towards anyone's weekly maximum."
+          hint="Each section with its own class teacher - attendance and the like. Not counted towards anyone's weekly maximum. For some grades only, or counted in the class teacher's week, use Fixed periods for some grades below."
         >
           <Toggle
             label="Class teacher period"

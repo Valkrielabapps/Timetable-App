@@ -50,6 +50,15 @@ class School(Base):
     # no school that day). Lesson periods after a grade's last one are kept
     # empty for its sections, exactly like a zero period. Null = none.
     grade_day_limits = Column(JSON, nullable=True)
+    # Subjects held at the same period every day for some grades - the class
+    # teacher period in period 8 for Grades 1 to 5, while the rest of the
+    # school has an ordinary lesson then. A list of
+    #   {"subject_id": 12, "grades": ["Grade 1", ...], "period": 8, "days": [0, 1, 2, 3, 4] | null}
+    # "period" is the lesson number (breaks not counted); days null = every
+    # school day. The subject's lessons for those grades go only there, nothing
+    # else does, and they're ordinary lessons: taught by whoever the plan says
+    # (the class teacher) and counted in that teacher's week. Null = none.
+    fixed_periods = Column(JSON, nullable=True)
     # The timetable version the school works from: what the Timetable tab
     # shows and edits, what exports and substitutions read, and where the next
     # generation takes its locked slots from. Set to each new successful
