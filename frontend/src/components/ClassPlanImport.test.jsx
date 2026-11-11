@@ -26,6 +26,20 @@ const PREVIEW = {
 }
 
 describe('filling in every class from the allotment sheet', () => {
+  it('sends the staff list with last year’s timetable when one is added', async () => {
+    api.classPlanPreview.mockResolvedValue({ ...PREVIEW, questions: [], staff_listed: 62 })
+    const { container } = render(<ClassPlanImport schoolId={1} withStaffList inputId="ly" />)
+    const [timetable, staff] = container.querySelectorAll('input[type="file"]')
+    const tt = new File(['x'], 'last year.xlsx')
+    const sl = new File(['y'], 'staff list.docx')
+    fireEvent.change(timetable, { target: { files: [tt] } })
+    fireEvent.change(staff, { target: { files: [sl] } })
+    expect(screen.getByText('Staff list: staff list.docx')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Read file' }))
+    await waitFor(() => expect(api.classPlanPreview).toHaveBeenCalledWith(1, tt, sl))
+    expect(await screen.findByText(/matched to your staff list \(62 people\)/)).toBeInTheDocument()
+  })
+
   it('from last year’s timetable: says so, shows the week and the new teachers, and saves with no questions', async () => {
     const preview = { ...PREVIEW, questions: [], checks: [], skipped: [], from_timetable: true,
       week: { days: [0, 1, 2, 3, 4], periods: 9 }, new_teachers: ['Deva', 'Rosee'] }

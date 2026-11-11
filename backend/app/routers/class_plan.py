@@ -23,13 +23,18 @@ router = APIRouter(prefix="/api/class-plan", tags=["class plan"])
 async def preview_plan(
     school_id: int = Form(...),
     file: UploadFile = File(...),
+    staff_file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """staff_file: the school's staff list, optional - short names in the
+    file (last year's timetable especially) are matched to the names on it,
+    and everyone on it is added as a teacher."""
     require_school_access(db, current_user, school_id, min_role="admin")
     content = await read_upload(file)
+    staff = (staff_file.filename, await read_upload(staff_file)) if staff_file and staff_file.filename else None
     try:
-        return class_plan.build_preview(db, school_id, file.filename, content)
+        return class_plan.build_preview(db, school_id, file.filename, content, staff_file=staff)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

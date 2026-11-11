@@ -477,7 +477,8 @@ _SUBJECT_ALIASES = {
     "lifeskill": "lifeskills", "lifeskills": "lifeskills",
     "writingskill": "writing", "writingskills": "writing",
     "art": "art", "arts": "art", "artandcraft": "art", "artcraft": "art",
-    "eng": "english", "engl": "english", "english": "english",
+    "eng": "english", "engl": "english", "english": "english", "bioscience": "biology", "biosci": "biology",
+    "social": "social", "supw": "supw",
     "hin": "hindi", "hindi": "hindi", "tam": "tamil", "tamil": "tamil", "kan": "kannada", "kannada": "kannada",
     "tel": "telugu", "telugu": "telugu", "mal": "malayalam", "malayalam": "malayalam", "skt": "sanskrit",
     "sans": "sanskrit", "sanskrit": "sanskrit", "fre": "french", "french": "french",
@@ -1107,7 +1108,16 @@ def _timetables(rows: list[list[str]]) -> list[dict]:
     return _timetables_from(_timetable_blocks(rows))
 
 
-def _timetables_from(blocks: list[dict]) -> list[dict]:
+def _staff_name(name: str) -> str:
+    n = re.sub(r"\s+", " ", _TITLE.sub("", name.strip())).strip(" .,-")
+    return " ".join(w[:1].upper() + w[1:].lower() if w.isupper() or w.islower() else w for w in n.split())
+
+
+def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> list[dict]:
+    """staff: the school's own list [{"name", "subjects"}], when there is
+    one - every short spelling is then matched to a real name on it, using
+    the subject to tell two alike apart (SUPW-SUBHA is Subhashini who takes
+    SUPW, ACCO-SUBHA is Subha Sri who takes Accountancy)."""
     if len(blocks) < 2:
         return []
     from collections import Counter
@@ -1221,10 +1231,11 @@ def _timetables_from(blocks: list[dict]) -> list[dict]:
     resolved = []
     for b, s, ws in raw:
         code = code_of[_ck(s)]
-        who = [resolve(w, b["section"], code) for w in ws]
-        resolved.append((b, code, [x for x in who if x and x not in subject_codes]))
+        pairs = [(w, resolve(w, b["section"], code)) for w in ws]
+        pairs = [(w, x) for w, x in pairs if x and x not in subject_codes]
+        resolved.append((b, code, [x for _, x in pairs], [w for w, _ in pairs]))
     # Spelling slips between whole names: "ISSAC" and "ISAAC", "SWATHI" and "SWATHY".
-    tally = Counter(x for _, _, ws in resolved for x in ws)
+    tally = Counter(x for _, _, ws, _ in resolved for x in ws)
     same = {}
     for a in tally:
         for c in tally:
@@ -1247,17 +1258,79 @@ def _timetables_from(blocks: list[dict]) -> list[dict]:
         n = re.sub(r"\s+", " ", n).strip(" .")
         return n.title() if n.isupper() or n.islower() else n
 
+    # The school's staff list: every spelling to a name on it.
+    people = []
+    for p in staff or []:
+        nm = _staff_name(p.get("name") or "")
+        if nm:
+            people.append((nm, _lk(nm), [_lk(w) for w in nm.split()],
+                           {_concept(x) for x in p.get("subjects") or [] if x}))
+
+    def name_score(k: str, key: str, words: list[str]) -> float:
+        if not k:
+            return 0
+        if k == key:
+            return 4
+        if len(k) >= 3 and (key.startswith(k) or any(w.startswith(k) for w in words)):
+            return 3
+        if len(key) >= 4 and k.startswith(key):
+            return 2.5
+        if _close(k, key) or any(_close(k, w) for w in words if len(w) >= 4):
+            return 2
+        return 0
+
+    votes: dict[str, Counter] = {}
+
+    def staff_match(k: str, code: str | None, use_votes: bool = False) -> str | None:
+        if not people:
+            return None
+        want = _concept(code) if code else ""
+        scored = []
+        for nm, key, words, subs in people:
+            sc = name_score(k, key, words)
+            if not sc:
+                continue
+            if want and want in subs:
+                sc += 1.5
+            if use_votes and code and votes.get(code):
+                top = votes[code].most_common(1)[0][0]
+                if top in subs:
+                    sc += 0.5
+            scored.append((sc, nm))
+        if not scored:
+            return None
+        scored.sort(reverse=True)
+        if len(scored) > 1 and scored[0][0] == scored[1][0] and scored[0][1] != scored[1][1]:
+            return None
+        return scored[0][1]
+
+    def final_names(code, raws, keys, use_votes=False):
+        out = []
+        for w, k in zip(raws, keys):
+            m = staff_match(_lk(w), code, use_votes) or staff_match(same.get(k, k), code, use_votes)
+            out.append(m or display(k))
+        return out
+
+    if people:
+        # What each subject's teachers mostly teach, to break a tie ("2LN-ABI":
+        # the other 2LN teachers are Tamil teachers, so Abirami not Abinaya).
+        for _, code, keys, raws in resolved:
+            for nm in final_names(code, raws, keys):
+                subs = next((p[3] for p in people if p[0] == nm), set())
+                for c in subs:
+                    votes.setdefault(code, Counter())[c] += 1
+
     tables = []
     days = sorted({d for b in blocks for d in b["days"]})
     periods = max((n for b in blocks for (_, n) in b["cells"]), default=0)
     for b in blocks:
         per: dict[str, Counter] = {}
         n_cells = Counter()
-        for bb, code, who in resolved:
+        for bb, code, who, raws in resolved:
             if bb is not b:
                 continue
             n_cells[code] += 1
-            per.setdefault(code, Counter()).update(display(x) for x in who)
+            per.setdefault(code, Counter()).update(final_names(code, raws, who, use_votes=True))
         grade, sec = b["section"]
         if grade.isdigit():
             grade = next(r for r, n in _ROMAN_N.items() if n == int(grade)).upper()
@@ -1266,12 +1339,42 @@ def _timetables_from(blocks: list[dict]) -> list[dict]:
             teachers = [t for t, _ in per[code].most_common()]
             items.append((spelt.get(code, code.upper()), str(n), "/".join(teachers)))
         tables.append({"label": f"Class {grade} {sec}", "items": items, "by_teacher": False,
-                       "timetable": True, "class_teacher": display(_lk(b["class_teacher"])) if b["class_teacher"] else "",
+                       "timetable": True,
+                       "class_teacher": (staff_match(_lk(b["class_teacher"]), None) or display(_lk(b["class_teacher"])))
+                       if b["class_teacher"] else "",
                        "week": {"days": days, "periods": periods}})
     return tables
 
 
-def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[dict]]:
+def name_list(sheets: list[tuple[str, list[list[str]]]]) -> list[dict]:
+    """A staff list: names with Mr / Mrs / Ms down a column, under the
+    department they belong to ("HIGH SCHOOL ENGLISH", "PHY/CHEM").
+    [{"name", "subjects"}], one per person however often they're listed."""
+    best: list[dict] = []
+    for _, rows in sheets:
+        width = max((len(r) for r in rows), default=0)
+        for c in range(width):
+            col = [(r[c].strip() if c < len(r) else "") for r in rows]
+            titled = [v for v in col if v and _TITLE.match(v) and len(v.split()) <= 6]
+            if len(titled) < 5:
+                continue
+            people: dict[str, dict] = {}
+            heading: list[str] = []
+            for v in col:
+                if not v or _COUNT.match(v):
+                    continue
+                if _TITLE.match(v) and len(v.split()) <= 6:
+                    nm = _staff_name(v)
+                    rec = people.setdefault(_lk(nm), {"name": nm, "subjects": []})
+                    rec["subjects"] += [h for h in heading if h not in rec["subjects"]]
+                elif not is_label(v) or _LEVEL_WORDS.search(v):
+                    heading = [h.replace("-", " ").strip() for h in _heading_subjects(v)]
+            if len(people) > len(best):
+                best = list(people.values())
+    return best
+
+
+def plan_tables(sheets: list[tuple[str, list[list[str]]]], staff: list[dict] | None = None) -> tuple[str, list[dict]]:
     """Every class table in the file, whichever way it's written: the
     Subjects | Periods | Teacher tables, a grid of counts, side blocks.
     The best sheet's, plus any other sheet nearly as full (a Word document's
@@ -1283,7 +1386,7 @@ def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[di
     # Last year's timetable, every sheet together: one teacher is written
     # the same short way on the primary sheet and the senior one.
     blocks = [b for _, rows in sheets for b in _timetable_blocks(rows)]
-    timetable = _timetables_from(blocks)
+    timetable = _timetables_from(blocks, staff)
     scored = [(_class_score(tb), t, tb) for t, rows in sheets
               for tb in [max([_grid(rows) or _side_blocks(rows), _teacher_lists(rows)], key=_class_score)]]
     if timetable and _class_score(timetable) >= sum(sc for sc, _, _ in scored):
@@ -1437,6 +1540,13 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         if counts and max(counts) >= 2:
             col = counts.index(max(counts))
             headings, body, mapping, idx = [""] * width, all_rows, {col: "name"}, -1
+    if not ({"name", "first_name"} & set(mapping.values())) and kind == "teachers" and not class_tables:
+        people = name_list(sheets)
+        if people:
+            layout = "name_list"
+            headings = ["Teacher", "Department"]
+            body = [[p["name"], ";".join(p["subjects"])] for p in people]
+            mapping, idx = {0: "name", 1: "qualified_subjects"}, -1
     if not ({"name", "first_name"} & set(mapping.values())):
         what = "subject" if kind == "subjects" else "teacher"
         raise ValueError(

@@ -39,7 +39,7 @@ from app.models.school import (
     ClassGroup, ElectiveBlock, ElectiveOption, Period, Subject, SubjectRequirement, Teacher,
 )
 from app.services.smart_import import (
-    _NOT_A_TEACHER, _concept, count_of, plan_tables, _key, _norm, _rule_subjects, _split_people,
+    _NOT_A_TEACHER, _concept, count_of, name_list, plan_tables, _key, _norm, _rule_subjects, _split_people,
     _split_subjects, look_alike_people, read_sheets,
 )
 
@@ -150,18 +150,38 @@ def _splits(n: int, a: str, b: str) -> list[dict]:
     return [{"key": f"split:{x}", "label": f"{a} {x}, {b} {n - x}"} for x in range(n - 1, 0, -1)]
 
 
-def build_preview(db: Session, school_id: int, filename: str, content: bytes) -> dict:
+def _staff_from(filename: str, content: bytes) -> list[dict]:
+    """The school's staff list, any layout: [{"name", "subjects"}]."""
+    from app.services.smart_import import smart_rows
+
     sheets = read_sheets(filename, content, "teachers")
+    people = name_list(sheets)
+    if people:
+        return people
+    rows, _ = smart_rows("teachers", filename, content)
+    return [{"name": r["name"], "subjects": [x for x in (r.get("qualified_subjects") or "").split(";") if x]}
+            for r in rows if r.get("name")]
+
+
+def build_preview(db: Session, school_id: int, filename: str, content: bytes,
+                  staff_file: tuple[str, bytes] | None = None) -> dict:
+    sheets = read_sheets(filename, content, "teachers")
+    s = _school(db, school_id)
+    # Names to match short spellings to: the teachers already here, and the
+    # staff list if one came with the file.
+    by_id = {x.id: x.name for x in s["subjects"]}
+    staff_listed = _staff_from(*staff_file) if staff_file else []
+    staff = [{"name": t.name, "subjects": [by_id[i] for i in (t.qualified_subject_ids or []) if i in by_id]}
+             for t in s["teachers"]] + staff_listed
     # A table per class, a grid of counts (classes down, subjects across, or
-    # the other way), or a column of subjects per stream.
-    title, tables = plan_tables(sheets)
+    # the other way), a list under each teacher, or last year's timetable.
+    title, tables = plan_tables(sheets, staff)
     if not tables:
         raise ValueError("Couldn't find the periods for each class in this file. It can read a table per class "
                          "(Subjects, Periods, Teacher), a grid with classes down one side and subjects across "
                          "the top (or the other way round) with the periods in the cells, or a column of subjects "
                          "with a column of periods for each class. Fill in the plans by hand instead, or upload "
                          "the allotment sheet.")
-    s = _school(db, school_id)
     subject_names = [x.name for x in s["subjects"]]
     teacher_names = [t.name for t in s["teachers"]]
     by_teacher = {_norm(t): t for t in teacher_names}
@@ -347,9 +367,12 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes) ->
     week = file_week if file_week and not s["lessons"] else None
     return {
         "sheet": title,
-        "plan": {"tables": out_tables, "people": people, "ask_existing": bool(existing_with_plan), "week": week},
+        "plan": {"tables": out_tables, "people": people, "ask_existing": bool(existing_with_plan), "week": week,
+                 "staff": staff_listed},
         "week": week,
-        "new_teachers": sorted(p for p, v in people.items() if v.get("new")),
+        "staff_listed": len(staff_listed),
+        "new_teachers": sorted({p for p, v in people.items() if v.get("new")}
+                               | {x["name"] for x in staff_listed if _norm(x["name"]) not in by_teacher}),
         "from_timetable": any(t.get("timetable") for t in tables),
         "questions": questions,
         "checks": checks,
@@ -423,6 +446,9 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             created["teachers"].append(t.name)
         return teachers[_norm(name)]
 
+    def subjects_names():
+        return [x.name for x in subjects.values()]
+
     def qualify(t: Teacher, sub: Subject, grade: str | None):
         ids = list(t.qualified_subject_ids or [])
         if sub.id not in ids:
@@ -432,6 +458,14 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             t.qualified_grades = gs + [grade]
 
     replace = bool(plan.get("ask_existing")) and _answer(answers, "existing", ("replace", "add")) == "replace"
+    # Everyone on the staff list, with what their department teaches - also
+    # those last year's timetable doesn't name.
+    for person in plan.get("staff") or []:
+        t = teacher(str(person.get("name") or "").strip())
+        if isinstance(t, Teacher):
+            for x in person.get("subjects") or []:
+                if str(x).strip():
+                    qualify(t, subject(_subject_name(str(x), list(subjects_names()))), None)
     week = plan.get("week") or {}
     if week.get("periods") and not s["lessons"]:
         days = list(week.get("days") or range(5))

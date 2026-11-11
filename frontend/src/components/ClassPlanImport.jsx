@@ -17,10 +17,12 @@ export default function ClassPlanImport({
   file: givenFile,
   onDone,
   inputId = 'class-plan-file',
+  withStaffList = false,
   title = 'Fill in every class from your file',
   blurb = 'Upload your allotment or staff sheet, in any layout: a table per class, a grid of periods, a list under each teacher, or last year’s timetable. We make the sections and fill in every plan from it.',
 }) {
   const [file, setFile] = useState(givenFile ?? null)
+  const [staffFile, setStaffFile] = useState(null)
   const [reading, setReading] = useState(false)
   const [preview, setPreview] = useState(null)
   const [answers, setAnswers] = useState({})
@@ -33,7 +35,7 @@ export default function ClassPlanImport({
     setError(null)
     setResult(null)
     try {
-      setPreview(await api.classPlanPreview(schoolId, f))
+      setPreview(staffFile ? await api.classPlanPreview(schoolId, f, staffFile) : await api.classPlanPreview(schoolId, f))
       setAnswers({})
     } catch (err) {
       setError(err.message)
@@ -94,10 +96,34 @@ export default function ClassPlanImport({
             Choose file
           </label>
           {file && <span className="max-w-[220px] truncate text-slate-500">{file.name}</span>}
+          {withStaffList && (
+            <>
+              <input
+                type="file"
+                id={`${inputId}-staff`}
+                accept=".xlsx,.csv,.docx"
+                className="sr-only"
+                onChange={(e) => setStaffFile(e.target.files?.[0] ?? null)}
+              />
+              <label
+                htmlFor={`${inputId}-staff`}
+                className="cursor-pointer rounded-md border border-dashed border-slate-300 bg-white px-3.5 py-1.5 text-slate-600 hover:bg-slate-50"
+              >
+                {staffFile ? `Staff list: ${staffFile.name}` : '+ Staff list (optional)'}
+              </label>
+            </>
+          )}
           <button disabled={!file || reading} className="rounded-md bg-neutral-900 px-3.5 py-1.5 font-medium text-white hover:bg-neutral-700 disabled:opacity-50">
             {reading ? 'Reading…' : 'Read file'}
           </button>
         </form>
+      )}
+
+      {withStaffList && !preview && (
+        <p className="mt-1.5 text-xs text-slate-500">
+          Add your staff list too and every short name in the timetable (“KRITHI”, “V’G”, “SUBHA”) is matched to the
+          full name on it, using the subject where two names are alike. Everyone on the list is added as a teacher.
+        </p>
       )}
 
       {error && <p className="mt-2 text-red-600">{error}</p>}
@@ -134,6 +160,9 @@ export default function ClassPlanImport({
               {preview.week.days.map((d) => DAY_NAMES[d]).join(', ')}, {preview.week.periods} periods a day. You can add
               breaks and timings afterwards in Setup.
             </p>
+          )}
+          {preview.staff_listed > 0 && (
+            <p className="text-xs text-slate-600">Names matched to your staff list ({preview.staff_listed} people).</p>
           )}
           {preview.new_teachers?.length > 0 && (
             <p className="text-xs text-slate-600">

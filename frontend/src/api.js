@@ -125,13 +125,14 @@ async function downloadFile(path, filename) {
 // Separate from request() because bulk-import posts multipart/form-data
 // (a file, not JSON) - must NOT set a Content-Type header (the browser
 // sets its own with the multipart boundary) or the upload gets mangled.
-async function uploadFile(path, schoolId, file) {
+async function uploadFile(path, schoolId, file, extra = {}) {
   const token = getToken();
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   const body = new FormData();
   body.append("school_id", schoolId);
   body.append("file", file);
+  for (const [k, v] of Object.entries(extra)) if (v) body.append(k, v);
 
   const res = await fetch(`/api${path}`, { method: "POST", headers, body });
   if (!res.ok) throw await toError(res);
@@ -522,7 +523,9 @@ export const api = {
   bulkImportCommit: (resource, schoolId, rows) => post(`/${resource}/bulk-import/commit`, { school_id: schoolId, rows }),
   // Every section's weekly plan from the allotment sheet (backend
   // app/services/class_plan.py): read and asked about first, then saved.
-  classPlanPreview: (schoolId, file) => uploadFile('/class-plan/preview', schoolId, file),
+  // staffFile (optional): the staff list, so short names are matched to full ones.
+  classPlanPreview: (schoolId, file, staffFile) =>
+    uploadFile('/class-plan/preview', schoolId, file, { staff_file: staffFile }),
   classPlanCommit: (schoolId, plan, answers) => post('/class-plan/commit', { school_id: schoolId, plan, answers }),
 
   // Setup-from-document extraction - upload an arbitrary spreadsheet

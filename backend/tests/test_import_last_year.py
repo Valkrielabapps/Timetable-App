@@ -120,3 +120,53 @@ def test_starting_from_it_sets_up_the_school(client):
         assert "Maths" in {subs[i] for i in deva.qualified_subject_ids}
     finally:
         db.close()
+
+
+STAFF = [["S.NO", "HIGH SCHOOL ENGLISH"], ["1", "Mrs. Vijaya Geetha"], ["2", "Mrs. Sofia"], ["3", "Ms. Mary Josefa"],
+         ["", "MATHS"], ["4", "Mr.Devasenapathy"], ["5", "Mr.Jerom"], ["6", "Ms.Swathi"],
+         ["", "SOCIAL"], ["7", "Mrs.Vinothini"], ["", "PRIMARY SCIENCE"], ["8", "Mrs.Krithika"],
+         ["", "ACCOUNTANCY"], ["9", "Mrs. Subha sri"], ["", "SUPW"], ["10", "Ms. Subhashini"], ["11", "Mr.Naveen"]]
+SUPW = week(["TEACHERS NAME :  MRS.SUBHA SRI      XII C"], [
+    ["ACCO-SUBHA", "SUPW-SUBHA", "ACCO-SUBHA", "MAT-DEVA", "SOC-VINO"],
+    ["ACCO-SUBHA", "SUPW-SUBHA", "ACCO-SUBHA", "MAT-DEVA", "SOC-VINO"],
+    ["ACCO-SUBHA", "SUPW-SUBHA", "ACCO-SUBHA", "MAT-DEVA", "SOC-VINO"],
+    ["ACCO-SUBHA", "SUPW-SUBHA", "ACCO-SUBHA", "MAT-DEVA", "SOC-VINO"],
+    ["ACCO-SUBHA", "SUPW-SUBHA", "ACCO-SUBHA", "MAT-DEVA", "SOC-VINO"],
+])
+
+
+def test_a_staff_list_is_read_as_teachers_with_their_department():
+    rows, info = smart_rows("teachers", "staff.xlsx", xlsx(("staff", STAFF)), ai=NoAI())
+    by = {r["name"]: r["qualified_subjects"] for r in rows}
+    assert by["Mary Josefa"] == "English" and by["Devasenapathy"] == "Maths" and by["Subhashini"] == "SUPW"
+    assert by["Subha Sri"] == "Accountancy" and "Naveen" in by
+    assert "MATHS" not in by and "S.NO" not in by
+
+
+def test_with_the_staff_list_short_names_become_full_ones(client):
+    _, h = signup(client)
+    sid = create_school(client, h)["id"]
+    timetable = xlsx(("XI AND XII", SENIOR + SUPW), ("I TO V", PRIMARY))
+    r = client.post("/api/class-plan/preview", data={"school_id": sid}, headers=h, files={
+        "file": ("last year.xlsx", timetable, "application/octet-stream"),
+        "staff_file": ("staff.xlsx", xlsx(("staff", STAFF)), "application/octet-stream")})
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["staff_listed"] == 11
+    by = {t["label"]: {it["raw"]: it["teachers"] for it in t["items"]} for t in p["plan"]["tables"]}
+    assert by["Class XII C"]["SUPW"] == ["Subhashini"]  # SUPW-SUBHA: the SUPW teacher
+    assert by["Class XII C"]["ACCO"] == ["Subha Sri"]  # ACCO-SUBHA: the accountancy teacher
+    assert by["Class XI A"]["MAT"] == ["Devasenapathy"] and by["Class X A"]["SOC"] == ["Vinothini"]
+    assert by["Class I A"]["MAT"] == ["Swathi"]  # the staff list's own spelling
+    assert by["Class X A"]["MAT"] == ["Jerom"]
+    assert "Naveen" in p["new_teachers"]  # on the list, not in the timetable: still added
+    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": {}}, headers=h)
+    assert r.status_code == 200, r.text
+    db = SessionLocal()
+    try:
+        subs = {s.id: s.name for s in db.query(Subject).filter_by(school_id=sid)}
+        naveen = db.query(Teacher).filter_by(school_id=sid, name="Naveen").one()
+        assert [subs[i] for i in naveen.qualified_subject_ids] == ["SUPW"]
+        assert db.query(Teacher).filter_by(school_id=sid, name="Subha").count() == 0
+    finally:
+        db.close()
