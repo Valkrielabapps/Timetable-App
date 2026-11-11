@@ -4,9 +4,10 @@
  * ended (backend app/services/plans.py). Settings stays reachable, since
  * Plan & billing is how the school unlocks.
  */
-import { PLAN_NAMES } from '../lib/plans'
+import { PLANS, PLAN_NAMES, detectCurrency, planPrice } from '../lib/plans'
 
 export default function LockedScreen({ entitlements, isAdmin, onUpgrade }) {
+  const from = planPrice(PLANS[0], detectCurrency())
   const paid = entitlements?.paid_plan
   const title = paid ? `Your ${PLAN_NAMES[paid] ?? 'paid'} plan has ended` : 'Your 14-day free trial has ended'
   return (
@@ -20,7 +21,7 @@ export default function LockedScreen({ entitlements, isAdmin, onUpgrade }) {
         </div>
         <h2 className="mt-5 text-xl font-semibold">{title}</h2>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Choose a plan to keep building and editing timetables. Plans start at ₹9,999 a year, priced by the number
+          Choose a plan to keep building and editing timetables. Plans start at {from} a year, priced by the number
           of sections. Everything you&rsquo;ve set up is saved and comes straight back the moment you pay.
         </p>
         {isAdmin ? (

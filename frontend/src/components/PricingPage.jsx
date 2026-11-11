@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
-import { DONE_FOR_YOU, EVERY_PLAN, LARGE, PLANS } from '../lib/plans'
+import {
+  DONE_FOR_YOU, EVERY_PLAN, INVOICE_EMAIL, LARGE, PLANS, detectCurrency, largeBase, largePerSection, planPrice, saveCurrency,
+} from '../lib/plans'
 
 /**
  * Standalone pricing page - reached via `?page=pricing` (see App.jsx,
@@ -21,44 +23,40 @@ import { DONE_FOR_YOU, EVERY_PLAN, LARGE, PLANS } from '../lib/plans'
  *   - The "View Github / self-hosted" half of the closing banner - no
  *     public repo or self-hosted offering exists.
  *
- * The USD/INR toggle stays - see USD_PER_INR below on what it does and
- * doesn't represent.
+ * Currency: rupees for visitors in India, US dollars elsewhere (detected
+ * from the browser's time zone, see detectCurrency in src/lib/plans.js);
+ * the INR/USD switch changes it. The dollar prices are their own price
+ * points (about 35% above the rupee ones), invoiced by email for now
+ * because checkout is rupees only.
  */
 
-// Rough, clearly-labeled reference rate for *display* only - this does
-// NOT mean the plans are separately priced in USD, or that a foreign school
-// would actually be billed in dollars today (Razorpay billing is INR - 
-// see the business-setup conversation). It just converts the one real
-// prices so a visitor thinking in USD has a ballpark figure,
-// same as any "approx. $X" conversion widget. Update this if the real
-// rate drifts far enough that $60 stops being a fair approximation.
-const USD_PER_INR = 1 / 83
-
-const PRICING_TIERS = [
-  ...PLANS.map((p) => ({
-    name: p.name,
-    priceInr: p.price,
-    period: '/year',
-    doneForYouInr: p.doneForYou,
-    tagline: p.sections,
-    highlights: EVERY_PLAN,
-    highlighted: p.id === 'standard',
-    ctaLabel: 'Start free trial',
-  })),
-  {
-    name: LARGE.name,
-    priceInr: LARGE.base,
-    period: '/year',
-    pricePrefix: 'From ',
-    priceNote: `+ ₹${LARGE.perSection} a year for each section above ${LARGE.from}`,
-    doneForYouText: 'Done for you: quoted',
-    tagline: LARGE.sections,
-    highlights: [...EVERY_PLAN, 'Several schools in one account'],
-    highlighted: false,
-    ctaLabel: 'Get in touch',
-    href: '/contact',
-  },
-]
+function pricingTiers(currency) {
+  return [
+    ...PLANS.map((p) => ({
+      name: p.name,
+      price: planPrice(p, currency),
+      period: '/year',
+      doneForYou: planPrice(p, currency, 'done_for_you'),
+      tagline: p.sections,
+      highlights: EVERY_PLAN,
+      highlighted: p.id === 'standard',
+      ctaLabel: 'Start free trial',
+    })),
+    {
+      name: LARGE.name,
+      price: largeBase(currency),
+      period: '/year',
+      pricePrefix: 'From ',
+      priceNote: `+ ${largePerSection(currency)} a year for each section above ${LARGE.from}`,
+      doneForYouText: 'Done for you: quoted',
+      tagline: LARGE.sections,
+      highlights: [...EVERY_PLAN, 'Several schools in one account'],
+      highlighted: false,
+      ctaLabel: 'Get in touch',
+      href: '/contact',
+    },
+  ]
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -103,6 +101,31 @@ export const BILLING_FAQS = [
   },
 ]
 
+/** The FAQs as a visitor paying in dollars should read them. */
+export function billingFaqs(currency) {
+  if (currency !== 'USD') return BILLING_FAQS
+  const [, ...rest] = BILLING_FAQS
+  const pick = {
+    q: 'How do I pick a plan?',
+    a: `By the number of sections in your school (each class division, like 6A or 6B, is a section). Starter is up to 30, Standard 31 to 50, Plus 51 to 80. Over 80, or several schools in a group, the ${LARGE.name} plan is ${largeBase('USD')} plus ${largePerSection('USD')} a year for each section above ${LARGE.from}. Every plan has every feature.`,
+  }
+  const abroad = {
+    q: 'We’re outside India. How do we pay?',
+    a: `Prices outside India are in US dollars. Start the free trial as usual; when you’re ready to buy, choose your plan in Settings > Plan & billing and we’ll email you an invoice, or write to ${INVOICE_EMAIL}. Any local taxes or bank charges on your side are yours.`,
+  }
+  return [
+    pick,
+    abroad,
+    ...rest.map((f) =>
+      f.q === 'Does the price include GST?'
+        ? { q: 'Does the price include tax?', a: 'The price shown is what we invoice, in US dollars. Indian GST does not apply to schools outside India.' }
+        : f.q === 'How does billing work?'
+          ? { ...f, a: 'Plans are paid in advance for one year at a time, by invoice, and do not renew automatically. If you cancel during the year, we refund the unused full months (see our Refund and Cancellation Policy).' }
+          : f,
+    ),
+  ]
+}
+
 function BillingFaqItem({ item, isOpen, onToggle }) {
   return (
     <div className="border-b border-neutral-200">
@@ -139,16 +162,7 @@ function BillingFaqItem({ item, isOpen, onToggle }) {
   )
 }
 
-function formatPrice(priceInr, currency) {
-  if (priceInr === null) return 'Custom'
-  if (priceInr === 0) return currency === 'USD' ? '$0' : '₹0'
-  if (currency === 'USD') {
-    return `$${Math.round(priceInr * USD_PER_INR)}`
-  }
-  return `₹${priceInr.toLocaleString('en-IN')}`
-}
-
-function PricingCard({ tier, currency, onGetStarted, delay }) {
+function PricingCard({ tier, onGetStarted, delay }) {
   return (
     <motion.div
       initial="hidden"
@@ -169,13 +183,13 @@ function PricingCard({ tier, currency, onGetStarted, delay }) {
 
       <p className="mt-6">
         {tier.pricePrefix && <span className="text-sm text-neutral-500">{tier.pricePrefix}</span>}
-        <span className="text-3xl font-semibold tracking-tight text-neutral-900">{formatPrice(tier.priceInr, currency)}</span>
-        {tier.period && tier.priceInr !== null && <span className="ml-1 text-sm text-neutral-500">{tier.period}</span>}
+        <span className="text-3xl font-semibold tracking-tight text-neutral-900">{tier.price}</span>
+        {tier.period && <span className="ml-1 text-sm text-neutral-500">{tier.period}</span>}
       </p>
       {tier.priceNote && <p className="mt-1 text-xs text-neutral-500">{tier.priceNote}</p>}
       <p className="mt-2 rounded-md bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
-        {tier.doneForYouInr
-          ? <>Done for you: <strong>{formatPrice(tier.doneForYouInr, currency)}</strong> <span className="text-neutral-500">first year, setup included</span></>
+        {tier.doneForYou
+          ? <>Done for you: <strong>{tier.doneForYou}</strong> <span className="text-neutral-500">first year, setup included</span></>
           : tier.doneForYouText}
       </p>
 
@@ -203,8 +217,14 @@ function PricingCard({ tier, currency, onGetStarted, delay }) {
 }
 
 export default function PricingPage({ onBack, onGetStarted }) {
-  const [currency, setCurrency] = useState('INR')
+  const [currency, setCurrencyState] = useState(detectCurrency)
   const [openFaq, setOpenFaq] = useState(0)
+  const tiers = pricingTiers(currency)
+  const faqs = billingFaqs(currency)
+  function setCurrency(c) {
+    setCurrencyState(c)
+    saveCurrency(c)
+  }
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
@@ -223,8 +243,7 @@ export default function PricingPage({ onBack, onGetStarted }) {
           </p>
           <p className="mt-2 text-sm text-neutral-500">Start with a 14-day free trial, everything unlocked, no card needed. Prices are per year.</p>
 
-          {/* See USD_PER_INR above - this converts the display, it isn't
-              a second, separately-decided USD price point. */}
+          {/* Rupees in India, dollars elsewhere; both are real price points. */}
           <div className="mt-8 inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 p-1 text-sm">
             {['INR', 'USD'].map((c) => (
               <button
@@ -238,11 +257,14 @@ export default function PricingPage({ onBack, onGetStarted }) {
               </button>
             ))}
           </div>
+          {currency === 'USD' && (
+            <p className="mt-3 text-sm text-neutral-500">Prices for schools outside India, in US dollars. We invoice you by email.</p>
+          )}
         </motion.div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {PRICING_TIERS.map((tier, i) => (
-            <PricingCard key={tier.name} tier={tier} currency={currency} onGetStarted={onGetStarted} delay={i * 0.08} />
+          {tiers.map((tier, i) => (
+            <PricingCard key={tier.name} tier={tier} onGetStarted={onGetStarted} delay={i * 0.08} />
           ))}
         </div>
 
@@ -256,7 +278,7 @@ export default function PricingPage({ onBack, onGetStarted }) {
         >
           <h2 className="text-xl font-semibold tracking-tight text-neutral-900">Billing questions</h2>
           <div className="mt-4">
-            {BILLING_FAQS.map((item, i) => (
+            {faqs.map((item, i) => (
               <BillingFaqItem
                 key={item.q}
                 item={item}

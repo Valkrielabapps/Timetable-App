@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
 import { startCheckout } from '../payments'
 import { useEntitlements } from '../hooks/useEntitlements'
-import { DONE_FOR_YOU, LARGE, PLANS, PLAN_NAMES, inr } from '../lib/plans'
+import {
+  DONE_FOR_YOU, LARGE, PLANS, PLAN_NAMES, detectCurrency, inr, invoiceMailto, largeBase, largePerSection, planPrice, saveCurrency,
+} from '../lib/plans'
 
 // The API sends UTC timestamps without a zone suffix.
 export function parseUtc(value) {
@@ -45,11 +47,19 @@ export default function BillingSection({ school, isAdmin }) {
   const plan = choice?.plan ?? (renewing ? paidPlan : ent?.suggested_plan && ent.suggested_plan !== 'business' ? ent.suggested_plan : 'starter')
   const service = choice?.service ?? 'software'
   const chosen = PLANS.find((p) => p.id === plan) ?? PLANS[0]
-  const price = service === 'done_for_you' ? chosen.doneForYou : chosen.price
   const tooBig = ent?.suggested_plan === 'business'
   // A custom plan offered to this school from the admin page. When there is
   // one, Pay now pays it (price, length and limits come from the offer).
   const offer = ent?.offer ?? null
+  // Outside India the plans are priced in US dollars and invoiced by email
+  // (checkout is rupees only). A custom offer is always in rupees.
+  const [currencyChoice, setCurrencyChoice] = useState(detectCurrency)
+  const abroad = currencyChoice === 'USD' && !offer
+  const price = planPrice(chosen, abroad ? 'USD' : 'INR', service)
+  function switchCurrency(c) {
+    setCurrencyChoice(c)
+    saveCurrency(c)
+  }
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', school?.id],
     queryFn: () => api.getInvoices(school.id),
@@ -149,7 +159,7 @@ export default function BillingSection({ school, isAdmin }) {
           ) : tooBig ? (
             <p className="text-sm text-slate-600">
               Your school has {sections} sections, more than the Plus plan’s 80. The {LARGE.name} plan is{' '}
-              {inr(LARGE.base)} + {inr(LARGE.perSection)} a year for each section above {LARGE.from}.{' '}
+              {largeBase(abroad ? 'USD' : 'INR')} + {largePerSection(abroad ? 'USD' : 'INR')} a year for each section above {LARGE.from}.{' '}
               <a className="underline" href="/contact">Contact us</a> and we’ll send you an offer to pay here.
             </p>
           ) : (
@@ -180,7 +190,7 @@ export default function BillingSection({ school, isAdmin }) {
                           checked={plan === p.id && service === 'software'}
                           onChange={() => setChoice({ plan: p.id, service: 'software' })}
                         />
-                        Software · {inr(p.price)}/year
+                        Software · {planPrice(p, abroad ? 'USD' : 'INR')}/year
                       </label>
                       <label className="mt-1 flex cursor-pointer items-center gap-2 text-sm">
                         <input
@@ -190,7 +200,7 @@ export default function BillingSection({ school, isAdmin }) {
                           checked={plan === p.id && service === 'done_for_you'}
                           onChange={() => setChoice({ plan: p.id, service: 'done_for_you' })}
                         />
-                        Done for you · {inr(p.doneForYou)}
+                        Done for you · {planPrice(p, abroad ? 'USD' : 'INR', 'done_for_you')}
                       </label>
                       {!fits && <p className="mt-1 text-xs text-slate-500">Too small for your {sections} sections</p>}
                     </div>
@@ -200,7 +210,23 @@ export default function BillingSection({ school, isAdmin }) {
               {service === 'done_for_you' && <p className="mt-2 text-xs text-slate-500">{DONE_FOR_YOU}</p>}
             </fieldset>
           )}
-          {!tooBig || offer ? (
+          {abroad && !tooBig ? (
+            <div>
+              <a
+                href={invoiceMailto(chosen.name, service, price, sections)}
+                className="inline-block rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
+              >
+                Request an invoice · {chosen.name}{service === 'done_for_you' ? ', done for you' : ''} · {price}
+              </a>
+              <p className="mt-2 text-xs text-slate-500">
+                Prices outside India are in US dollars. This opens an email to us; we reply with an invoice, and your
+                plan starts when it’s paid.{' '}
+                <button type="button" onClick={() => switchCurrency('INR')} className="underline">
+                  In India? Pay in rupees
+                </button>
+              </p>
+            </div>
+          ) : !tooBig || offer ? (
             <>
               <label className="flex max-w-xs flex-col gap-1">
                 <span className="text-xs font-medium text-slate-500">Mobile number for the payment receipt</span>
@@ -225,11 +251,20 @@ export default function BillingSection({ school, isAdmin }) {
                     ? 'Opening secure checkout…'
                     : offer
                       ? `Pay now · ${inr(offer.price_inr)}`
-                      : `${renewing ? 'Renew now' : 'Pay now'} · ${chosen.name}${service === 'done_for_you' ? ', done for you' : ''} · ${inr(price)}`}
+                      : `${renewing ? 'Renew now' : 'Pay now'} · ${chosen.name}${service === 'done_for_you' ? ', done for you' : ''} · ${price}`}
                 </button>
                 <p className="mt-2 text-xs text-slate-400">
                   Payments are processed securely by Cashfree. More than 80 sections or several schools?{' '}
                   <a className="underline" href="/contact">Contact us about {LARGE.name}</a>.
+                  {!offer && (
+                    <>
+                      {' '}Outside India?{' '}
+                      <button type="button" onClick={() => switchCurrency('USD')} className="underline">
+                        See prices in US dollars
+                      </button>
+                      .
+                    </>
+                  )}
                 </p>
               </div>
             </>

@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 
-import { EVERY_PLAN, LARGE, PLANS as PRICED, inr } from '../lib/plans'
+import { EVERY_PLAN, LARGE, PLANS as PRICED, detectCurrency, largeBase, largePerSection, planPrice } from '../lib/plans'
 
 /**
  * The first step after "Get started": see the plans, then create an account.
@@ -11,29 +12,32 @@ import { EVERY_PLAN, LARGE, PLANS as PRICED, inr } from '../lib/plans'
  * Settings > Plan & billing to pay (the payment needs a school). Large /
  * Group goes to the Contact page. Prices come from src/lib/plans.js.
  */
-const PLANS = [
-  ...PRICED.map((p) => ({
-    id: p.id,
-    name: p.name,
-    price: inr(p.price),
-    period: '/year',
-    blurb: p.sections,
-    doneForYou: `Done for you: ${inr(p.doneForYou)} first year`,
-    features: EVERY_PLAN,
-    cta: 'Start free trial',
-    highlighted: p.id === 'standard',
-  })),
-  {
-    id: 'business',
-    name: LARGE.name,
-    price: `From ${inr(LARGE.base)}`,
-    period: '/year',
-    blurb: LARGE.sections,
-    doneForYou: `+ ${inr(LARGE.perSection)} a year per section above ${LARGE.from}. Done for you: quoted`,
-    features: [...EVERY_PLAN, 'Several schools in one account'],
-    cta: 'Get in touch',
-  },
-]
+// Rupees in India, US dollars elsewhere (see detectCurrency).
+function plansFor(currency) {
+  return [
+    ...PRICED.map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: planPrice(p, currency),
+      period: '/year',
+      blurb: p.sections,
+      doneForYou: `Done for you: ${planPrice(p, currency, 'done_for_you')} first year`,
+      features: EVERY_PLAN,
+      cta: 'Start free trial',
+      highlighted: p.id === 'standard',
+    })),
+    {
+      id: 'business',
+      name: LARGE.name,
+      price: `From ${largeBase(currency)}`,
+      period: '/year',
+      blurb: LARGE.sections,
+      doneForYou: `+ ${largePerSection(currency)} a year per section above ${LARGE.from}. Done for you: quoted`,
+      features: [...EVERY_PLAN, 'Several schools in one account'],
+      cta: 'Get in touch',
+    },
+  ]
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -97,6 +101,8 @@ function PlanCard({ plan, onChoose, delay }) {
 }
 
 export default function PlanPicker({ onChoose, onBack, onSignIn }) {
+  const [currency] = useState(detectCurrency)
+  const PLANS = plansFor(currency)
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
@@ -131,6 +137,7 @@ export default function PlanPicker({ onChoose, onBack, onSignIn }) {
 
         <p className="mt-8 text-sm text-neutral-500">
           After 14 days the school is paused until you choose a plan. Nothing you&rsquo;ve set up is deleted.
+          {currency === 'USD' && ' Prices outside India are in US dollars, and we invoice you by email.'}
         </p>
       </div>
     </div>

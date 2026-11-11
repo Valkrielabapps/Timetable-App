@@ -86,6 +86,17 @@ describe('BillingSection', () => {
     await waitFor(() => expect(api.createPaymentOrder).toHaveBeenCalledWith({ school_id: 7, phone: '9876543210', plan: 'standard', service: 'done_for_you' }))
   })
 
+  it('outside India shows dollar prices and asks for an invoice instead of checkout', () => {
+    window.localStorage.setItem('timetablz.currency', 'USD')
+    render(<BillingSection school={school} isAdmin />)
+    expect(screen.getByLabelText(/Software · \$149\/year/)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /request an invoice · starter · \$149/i })
+    expect(link.getAttribute('href')).toMatch(/^mailto:support@timetablz\.com/)
+    expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /pay in rupees/i }))
+    expect(screen.getByRole('button', { name: /pay now · starter · ₹9,999/i })).toBeInTheDocument()
+  })
+
   it('sends a school bigger than Plus to the Large / Group plan', () => {
     entitlements.current = { ...FREE, suggested_plan: 'business', usage: { ...FREE.usage, sections: 95 } }
     render(<BillingSection school={school} isAdmin />)
