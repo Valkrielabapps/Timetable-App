@@ -887,6 +887,131 @@ def _side_blocks(rows: list[list[str]]) -> list[dict]:
     return tables
 
 
+# ----------------------------------------------- a list under each teacher
+#
+# The other common staff sheet: a department heading, each teacher's name
+# across the row, and under each name what they take, one line each:
+#
+#   HIGHSCHOOL PHY,CHEM
+#   MRS.HARINIKA-PHY | MRS.VAHINI-CHEM | MR.MUKESH
+#   VI B- 3          | X B- 4          | VIII A-3 PHY
+#   VII C- 5 C.T     | XI A,B - 9      | IX-2 3LN
+#
+# "VIII A-3 PHY" is Class 8 section A, 3 periods of Physics; with no subject
+# it's the teacher's own (the "-PHY" after the name) or the heading's.
+
+_TITLE = re.compile(r"^\s*(?:mrs|mr|ms|miss|dr|sr|fr|sis|bro|smt|shri|sri)\b\.?\s*", re.I)
+_LEVEL_WORDS = re.compile(r"\b(?:high\s*school|highschool|higher\s*secondary|secondary|primary|middle\s*school|"
+                          r"middle|senior|junior|pre\s*primary|dept\.?|department|teachers?|staff)\b", re.I)
+_ENTRY = re.compile(
+    r"^(XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I|1[0-2]|[1-9])(?![0-9])"   # the class
+    r"\s*[-–:]?\s*((?:[A-H]\s*[,&/]\s*)*[A-H](?![A-Z])|[A-H]{2,6}(?![A-Z]))?"  # sections
+    r"\s*[-–:]?\s*(?:(\d{1,2}(?![0-9])|I(?![A-Z])))?"                     # periods ("I" for 1)
+    r"\s*[-–:]?\s*(.*)$")
+_LANG = re.compile(r"\b([23])\s*(?:LN|LANG|LANGUAGE|L)\b")
+
+
+def _teacher_cell(text: str) -> list[tuple[str, str]] | None:
+    """"MRS.HARINIKA-PHY" -> [("Harinika", "PHY")]; "MR.A/MR.B" -> both;
+    not a name (no Mr / Mrs / Ms) -> None."""
+    parts = [p.strip() for p in re.split(r"\s*/\s*(?=(?:mrs|mr|ms|miss|dr)\b)", text.strip(), flags=re.I) if p.strip()]
+    if not parts or not all(_TITLE.match(p) for p in parts):
+        return None
+    out = []
+    for p in parts:
+        name = _TITLE.sub("", p).strip(" .")
+        subj = ""
+        m = re.match(r"^(.*?)\s*[-–]\s*([A-Za-z.&, ]{2,30})$", name)
+        if m:
+            name, subj = m.group(1), m.group(2).strip()
+        name = re.sub(r"\s+", " ", name).strip(" .-")
+        if name:
+            out.append((name.title() if name.isupper() else name, subj))
+    return out or None
+
+
+def _entry(text: str) -> tuple[str, list[str], int, str] | None:
+    """"VIII A-3 PHY" -> ("VIII", ["A"], 3, "PHY"); "I A,B,C - 3" -> ("I",
+    ["A","B","C"], 3, ""); "IX-2 3LN" -> ("IX", [], 2, "3rd language")."""
+    t = re.sub(r"\s+", " ", text.strip().upper())
+    if not t or len(t) > 32:
+        return None
+    lang = ""
+    m = _LANG.search(t)
+    if m:
+        lang = "2nd language" if m.group(1) == "2" else "3rd language"
+        t = (t[:m.start()] + " " + t[m.end():]).strip()
+    m = _ENTRY.match(t)
+    if not m:
+        return None
+    grade, secs, per, subj = m.group(1), m.group(2) or "", m.group(3), m.group(4).strip(" -–.:")
+    if per is None and not subj and not secs and not lang:
+        return None
+    if subj and (len(subj.split()) > 3 or re.search(r"\d{3,}", subj)):
+        return None
+    sections = re.findall(r"[A-H]", secs)
+    periods = 1 if per == "I" else int(per) if per else 0
+    return grade, sections, periods, (lang + (" " + subj if subj else "")).strip() if lang else subj
+
+
+def _heading_subjects(text: str) -> list[str]:
+    """"HIGHSCHOOL PHY,CHEM" -> ["PHY", "CHEM"]; "PRIMARY ,HIGHSCHOOL  HINDI" -> ["HINDI"]."""
+    t = _LEVEL_WORDS.sub(" ", text)
+    return [p.strip(" -–.:") for p in re.split(r"[,/&]|\band\b", t) if p.strip(" -–.:")]
+
+
+def _teacher_lists(rows: list[list[str]]) -> list[dict]:
+    heading: list[str] = []
+    owner: dict[int, list[tuple[str, str]]] = {}
+    found: dict[tuple[str, str], dict] = {}
+    entries = teachers = 0
+    for row in rows:
+        cells = [(c, v.strip()) for c, v in enumerate(row) if v and v.strip()]
+        if not cells:
+            continue
+        kinds = []
+        for c, v in cells:
+            ppl = _teacher_cell(v)
+            kinds.append(("teacher", c, ppl) if ppl else ("entry", c, _entry(v)) if _entry(v) else ("text", c, v))
+        # A heading: a row of text with no name and no class in it.
+        if all(k == "text" for k, _, _ in kinds):
+            if len(cells) <= 2 and not is_label(cells[0][1]) or _LEVEL_WORDS.search(cells[0][1]):
+                heading, owner = _heading_subjects(cells[0][1]), {}
+            continue
+        for kind, c, val in kinds:
+            if kind == "teacher":
+                owner[c] = val
+                teachers += len(val)
+            elif kind == "entry" and c in owner:
+                grade, sections, periods, subj = val
+                own = [s for _, s in owner[c] if s]
+                if subj in ("2nd language", "3rd language") or not subj:
+                    base = own[0] if own else "/".join(heading)
+                    base = base.title() if base.isupper() and len(base) > 3 and subj else base
+                    subj = f"{base} ({subj})" if subj else base
+                if not subj:
+                    continue
+                who = "/".join(n for n, _ in owner[c])
+                entries += 1
+                # "1" and "I" are one class: written the way most of the sheet writes it.
+                if grade.isdigit():
+                    grade = next(r for r, n in _ROMAN_N.items() if n == int(grade)).upper()
+                for sec in sections or [""]:
+                    label = f"Class {grade} {sec}".strip()
+                    rec = found.setdefault((label, _key(subj)), {"label": label, "subj": subj, "per": 0, "who": {}})
+                    # Two teachers each with "XI A- 5" Maths share it: 10 in all.
+                    # The same teacher's line twice is one.
+                    rec["who"][who] = max(rec["who"].get(who, 0), periods)
+                    rec["per"] = sum(rec["who"].values())
+    if entries < 5 or teachers < 2:
+        return []
+    tables: dict[str, list] = {}
+    for rec in found.values():
+        tables.setdefault(rec["label"], []).append((rec["subj"], str(rec["per"]) if rec["per"] else "",
+                                                    "/".join(rec["who"])))
+    return [{"label": label, "items": items, "by_teacher": True} for label, items in tables.items()]
+
+
 def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[dict]]:
     """Every class table in the file, whichever way it's written: the
     Subjects | Periods | Teacher tables, a grid of counts, side blocks.
@@ -896,12 +1021,23 @@ def plan_tables(sheets: list[tuple[str, list[list[str]]]]) -> tuple[str, list[di
                  key=lambda x: x[0], default=(0, "", []))
     if len(proper[2]) >= 2:
         return proper[1], proper[2]
-    scored = [(_class_score(tb), t, tb) for t, rows in sheets for tb in [_grid(rows) or _side_blocks(rows)]]
+    scored = [(_class_score(tb), t, tb) for t, rows in sheets
+              for tb in [max([_grid(rows) or _side_blocks(rows), _teacher_lists(rows)], key=_class_score)]]
     top = max((s for s, _, _ in scored), default=0)
     if top == 0:
         return proper[1], proper[2]
     keep = [(t, tb) for s, t, tb in scored if s and s >= top * 0.2]
-    return ", ".join(t for t, _ in keep), [x for _, tb in keep for x in tb]
+    # The same class on two sheets (primary and high school lists both
+    # naming Class 5 A): one table.
+    merged: dict[str, dict] = {}
+    for _, tb in keep:
+        for x in tb:
+            k = _key(x["label"])
+            if k in merged:
+                merged[k]["items"] = merged[k]["items"] + [i for i in x["items"] if i not in merged[k]["items"]]
+            else:
+                merged[k] = {**x, "items": list(x["items"])}
+    return ", ".join(t for t, _ in keep), list(merged.values())
 
 
 def _split_people(cell: str) -> list[str]:
@@ -1162,7 +1298,10 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                if headings[i] and f not in ("subject_mark", "grade_mark")]
     if class_tables:
         labels = [t["label"] for t in class_tables]
-        read_as = [f"a table for each class ({len(labels)}: {', '.join(labels[:8])}{'…' if len(labels) > 8 else ''})",
+        read_as = [
+            "a list under each teacher's name of the classes they take and how many periods",
+            f"{len(labels)} sections in all",
+        ] if any(t.get("by_teacher") for t in class_tables) else [f"a table for each class ({len(labels)}: {', '.join(labels[:8])}{'…' if len(labels) > 8 else ''})",
                    "the subjects in each" + (", and who teaches them" if kind == "teachers" else "")]
     if not read_as and not class_tables:
         read_as = ["the column of subject names (it has no heading)"]
