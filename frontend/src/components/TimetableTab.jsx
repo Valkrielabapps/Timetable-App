@@ -421,20 +421,20 @@ export default function TimetableTab({
     <div className="tw-root" onPointerDown={closeMenusOutside}>
       <div className="tw-toolbar">
         <div className="tw-seg">
-          <button type="button" className={page === 'schedule' ? 'tw-on' : ''} onClick={() => setPage('schedule')}>Schedule</button>
-          <button type="button" className={page === 'substitutions' ? 'tw-on' : ''} onClick={() => setPage('substitutions')}>Substitutions</button>
+          <button type="button" data-testid="tab-schedule" className={page === 'schedule' ? 'tw-on' : ''} onClick={() => setPage('schedule')}>Schedule</button>
+          <button type="button" data-testid="tab-substitutions" className={page === 'substitutions' ? 'tw-on' : ''} onClick={() => setPage('substitutions')}>Substitutions</button>
         </div>
         {page === 'schedule' && (
           <div className="tw-desktop" style={{ display: 'contents' }}>
             {!readOnly && (
               <div className="tw-seg">
-                <button type="button" className={mode === 'work' ? 'tw-on' : ''} onClick={() => setMode('work')}>Workspace</button>
-                <button type="button" className={mode === 'plain' ? 'tw-on' : ''} onClick={() => setMode('plain')}>Plain view</button>
+                <button type="button" data-testid="view-workspace" className={mode === 'work' ? 'tw-on' : ''} onClick={() => setMode('work')}>Workspace</button>
+                <button type="button" data-testid="view-plain" className={mode === 'plain' ? 'tw-on' : ''} onClick={() => setMode('plain')}>Plain view</button>
               </div>
             )}
             {!readOnly && (
               <div className="tw-menuwrap">
-                <button type="button" className="tw-btn tw-primary" disabled={isGenerating} onClick={() => setMenu(menu === 'generate' ? null : 'generate')}>
+                <button type="button" data-testid="generate-btn" className="tw-btn tw-primary" disabled={isGenerating} onClick={() => setMenu(menu === 'generate' ? null : 'generate')}>
                   {isGenerating ? 'Generating…' : 'Generate timetable ▾'}
                 </button>
                 {menu === 'generate' && (
@@ -447,7 +447,7 @@ export default function TimetableTab({
                       <b>Fill the empty slots</b>
                       <small>The scheduler completes the timetable and keeps everything you placed. Saved as a new version.</small>
                     </button>
-                    <button type="button" onClick={() => handleGenerate(false)}>
+                    <button type="button" data-testid="generate-option-full" onClick={() => handleGenerate(false)}>
                       <b>Regenerate everything</b>
                       <small>Keeps only frozen and locked lessons. Saved as a new version.</small>
                     </button>
@@ -481,7 +481,7 @@ export default function TimetableTab({
               </button>
             )}
             <span className="tw-spacer" />
-            {solved && <span className="tw-count">{placedLessons} of {totalLessons} lessons placed</span>}
+            {solved && <span className="tw-count" data-testid="lessons-placed">{placedLessons} of {totalLessons} lessons placed</span>}
             <button
               type="button"
               className={`tw-btn${problems || setupErrors.length ? ' tw-alert' : ''}`}

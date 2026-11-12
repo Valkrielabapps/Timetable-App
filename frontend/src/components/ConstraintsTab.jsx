@@ -427,12 +427,14 @@ export default function ConstraintsTab({
               <form onSubmit={handleAdd} className="flex items-center gap-2.5 rounded-md border border-slate-300 py-1.5 pl-3.5 pr-1.5">
                 <span className="text-slate-400">✦</span>
                 <input
+                  data-testid="rule-input"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="e.g. Math can't immediately follow PE, or Priya Sharma is not available on Wednesdays"
                   className="flex-1 py-1 text-sm focus:outline-none"
                 />
                 <button
+                  data-testid="rule-submit"
                   disabled={submitting}
                   className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >

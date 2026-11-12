@@ -928,6 +928,7 @@ function App() {
                   return (
                     <button
                       key={t.id}
+                      data-testid={`nav-${t.id}`}
                       onClick={() => handleNavigate(t.tab, t.subView)}
                       aria-current={active ? 'page' : undefined}
                       className={`relative rounded-md px-3 py-1.5 font-medium ${

@@ -7,6 +7,9 @@ import {
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const MOVE_BEFORE_DRAG = 5
+// A cell's data-state while a lesson is held over it (read by the automated demo).
+const HELD_STATE = { ok: 'free', warn: 'rule', bad: 'taken' }
+const restingState = (cell) => (cell.dataset.empty ? 'empty' : 'filled')
 const smooth = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth')
 
 /**
@@ -156,6 +159,7 @@ export default function Workspace({
           d.verdicts.set(pid, v)
         }
         cell.dataset.hue = v.kind
+        cell.dataset.state = HELD_STATE[v.kind] ?? restingState(cell)
       }
     }
   }
@@ -166,6 +170,7 @@ export default function Workspace({
     for (const cell of root.querySelectorAll('td[data-hue]')) {
       delete cell.dataset.hue
       delete cell.dataset.hot
+      cell.dataset.state = restingState(cell)
     }
     for (const el of root.querySelectorAll('[data-target]')) delete el.dataset.target
     for (const el of root.querySelectorAll('[data-picked]')) delete el.dataset.picked
@@ -515,7 +520,7 @@ export default function Workspace({
               </div>
             )}
           </div>
-          <select className="tw-btn" aria-label="Choose teacher" value={teacherId ?? ''} onChange={(e) => choose(Number(e.target.value))}>
+          <select className="tw-btn" data-testid="teacher-select" aria-label="Choose teacher" value={teacherId ?? ''} onChange={(e) => choose(Number(e.target.value))}>
             {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <button type="button" className="tw-btn" aria-label="Previous teacher" onClick={() => go(-1)}>‹ Prev</button>
@@ -669,6 +674,7 @@ function LessonCard({ lesson, state, section, takenByName, onSwitch }) {
   return (
     <div
       className={`tw-card${off ? ' tw-off' : ''}`}
+      data-testid="lesson-card"
       {...(off ? {} : { 'data-card': lesson.key, role: 'button', tabIndex: 0 })}
       title={lesson.detail ?? lesson.label}
     >

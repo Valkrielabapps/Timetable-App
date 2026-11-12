@@ -22,7 +22,7 @@ function WeekGrid({ kind, entries, layout, sectionsById, mine = '', broken = '',
   const brokenIds = new Set(broken.split(',').filter(Boolean).map(Number))
 
   return (
-    <table className="tw-grid">
+    <table className="tw-grid" data-grid={kind}>
       <thead>
         <tr>
           <th className="tw-p" aria-label="Period" />
@@ -50,6 +50,8 @@ function WeekGrid({ kind, entries, layout, sectionsById, mine = '', broken = '',
                     className={`tw-cell${special ? ' tw-special' : ''}`}
                     data-pid={period.id}
                     data-empty={here.length === 0 ? '1' : undefined}
+                    data-testid="slot"
+                    data-state={here.length === 0 ? 'empty' : 'filled'}
                   >
                     {special ?? (here.length > 0 && (
                       <Lesson kind={kind} entries={here} sectionsById={sectionsById} mineIds={mineIds} brokenIds={brokenIds} plain={plain} />

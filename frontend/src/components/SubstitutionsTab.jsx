@@ -493,7 +493,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                       placeholder="Search teachers"
                       className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:border-neutral-900 focus:outline-none"
                     />
-                    <div className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
+                    <div data-testid="absent-teacher-select" className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
                       {/* Alphabetical, titles ignored; narrowed by the search. */}
                       {rankMatches(teachersWithLessons, absentSearch).map(t => {
                         const away = t.id in absences
@@ -503,6 +503,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                             <label className="flex items-center gap-3 cursor-pointer">
                               <input
                                 type="checkbox"
+                                data-testid="mark-absent-btn"
                                 checked={away}
                                 disabled={readOnly}
                                 onChange={() => toggleAbsentTeacher(t.id)}
@@ -595,7 +596,7 @@ export default function SubstitutionsTab({ schoolId, teachers, classGroups, read
                   <p>No lessons need cover for the periods chosen.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div data-testid="substitution-result" className="space-y-4">
                   {uncoveredCount > 0 && (
                     <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
                       {uncoveredCount} lesson{uncoveredCount === 1 ? '' : 's'} without a substitute will be saved as not covered.

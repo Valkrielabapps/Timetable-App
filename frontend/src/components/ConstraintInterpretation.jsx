@@ -41,7 +41,7 @@ export default function ConstraintInterpretation({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-slate-300 bg-slate-50 p-4">
+    <div data-testid="rule-interpretation" className="flex flex-col gap-3 rounded-md border border-slate-300 bg-slate-50 p-4">
       <div className="flex flex-col gap-1">
         <p className="text-xs uppercase tracking-wide text-slate-500">You typed</p>
         <p className="text-sm text-slate-600">{typed}</p>
@@ -69,6 +69,7 @@ export default function ConstraintInterpretation({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
+          data-testid="rule-confirm"
           disabled={saving || blocked}
           onClick={onConfirm}
           className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
@@ -112,7 +113,7 @@ function NotUnderstood({ typed, interpretation, onReword, onCancel }) {
   const { reason, explanation, question, readings = [] } = interpretation
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-4">
+    <div data-testid="rule-interpretation" className="flex flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-4">
       <div className="flex flex-col gap-1">
         <p className="text-xs uppercase tracking-wide text-amber-800">You typed</p>
         <p className="text-sm text-amber-900">{typed}</p>
