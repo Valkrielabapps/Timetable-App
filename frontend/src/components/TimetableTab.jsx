@@ -1144,14 +1144,24 @@ function CompromiseNotice({ compromise, readOnly, onAccept, onOpenConstraints })
  */
 export function PlanChangedBar({ changes, update, onUpdate, busy }) {
   const [all, setAll] = useState(false)
+  // Closing hides the bar until the plan changes again or another update runs.
+  const [closed, setClosed] = useState(null)
+  const changesKey = changes.map((c) => c.text).join('\n')
+  const close = (
+    <button type="button" aria-label="Close" title="Close" onClick={() => setClosed(changes.length > 0 ? changesKey : update)}
+      className="-mr-1 shrink-0 rounded p-1 text-lg leading-none opacity-70 hover:bg-black/5 hover:opacity-100">
+      &times;
+    </button>
+  )
   if (changes.length > 0) {
+    if (closed === changesKey) return null
     const shown = all ? changes : changes.slice(0, 3)
     return (
       <section aria-label="The plan has changed" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="font-semibold">The plan has changed since this timetable was made</p>
-            <ul className="mt-0.5 list-disc pl-4">
+            <ul className="mt-0.5 max-h-40 list-disc overflow-y-auto pl-4">
               {shown.map((c) => <li key={c.text}>{c.text}</li>)}
             </ul>
             {changes.length > 3 && (
@@ -1164,16 +1174,20 @@ export function PlanChangedBar({ changes, update, onUpdate, busy }) {
             <button type="button" className="tw-btn tw-primary" disabled={busy} onClick={onUpdate}>Update the timetable</button>
             <p className="mt-1 max-w-[16rem] text-xs text-amber-900">Keeps every lesson that&rsquo;s still right; only the changes are placed.</p>
           </div>
+          {close}
         </div>
       </section>
     )
   }
-  if (!update) return null
+  if (!update || closed === update) return null
   return (
-    <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-      {update.stage === 3
-        ? 'The changes couldn’t fit around the existing timetable, so it was built again.'
-        : `Updated for your changes: ${update.unchanged} lessons stayed exactly where they were and ${update.placed} ${update.placed === 1 ? 'was' : 'were'} placed${update.stage === 2 ? ' (the sections and teachers the changes touched were rearranged)' : ''}.`}
-    </p>
+    <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+      <p role="status" className="min-w-0 flex-1">
+        {update.stage === 3
+          ? 'The changes couldn’t fit around the existing timetable, so it was built again.'
+          : `Updated for your changes: ${update.unchanged} lessons stayed exactly where they were and ${update.placed} ${update.placed === 1 ? 'was' : 'were'} placed${update.stage === 2 ? ' (the sections and teachers the changes touched were rearranged)' : ''}.`}
+      </p>
+      {close}
+    </div>
   )
 }

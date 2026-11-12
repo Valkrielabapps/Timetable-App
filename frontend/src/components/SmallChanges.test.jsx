@@ -46,6 +46,17 @@ describe('small changes', () => {
     expect(onUpdate).toHaveBeenCalled()
   })
 
+  it('closes, and comes back when the plan changes again', () => {
+    const first = [{ text: 'Grade 6 A: Library is new (1 a week)' }]
+    const { rerender } = render(<PlanChangedBar changes={first} onUpdate={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText('The plan has changed since this timetable was made')).not.toBeInTheDocument()
+    rerender(<PlanChangedBar changes={[...first]} onUpdate={() => {}} />)
+    expect(screen.queryByText('The plan has changed since this timetable was made')).not.toBeInTheDocument()
+    rerender(<PlanChangedBar changes={[...first, { text: 'Grade 6 A: SUPW is new (1 a week)' }]} onUpdate={() => {}} />)
+    expect(screen.getByText('The plan has changed since this timetable was made')).toBeInTheDocument()
+  })
+
   it('says what an update kept', () => {
     render(<PlanChangedBar changes={[]} update={{ stage: 1, unchanged: 46, placed: 1 }} onUpdate={() => {}} />)
     expect(screen.getByRole('status')).toHaveTextContent('46 lessons stayed exactly where they were and 1 was placed')
