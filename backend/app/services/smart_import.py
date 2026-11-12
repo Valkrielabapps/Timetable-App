@@ -1474,7 +1474,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     if class_tables and kind == "teachers" and not any(cell for t in class_tables for _, _, cell in t["items"]):
         raise ValueError(
             "This file has the periods for each class but no teachers' names in it. Upload it under "
-            "Subjects to add its subjects, or in Get started step 4 (What each class needs) to fill in "
+            "Subjects to add its subjects, or at the top of Setup (Start from last year's timetable) to fill in "
             "every class's periods. Then upload a staff list here."
         )
 

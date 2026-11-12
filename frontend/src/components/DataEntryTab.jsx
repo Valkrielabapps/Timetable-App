@@ -694,7 +694,7 @@ function SetupSection({ schoolId, periods, grades, onPeriodsSaved, gradeDayLimit
           inputId="last-year-file-setup"
           withStaffList
           title="Start from last year’s timetable"
-          blurb="Upload last year’s timetable and we set up everything it shows: every section and its class teacher, the subjects, the teachers, how many periods each subject had and who taught it, and the shape of the week if you haven’t set one. You can change anything afterwards."
+          blurb="Upload last year’s timetable and we set up everything it shows: every section and its class teacher, the subjects, the teachers, how many periods each subject had and who taught it, and the shape of the week if you haven’t set one. An allotment sheet works here too. You can change anything afterwards."
           onDone={async () => {
             await onPeriodsSaved?.()
             await onImported?.()

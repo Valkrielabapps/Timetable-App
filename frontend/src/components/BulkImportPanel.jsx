@@ -59,7 +59,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource, onFile
     try {
       if (meta.smart) {
         setPreview(await api.bulkImportPreview(resource, schoolId, file))
-        // Get started keeps the file: the same sheet often holds every class's plan.
+        // The caller may keep the file: the same sheet often holds every class's plan.
         onFileRead?.(file)
       } else {
         setResult(await api.bulkImport(resource, schoolId, file))

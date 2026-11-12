@@ -16,7 +16,6 @@ import CustomersPage from './components/CustomersPage'
 import Sidebar from './components/Sidebar'
 import FirstRunWelcome from './components/FirstRunWelcome'
 import DashboardTab from './components/DashboardTab'
-import GetStartedTab from './components/GetStartedTab'
 import CalendarTab from './components/CalendarTab'
 import DemoTab from './components/DemoTab'
 import SettingsTab from './components/SettingsTab'
@@ -176,7 +175,7 @@ function App() {
   // straight to e.g. "Teachers" instead of just landing on Data Entry
   // and making the admin find the right sub-page themselves.
   const [dataEntrySubView, setDataEntrySubView] = useState('subjects')
-  // Set by Get started's "Build my timetable": the Timetable tab starts generating as it opens.
+  // When set, the Timetable tab starts generating as it opens.
   const [autoGenerate, setAutoGenerate] = useState(false)
   // Whether loadSchools()/loadSchoolData() have resolved at least once
   // for the current user/school - distinct from schools.length === 0 /
@@ -630,16 +629,6 @@ function App() {
     allRequirements,
   })
 
-  // A school with no timetable yet opens on Get started, once per school
-  // (afterwards the admin goes wherever they like).
-  const startedFor = useRef(new Set())
-  useEffect(() => {
-    if (!selectedSchoolId || !schoolDataReady || !timetablesFetched) return
-    if (startedFor.current.has(selectedSchoolId)) return
-    startedFor.current.add(selectedSchoolId)
-    if (schoolTimetables.length === 0 && tab === 'dashboard') setTab('start')
-  }, [selectedSchoolId, schoolDataReady, timetablesFetched, schoolTimetables.length, tab])
-
   // Public, no-auth-required pages - checked before the invite/reset/
   // session logic below since they don't depend on any of it (a signed-
   // out visitor, or someone with an unrelated ?invite=/?reset= link still
@@ -921,17 +910,6 @@ function App() {
 
           {selectedSchool && (
             <div className="ml-auto flex items-center gap-3">
-              {!isViewer && (
-                <button
-                  onClick={() => setTab('start')}
-                  aria-current={tab === 'start' ? 'page' : undefined}
-                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
-                    tab === 'start' ? 'bg-neutral-900 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  Get started
-                </button>
-              )}
               <SetupProgressBar progress={setupProgress} onNavigate={handleNavigate} />
               <nav className="flex gap-1 text-sm">
                 {TABS.map((t, index) => {
@@ -1069,31 +1047,6 @@ function App() {
                       onAddClassGroups={handleAddClassGroups}
                     />
                   )
-                )}
-                {tab === 'start' && (
-                  <GetStartedTab
-                    school={selectedSchool}
-                    periods={periods}
-                    classGroups={classGroups}
-                    subjects={subjects}
-                    teachers={teachers}
-                    allRequirements={allRequirements}
-                    readOnly={isViewer}
-                    onReload={() => loadSchoolData(selectedSchoolId)}
-                    onAddClassGroups={handleAddClassGroups}
-                    onOpenSection={handleOpenSection}
-                    onOpenTab={handleNavigate}
-                    onFix={handleFix}
-                    onSaveStandardRules={async (rules) => {
-                      const updated = await api.updateStandardRules(selectedSchoolId, rules)
-                      setSchools((prev) => prev.map((s) => (s.id === selectedSchoolId ? updated : s)))
-                    }}
-                    onGenerate={() => {
-                      if (!selectedClassGroupId && classGroups[0]) setSelectedClassGroupId(classGroups[0].id)
-                      setAutoGenerate(true)
-                      setTab('timetable')
-                    }}
-                  />
                 )}
                 {tab === 'entry' && (
                   <DataEntryTab
