@@ -61,6 +61,9 @@ const BASE_TABS = [
   { id: 'setup', label: 'Setup', tab: 'entry', subView: 'setup' },
   { id: 'subjects', label: 'Subjects', tab: 'entry', subView: 'subjects' },
   { id: 'teachers', label: 'Teachers', tab: 'entry', subView: 'teachers' },
+  // Each section's weekly plan: its subjects, periods and teachers. Comes
+  // after Subjects and Teachers because it uses both.
+  { id: 'plans', label: 'Class plans', tab: 'entry', subView: 'plan' },
   { id: 'constraints', label: 'Constraints', tab: 'constraints' },
   { id: 'timetable', label: 'Timetable', tab: 'timetable' },
 ]
@@ -783,6 +786,8 @@ function App() {
   function handleNavigate(tabId, subView) {
     setTab(tabId)
     if (subView) setDataEntrySubView(subView)
+    // Class plans open on a section: the one picked before, else the first.
+    if (subView === 'plan' && !selectedClassGroupId && classGroups[0]) setSelectedClassGroupId(classGroups[0].id)
   }
 
   // From the Dashboard's sections list: select that section, then open
@@ -919,11 +924,7 @@ function App() {
                   // fail) - muted rather than hidden or disabled, so
                   // someone who wants to peek still can.
                   const muted = ['constraints', 'timetable'].includes(t.id) && !setupProgress.allRequiredDone
-                  // A section's weekly plan (sub-view 'plan') is where its
-                  // subjects get their periods, so it lights up Subjects.
-                  const active =
-                    tab === t.tab &&
-                    (!t.subView || dataEntrySubView === t.subView || (t.subView === 'subjects' && dataEntrySubView === 'plan'))
+                  const active = tab === t.tab && (!t.subView || dataEntrySubView === t.subView)
                   return (
                     <button
                       key={t.id}

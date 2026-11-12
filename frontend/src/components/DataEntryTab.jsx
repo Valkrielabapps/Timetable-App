@@ -536,12 +536,23 @@ export default function DataEntryTab({
       {/* Subjects / Teachers / Setup are steps in the header (App.jsx
           BASE_TABS), so the page doesn't repeat them as tabs of its own. */}
       {subView === 'plan' && (
-        <button
-          onClick={() => onSubViewChange('subjects')}
-          className="w-fit text-xs font-medium text-neutral-900 hover:underline"
-        >
-          ← Manage school subjects &amp; teachers
-        </button>
+        <ClassPlansOverview
+          classGroups={classGroups}
+          allRequirements={allRequirements}
+          periods={periods}
+          activeSectionId={activeSectionId}
+          onPick={setActiveSectionId}
+        />
+      )}
+      {subView === 'plan' && !readOnly && (
+        <details className="rounded-lg border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-2.5 text-sm font-medium text-slate-700">
+            Fill in every class from a file
+          </summary>
+          <div className="px-4 pb-4">
+            <ClassPlanImport schoolId={schoolId} inputId="class-plans-file" onDone={onReloadSchoolData} />
+          </div>
+        </details>
       )}
 
       {subView === 'subjects' && (
@@ -661,6 +672,65 @@ export default function DataEntryTab({
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Class plans: every section at a glance - how many periods a week it has
+ * planned against the week's lessons - so the school can go through them in
+ * order. Clicking one opens its plan below.
+ */
+export function ClassPlansOverview({ classGroups, allRequirements, periods, activeSectionId, onPick }) {
+  const lessons = periods.filter((p) => !(p.kind && p.kind !== 'lesson') && !p.is_break).length
+  const planned = new Map()
+  for (const r of allRequirements) planned.set(r.class_group_id, (planned.get(r.class_group_id) ?? 0) + (r.periods_per_week || 0))
+  const sections = sortSections(classGroups)
+  const done = sections.filter((c) => lessons > 0 && planned.get(c.id) === lessons).length
+  if (sections.length === 0) {
+    return <p className="text-sm text-slate-500">Add grades and sections in the sidebar first.</p>
+  }
+  return (
+    <section aria-label="Every section" className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-base font-medium">Class plans</h4>
+        <p className="text-xs text-slate-500">
+          {lessons > 0 ? `${done} of ${sections.length} sections fill the week's ${lessons} lessons` : `${sections.length} sections`}
+        </p>
+      </div>
+      <p className="mt-0.5 text-sm text-slate-500">
+        For each section: its subjects, periods a week and who teaches them. Pick a section to open its plan.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {sections.map((c) => {
+          const n = planned.get(c.id) ?? 0
+          const state = n === 0 ? 'none' : lessons && n === lessons ? 'full' : lessons && n > lessons ? 'over' : 'part'
+          const active = c.id === activeSectionId
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onPick(c.id)}
+              aria-pressed={active}
+              title={`${n}${lessons ? ` of ${lessons}` : ''} periods planned`}
+              className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                active
+                  ? 'border-neutral-900 bg-neutral-900 text-white'
+                  : state === 'full'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : state === 'over'
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : state === 'part'
+                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              {`${c.grade ? `${c.grade.replace(/^Grade\s*/i, '')} ` : ''}${c.name}`}
+              <span className="ml-1 font-normal opacity-75">{n}</span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

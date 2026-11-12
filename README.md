@@ -35,24 +35,28 @@ plain-English rules, and questions instead of guesses.
    - last year's timetable
    Every import shows a preview first, flags doubtful rows, and asks about
    look-alike names and spellings before anything is saved.
-3. **Rules.** Common ones are tick boxes (teacher daily/weekly caps, spread,
+3. **Class plans** (its own step, after Subjects and Teachers): every section
+   at a glance, coloured by whether its periods fill the week, and each
+   section's subjects, periods a week, teachers and class teacher. Plans can
+   be copied to other sections or filled in from a file.
+4. **Rules.** Common ones are tick boxes (teacher daily/weekly caps, spread,
    core subjects in the morning). Anything else is written in plain English
    and turned into a structured rule (see "Rules" below). Setup also covers
    breaks, a school-wide class teacher or zero period, shorter days for some
    grades, and **fixed periods for some grades** (e.g. the class teacher period
    in period 8 for Grades 1–5, counted in that teacher's week).
-4. **Generate.** The whole school is solved together. A setup check runs first
+5. **Generate.** The whole school is solved together. A setup check runs first
    and lists anything that would make generation fail, with a link to fix it.
    If the rules can't all be met, it explains which ones conflict, and can
    produce a compromise timetable that says what it relaxed.
-5. **Adjust without rebuilding.** Drag lessons (the grid colours where a lesson
+6. **Adjust without rebuilding.** Drag lessons (the grid colours where a lesson
    can go and suggests chains of moves), lock or freeze what's right, replace
    one teacher with another everywhere, and update only what changed when the
    plan changes mid-year. Up to five versions are kept.
-6. **Day to day.** Mark absences, get substitute suggestions, and email
+7. **Day to day.** Mark absences, get substitute suggestions, and email
    teachers their cover with calendar invites (updates and cancellations
    included).
-7. **Export** by section or teacher, to Excel or PDF.
+8. **Export** by section or teacher, to Excel or PDF.
 
 ## Plans and billing
 
