@@ -62,16 +62,7 @@ fun TimetablzApp(openTab: String? = null) {
     TimetablzTheme(settings.theme) {
         Crossfade(targetState = showApp, animationSpec = tween(450), label = "intro") { ready ->
             if (!ready) {
-                if (settings.loaded) {
-                    IntroScreen(full = !settings.introSeen) {
-                        if (!introDone) {
-                            introDone = true
-                            if (!settings.introSeen) session.introSeen()
-                        }
-                    }
-                } else {
-                    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)))
-                }
+                IntroScreen { introDone = true }
             } else {
                 Surface(color = MaterialTheme.colorScheme.background) {
                     val user = ui.user

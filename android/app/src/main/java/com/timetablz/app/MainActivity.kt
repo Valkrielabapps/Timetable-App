@@ -10,7 +10,10 @@ import com.timetablz.app.ui.TimetablzApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // The mark on black while Android starts the app; the opening animation carries on from it.
-        installSplashScreen()
+        // When it's done, the mark simply fades out to the same black - no jump.
+        installSplashScreen().setOnExitAnimationListener { splash ->
+            splash.view.animate().alpha(0f).setDuration(300L).withEndAction { splash.remove() }.start()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // A cover notification opens straight on the Substitution page.

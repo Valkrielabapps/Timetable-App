@@ -68,17 +68,38 @@ class SessionViewModel(private val c: AppContainer) : ViewModel() {
     fun me(data: SchoolData?, settings: Settings, ui: SessionUi): Teacher? =
         MyCover.whoAmI(data?.teachers ?: emptyList(), ui.user?.email, ui.school?.id?.let { settings.me[it] })
 
+    /**
+     * Opening the app: straight in on the account and school as last seen
+     * (the offline copy), then the sign-in, schools and data are checked in
+     * the background. Only a first sign-in on this phone waits for the server.
+     */
     private fun resume() = viewModelScope.launch {
         if (!c.auth.restore()) {
             _ui.update { it.copy(starting = false) }
             return@launch
+        }
+        val cached = c.auth.cachedAccount()
+        val savedId = c.store.current().schoolId
+        if (cached != null) {
+            _ui.update {
+                it.copy(
+                    user = cached.user, schools = cached.schools, schoolsLoaded = true,
+                    school = cached.schools.firstOrNull { s -> s.id == savedId }, starting = false,
+                )
+            }
         }
         try {
             val user = c.auth.me()
             _ui.update { it.copy(user = user) }
             loadSchools(user)
         } catch (e: ApiException) {
-            if (e.offline) openOffline() else if (e.status == 401) signOut() else _ui.update { it.copy(error = e.message) }
+            if (e.offline) {
+                if (cached == null) openOffline() else _ui.update { it.copy(offline = true) }
+            } else if (e.status == 401) {
+                signOut()
+            } else if (cached == null) {
+                _ui.update { it.copy(error = e.message) }
+            }
         } finally {
             _ui.update { it.copy(starting = false) }
         }
@@ -133,8 +154,12 @@ class SessionViewModel(private val c: AppContainer) : ViewModel() {
             val schools = c.auth.schools(user)
             val savedId = c.store.current().schoolId
             val pick = schools.firstOrNull { it.id == savedId } ?: schools.singleOrNull()
-            _ui.update { it.copy(schools = schools, schoolsLoaded = true, loading = false, offline = false) }
-            if (pick != null) choose(pick)
+            // The school already open (from the saved copy) stays, with its latest name and role -
+            // unless this account has lost it.
+            val stillOpen = _ui.value.school?.let { o -> schools.firstOrNull { it.id == o.id } }
+            _ui.update { it.copy(schools = schools, schoolsLoaded = true, loading = false, offline = false, school = stillOpen) }
+            if (stillOpen != null) viewModelScope.launch { refreshNow() }
+            else if (pick != null) choose(pick)
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiException) {
@@ -147,7 +172,8 @@ class SessionViewModel(private val c: AppContainer) : ViewModel() {
     private suspend fun choose(school: School) {
         _ui.update { it.copy(school = school) }
         c.store.setSchool(school.id)
-        refreshNow()
+        // In the background: the saved copy shows meanwhile.
+        viewModelScope.launch { refreshNow() }
     }
 
     /** Fetch the school's latest data and cover into the offline copy; screens update by themselves. */
