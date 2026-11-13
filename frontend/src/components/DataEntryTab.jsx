@@ -1284,7 +1284,7 @@ function TeacherPicker({ subjectName, teachers, selectedIds, disabled, onChange 
       ? 'Any (let solver choose)'
       : selectedIds.length === 1
         ? nameOf(selectedIds[0])
-        : `${selectedIds.length} teachers: ${selectedIds.map(nameOf).join(', ')}`
+        : `Shared: ${selectedIds.map(nameOf).join(', ')}`
 
   return (
     <div ref={ref} className="relative">

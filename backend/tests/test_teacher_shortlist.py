@@ -1,5 +1,7 @@
-"""A section's subject can have a shortlist of teachers ("Priya or Joseph"):
-the solver picks one of them, never anyone else qualified."""
+"""A section's subject can be given to several named teachers ("Priya and
+Joseph"): they share its periods as evenly as they can, and nobody else
+qualified teaches it."""
+from collections import Counter
 import pytest
 
 from app.core.config import settings
@@ -23,8 +25,9 @@ def test_the_solver_only_uses_the_shortlist(db, monkeypatch, seed):  # noqa: F81
 
     result = generate_school_timetable(db, school.id)
     assert result.status in ("optimal", "feasible"), result.errors
-    used = {a["teacher_id"] for a in result.assignments}
-    assert len(used) == 1 and used <= {priya.id, joseph.id}
+    counts = Counter(a["teacher_id"] for a in result.assignments)
+    assert set(counts) == {priya.id, joseph.id}  # never Anita
+    assert sorted(counts.values()) == [1, 2]  # 3 periods shared out
 
 
 def test_saving_a_shortlist_keeps_it_tidy(client):

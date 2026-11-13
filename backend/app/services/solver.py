@@ -388,6 +388,8 @@ def _find_timetable(model, rng, remaining):
 # in one place: one unit of "try to keep Hindi out of the last period" is worth
 # more than one lesson's worth of spreading or a teacher's third period in a row.
 _USER_WEIGHT = 10
+# Per period a shared subject is off an even split between its teachers.
+_SHARE_WEIGHT = 3
 
 
 def _valid_ir(c) -> bool:
@@ -837,6 +839,14 @@ def _runs_by_day(all_periods: list[Period]) -> list[list[Period]]:
 
 def _class_group_label(cg: ClassGroup) -> str:
     return f"{cg.grade} - {cg.name}" if cg.grade else cg.name
+
+
+def _is_shared(req) -> bool:
+    """A subject the section's plan gives to two or more named teachers
+    ("2 teachers: Subha, Matthew"), with nobody pinned: they share its
+    periods between them, as evenly as their limits allow."""
+    return req is not None and getattr(req, "preferred_teacher_id", None) is None \
+        and len(getattr(req, "allowed_teacher_ids", None) or []) >= 2
 
 
 def _candidate_teacher_ids(
@@ -1861,6 +1871,10 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             strands.setdefault(("o", block_id, option_id), {}).setdefault(teacher_id, []).append(var)
 
     for key, by_teacher in ({} if "one_teacher" in _RELAX.get() else strands).items():
+        # Two or more named teachers share the subject between them (see
+        # share_terms below), so it isn't held to one.
+        if key[0] == "r" and _is_shared(requirements_by_id.get(key[1])):
+            continue
         if key[0] == "r" and len(locked_teachers_by_req.get(key[1], ())) > 1:
             req = requirements_by_id.get(key[1])
             subject = subjects_by_id.get(req.subject_id) if req else None
@@ -2279,6 +2293,31 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     # Added only AFTER a valid timetable is found (see _solve_timetable_model):
     # in the model from the start they cost the first search its speed - a
     # school that solved in 27 seconds ran out of time.
+    # A subject given to two or more named teachers in a section (the plan's
+    # "2 teachers: Subha, Matthew"): its periods are shared out evenly -
+    # 9 periods between two is 5 and 4 - unless a teacher's limits or other
+    # rules make that impossible, which is why it's a preference. Stronger
+    # than the everyday habits, weaker than a rule the school typed.
+    share_reqs = [
+        r for r in requirements
+        if _is_shared(r) and len(candidate_ids_by_req.get(r.id) or []) >= 2 and _batch_count(r) == 1
+    ]
+
+    def share_terms() -> list:
+        terms: list = []
+        for r in share_reqs:
+            ids = candidate_ids_by_req[r.id]
+            n = r.periods_per_week or 0
+            lo, hi = n // len(ids), -(-n // len(ids))
+            for t in ids:
+                count = sum(v for (rid, tid, _), v in x.items() if rid == r.id and tid == t)
+                under = model.NewIntVar(0, n, f"share_under_r{r.id}_t{t}")
+                over = model.NewIntVar(0, n, f"share_over_r{r.id}_t{t}")
+                model.Add(under >= lo - count)
+                model.Add(over >= count - hi)
+                terms += [_SHARE_WEIGHT * under, _SHARE_WEIGHT * over]
+        return terms
+
     def add_later() -> bool:
         if deferred_rules:
             atoms_, index_ = deferred_compile
@@ -2290,9 +2329,10 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             ir_rules=[rule_from_dict(c.parameters or {}) for c in ir_constraints if _valid_ir(c)],
             consecutive_constraints=consecutive_constraints,
         )
-        if not penalties and not habit_penalties:
+        shared = share_terms()
+        if not penalties and not habit_penalties and not shared:
             return False
-        model.Minimize(_USER_WEIGHT * sum(penalties) + sum(habit_penalties))
+        model.Minimize(_USER_WEIGHT * sum(penalties) + sum(habit_penalties) + sum(shared))
         return True
     if penalties:
         model.Minimize(sum(penalties))
@@ -2320,7 +2360,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         solver, status = _solve_timetable_model(model, True, None)
     else:
         solver, status = _solve_timetable_model(
-            model, bool(penalties), add_later if (deferred_rules or _DEFAULT_HABITS.get()) else None,
+            model, bool(penalties), add_later if (deferred_rules or _DEFAULT_HABITS.get() or share_reqs) else None,
         )
 
     status_name = {
@@ -2525,6 +2565,8 @@ def _diagnose_teacher_assignment(
         cands = candidate_ids_by_req.get(r.id) or []
         if not cands or not r.periods_per_week:
             continue
+        if _is_shared(r) and batch_count(r) == 1:
+            continue  # shared between its teachers, not one teacher's whole load
         for b in range(batch_count(r)):
             strands.append((r.subject_id, r.class_group_id, r.periods_per_week, cands, ("r", r.id)))
     for o in option_reqs:

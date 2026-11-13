@@ -68,7 +68,7 @@ describe('choosing teachers for a subject', () => {
 
   it('shows an existing shortlist and can clear it back to any teacher', async () => {
     renderPlan({ allowed_teacher_ids: [1, 2] })
-    expect(pickerButton()).toHaveTextContent('2 teachers: Priya, Joseph')
+    expect(pickerButton()).toHaveTextContent('Shared: Priya, Joseph')
     fireEvent.click(pickerButton())
     fireEvent.click(screen.getByRole('button', { name: /clear/i }))
     fireEvent.click(screen.getByRole('button', { name: 'Done' }))
