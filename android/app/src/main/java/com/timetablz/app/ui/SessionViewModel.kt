@@ -183,6 +183,7 @@ class SessionViewModel(private val c: AppContainer) : ViewModel() {
     // ---- settings
     fun chooseTheme(theme: String) = viewModelScope.launch { c.store.setTheme(theme) }
     fun setNotify(on: Boolean) = viewModelScope.launch { c.store.setNotify(on) }
+    fun introSeen() = viewModelScope.launch { c.store.setIntroSeen() }
     fun chooseMe(teacherId: Int?) = viewModelScope.launch {
         val s = _ui.value.school ?: return@launch
         c.store.setMe(s.id, teacherId)

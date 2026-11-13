@@ -1,5 +1,11 @@
 package com.timetablz.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -46,23 +52,25 @@ fun TimetableScreen(data: SchoolData, mode: String, fixedTeacherId: Int? = null,
     }
     // "mine" and "teacher" show a teacher's week; "section" a section's.
     val view = if (mode == "section") "section" else "teacher"
-    val days = data.periods.map { it.day }.distinct().sorted()
+    // Worked out once per data change, not on every redraw.
+    val days = remember(data.periods) { data.periods.map { it.day }.distinct().sorted() }
     val today = Dates.weekday(Dates.today())
     val chosenDay by vm.day.collectAsStateWithLifecycle()
     val day = chosenDay ?: if (today in days) today else days.firstOrNull() ?: 0
 
-    val sections = timetable.entries.map { it.classGroupId to it.classGroupName }.distinct().sortedWith { a, b -> Natural.compare(a.second, b.second) }
-    val teachers = data.teachers.filter { t -> timetable.entries.any { it.teacherId == t.id } }.sortedBy { it.name.lowercase() }
+    val sections = remember(timetable) {
+        timetable.entries.map { it.classGroupId to it.classGroupName }.distinct().sortedWith { a, b -> Natural.compare(a.second, b.second) }
+    }
+    val teachers = remember(timetable, data.teachers) {
+        val teaching = timetable.entries.mapNotNull { it.teacherId }.toSet()
+        data.teachers.filter { it.id in teaching }.sortedBy { it.name.lowercase() }
+    }
     val chosenSection by vm.sectionId.collectAsStateWithLifecycle()
     val sectionId = chosenSection ?: sections.firstOrNull()?.first
     val chosenTeacher by vm.teacherId.collectAsStateWithLifecycle()
     val teacherId = fixedTeacherId ?: chosenTeacher ?: teachers.firstOrNull()?.id
     var picking by remember { mutableStateOf(false) }
 
-    val dayPeriods = data.periods.filter { it.day == day }.sortedBy { it.order }
-    val shown = timetable.entries.filter {
-        it.day == day && if (view == "section") it.classGroupId == sectionId else it.teacherId == teacherId
-    }
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -75,12 +83,30 @@ fun TimetableScreen(data: SchoolData, mode: String, fixedTeacherId: Int? = null,
                 days.forEach { d -> Pill(Dates.dayShort[d], d == day) { vm.day.value = d } }
             }
         }
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(dayPeriods) { p -> PeriodRow(p, shown.filter { it.periodId == p.id }, view) }
+        // Changing day or person slides the new day in.
+        AnimatedContent(
+            targetState = Triple(day, sectionId, teacherId),
+            transitionSpec = {
+                val forward = targetState.first >= initialState.first
+                (fadeIn(tween(200)) + slideInHorizontally(tween(240)) { if (forward) it / 8 else -it / 8 }) togetherWith
+                    fadeOut(tween(120))
+            },
+            label = "day",
+        ) { (d, sec, tch) ->
+            // Each day's list is built from its own day and person, so the one sliding out stays as it was.
+            val dayPeriods = remember(data.periods, d) { data.periods.filter { it.day == d }.sortedBy { it.order } }
+            val byPeriod = remember(timetable, d, view, sec, tch) {
+                timetable.entries.filter {
+                    it.day == d && if (view == "section") it.classGroupId == sec else it.teacherId == tch
+                }.groupBy { it.periodId }
+            }
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(dayPeriods, key = { it.id }) { p -> PeriodRow(p, byPeriod[p.id] ?: emptyList(), view) }
+            }
         }
     }
 

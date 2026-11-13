@@ -19,3 +19,12 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Google sign-in through Credential Manager (from its documentation).
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }
+
+# The app's own API models are read by kotlinx.serialization (its rules keep
+# the generated serializers; these keep the classes' names for clearer crashes).
+-keepattributes *Annotation*, InnerClasses
+-keep,includedescriptorclasses class com.timetablz.app.data.**$$serializer { *; }
+-keepclassmembers class com.timetablz.app.data.** { *** Companion; }

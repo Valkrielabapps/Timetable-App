@@ -1,6 +1,13 @@
 package com.timetablz.app.ui
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -25,6 +32,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,15 +55,42 @@ fun TimetablzApp(openTab: String? = null) {
     val ui by session.ui.collectAsStateWithLifecycle()
     val settings by session.settings.collectAsStateWithLifecycle()
 
+    // The opening plays until it ends (or is tapped) and the app is ready, then fades into it.
+    var introDone by rememberSaveable { mutableStateOf(false) }
+    val showApp = introDone && !ui.starting
+
     TimetablzTheme(settings.theme) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            val user = ui.user
-            when {
-                ui.starting -> Loading("Opening Timetablz…")
-                user == null -> LoginScreen(session, ui)
-                user.needsTerms -> TermsScreen(session, ui)
-                ui.school == null -> SchoolPicker(session, ui)
-                else -> Home(session, openTab)
+        Crossfade(targetState = showApp, animationSpec = tween(450), label = "intro") { ready ->
+            if (!ready) {
+                if (settings.loaded) {
+                    IntroScreen(full = !settings.introSeen) {
+                        if (!introDone) {
+                            introDone = true
+                            if (!settings.introSeen) session.introSeen()
+                        }
+                    }
+                } else {
+                    Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)))
+                }
+            } else {
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    val user = ui.user
+                    // Each stage of getting in fades into the next.
+                    val stage = when {
+                        user == null -> "login"
+                        user.needsTerms -> "terms"
+                        ui.school == null -> "schools"
+                        else -> "home"
+                    }
+                    Crossfade(targetState = stage, animationSpec = tween(300), label = "stage") { s ->
+                        when (s) {
+                            "login" -> LoginScreen(session, ui)
+                            "terms" -> TermsScreen(session, ui)
+                            "schools" -> SchoolPicker(session, ui)
+                            else -> Home(session, openTab)
+                        }
+                    }
+                }
             }
         }
     }
@@ -142,7 +180,21 @@ private fun Home(session: SessionViewModel, openTab: String?) {
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            NavHost(nav, startDestination = if (openTab == "substitution") Routes.SUBSTITUTION else Routes.MENU) {
+            // Pages slide in a little and fade; going back slides the other way.
+            NavHost(
+                nav,
+                startDestination = if (openTab == "substitution") Routes.SUBSTITUTION else Routes.MENU,
+                enterTransition = {
+                    fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(260)) { it / 10 }
+                },
+                exitTransition = { fadeOut(tween(160)) },
+                popEnterTransition = {
+                    fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(260)) { it / 10 }
+                },
+                popExitTransition = {
+                    fadeOut(tween(160)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(220)) { it / 10 }
+                },
+            ) {
                 composable(Routes.MENU) {
                     MenuScreen(school, ui.user, session.me(data, settings, ui)) { nav.navigate(it) }
                 }

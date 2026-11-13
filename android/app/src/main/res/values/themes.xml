@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The app itself. -->
+    <style name="Theme.Timetablz" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#0A0A0A</item>
+    </style>
 
-    <style name="Theme.Timetablz" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- The moment the app is tapped: the mark on black, which the opening
+         animation then grows out of (ui/IntroScreen.kt). -->
+    <style name="Theme.Timetablz.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0A0A0A</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Timetablz</item>
+    </style>
 </resources>

@@ -27,7 +27,12 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Shrunk and optimised: the build to judge smoothness on (debug builds
+            // run Compose far slower). Signed with the debug key for now so it
+            // installs from Android Studio - swap in the real key before the Play Store.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -65,6 +70,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

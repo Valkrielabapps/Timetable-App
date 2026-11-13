@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -63,17 +64,20 @@ fun MySubstitutionsScreen(
         return
     }
     val loaded = covers ?: run { Loading("Loading your substitutions…"); return }
-    val entries = data.timetable?.entries ?: emptyList()
-    val subjects = entries.associate { it.subjectId to it.subjectName }
-    val all = MyCover.of(me.id, loaded, data.periods, entries, data.teachers, subjects)
     val today = Dates.today()
-    val earliest = Dates.add(today, -14)
-    val groups = listOf(
-        "Today" to all.filter { it.date == today },
-        "Coming up" to all.filter { it.date > today },
-        "Earlier" to all.filter { it.date < today && it.date >= earliest }.reversed(),
-    ).filter { it.second.isNotEmpty() }
-    val periodLabels = data.periods.associate { it.id to it.label }
+    // Worked out when the cover or data change, not on every redraw.
+    val groups = remember(loaded, data, me.id, today) {
+        val entries = data.timetable?.entries ?: emptyList()
+        val subjects = entries.associate { it.subjectId to it.subjectName }
+        val all = MyCover.of(me.id, loaded, data.periods, entries, data.teachers, subjects)
+        val earliest = Dates.add(today, -14)
+        listOf(
+            "Today" to all.filter { it.date == today },
+            "Coming up" to all.filter { it.date > today },
+            "Earlier" to all.filter { it.date < today && it.date >= earliest }.reversed(),
+        ).filter { it.second.isNotEmpty() }
+    }
+    val periodLabels = remember(data.periods) { data.periods.associate { it.id to it.label } }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {

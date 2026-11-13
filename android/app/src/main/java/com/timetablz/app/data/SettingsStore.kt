@@ -30,6 +30,10 @@ data class Settings(
     val userEmail: String? = null,
     val me: Map<Int, Int> = emptyMap(),
     val notified: Set<String> = emptySet(),
+    /** The opening animation has been seen in full once. */
+    val introSeen: Boolean = false,
+    /** False only for the placeholder before the saved settings have been read. */
+    val loaded: Boolean = false,
 )
 
 /** Settings in DataStore; the sign-in token encrypted with a key kept in the phone's keystore. */
@@ -41,6 +45,7 @@ class SettingsStore(private val context: Context) {
         val email = stringPreferencesKey("user_email")
         val token = stringPreferencesKey("token_enc")
         val notified = stringSetPreferencesKey("notified")
+        val intro = booleanPreferencesKey("intro_seen")
         fun me(schoolId: Int) = intPreferencesKey("me_$schoolId")
     }
 
@@ -55,6 +60,8 @@ class SettingsStore(private val context: Context) {
                 if (id != null && v is Int && v > 0) id to v else null
             }.toMap(),
             notified = p[K.notified] ?: emptySet(),
+            introSeen = p[K.intro] ?: false,
+            loaded = true,
         )
     }
 
@@ -72,6 +79,8 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setNotify(on: Boolean) = set { it[K.notify] = on }
+
+    suspend fun setIntroSeen() = set { it[K.intro] = true }
 
     suspend fun setEmail(email: String?) = set { p ->
         if (email == null) p.remove(K.email) else p[K.email] = email
@@ -97,8 +106,10 @@ class SettingsStore(private val context: Context) {
     /** Signing out: forget the account, keep the theme. */
     suspend fun clearAccount() = set { p ->
         val theme = p[K.theme]
+        val intro = p[K.intro]
         p.clear()
         if (theme != null) p[K.theme] = theme
+        if (intro != null) p[K.intro] = intro
         Unit
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.timetablz.app.data.Cover
 import com.timetablz.app.data.Dates
 import com.timetablz.app.data.SchoolData
 import com.timetablz.app.data.Lesson
@@ -69,10 +70,16 @@ fun CoverScreen(session: SessionViewModel, data: SchoolData, vm: CoverViewModel 
     var choosingAway by remember { mutableStateOf(false) }
     var choosingFor by remember { mutableStateOf<Lesson?>(null) }
 
-    val dayLessons = vm.dayLessons()
-    val toCover = vm.toCover()
-    val load = vm.weeklyLoad()
-    val teachersToday = data.teachers.filter { t -> dayLessons.any { it.teacherId == t.id } }.sortedBy { it.name.lowercase() }
+    // Worked out when the day, who's away or the data change - not on every redraw.
+    val dayLessons = remember(data, ui.date) { Cover.lessonsOn(data.timetable?.entries ?: emptyList(), Dates.weekday(ui.date)) }
+    val toCover = remember(dayLessons, ui.absent) { dayLessons.filter { it.teacherId in ui.absent } }
+    val load = remember(data) { Cover.weeklyLoad(data.timetable?.entries ?: emptyList()) }
+    val teachersToday = remember(dayLessons, data.teachers) {
+        val teaching = dayLessons.map { it.teacherId }.toSet()
+        data.teachers.filter { it.id in teaching }.sortedBy { it.name.lowercase() }
+    }
+    val periodsById = remember(data.periods) { data.periods.associateBy { it.id } }
+    val teachersById = remember(data.teachers) { data.teachers.associateBy { it.id } }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -128,10 +135,11 @@ fun CoverScreen(session: SessionViewModel, data: SchoolData, vm: CoverViewModel 
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
             }
             items(toCover, key = { it.key }) { lesson ->
-                val subName = data.teachers.firstOrNull { it.id == ui.picks[lesson.key] }?.name
-                Card(onClick = { choosingFor = lesson }) {
+                // Lessons slide into place as people are marked away.
+                val subName = ui.picks[lesson.key]?.let { teachersById[it]?.name }
+                Card(Modifier.animateItem(), onClick = { choosingFor = lesson }) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        val period = data.periods.firstOrNull { it.id == lesson.periodId }
+                        val period = periodsById[lesson.periodId]
                         Text("${period?.short ?: ""} · ${lesson.classGroupNames.joinToString(", ")} · ${lesson.subjectName}",
                             style = MaterialTheme.typography.titleSmall)
                         Text("${lesson.teacherName} is away", style = MaterialTheme.typography.bodySmall,
