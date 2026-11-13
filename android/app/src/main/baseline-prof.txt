@@ -1,0 +1,6 @@
+# Baseline profile: tells Android to compile these ahead of time when the app
+# is installed, so every screen - and the first open of each - draws at full
+# speed instead of warming up. Compose's own libraries ship theirs; this covers
+# the app's code: all of it, since it's small.
+HSPLcom/timetablz/app/**->**(**)**
+Lcom/timetablz/app/**;

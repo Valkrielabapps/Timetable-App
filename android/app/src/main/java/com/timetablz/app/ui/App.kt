@@ -146,6 +146,14 @@ private fun Home(session: SessionViewModel, openTab: String?) {
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = c.background),
                 )
+                if (com.timetablz.app.BuildConfig.DEBUG) {
+                    // So it's never mistaken for the real thing when judging smoothness.
+                    Text(
+                        "Debug build: slower than the real app. Use the release variant to judge speed.",
+                        style = MaterialTheme.typography.labelSmall, color = c.error,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
                 if (ui.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.onSurface)
                 if (ui.offline) {
                     Text(
