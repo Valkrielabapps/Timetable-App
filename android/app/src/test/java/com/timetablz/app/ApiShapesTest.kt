@@ -65,3 +65,12 @@ class ApiShapesTest {
         assertFalse(body.contains("substituting_teacher_id"))  // uncovered: left out, the server reads it as none
     }
 }
+
+class SectionLabelTest {
+    @Test
+    fun sectionsAreNamedWithTheirGrade() {
+        assertEquals("Grade 6 A", com.timetablz.app.data.sectionLabel("Grade 6", "A"))
+        assertEquals("Grade 6 A", com.timetablz.app.data.sectionLabel("Grade 6", "Grade 6 A"))
+        assertEquals("A", com.timetablz.app.data.sectionLabel(null, "A"))
+    }
+}

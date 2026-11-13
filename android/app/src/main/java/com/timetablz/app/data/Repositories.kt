@@ -72,7 +72,11 @@ class SchoolRepository(private val api: TimetablzApi, dao: CacheDao, json: Json)
         val versions = apiCall { api.timetables(schoolId) }
         // The version the school works from - the one the website's Timetable tab shows.
         val pick = versions.firstOrNull { it.isCurrent } ?: versions.filter { it.status == "draft" }.maxByOrNull { it.id }
-        val timetable = pick?.let { apiCall { api.timetable(it.id) } }
+        val sections = apiCall { api.classGroups(schoolId) }.associateBy { it.id }
+        // The timetable names a section only "A"; every screen should say "Grade 6 A".
+        val timetable = pick?.let { apiCall { api.timetable(it.id) } }?.let { tt ->
+            tt.copy(entries = tt.entries.map { e -> sections[e.classGroupId]?.let { e.copy(classGroupName = it.label) } ?: e })
+        }
         return SchoolData(periods, teachers, timetable).also { cache.put("school:$schoolId", it) }
     }
 }

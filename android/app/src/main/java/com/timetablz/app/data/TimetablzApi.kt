@@ -15,6 +15,7 @@ interface TimetablzApi {
 
     @GET("schools") suspend fun schools(): List<School>
     @GET("periods") suspend fun periods(@Query("school_id") schoolId: Int): List<Period>
+    @GET("class-groups") suspend fun classGroups(@Query("school_id") schoolId: Int): List<ClassGroup>
     @GET("teachers") suspend fun teachers(@Query("school_id") schoolId: Int): List<Teacher>
     @GET("timetables") suspend fun timetables(@Query("school_id") schoolId: Int): List<TimetableSummary>
     @GET("timetables/{id}") suspend fun timetable(@Path("id") id: Int): Timetable

@@ -35,6 +35,19 @@ data class Period(
     val short get() = number?.let { "P$it" } ?: (label ?: "")
 }
 
+/** A section: grade "Grade 6", name "A". */
+@Serializable
+data class ClassGroup(val id: Int, val name: String, val grade: String? = null) {
+    /** "Grade 6 A" - how the app names a section everywhere. */
+    val label get() = sectionLabel(grade, name)
+}
+
+/** "Grade 6" + "A" -> "Grade 6 A"; a name that already starts with its grade is left alone. */
+fun sectionLabel(grade: String?, name: String): String {
+    val g = grade?.trim().orEmpty()
+    return if (g.isEmpty() || name.trim().startsWith(g, ignoreCase = true)) name.trim() else "$g ${name.trim()}"
+}
+
 @Serializable
 data class Teacher(
     val id: Int,
