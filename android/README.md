@@ -6,6 +6,27 @@ same backend and accounts as the website (`https://timetablz.com/api`).
 
 Open this folder in Android Studio, sync Gradle, and Run.
 
+## How it's built
+
+```
+UI (Compose screens)        ui/*Screen.kt - draw state, send actions
+   ↓ ↑
+ViewModels                  SessionViewModel (sign-in, school, school data - app-wide),
+                            CoverViewModel, MySubstitutionsViewModel, TimetableViewModel
+   ↓ ↑
+Repositories                data/Repositories.kt - Auth, School, Cover
+   ↓ ↑             ↘
+Retrofit API        Room offline copy        DataStore settings
+(TimetablzApi,      (Cache.kt: last-fetched  (SettingsStore.kt; sign-in token
+ Network.kt - one    JSON per school, cover,  encrypted with a key in the
+ 401 handler)        account)                 Android keystore)
+```
+
+- Screens read the offline copy, so they open instantly and work without signal; Refresh (and opening a school) fetches and replaces it.
+- Shared objects are made once in `data/AppContainer.kt` (`TimetablzApplication`); ViewModels get them through `ui/ViewModels.kt`.
+- Pages are Navigation Compose routes (`ui/App.kt`, `Routes`).
+- Cover rules live in `data/Cover.kt` and match the website's; `CoverWorker` checks for new cover in the background.
+
 ## Google sign-in setup (once)
 
 Google only signs in apps it knows. In Google Cloud Console, in the same project
