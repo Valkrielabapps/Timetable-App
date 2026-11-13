@@ -5,6 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -88,8 +92,11 @@ fun TimetableScreen(data: SchoolData, mode: String, fixedTeacherId: Int? = null,
             targetState = Triple(day, sectionId, teacherId),
             transitionSpec = {
                 val forward = targetState.first >= initialState.first
-                (fadeIn(tween(200)) + slideInHorizontally(tween(240)) { if (forward) it / 8 else -it / 8 }) togetherWith
-                    fadeOut(tween(120))
+                // The same shared-axis motion as the pages: old day out first, new day in after.
+                (fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
+                    slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { if (forward) it / 12 else -it / 12 }) togetherWith
+                    (fadeOut(tween(90, easing = FastOutLinearInEasing)) +
+                        slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { if (forward) -it / 12 else it / 12 })
             },
             label = "day",
         ) { (d, sec, tch) ->

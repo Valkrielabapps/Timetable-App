@@ -1,6 +1,15 @@
 package com.timetablz.app.ui
 
-import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -115,6 +124,8 @@ private fun Home(session: SessionViewModel, openTab: String?) {
     val school = ui.school ?: return
     val c = MaterialTheme.colorScheme
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
+    // Material's shared-axis distance.
+    val shift = with(LocalDensity.current) { 30.dp.roundToPx() }
     val subPage = Routes.titles[route]
 
     Scaffold(
@@ -171,19 +182,29 @@ private fun Home(session: SessionViewModel, openTab: String?) {
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            // Pages slide in a little and fade; going back slides the other way.
+            // Material motion. Between the three tabs: fade through - the old page
+            // fades out quickly, then the new one fades in, growing a touch into
+            // place; never both at once. Opening a page from the Menu: shared axis -
+            // the new page slides in a short way from the right as the old one
+            // slides left, both fading; Back reverses it.
             NavHost(
                 nav,
                 startDestination = if (openTab == "substitution") Routes.SUBSTITUTION else Routes.MENU,
                 enterTransition = {
-                    fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(260)) { it / 10 }
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughIn()
+                    else slideInHorizontally(axis) { shift } + fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing))
                 },
-                exitTransition = { fadeOut(tween(160)) },
+                exitTransition = {
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughOut()
+                    else slideOutHorizontally(axis) { -shift } + fadeOut(tween(90, easing = FastOutLinearInEasing))
+                },
                 popEnterTransition = {
-                    fadeIn(tween(220)) + slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(260)) { it / 10 }
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughIn()
+                    else slideInHorizontally(axis) { -shift } + fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing))
                 },
                 popExitTransition = {
-                    fadeOut(tween(160)) + slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(220)) { it / 10 }
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughOut()
+                    else slideOutHorizontally(axis) { shift } + fadeOut(tween(90, easing = FastOutLinearInEasing))
                 },
             ) {
                 composable(Routes.MENU) {
@@ -229,3 +250,18 @@ private fun NavHostController.goTab(route: String) = navigate(route) {
     launchSingleTop = true
     restoreState = true
 }
+
+// ---------------------------------------------------------------- motion
+
+private val Tabs = setOf(Routes.MENU, Routes.SUBSTITUTION, Routes.SETTINGS)
+
+private fun isTabSwitch(from: String?, to: String?) = from in Tabs && to in Tabs
+
+/** Shared-axis slide timing: 300 ms, standard easing. */
+private val axis = tween<IntOffset>(300, easing = FastOutSlowInEasing)
+
+private fun fadeThroughIn(): EnterTransition =
+    fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
+        scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.96f)
+
+private fun fadeThroughOut(): ExitTransition = fadeOut(tween(90, easing = FastOutLinearInEasing))
