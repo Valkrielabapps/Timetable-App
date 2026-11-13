@@ -213,7 +213,12 @@ fun SchoolPicker(state: AppState) {
         Text("Choose a school", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 24.dp))
         Text("Signed in as ${state.user?.email ?: ""}", style = MaterialTheme.typography.bodySmall, color = Slate500,
             modifier = Modifier.padding(bottom = 8.dp))
-        if (state.schools.isEmpty()) {
+        if (state.loading) {
+            Loading("Loading your schools…")
+        } else if (state.error != null) {
+            Text(state.error ?: "", color = Red600)
+            PrimaryButton("Try again", { scope.launch { state.loadSchools() } }, Modifier.fillMaxWidth())
+        } else if (state.schools.isEmpty() && state.schoolsLoaded) {
             Text(
                 "This account isn't part of a school yet. If you made your school with a different email or Google " +
                     "account, sign out and sign in with that one. Otherwise set one up on timetablz.com, or ask your " +
@@ -230,7 +235,9 @@ fun SchoolPicker(state: AppState) {
                 }
             }
         }
-        state.error?.let { Text(it, color = Red600) }
+        if (!state.loading && state.error == null && !state.schoolsLoaded) {
+            PrimaryButton("Load my schools", { scope.launch { state.loadSchools() } }, Modifier.fillMaxWidth())
+        }
         SecondaryButton("Sign out", { state.signOut() }, Modifier.fillMaxWidth().padding(top = 16.dp))
     }
 }

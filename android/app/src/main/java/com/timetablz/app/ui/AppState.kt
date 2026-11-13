@@ -69,12 +69,36 @@ class AppState(private val session: Session) {
 
     suspend fun acceptTerms() {
         user = api.acceptTerms(user?.termsVersion ?: "")
+        if (schools.isEmpty()) loadSchools()
     }
 
-    private suspend fun afterSignIn() {
-        schools = api.schools()
-        val saved = schools.firstOrNull { it.id == session.schoolId }
-        if (saved != null) pick(saved) else if (schools.size == 1) pick(schools.first())
+    /** True once the school list has been fetched without an error. */
+    var schoolsLoaded by mutableStateOf(false)
+
+    private suspend fun afterSignIn() = loadSchools()
+
+    /**
+     * The schools this account owns or belongs to. A failure is kept in
+     * [error] for the school screen to show with Try again - never shown as
+     * "no schools", which it isn't.
+     */
+    suspend fun loadSchools() {
+        loading = true
+        error = null
+        try {
+            schools = api.schools()
+            schoolsLoaded = true
+            val saved = schools.firstOrNull { it.id == session.schoolId }
+            if (saved != null) pick(saved) else if (schools.size == 1) pick(schools.first())
+        } catch (e: ApiException) {
+            schoolsLoaded = false
+            if (e.status == 401) signOut() else error = "Couldn't load your schools: ${e.message}"
+        } catch (e: Exception) {
+            schoolsLoaded = false
+            error = "Couldn't load your schools (${e.javaClass.simpleName}: ${e.message})."
+        } finally {
+            loading = false
+        }
     }
 
     suspend fun pick(s: School) {
@@ -91,6 +115,8 @@ class AppState(private val session: Session) {
             data = SchoolData(api.periods(s.id), api.teachers(s.id), api.currentTimetable(s.id))
         } catch (e: ApiException) {
             if (e.status == 401) signOut() else error = e.message
+        } catch (e: Exception) {
+            error = "Couldn't read the school's data (${e.javaClass.simpleName}: ${e.message})."
         } finally {
             loading = false
         }
@@ -107,6 +133,7 @@ class AppState(private val session: Session) {
         api.token = null
         user = null
         schools = emptyList()
+        schoolsLoaded = false
         school = null
         data = null
     }
