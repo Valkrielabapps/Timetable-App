@@ -210,9 +210,16 @@ fun SchoolPicker(state: AppState) {
         Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("Choose a school", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+        Text("Choose a school", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 24.dp))
+        Text("Signed in as ${state.user?.email ?: ""}", style = MaterialTheme.typography.bodySmall, color = Slate500,
+            modifier = Modifier.padding(bottom = 8.dp))
         if (state.schools.isEmpty()) {
-            Text("Your account isn't part of a school yet. Set one up on timetablz.com, or ask your school's admin to invite you.", color = Slate500)
+            Text(
+                "This account isn't part of a school yet. If you made your school with a different email or Google " +
+                    "account, sign out and sign in with that one. Otherwise set one up on timetablz.com, or ask your " +
+                    "school's admin to invite you.",
+                color = Slate500,
+            )
             SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
         }
         state.schools.forEach { s: School ->
