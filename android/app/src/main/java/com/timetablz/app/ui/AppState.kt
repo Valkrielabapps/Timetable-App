@@ -59,6 +59,14 @@ class AppState(private val session: Session) {
         afterSignIn()
     }
 
+    suspend fun signInWithGoogle(idToken: String) {
+        val (token, u) = api.google(idToken)
+        api.token = token
+        session.token = token
+        user = u
+        afterSignIn()
+    }
+
     suspend fun acceptTerms() {
         user = api.acceptTerms(user?.termsVersion ?: "")
     }

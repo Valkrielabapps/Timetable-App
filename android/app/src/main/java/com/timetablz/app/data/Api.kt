@@ -29,6 +29,12 @@ class Api(private val base: String = BASE_URL, var token: String? = null) {
         return o.getString("access_token") to parseUser(o.getJSONObject("user"))
     }
 
+    /** [idToken] from Google's account chooser - see GoogleSignIn. */
+    suspend fun google(idToken: String): Pair<String, User> {
+        val o = JSONObject(request("POST", "/auth/google", JSONObject().put("credential", idToken)))
+        return o.getString("access_token") to parseUser(o.getJSONObject("user"))
+    }
+
     suspend fun me(): User = parseUser(JSONObject(request("GET", "/auth/me")))
 
     suspend fun acceptTerms(version: String): User =
