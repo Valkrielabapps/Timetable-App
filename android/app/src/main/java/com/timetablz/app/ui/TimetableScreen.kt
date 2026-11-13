@@ -35,13 +35,14 @@ import com.timetablz.app.ui.theme.Slate500
  * version of the website's grid. Opens on today (or Monday at the weekend).
  */
 @Composable
-fun TimetableScreen(state: AppState, data: SchoolData) {
+fun TimetableScreen(state: AppState, data: SchoolData, mode: String, fixedTeacherId: Int? = null) {
     val timetable = data.timetable
     if (timetable == null || timetable.entries.isEmpty()) {
         Message("No timetable yet", "Generate one on timetablz.com and it shows here.")
         return
     }
-    var view by rememberSaveable { mutableStateOf(state.timetableView) }
+    // "mine" and "teacher" show a teacher's week; "section" a section's.
+    val view = if (mode == "section") "section" else "teacher"
     val days = data.periods.map { it.day }.distinct().sorted()
     val today = Dates.weekday(Dates.today())
     var day by rememberSaveable { mutableStateOf(if (today in days) today else days.firstOrNull() ?: 0) }
@@ -49,7 +50,8 @@ fun TimetableScreen(state: AppState, data: SchoolData) {
     val sections = timetable.entries.map { it.classGroupId to it.classGroupName }.distinct().sortedWith { a, b -> Natural.compare(a.second, b.second) }
     val teachers = data.teachers.filter { t -> timetable.entries.any { it.teacherId == t.id } }.sortedBy { it.name.lowercase() }
     var sectionId by rememberSaveable { mutableStateOf(sections.firstOrNull()?.first) }
-    var teacherId by rememberSaveable { mutableStateOf(teachers.firstOrNull()?.id) }
+    var pickedTeacherId by rememberSaveable { mutableStateOf(teachers.firstOrNull()?.id) }
+    val teacherId = fixedTeacherId ?: pickedTeacherId
     var picking by remember { mutableStateOf(false) }
 
     val dayPeriods = data.periods.filter { it.day == day }.sortedBy { it.order }
@@ -59,14 +61,10 @@ fun TimetableScreen(state: AppState, data: SchoolData) {
 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("By section", view == "section") { view = "section"; state.timetableView = "section" }
-                Pill("By teacher", view == "teacher") { view = "teacher"; state.timetableView = "teacher" }
-            }
-            if (view == "section") {
-                PickerField("Section", sections.firstOrNull { it.first == sectionId }?.second ?: "Choose", { picking = true })
-            } else {
-                PickerField("Teacher", teachers.firstOrNull { it.id == teacherId }?.name ?: "Choose", { picking = true })
+            when (mode) {
+                "section" -> PickerField("Section", sections.firstOrNull { it.first == sectionId }?.second ?: "Choose", { picking = true })
+                "teacher" -> PickerField("Teacher", teachers.firstOrNull { it.id == teacherId }?.name ?: "Choose", { picking = true })
+                else -> Text(data.teachers.firstOrNull { it.id == teacherId }?.name ?: "", style = MaterialTheme.typography.titleMedium)
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 days.forEach { d -> Pill(Dates.dayShort[d], d == day) { day = d } }
@@ -87,7 +85,7 @@ fun TimetableScreen(state: AppState, data: SchoolData) {
                 onPick = { sectionId = it; picking = false }, onDismiss = { picking = false })
         } else {
             PickerDialog("Choose a teacher", teachers.map { PickerOption(it.id, it.name) }, teacherId,
-                onPick = { teacherId = it; picking = false }, onDismiss = { picking = false })
+                onPick = { pickedTeacherId = it; picking = false }, onDismiss = { picking = false })
         }
     }
 }
@@ -97,7 +95,7 @@ private fun PeriodRow(p: Period, entries: List<Entry>, view: String) {
     if (!p.isLesson) {
         // Breaks and the like: a thin grey band.
         Row(
-            Modifier.fillMaxWidth().background(Slate50, Rounded).padding(horizontal = 14.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, Rounded).padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(p.label ?: "Break", style = MaterialTheme.typography.bodySmall, color = Slate500)

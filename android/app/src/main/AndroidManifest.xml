@@ -4,6 +4,8 @@
 
     <!-- Talks to the Timetablz API at timetablz.com. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "You're covering 7 A Maths in period 2" (Android 13+ asks first). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"

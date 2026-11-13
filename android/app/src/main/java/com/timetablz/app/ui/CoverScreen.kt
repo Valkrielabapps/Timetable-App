@@ -110,12 +110,12 @@ fun CoverScreen(state: AppState, data: SchoolData) {
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { date = Dates.add(date, -1) }) { Text("‹", color = Ink, style = MaterialTheme.typography.titleLarge) }
+                TextButton(onClick = { date = Dates.add(date, -1) }) { Text("‹", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge) }
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(Dates.pretty(date), style = MaterialTheme.typography.titleMedium)
                     if (date == Dates.today()) Text("Today", style = MaterialTheme.typography.bodySmall, color = Slate500)
                 }
-                TextButton(onClick = { date = Dates.add(date, 1) }) { Text("›", color = Ink, style = MaterialTheme.typography.titleLarge) }
+                TextButton(onClick = { date = Dates.add(date, 1) }) { Text("›", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge) }
             }
             if (date != Dates.today()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -292,7 +292,7 @@ private fun AwayDialog(teachers: List<Pair<Int, String>>, chosen: Set<Int>, onDo
                             Checkbox(
                                 checked = id in picked,
                                 onCheckedChange = { picked = if (it) picked + id else picked - id },
-                                colors = CheckboxDefaults.colors(checkedColor = Ink),
+                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
                             )
                             Text(name, modifier = Modifier.width(220.dp), fontWeight = if (id in picked) FontWeight.SemiBold else FontWeight.Normal)
                         }
@@ -300,9 +300,8 @@ private fun AwayDialog(teachers: List<Pair<Int, String>>, chosen: Set<Int>, onDo
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onDone(picked) }) { Text("Done", color = Ink, fontWeight = FontWeight.SemiBold) } },
+        confirmButton = { TextButton(onClick = { onDone(picked) }) { Text("Done", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Slate500) } },
-        containerColor = Color.White,
     )
 }
 

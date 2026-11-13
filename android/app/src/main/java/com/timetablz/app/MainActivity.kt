@@ -5,14 +5,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.timetablz.app.ui.TimetablzApp
-import com.timetablz.app.ui.theme.TimetablzTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            TimetablzTheme { TimetablzApp() }
-        }
+        // A cover notification opens straight on the Substitution page.
+        val open = intent?.getStringExtra("open")
+        setContent { TimetablzApp(openTab = open) }
     }
 }

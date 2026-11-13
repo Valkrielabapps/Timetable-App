@@ -50,9 +50,10 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         enabled = enabled && !busy,
         modifier = modifier.heightIn(min = 48.dp),
         shape = RoundedCornerShape(8.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Ink, contentColor = Color.White),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
     ) {
-        if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = Color.White, modifier = Modifier.padding(end = 8.dp).size(18.dp))
+        if (busy) CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(end = 8.dp).size(18.dp))
         Text(text)
     }
 }
@@ -65,8 +66,8 @@ fun SecondaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modi
         enabled = enabled,
         modifier = modifier.heightIn(min = 44.dp),
         shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, Slate200),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
     ) { Text(text) }
 }
 
@@ -76,10 +77,10 @@ fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Slate200, Rounded)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Rounded)
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = Rounded,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
     ) { content() }
 }
 
@@ -87,13 +88,14 @@ fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: 
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    val c = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
-            .then(if (selected) Modifier.background(Ink, shape) else Modifier.border(1.dp, Slate200, shape))
+            .then(if (selected) Modifier.background(c.primary, shape) else Modifier.border(1.dp, c.outlineVariant, shape))
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 7.dp),
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) Color.White else Ink)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) c.onPrimary else c.onSurface)
     }
 }
 
@@ -101,7 +103,7 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
 fun Loading(text: String = "Loading…") {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            CircularProgressIndicator(color = Ink)
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.onSurface)
             Text(text, color = Slate500)
         }
     }
@@ -127,7 +129,7 @@ fun PickerField(label: String, value: String, onClick: () -> Unit, modifier: Mod
             modifier = Modifier
                 .padding(top = 4.dp)
                 .fillMaxWidth()
-                .border(1.dp, Slate200, RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
                 .clickable { onClick() }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -190,7 +192,6 @@ fun <T> PickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = Ink) } },
-        containerColor = Color.White,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = MaterialTheme.colorScheme.onSurface) } },
     )
 }

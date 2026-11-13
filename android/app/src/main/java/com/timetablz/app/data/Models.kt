@@ -45,7 +45,7 @@ data class TimetableSummary(val id: Int, val status: String, val isCurrent: Bool
 
 data class Timetable(val id: Int, val entries: List<Entry>)
 
-data class SavedChange(val periodId: Int, val absentTeacherId: Int, val substituteId: Int?, val classGroupId: Int)
+data class SavedChange(val periodId: Int, val absentTeacherId: Int, val substituteId: Int?, val classGroupId: Int, val subjectId: Int? = null)
 
 data class SavedCover(val id: Int, val date: String?, val category: String?, val absentIds: Set<Int>, val changes: List<SavedChange>)
 
@@ -122,7 +122,7 @@ fun parseCovers(a: JSONArray) = a.map { o ->
         absentIds = (o.optJSONArray("absences") ?: JSONArray()).map { it.getInt("teacher_id") }.toSet(),
         changes = (o.optJSONArray("changes") ?: JSONArray()).map {
             SavedChange(it.getInt("period_id"), it.getInt("absent_teacher_id"),
-                it.optIntOrNull("substituting_teacher_id"), it.getInt("class_group_id"))
+                it.optIntOrNull("substituting_teacher_id"), it.getInt("class_group_id"), it.optIntOrNull("subject_id"))
         },
     )
 }

@@ -99,7 +99,7 @@ fun LoginScreen(state: AppState) {
             .padding(horizontal = 24.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Timetablz", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Ink)
+        Text("Timetablz", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text("Sign in with your Timetablz account", style = MaterialTheme.typography.bodyLarge, color = Slate500)
         if (GoogleSignIn.configured) {
             GoogleButton(onClick = ::google, busy = googleBusy, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
@@ -167,7 +167,7 @@ fun TermsScreen(state: AppState) {
             Modifier.fillMaxWidth().clickable { agreed = !agreed },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Checkbox(checked = agreed, onCheckedChange = { agreed = it }, colors = CheckboxDefaults.colors(checkedColor = Ink))
+            Checkbox(checked = agreed, onCheckedChange = { agreed = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
             Text("I have read and agree to the Terms of Service and Privacy Policy", style = MaterialTheme.typography.bodyMedium)
         }
         error?.let { Text(it, color = Red600) }
@@ -191,10 +191,10 @@ private fun GoogleButton(onClick: () -> Unit, busy: Boolean, modifier: Modifier 
         modifier = modifier.heightIn(min = 48.dp),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, com.timetablz.app.ui.theme.Slate300),
-        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = Ink),
+        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
     ) {
         if (busy) {
-            androidx.compose.material3.CircularProgressIndicator(strokeWidth = 2.dp, color = Ink, modifier = Modifier.size(18.dp))
+            androidx.compose.material3.CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
         } else {
             Text("G", fontWeight = FontWeight.Bold, color = Color(0xFF4285F4), fontSize = 18.sp)
         }
