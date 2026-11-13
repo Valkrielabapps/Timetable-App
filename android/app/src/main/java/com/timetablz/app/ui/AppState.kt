@@ -11,6 +11,10 @@ import com.timetablz.app.data.Session
 import com.timetablz.app.data.Teacher
 import com.timetablz.app.data.Timetable
 import com.timetablz.app.data.User
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 /** Everything one school's screens read, loaded together. */
 data class SchoolData(val periods: List<Period>, val teachers: List<Teacher>, val timetable: Timetable?)
@@ -22,6 +26,14 @@ data class SchoolData(val periods: List<Period>, val teachers: List<Teacher>, va
  */
 class AppState(private val session: Session) {
     val api = Api(token = session.token)
+
+    /**
+     * Work that changes which screen is showing (signing in, loading schools,
+     * picking one) runs here, not in a screen's own scope: a screen's scope is
+     * cancelled the moment the app moves off it, which used to cut the school
+     * list off half-loaded.
+     */
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     var user by mutableStateOf<User?>(null)
     var schools by mutableStateOf<List<School>>(emptyList())
@@ -93,6 +105,8 @@ class AppState(private val session: Session) {
         } catch (e: ApiException) {
             schoolsLoaded = false
             if (e.status == 401) signOut() else error = "Couldn't load your schools: ${e.message}"
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             schoolsLoaded = false
             error = "Couldn't load your schools (${e.javaClass.simpleName}: ${e.message})."
@@ -115,6 +129,8 @@ class AppState(private val session: Session) {
             data = SchoolData(api.periods(s.id), api.teachers(s.id), api.currentTimetable(s.id))
         } catch (e: ApiException) {
             if (e.status == 401) signOut() else error = e.message
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             error = "Couldn't read the school's data (${e.javaClass.simpleName}: ${e.message})."
         } finally {

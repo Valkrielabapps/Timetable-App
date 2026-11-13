@@ -59,7 +59,7 @@ fun TimetablzApp() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Home(state: AppState) {
-    val scope = rememberCoroutineScope()
+    val scope = state.scope
     var tab by rememberSaveable { mutableStateOf("timetable") }
     var menu by remember { mutableStateOf(false) }
     val school = state.school ?: return

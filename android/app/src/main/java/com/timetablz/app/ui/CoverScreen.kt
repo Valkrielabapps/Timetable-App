@@ -66,7 +66,8 @@ fun CoverScreen(state: AppState, data: SchoolData) {
         Message("No timetable yet", "Cover needs the school's timetable. Generate one on timetablz.com first.")
         return
     }
-    val scope = rememberCoroutineScope()
+    // Saving or emailing finishes even if you switch tabs meanwhile.
+    val scope = state.scope
     var date by rememberSaveable { mutableStateOf(Dates.today()) }
     var saved by remember { mutableStateOf<List<SavedCover>>(emptyList()) }
     var absent by remember { mutableStateOf<Set<Int>>(emptySet()) }

@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(state: AppState) {
-    val scope = rememberCoroutineScope()
+    val scope = state.scope
     val uri = LocalUriHandler.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -134,7 +134,7 @@ fun LoginScreen(state: AppState) {
 
 @Composable
 fun TermsScreen(state: AppState) {
-    val scope = rememberCoroutineScope()
+    val scope = state.scope
     val uri = LocalUriHandler.current
     var agreed by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -204,7 +204,7 @@ private fun GoogleButton(onClick: () -> Unit, busy: Boolean, modifier: Modifier 
 
 @Composable
 fun SchoolPicker(state: AppState) {
-    val scope = rememberCoroutineScope()
+    val scope = state.scope
     val uri = LocalUriHandler.current
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
