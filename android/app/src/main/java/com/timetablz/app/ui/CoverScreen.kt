@@ -135,9 +135,8 @@ fun CoverScreen(session: SessionViewModel, data: SchoolData, vm: CoverViewModel 
                     style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
             }
             items(toCover, key = { it.key }) { lesson ->
-                // Lessons slide into place as people are marked away.
                 val subName = ui.picks[lesson.key]?.let { teachersById[it]?.name }
-                Card(Modifier.animateItem(), onClick = { choosingFor = lesson }) {
+                Card(onClick = { choosingFor = lesson }) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         val period = periodsById[lesson.periodId]
                         Text("${period?.short ?: ""} · ${lesson.classGroupNames.joinToString(", ")} · ${lesson.subjectName}",

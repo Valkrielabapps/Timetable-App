@@ -125,7 +125,7 @@ private fun Home(session: SessionViewModel, openTab: String?) {
     val c = MaterialTheme.colorScheme
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     // Material's shared-axis distance.
-    val shift = with(LocalDensity.current) { 30.dp.roundToPx() }
+    val shift = with(LocalDensity.current) { 56.dp.roundToPx() }
     val subPage = Routes.titles[route]
 
     Scaffold(
@@ -182,52 +182,53 @@ private fun Home(session: SessionViewModel, openTab: String?) {
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
-            // Material motion. Between the three tabs: fade through - the old page
-            // fades out quickly, then the new one fades in, growing a touch into
-            // place; never both at once. Opening a page from the Menu: shared axis -
-            // the new page slides in a short way from the right as the old one
-            // slides left, both fading; Back reverses it.
+            // Motion that starts the instant you tap. Opening a page: it slides in
+            // from the right over the old one, which drifts left and fades - both
+            // moving from the first frame. Between tabs: a quick cross-fade, the
+            // new tab growing a touch into place. Back reverses the slide.
             NavHost(
                 nav,
                 startDestination = if (openTab == "substitution") Routes.SUBSTITUTION else Routes.MENU,
                 enterTransition = {
-                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughIn()
-                    else slideInHorizontally(axis) { shift } + fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing))
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) tabIn()
+                    else slideInHorizontally(axis) { shift } + fadeIn(tween(180, easing = LinearOutSlowInEasing))
                 },
                 exitTransition = {
-                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughOut()
-                    else slideOutHorizontally(axis) { -shift } + fadeOut(tween(90, easing = FastOutLinearInEasing))
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) tabOut()
+                    else slideOutHorizontally(axis) { -shift / 2 } + fadeOut(tween(200, easing = FastOutLinearInEasing))
                 },
                 popEnterTransition = {
-                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughIn()
-                    else slideInHorizontally(axis) { -shift } + fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing))
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) tabIn()
+                    else slideInHorizontally(axis) { -shift / 2 } + fadeIn(tween(200, easing = LinearOutSlowInEasing))
                 },
                 popExitTransition = {
-                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) fadeThroughOut()
-                    else slideOutHorizontally(axis) { shift } + fadeOut(tween(90, easing = FastOutLinearInEasing))
+                    if (isTabSwitch(initialState.destination.route, targetState.destination.route)) tabOut()
+                    else slideOutHorizontally(axis) { shift } + fadeOut(tween(180, easing = FastOutLinearInEasing))
                 },
             ) {
                 composable(Routes.MENU) {
-                    MenuScreen(school, ui.user, session.me(data, settings, ui)) { nav.navigate(it) }
+                    Page { MenuScreen(school, ui.user, session.me(data, settings, ui)) { nav.navigate(it) } }
                 }
-                composable(Routes.SETTINGS) { SettingsScreen(session) }
+                composable(Routes.SETTINGS) { Page { SettingsScreen(session) } }
                 composable(Routes.SUBSTITUTION) {
-                    WithData(session, data) { d -> MySubstitutionsScreen(session, d) { nav.goTab(Routes.SETTINGS) } }
+                    Page { WithData(session, data) { d -> MySubstitutionsScreen(session, d) { nav.goTab(Routes.SETTINGS) } } }
                 }
-                composable(Routes.MAKE_COVER) { WithData(session, data) { d -> CoverScreen(session, d) } }
+                composable(Routes.MAKE_COVER) { Page { WithData(session, data) { d -> CoverScreen(session, d) } } }
                 composable(Routes.MY_TIMETABLE) {
-                    WithData(session, data) { d ->
-                        val me = session.me(d, settings, ui)
-                        if (me == null) {
-                            Message("Which teacher are you?", "Choose yourself in Settings → I am, and your timetable shows here.",
-                                "Open Settings") { nav.goTab(Routes.SETTINGS) }
-                        } else {
-                            TimetableScreen(d, mode = "mine", fixedTeacherId = me.id)
+                    Page {
+                        WithData(session, data) { d ->
+                            val me = session.me(d, settings, ui)
+                            if (me == null) {
+                                Message("Which teacher are you?", "Choose yourself in Settings → I am, and your timetable shows here.",
+                                    "Open Settings") { nav.goTab(Routes.SETTINGS) }
+                            } else {
+                                TimetableScreen(d, mode = "mine", fixedTeacherId = me.id)
+                            }
                         }
                     }
                 }
-                composable(Routes.TEACHERS) { WithData(session, data) { d -> TimetableScreen(d, mode = "teacher") } }
-                composable(Routes.CLASSES) { WithData(session, data) { d -> TimetableScreen(d, mode = "section") } }
+                composable(Routes.TEACHERS) { Page { WithData(session, data) { d -> TimetableScreen(d, mode = "teacher") } } }
+                composable(Routes.CLASSES) { Page { WithData(session, data) { d -> TimetableScreen(d, mode = "section") } } }
             }
         }
     }
@@ -257,11 +258,17 @@ private val Tabs = setOf(Routes.MENU, Routes.SUBSTITUTION, Routes.SETTINGS)
 
 private fun isTabSwitch(from: String?, to: String?) = from in Tabs && to in Tabs
 
-/** Shared-axis slide timing: 300 ms, standard easing. */
-private val axis = tween<IntOffset>(300, easing = FastOutSlowInEasing)
+/** Page slide: 280 ms, standard easing. */
+private val axis = tween<IntOffset>(280, easing = FastOutSlowInEasing)
 
-private fun fadeThroughIn(): EnterTransition =
-    fadeIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing)) +
-        scaleIn(tween(210, delayMillis = 90, easing = LinearOutSlowInEasing), initialScale = 0.96f)
+private fun tabIn(): EnterTransition =
+    fadeIn(tween(200, easing = LinearOutSlowInEasing)) +
+        scaleIn(tween(240, easing = FastOutSlowInEasing), initialScale = 0.98f)
 
-private fun fadeThroughOut(): ExitTransition = fadeOut(tween(90, easing = FastOutLinearInEasing))
+private fun tabOut(): ExitTransition = fadeOut(tween(120, easing = FastOutLinearInEasing))
+
+/** Each page is opaque, so the one sliding in covers the one leaving cleanly. */
+@Composable
+private fun Page(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { content() }
+}

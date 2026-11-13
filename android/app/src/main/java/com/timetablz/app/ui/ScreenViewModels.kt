@@ -12,7 +12,9 @@ import com.timetablz.app.data.SavedCover
 import com.timetablz.app.data.SchoolData
 import com.timetablz.app.data.Summary
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -80,7 +82,9 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     private val entries get() = data?.timetable?.entries ?: emptyList()
-    private val load get() = Cover.weeklyLoad(entries)
+    private var loadCache: Pair<SchoolData?, Map<Int, Int>> = null to emptyMap()
+    private val load: Map<Int, Int>
+        get() = if (loadCache.first === data) loadCache.second else Cover.weeklyLoad(entries).also { loadCache = data to it }
 
     fun dayLessons(): List<Lesson> = Cover.lessonsOn(entries, Dates.weekday(_ui.value.date))
     fun toCover(): List<Lesson> = dayLessons().filter { it.teacherId in _ui.value.absent }
@@ -122,9 +126,21 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
         if (here != null || !isAdmin) loadSummary()
     }
 
+    private var filling: Job? = null
+
+    /** Finds each lesson's best free teacher in the background, so the screen never waits on it. */
     private fun autofill() {
         val d = data ?: return
-        _ui.update { it.copy(picks = Cover.autofill(toCover(), d.teachers, entries, it.absent, it.picks, load)) }
+        val snapshot = _ui.value
+        val lessons = Cover.lessonsOn(entries, Dates.weekday(snapshot.date)).filter { it.teacherId in snapshot.absent }
+        val all = entries
+        filling?.cancel()
+        filling = viewModelScope.launch {
+            val picks = withContext(Dispatchers.Default) {
+                Cover.autofill(lessons, d.teachers, all, snapshot.absent, snapshot.picks, Cover.weeklyLoad(all))
+            }
+            _ui.update { if (it.date == snapshot.date && it.absent == snapshot.absent) it.copy(picks = it.picks + picks.filterKeys { k -> k !in it.picks }) else it }
+        }
     }
 
     private fun loadSummary() {
