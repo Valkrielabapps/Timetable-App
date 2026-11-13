@@ -1,8 +1,5 @@
 package com.timetablz.app.data
 
-import org.json.JSONArray
-import org.json.JSONObject
-
 /**
  * Cover for absent teachers - the same reasoning as the website's
  * Substitutions screen (frontend/src/components/SubstitutionsTab.jsx), so a
@@ -94,25 +91,13 @@ object Cover {
     }
 
     /** What the server stores for the day (whole school; whole-day absences). */
-    fun body(date: String, absent: Set<Int>, lessons: List<Lesson>, picks: Map<String, Int?>): JSONObject {
-        val absences = JSONArray()
-        absent.sorted().forEach { absences.put(JSONObject().put("teacher_id", it).put("period_ids", JSONObject.NULL)) }
-        val changes = JSONArray()
-        for (l in lessons) {
-            val sub = picks[l.key]
-            for (cg in l.classGroupIds) {
-                changes.put(
-                    JSONObject()
-                        .put("period_id", l.periodId)
-                        .put("absent_teacher_id", l.teacherId)
-                        .put("substituting_teacher_id", sub ?: JSONObject.NULL)
-                        .put("class_group_id", cg)
-                        .put("subject_id", l.subjectId)
-                )
-            }
-        }
-        return JSONObject().put("date", date).put("category", JSONObject.NULL).put("absences", absences).put("changes", changes)
-    }
+    fun body(date: String, absent: Set<Int>, lessons: List<Lesson>, picks: Map<String, Int?>) = SaveCoverRequest(
+        date = date,
+        absences = absent.sorted().map { AbsenceDto(it) },
+        changes = lessons.flatMap { l ->
+            l.classGroupIds.map { cg -> ChangeDto(l.periodId, l.teacherId, picks[l.key], cg, l.subjectId) }
+        },
+    )
 
     /** Picks from cover already saved for the day, keyed like [Lesson.key]. */
     fun picksFrom(saved: SavedCover, lessons: List<Lesson>): Map<String, Int?> {

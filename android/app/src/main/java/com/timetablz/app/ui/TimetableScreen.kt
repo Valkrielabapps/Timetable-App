@@ -23,7 +23,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.timetablz.app.data.Dates
+import com.timetablz.app.data.SchoolData
 import com.timetablz.app.data.Entry
 import com.timetablz.app.data.Natural
 import com.timetablz.app.data.Period
@@ -35,7 +38,7 @@ import com.timetablz.app.ui.theme.Slate500
  * version of the website's grid. Opens on today (or Monday at the weekend).
  */
 @Composable
-fun TimetableScreen(state: AppState, data: SchoolData, mode: String, fixedTeacherId: Int? = null) {
+fun TimetableScreen(data: SchoolData, mode: String, fixedTeacherId: Int? = null, vm: TimetableViewModel = viewModel(factory = AppViewModels.Factory)) {
     val timetable = data.timetable
     if (timetable == null || timetable.entries.isEmpty()) {
         Message("No timetable yet", "Generate one on timetablz.com and it shows here.")
@@ -45,13 +48,15 @@ fun TimetableScreen(state: AppState, data: SchoolData, mode: String, fixedTeache
     val view = if (mode == "section") "section" else "teacher"
     val days = data.periods.map { it.day }.distinct().sorted()
     val today = Dates.weekday(Dates.today())
-    var day by rememberSaveable { mutableStateOf(if (today in days) today else days.firstOrNull() ?: 0) }
+    val chosenDay by vm.day.collectAsStateWithLifecycle()
+    val day = chosenDay ?: if (today in days) today else days.firstOrNull() ?: 0
 
     val sections = timetable.entries.map { it.classGroupId to it.classGroupName }.distinct().sortedWith { a, b -> Natural.compare(a.second, b.second) }
     val teachers = data.teachers.filter { t -> timetable.entries.any { it.teacherId == t.id } }.sortedBy { it.name.lowercase() }
-    var sectionId by rememberSaveable { mutableStateOf(sections.firstOrNull()?.first) }
-    var pickedTeacherId by rememberSaveable { mutableStateOf(teachers.firstOrNull()?.id) }
-    val teacherId = fixedTeacherId ?: pickedTeacherId
+    val chosenSection by vm.sectionId.collectAsStateWithLifecycle()
+    val sectionId = chosenSection ?: sections.firstOrNull()?.first
+    val chosenTeacher by vm.teacherId.collectAsStateWithLifecycle()
+    val teacherId = fixedTeacherId ?: chosenTeacher ?: teachers.firstOrNull()?.id
     var picking by remember { mutableStateOf(false) }
 
     val dayPeriods = data.periods.filter { it.day == day }.sortedBy { it.order }
@@ -67,7 +72,7 @@ fun TimetableScreen(state: AppState, data: SchoolData, mode: String, fixedTeache
                 else -> Text(data.teachers.firstOrNull { it.id == teacherId }?.name ?: "", style = MaterialTheme.typography.titleMedium)
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                days.forEach { d -> Pill(Dates.dayShort[d], d == day) { day = d } }
+                days.forEach { d -> Pill(Dates.dayShort[d], d == day) { vm.day.value = d } }
             }
         }
         LazyColumn(
@@ -82,10 +87,10 @@ fun TimetableScreen(state: AppState, data: SchoolData, mode: String, fixedTeache
     if (picking) {
         if (view == "section") {
             PickerDialog("Choose a section", sections.map { PickerOption(it.first, it.second) }, sectionId,
-                onPick = { sectionId = it; picking = false }, onDismiss = { picking = false })
+                onPick = { vm.sectionId.value = it; picking = false }, onDismiss = { picking = false })
         } else {
             PickerDialog("Choose a teacher", teachers.map { PickerOption(it.id, it.name) }, teacherId,
-                onPick = { pickedTeacherId = it; picking = false }, onDismiss = { picking = false })
+                onPick = { vm.teacherId.value = it; picking = false }, onDismiss = { picking = false })
         }
     }
 }

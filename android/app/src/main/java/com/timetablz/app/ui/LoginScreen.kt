@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,53 +42,38 @@ import androidx.compose.ui.unit.sp
 import com.timetablz.app.data.ApiException
 import com.timetablz.app.data.GoogleSignIn
 import com.timetablz.app.data.GoogleSignInCancelled
-import com.timetablz.app.data.School
 import com.timetablz.app.ui.theme.Ink
 import com.timetablz.app.ui.theme.Red600
 import com.timetablz.app.ui.theme.Slate500
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(state: AppState) {
-    val scope = state.scope
+fun LoginScreen(session: SessionViewModel, ui: SessionUi) {
     val uri = LocalUriHandler.current
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
     val context = LocalContext.current
-    var busy by remember { mutableStateOf(false) }
-    var googleBusy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val busy = ui.authBusy != null
 
     fun google() {
-        if (googleBusy || busy) return
-        googleBusy = true
-        error = null
+        if (busy) return
+        session.showAuthError(null)
+        // The chooser only lasts while this screen is up; signing in itself runs in the ViewModel.
         scope.launch {
             try {
-                state.signInWithGoogle(GoogleSignIn.idToken(context))
+                session.signInWithGoogle(GoogleSignIn.idToken(context))
             } catch (e: GoogleSignInCancelled) {
                 // Closed the chooser: nothing to say.
             } catch (e: ApiException) {
-                error = e.message
-            } finally {
-                googleBusy = false
+                session.showAuthError(e.message)
             }
         }
     }
 
     fun submit() {
         if (email.isBlank() || password.isEmpty() || busy) return
-        busy = true
-        error = null
-        scope.launch {
-            try {
-                state.signIn(email, password)
-            } catch (e: ApiException) {
-                error = e.message
-            } finally {
-                busy = false
-            }
-        }
+        session.signIn(email, password)
     }
 
     Column(
@@ -99,20 +85,20 @@ fun LoginScreen(state: AppState) {
             .padding(horizontal = 24.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Timetablz", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text("Sign in with your Timetablz account", style = MaterialTheme.typography.bodyLarge, color = Slate500)
+        Text("Timetablz", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text("Sign in with your Timetablz account", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (GoogleSignIn.configured) {
-            GoogleButton(onClick = ::google, busy = googleBusy, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+            GoogleButton(onClick = ::google, busy = ui.authBusy == "google", modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                 HorizontalDivider(Modifier.weight(1f))
-                Text("  or with email  ", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                Text("  or with email  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 HorizontalDivider(Modifier.weight(1f))
             }
         }
         OutlinedTextField(
             value = email, onValueChange = { email = it }, label = { Text("Email") }, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-            modifier = Modifier.fillMaxWidth().padding(top = if (GoogleSignIn.configured) 0.dp else 16.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = password, onValueChange = { password = it }, label = { Text("Password") }, singleLine = true,
@@ -121,24 +107,22 @@ fun LoginScreen(state: AppState) {
             keyboardActions = KeyboardActions(onDone = { submit() }),
             modifier = Modifier.fillMaxWidth(),
         )
-        error?.let { Text(it, color = Red600, style = MaterialTheme.typography.bodyMedium) }
-        PrimaryButton("Sign in", ::submit, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && password.isNotEmpty(), busy = busy)
+        ui.authError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+        PrimaryButton("Sign in", ::submit, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && password.isNotEmpty(),
+            busy = ui.authBusy == "email")
         Text(
             "Forgot your password? Reset it on timetablz.com. New here? Sign in and you'll be asked to accept " +
                 "the Terms first.",
-            style = MaterialTheme.typography.bodySmall, color = Slate500,
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
     }
 }
 
 @Composable
-fun TermsScreen(state: AppState) {
-    val scope = state.scope
+fun TermsScreen(session: SessionViewModel, ui: SessionUi) {
     val uri = LocalUriHandler.current
-    var agreed by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var agreed by rememberSaveable { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -147,7 +131,7 @@ fun TermsScreen(state: AppState) {
         Text(
             "Before you use Timetablz, please read and accept our Terms of Service and Privacy Policy. " +
                 "If they change, we'll ask again.",
-            color = Slate500,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -163,22 +147,14 @@ fun TermsScreen(state: AppState) {
         }
         SecondaryButton("Read the Terms of Service", { uri.openUri("https://timetablz.com/terms") }, Modifier.fillMaxWidth())
         SecondaryButton("Read the Privacy Policy", { uri.openUri("https://timetablz.com/privacy") }, Modifier.fillMaxWidth())
-        Row(
-            Modifier.fillMaxWidth().clickable { agreed = !agreed },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = agreed, onCheckedChange = { agreed = it }, colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
+        Row(Modifier.fillMaxWidth().clickable { agreed = !agreed }, verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = agreed, onCheckedChange = { agreed = it },
+                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
             Text("I have read and agree to the Terms of Service and Privacy Policy", style = MaterialTheme.typography.bodyMedium)
         }
-        error?.let { Text(it, color = Red600) }
-        PrimaryButton("Continue", {
-            busy = true
-            error = null
-            scope.launch {
-                try { state.acceptTerms() } catch (e: ApiException) { error = e.message } finally { busy = false }
-            }
-        }, Modifier.fillMaxWidth(), enabled = agreed, busy = busy)
-        SecondaryButton("Sign out", { state.signOut() }, Modifier.fillMaxWidth())
+        ui.authError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        PrimaryButton("Continue", { session.acceptTerms() }, Modifier.fillMaxWidth(), enabled = agreed, busy = ui.authBusy == "terms")
+        SecondaryButton("Sign out", { session.signOut() }, Modifier.fillMaxWidth())
     }
 }
 
@@ -203,41 +179,41 @@ private fun GoogleButton(onClick: () -> Unit, busy: Boolean, modifier: Modifier 
 }
 
 @Composable
-fun SchoolPicker(state: AppState) {
-    val scope = state.scope
+fun SchoolPicker(session: SessionViewModel, ui: SessionUi) {
     val uri = LocalUriHandler.current
     Column(
         Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Choose a school", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 24.dp))
-        Text("Signed in as ${state.user?.email ?: ""}", style = MaterialTheme.typography.bodySmall, color = Slate500,
-            modifier = Modifier.padding(bottom = 8.dp))
-        if (state.loading) {
-            Loading("Loading your schools…")
-        } else if (state.error != null) {
-            Text(state.error ?: "", color = Red600)
-            PrimaryButton("Try again", { scope.launch { state.loadSchools() } }, Modifier.fillMaxWidth())
-        } else if (state.schools.isEmpty() && state.schoolsLoaded) {
-            Text(
-                "This account isn't part of a school yet. If you made your school with a different email or Google " +
-                    "account, sign out and sign in with that one. Otherwise set one up on timetablz.com, or ask your " +
-                    "school's admin to invite you.",
-                color = Slate500,
-            )
-            SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
+        Text("Signed in as ${ui.user?.email ?: ""}", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+        when {
+            ui.loading -> Loading("Loading your schools…")
+            ui.error != null -> {
+                Text(ui.error, color = MaterialTheme.colorScheme.error)
+                PrimaryButton("Try again", { session.retrySchools() }, Modifier.fillMaxWidth())
+            }
+            ui.schools.isEmpty() && ui.schoolsLoaded -> {
+                Text(
+                    "This account isn't part of a school yet. If you made your school with a different email or Google " +
+                        "account, sign out and sign in with that one. Otherwise set one up on timetablz.com, or ask your " +
+                        "school's admin to invite you.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
+            }
+            !ui.schoolsLoaded -> PrimaryButton("Load my schools", { session.retrySchools() }, Modifier.fillMaxWidth())
         }
-        state.schools.forEach { s: School ->
-            Card(onClick = { scope.launch { state.pick(s) } }) {
+        ui.schools.forEach { s ->
+            Card(onClick = { session.pick(s) }) {
                 Column(Modifier.padding(16.dp)) {
                     Text(s.name, style = MaterialTheme.typography.titleMedium)
-                    Text(if (s.isAdmin) "Admin" else "Viewer", style = MaterialTheme.typography.bodySmall, color = Slate500)
+                    Text(if (s.isAdmin) "Admin" else "Viewer", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-        if (!state.loading && state.error == null && !state.schoolsLoaded) {
-            PrimaryButton("Load my schools", { scope.launch { state.loadSchools() } }, Modifier.fillMaxWidth())
-        }
-        SecondaryButton("Sign out", { state.signOut() }, Modifier.fillMaxWidth().padding(top = 16.dp))
+        SecondaryButton("Sign out", { session.signOut() }, Modifier.fillMaxWidth().padding(top = 16.dp))
     }
 }

@@ -25,20 +25,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.timetablz.app.data.CoverWorker
 
 /** Settings: theme, who I am, notifications, calendar, account. */
 @Composable
-fun SettingsScreen(state: AppState) {
+fun SettingsScreen(session: SessionViewModel) {
     val context = LocalContext.current
-    val school = state.school ?: return
+    val ui by session.ui.collectAsStateWithLifecycle()
+    val settings by session.settings.collectAsStateWithLifecycle()
+    val data by session.schoolData.collectAsStateWithLifecycle()
+    val school = ui.school ?: return
     var pickingMe by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
-    val me = state.me()
+    val me = session.me(data, settings, ui)
+    val chosenMe = settings.me[school.id]
 
     val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            state.setNotify(true)
+            session.setNotify(true)
             CoverWorker.schedule(context)
         } else {
             note = "Notifications are blocked for Timetablz. Turn them on in your phone's Settings → Apps → Timetablz."
@@ -48,12 +53,12 @@ fun SettingsScreen(state: AppState) {
     fun turnNotifications(on: Boolean) {
         note = null
         if (!on) {
-            state.setNotify(false)
+            session.setNotify(false)
             CoverWorker.cancel(context)
         } else if (Build.VERSION.SDK_INT >= 33 && !CoverWorker.canNotify(context)) {
             askPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            state.setNotify(true)
+            session.setNotify(true)
             CoverWorker.schedule(context)
         }
     }
@@ -66,15 +71,15 @@ fun SettingsScreen(state: AppState) {
 
         Section("Theme") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pill("Same as phone", state.theme == "system") { state.chooseTheme("system") }
-                Pill("Light", state.theme == "light") { state.chooseTheme("light") }
-                Pill("Dark", state.theme == "dark") { state.chooseTheme("dark") }
+                Pill("Same as phone", settings.theme == "system") { session.chooseTheme("system") }
+                Pill("Light", settings.theme == "light") { session.chooseTheme("light") }
+                Pill("Dark", settings.theme == "dark") { session.chooseTheme("dark") }
             }
         }
 
         Section("I am", "So My timetable and My substitutions show your lessons.") {
             PickerField("Teacher", me?.name ?: "Choose yourself", { pickingMe = true })
-            if (me != null && state.chosenMe == null) {
+            if (me != null && chosenMe == null) {
                 Text("Matched by your email.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -87,12 +92,12 @@ fun SettingsScreen(state: AppState) {
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
-                    checked = state.notifyCover,
+                    checked = settings.notifyCover,
                     onCheckedChange = { turnNotifications(it) },
                     colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.primary),
                 )
             }
-            if (state.notifyCover && me == null) {
+            if (settings.notifyCover && me == null) {
                 Text("Choose yourself under I am first, so we know which cover is yours.", color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall)
             }
@@ -117,22 +122,21 @@ fun SettingsScreen(state: AppState) {
         }
 
         Section("Account") {
-            Text(state.user?.email ?: "", style = MaterialTheme.typography.bodyLarge)
+            Text(ui.user?.email ?: "", style = MaterialTheme.typography.bodyLarge)
             Text("${school.name} · ${if (school.isAdmin) "Admin" else "Viewer"}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (state.schools.size > 1) SecondaryButton("Switch school", { state.switchSchool() }, Modifier.fillMaxWidth())
+            if (ui.schools.size > 1) SecondaryButton("Switch school", { session.switchSchool() }, Modifier.fillMaxWidth())
             SecondaryButton("Sign out", {
                 CoverWorker.cancel(context)
-                state.setNotify(false)
-                state.signOut()
+                session.signOut()
             }, Modifier.fillMaxWidth())
         }
     }
 
     if (pickingMe) {
-        val options = state.data?.teachers?.sortedBy { it.name.lowercase() }?.map { PickerOption(it.id, it.name, it.email) } ?: emptyList()
+        val options = data?.teachers?.sortedBy { it.name.lowercase() }?.map { PickerOption(it.id, it.name, it.email) } ?: emptyList()
         PickerDialog("Which teacher are you?", options, me?.id,
-            onPick = { state.chooseMe(it); pickingMe = false }, onDismiss = { pickingMe = false })
+            onPick = { session.chooseMe(it); pickingMe = false }, onDismiss = { pickingMe = false })
     }
 }
 

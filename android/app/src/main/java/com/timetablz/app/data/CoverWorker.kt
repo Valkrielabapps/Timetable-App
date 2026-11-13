@@ -20,6 +20,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.timetablz.app.MainActivity
 import com.timetablz.app.R
+import com.timetablz.app.TimetablzApplication
 import java.util.concurrent.TimeUnit
 
 /**
@@ -59,25 +60,23 @@ class CoverWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     }
 
     override suspend fun doWork(): Result {
-        val session = Session(applicationContext)
-        val token = session.token ?: return Result.success()
-        val schoolId = session.schoolId ?: return Result.success()
-        if (!session.notifyCover || !canNotify(applicationContext)) return Result.success()
+        val c = (applicationContext as TimetablzApplication).container
+        val settings = c.store.current()
+        val schoolId = settings.schoolId ?: return Result.success()
+        if (!settings.notifyCover || !canNotify(applicationContext) || !c.auth.restore()) return Result.success()
         return try {
-            val api = Api(token = token)
-            val teachers = api.teachers(schoolId)
-            val me = MyCover.whoAmI(teachers, session.userEmail, session.myTeacherId(schoolId)) ?: return Result.success()
-            val periods = api.periods(schoolId)
-            val timetable = api.currentTimetable(schoolId)
-            val entries = timetable?.entries ?: emptyList()
+            // Refreshing also updates the offline copy, so the app opens on the latest.
+            val data = c.schools.refresh(schoolId)
+            val me = MyCover.whoAmI(data.teachers, settings.userEmail, settings.me[schoolId]) ?: return Result.success()
+            val entries = data.timetable?.entries ?: emptyList()
             val subjects = entries.associate { it.subjectId to it.subjectName }
             val today = Dates.today()
-            val mine = MyCover.of(me.id, api.covers(schoolId), periods, entries, teachers, subjects).filter { it.date >= today }
-            val seen = session.notified
-            val fresh = mine.filter { it.key !in seen }
+            val mine = MyCover.of(me.id, c.cover.refresh(schoolId), data.periods, entries, data.teachers, subjects)
+                .filter { it.date >= today }
+            val fresh = mine.filter { it.key !in settings.notified }
             if (fresh.isNotEmpty()) {
                 notify(fresh, today)
-                session.notified = seen + fresh.map { it.key }
+                c.store.addNotified(fresh.map { it.key })
             }
             Result.success()
         } catch (e: ApiException) {

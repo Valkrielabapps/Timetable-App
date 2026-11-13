@@ -20,20 +20,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.timetablz.app.data.ApiException
 import com.timetablz.app.data.CalendarLink
 import com.timetablz.app.data.Dates
 import com.timetablz.app.data.MyCover
 import com.timetablz.app.data.MyCoverItem
-import com.timetablz.app.data.SavedCover
+import com.timetablz.app.data.SchoolData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 /**
  * My substitutions: the lessons I've been given to cover - today, coming up,
@@ -41,17 +39,20 @@ import com.timetablz.app.data.SavedCover
  * calendar".
  */
 @Composable
-fun MySubstitutionsScreen(state: AppState, data: SchoolData, onOpenSettings: () -> Unit) {
-    val school = state.school ?: return
+fun MySubstitutionsScreen(
+    session: SessionViewModel,
+    data: SchoolData,
+    vm: MySubstitutionsViewModel = viewModel(factory = AppViewModels.Factory),
+    onOpenSettings: () -> Unit,
+) {
+    val sessionUi by session.ui.collectAsStateWithLifecycle()
+    val settings by session.settings.collectAsStateWithLifecycle()
+    val school = sessionUi.school ?: return
     val context = LocalContext.current
-    val me = state.me()
-    var covers by remember { mutableStateOf<List<SavedCover>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(school.id, data) {
-        error = null
-        covers = try { state.api.covers(school.id) } catch (e: ApiException) { error = e.message; emptyList() }
-    }
+    val me = session.me(data, settings, sessionUi)
+    LaunchedEffect(school.id) { vm.bind(school.id) }
+    val covers by vm.covers.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
 
     if (me == null) {
         Message(
