@@ -11,6 +11,9 @@ class ElectiveOptionIn(BaseModel):
 
     subject_id: int
     preferred_teacher_id: int | None = None
+    # Two or more teachers who share the group's periods (as for a normal
+    # subject); fewer than two is ignored.
+    allowed_teacher_ids: list[int] | None = None
     class_group_ids: list[int] | None = None
     label: str | None = Field(default=None, max_length=40)
 
@@ -52,6 +55,7 @@ class ElectiveOptionOut(BaseModel):
     id: int
     subject_id: int
     preferred_teacher_id: int | None
+    allowed_teacher_ids: list[int] | None = None
     class_group_ids: list[int] | None = None
     label: str | None = None
 

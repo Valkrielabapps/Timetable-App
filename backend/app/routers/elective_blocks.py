@@ -170,13 +170,30 @@ def _validate_block(
                     f"meet at the same time. Choose a different teacher for one of them."
                 ),
             )
+    shared = {t for o in options for t in (o.allowed_teacher_ids or [])}
+    if shared:
+        known = {
+            t.id for t in db.query(Teacher).filter(Teacher.id.in_(shared), Teacher.school_id == school_id).all()
+        }
+        if shared - known:
+            raise HTTPException(status_code=400, detail="A chosen teacher doesn't exist in this school.")
     return stored
+
+
+def _shared_teachers(o: ElectiveOptionIn) -> list[int] | None:
+    """The group's shared teachers, once each, or None: one teacher is a fixed
+    choice (preferred_teacher_id), and a pinned teacher overrides a list."""
+    if o.preferred_teacher_id is not None:
+        return None
+    ids = list(dict.fromkeys(o.allowed_teacher_ids or []))
+    return ids if len(ids) >= 2 else None
 
 
 def _options(payload_options: list[ElectiveOptionIn], stored: list[list[int] | None]) -> list[ElectiveOption]:
     return [
         ElectiveOption(
             subject_id=o.subject_id, preferred_teacher_id=o.preferred_teacher_id,
+            allowed_teacher_ids=_shared_teachers(o),
             class_group_ids=sections, label=(o.label or "").strip() or None,
         )
         for o, sections in zip(payload_options, stored)
@@ -236,6 +253,7 @@ def update_block(
         options_in = payload.options if payload.options is not None else [
             ElectiveOptionIn(
                 subject_id=o.subject_id, preferred_teacher_id=o.preferred_teacher_id,
+                allowed_teacher_ids=o.allowed_teacher_ids,
                 class_group_ids=o.class_group_ids, label=o.label,
             )
             for o in block.options

@@ -79,7 +79,7 @@ def lessons_for_school(db: Session, school_id: int) -> list[dict]:
         for o in b.options:
             members = [i for i in o.group_section_ids if i in sections]
             grades = [sections[i].grade for i in members]
-            who = [o.preferred_teacher_id] if o.preferred_teacher_id else [
+            who = [o.preferred_teacher_id] if o.preferred_teacher_id else list(o.allowed_teacher_ids or []) or [
                 t.id for t in teachers if _can_teach(t, o.subject_id, grades)
             ]
             subject = subjects.get(o.subject_id)

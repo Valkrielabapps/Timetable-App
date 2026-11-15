@@ -1,7 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { optionsOf, pick } from '../test/pick'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
 
 /**
@@ -56,6 +55,18 @@ function renderPanel(props = {}) {
 }
 
 const form = () => screen.getByRole('form', { name: 'Elective block' })
+// Opens a group's teacher picker, ticks the given names and presses Done.
+function chooseTeachers(subject, names) {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Teachers for ${subject}`) }))
+  const dialog = screen.getByRole('dialog', { name: `Choose teachers for ${subject}` })
+  for (const n of names) fireEvent.click(within(dialog).getByLabelText(n))
+  fireEvent.click(within(dialog).getByText('Done'))
+}
+const pickerNames = (subject) => {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Teachers for ${subject}`) }))
+  const dialog = screen.getByRole('dialog', { name: `Choose teachers for ${subject}` })
+  return within(dialog).getAllByRole('checkbox').map((c) => c.closest('label').textContent.trim())
+}
 const check = (name) => fireEvent.click(within(form()).getByLabelText(name))
 
 beforeEach(() => {
@@ -73,7 +84,7 @@ describe('adding a block', () => {
     fireEvent.change(within(form()).getByLabelText('Periods/week'), { target: { value: '6' } })
     check('Physics')
     check('Accounts')
-    pick('Teacher for Physics', 'Mr. Das')
+    chooseTeachers('Physics', ['Mr. Das'])
     fireEvent.click(screen.getByText('Save block'))
     await waitFor(() =>
       expect(mutations.create).toHaveBeenCalledWith({
@@ -83,8 +94,8 @@ describe('adding a block', () => {
         periods_per_week: 6,
         section_ids: [100],
         options: [
-          { subject_id: 1, preferred_teacher_id: 13, label: null, class_group_ids: null },
-          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: null },
+          { subject_id: 1, preferred_teacher_id: 13, allowed_teacher_ids: null, label: null, class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: null },
         ],
       }),
     )
@@ -134,13 +145,38 @@ describe('adding a block', () => {
     expect(within(form()).getByLabelText('Chemistry')).toBeInTheDocument()
   })
 
+  it('lets a group be shared between two or more teachers', async () => {
+    renderPanel()
+    fireEvent.click(screen.getByText('+ Add elective block'))
+    fireEvent.change(within(form()).getByLabelText('Periods/week'), { target: { value: '6' } })
+    check('Physics')
+    check('Accounts')
+    chooseTeachers('Physics', ['Mr. Das', 'Mrs. Rao'])
+    expect(screen.getByRole('button', { name: /^Teachers for Physics: Shared: Mr. Das, Mrs. Rao/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Save block'))
+    await waitFor(() =>
+      expect(mutations.create).toHaveBeenCalledWith(expect.objectContaining({
+        options: [
+          { subject_id: 1, preferred_teacher_id: null, allowed_teacher_ids: [13, 10], label: null, class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: null },
+        ],
+      })),
+    )
+  })
+
+  it('shows a shared group by its teachers once saved', () => {
+    const shared = { ...BLOCK, options: [{ id: 70, subject_id: 1, preferred_teacher_id: null, allowed_teacher_ids: [13, 10] }, BLOCK.options[1]] }
+    renderPanel({ blocks: [shared] })
+    expect(screen.getByText(/Shared: Mr. Das, Mrs. Rao/)).toBeInTheDocument()
+  })
+
   it('offers only teachers qualified for the subject and the grade', () => {
     renderPanel()
     fireEvent.click(screen.getByText('+ Add elective block'))
     check('Physics')
     check('Biology')
     // Alphabetical by name, titles ignored: Das before Rao.
-    expect(optionsOf('Teacher for Physics')).toEqual(['Any qualified (let solver choose)', 'Mr. Das', 'Mrs. Rao'])
+    expect(pickerNames('Physics')).toEqual(['Mr. Das', 'Mrs. Rao'])
     // Ms. Iyer teaches Biology, but only to Grade 12.
     expect(screen.getByText(/No qualified teacher yet/)).toBeInTheDocument()
   })
@@ -181,8 +217,8 @@ describe('an existing block', () => {
         periods_per_week: 6,
         section_ids: [100],
         options: [
-          { subject_id: 1, preferred_teacher_id: 13, label: null, class_group_ids: null },
-          { subject_id: 5, preferred_teacher_id: null, label: null, class_group_ids: null },
+          { subject_id: 1, preferred_teacher_id: 13, allowed_teacher_ids: null, label: null, class_group_ids: null },
+          { subject_id: 5, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: null },
         ],
       }),
     )
@@ -236,8 +272,8 @@ describe('a block shared with other sections', () => {
       expect(mutations.create).toHaveBeenCalledWith(expect.objectContaining({
         section_ids: [100, 101],
         options: [
-          { subject_id: 1, preferred_teacher_id: null, label: null, class_group_ids: null },
-          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: [100] },
+          { subject_id: 1, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: [100] },
         ],
       })),
     )
@@ -263,9 +299,9 @@ describe('a block shared with other sections', () => {
     await waitFor(() =>
       expect(mutations.create).toHaveBeenCalledWith(expect.objectContaining({
         options: [
-          { subject_id: 1, preferred_teacher_id: null, label: 'Group 1', class_group_ids: null },
-          { subject_id: 1, preferred_teacher_id: null, label: 'Group 2', class_group_ids: null },
-          { subject_id: 2, preferred_teacher_id: null, label: null, class_group_ids: null },
+          { subject_id: 1, preferred_teacher_id: null, allowed_teacher_ids: null, label: 'Group 1', class_group_ids: null },
+          { subject_id: 1, preferred_teacher_id: null, allowed_teacher_ids: null, label: 'Group 2', class_group_ids: null },
+          { subject_id: 2, preferred_teacher_id: null, allowed_teacher_ids: null, label: null, class_group_ids: null },
         ],
       })),
     )

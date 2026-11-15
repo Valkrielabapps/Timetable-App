@@ -181,9 +181,18 @@ def replace_teacher(db: Session, school_id: int, old_id: int, new_id: int, timet
             qualify(r.subject_id, groups[r.class_group_id].grade)
             plan_changes_made += 1
     for o in (db.query(ElectiveOption).join(ElectiveBlock, ElectiveBlock.id == ElectiveOption.block_id)
-              .filter(ElectiveBlock.school_id == school_id, ElectiveOption.preferred_teacher_id == old.id).all()):
-        if in_scope(o.block.class_group_id):
+              .filter(ElectiveBlock.school_id == school_id).all()):
+        if not in_scope(o.block.class_group_id):
+            continue
+        if o.preferred_teacher_id == old.id:
             o.preferred_teacher_id = new.id
+            qualify(o.subject_id, groups[o.block.class_group_id].grade)
+            plan_changes_made += 1
+        elif o.allowed_teacher_ids and old.id in o.allowed_teacher_ids:
+            ids = list(dict.fromkeys(new.id if t == old.id else t for t in o.allowed_teacher_ids))
+            o.allowed_teacher_ids = ids if len(ids) >= 2 else None
+            if len(ids) == 1:
+                o.preferred_teacher_id = ids[0]
             qualify(o.subject_id, groups[o.block.class_group_id].grade)
             plan_changes_made += 1
     for g in groups.values():

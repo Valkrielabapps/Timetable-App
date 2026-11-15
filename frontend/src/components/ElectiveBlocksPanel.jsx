@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { confirmDialog } from './confirmDialog'
-import SearchableSelect from './SearchableSelect'
+import TeacherPicker from './TeacherPicker'
 import { sortByName, sortSections } from '../sorting'
 import { blockSectionIds, groupSectionIds } from '../electiveSections'
 
@@ -87,7 +87,9 @@ export default function ElectiveBlocksPanel({
       section_ids: sectionIds,
       options: form.groups.map((g) => ({
         subject_id: g.subjectId,
-        preferred_teacher_id: g.teacherId,
+        // One name fixes the teacher; two or more share the group's periods.
+        preferred_teacher_id: g.teacherIds.length === 1 ? g.teacherIds[0] : null,
+        allowed_teacher_ids: g.teacherIds.length >= 2 ? g.teacherIds : null,
         label: g.label.trim() || null,
         class_group_ids: g.sectionIds.length === sectionIds.length ? null : g.sectionIds,
       })),
@@ -215,7 +217,7 @@ export default function ElectiveBlocksPanel({
                 groups: block.options.map((o) => ({
                   key: `o${o.id}`,
                   subjectId: o.subject_id,
-                  teacherId: o.preferred_teacher_id,
+                  teacherIds: o.preferred_teacher_id ? [o.preferred_teacher_id] : (o.allowed_teacher_ids ?? []),
                   label: o.label ?? '',
                   sectionIds: groupSectionIds(block, o),
                 })),
@@ -276,6 +278,8 @@ export default function ElectiveBlocksPanel({
                       ·{' '}
                       {o.preferred_teacher_id
                         ? teacherName(o.preferred_teacher_id) ?? 'Any qualified teacher'
+                        : o.allowed_teacher_ids?.length >= 2
+                        ? `Shared: ${o.allowed_teacher_ids.map((id) => teacherName(id) ?? 'Unknown teacher').join(', ')}`
                         : qualified.length === 1
                         ? qualified[0].name
                         : 'Any qualified teacher'}
@@ -340,7 +344,7 @@ function BlockForm({
   function toggleSubject(subjectId, on) {
     setGroups((prev) =>
       on
-        ? [...prev, { key: newKey(), subjectId, teacherId: null, label: '', sectionIds: [...sectionIds] }]
+        ? [...prev, { key: newKey(), subjectId, teacherIds: [], label: '', sectionIds: [...sectionIds] }]
         : prev.filter((g) => g.subjectId !== subjectId),
     )
   }
@@ -354,7 +358,7 @@ function BlockForm({
         g.subjectId === group.subjectId && !g.label ? { ...g, label: `Group ${same.indexOf(g) + 1}` } : g,
       )
       const at = labelled.findIndex((g) => g.key === group.key)
-      const copy = { ...group, key: newKey(), teacherId: null, label: `Group ${same.length + 1}` }
+      const copy = { ...group, key: newKey(), teacherIds: [], label: `Group ${same.length + 1}` }
       return [...labelled.slice(0, at + 1), copy, ...labelled.slice(at + 1)]
     })
   }
@@ -523,13 +527,11 @@ function BlockForm({
                   {qualified.length === 0 ? (
                     <span className="text-xs text-amber-700">No qualified teacher yet. Mark one on the Teachers page</span>
                   ) : (
-                    <SearchableSelect
-                      ariaLabel={`Teacher for ${title}`}
-                      value={g.teacherId}
-                      onChange={(id) => update(g.key, { teacherId: id })}
-                      emptyOption={{ label: 'Any qualified (let solver choose)' }}
-                      options={qualified.map((t) => ({ value: t.id, label: t.name }))}
-                      className="text-xs"
+                    <TeacherPicker
+                      subjectName={title}
+                      teachers={qualified}
+                      selectedIds={g.teacherIds}
+                      onChange={(ids) => update(g.key, { teacherIds: ids })}
                     />
                   )}
                   <button

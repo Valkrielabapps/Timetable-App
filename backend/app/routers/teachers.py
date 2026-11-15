@@ -9,7 +9,7 @@ from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
-    ClassGroup, ElectiveOption, Period, Subject, SubjectRequirement, Teacher, TimetableEntry,
+    ClassGroup, ElectiveBlock, ElectiveOption, Period, Subject, SubjectRequirement, Teacher, TimetableEntry,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkCommitIn, BulkImportOut, BulkPreviewOut
@@ -99,6 +99,16 @@ def delete_teacher(teacher_id: int, db: Session = Depends(get_db), current_user:
                 r.allowed_teacher_ids = None
                 if left and r.preferred_teacher_id is None:
                     r.preferred_teacher_id = left[0]
+    blocks = db.query(ElectiveBlock.id).filter(ElectiveBlock.school_id == teacher.school_id)
+    for o in db.query(ElectiveOption).filter(ElectiveOption.block_id.in_(blocks)).all():
+        if o.allowed_teacher_ids and teacher_id in o.allowed_teacher_ids:
+            left = [t for t in o.allowed_teacher_ids if t != teacher_id]
+            if len(left) >= 2:
+                o.allowed_teacher_ids = left
+            else:
+                o.allowed_teacher_ids = None
+                if left and o.preferred_teacher_id is None:
+                    o.preferred_teacher_id = left[0]
     # Their lessons in generated timetables stay, as "No teacher yet" - on
     # Postgres the foreign key otherwise refuses to delete a teacher who was
     # ever timetabled.

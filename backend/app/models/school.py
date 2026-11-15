@@ -457,6 +457,10 @@ class ElectiveOption(Base):
     # option to one teacher instead of letting the solver pick among the
     # qualified ones.
     preferred_teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
+    # Same meaning as SubjectRequirement.allowed_teacher_ids: two or more named
+    # teachers who share this group's periods between them, each block period
+    # taught by one of them. Only used with no preferred_teacher_id.
+    allowed_teacher_ids = Column(JSON, nullable=True)
     class_group_ids = Column(JSON, nullable=True)
     label = Column(String, nullable=True)
 

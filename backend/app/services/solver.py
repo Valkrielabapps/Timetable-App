@@ -583,6 +583,8 @@ class _OptionReq:
     block_id: int
     option_id: int
     assistant_teacher_id: int | None = None
+    # Two or more teachers sharing the group's periods (ElectiveOption).
+    allowed_teacher_ids: tuple[int, ...] | None = None
     # The group's first section stands for it wherever teachers are counted;
     # the others are the same lesson seen from their own section.
     primary: bool = True
@@ -1174,6 +1176,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                     id=rid, class_group_id=sid, subject_id=o.subject_id,
                     periods_per_week=b.periods_per_week, preferred_teacher_id=o.preferred_teacher_id,
                     block_id=b.id, option_id=o.id, primary=i == 0, group_section_ids=tuple(group),
+                    allowed_teacher_ids=tuple(o.allowed_teacher_ids) if o.allowed_teacher_ids else None,
                 ))
     primary_options = [o for o in option_reqs if o.primary]
 
@@ -1860,6 +1863,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             for v in lesson_vars:
                 model.AddImplication(v, chosen[t])
 
+    primary_option_by_option_id = {o.option_id: o for o in option_reqs if o.primary}
     strands: dict[tuple, dict[int, list]] = {}
     for (req_id, teacher_id, _period_id), var in x.items():
         strands.setdefault(("r", req_id), {}).setdefault(teacher_id, []).append(var)
@@ -1874,6 +1878,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         # Two or more named teachers share the subject between them (see
         # share_terms below), so it isn't held to one.
         if key[0] == "r" and _is_shared(requirements_by_id.get(key[1])):
+            continue
+        if key[0] == "o" and _is_shared(primary_option_by_option_id.get(key[2])):
             continue
         if key[0] == "r" and len(locked_teachers_by_req.get(key[1], ())) > 1:
             req = requirements_by_id.get(key[1])
@@ -2302,6 +2308,10 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         r for r in requirements
         if _is_shared(r) and len(candidate_ids_by_req.get(r.id) or []) >= 2 and _batch_count(r) == 1
     ]
+    share_options = [
+        o for o in option_reqs
+        if o.primary and _is_shared(o) and len(candidate_ids_by_req.get(o.id) or []) >= 2
+    ]
 
     def share_terms() -> list:
         terms: list = []
@@ -2313,6 +2323,22 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 count = sum(v for (rid, tid, _), v in x.items() if rid == r.id and tid == t)
                 under = model.NewIntVar(0, n, f"share_under_r{r.id}_t{t}")
                 over = model.NewIntVar(0, n, f"share_over_r{r.id}_t{t}")
+                model.Add(under >= lo - count)
+                model.Add(over >= count - hi)
+                terms += [_SHARE_WEIGHT * under, _SHARE_WEIGHT * over]
+        # A block group shared the same way: each block period is taught by
+        # one of its teachers, as evenly as they can be.
+        for o in share_options:
+            ids = candidate_ids_by_req[o.id]
+            n = o.periods_per_week or 0
+            lo, hi = n // len(ids), -(-n // len(ids))
+            for t in ids:
+                count = sum(
+                    v for (bid, _pid, oid), choice in option_x.items()
+                    if bid == o.block_id and oid == o.option_id for tid, v in choice if tid == t
+                )
+                under = model.NewIntVar(0, n, f"share_under_o{o.option_id}_t{t}")
+                over = model.NewIntVar(0, n, f"share_over_o{o.option_id}_t{t}")
                 model.Add(under >= lo - count)
                 model.Add(over >= count - hi)
                 terms += [_SHARE_WEIGHT * under, _SHARE_WEIGHT * over]
@@ -2571,7 +2597,7 @@ def _diagnose_teacher_assignment(
             strands.append((r.subject_id, r.class_group_id, r.periods_per_week, cands, ("r", r.id)))
     for o in option_reqs:
         cands = candidate_ids_by_req.get(o.id) or []
-        if cands and o.periods_per_week:
+        if cands and o.periods_per_week and not _is_shared(o):
             strands.append((o.subject_id, o.class_group_id, o.periods_per_week, cands, ("b", o.block_id)))
     if not strands:
         return []

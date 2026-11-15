@@ -242,7 +242,7 @@ def _check(db: Session, school_id: int, school: School | None) -> list[dict]:
             for sid in group:
                 ids = _solver._candidate_teacher_ids(
                     SimpleNamespace(class_group_id=sid, subject_id=o.subject_id,
-                                    preferred_teacher_id=o.preferred_teacher_id, allowed_teacher_ids=None),
+                                    preferred_teacher_id=o.preferred_teacher_id, allowed_teacher_ids=o.allowed_teacher_ids),
                     teachers, t_by_id, cg_by_id)
                 allowed = ids if allowed is None else [t for t in allowed if t in set(ids)]
             allowed = allowed or []
@@ -491,7 +491,7 @@ def _block_cands(o, blocks, teachers, t_by_id, cg_by_id) -> list[int]:
     for sid in [s for s in option.group_section_ids if s in members]:
         ids = _solver._candidate_teacher_ids(
             SimpleNamespace(class_group_id=sid, subject_id=option.subject_id,
-                            preferred_teacher_id=option.preferred_teacher_id, allowed_teacher_ids=None),
+                            preferred_teacher_id=option.preferred_teacher_id, allowed_teacher_ids=option.allowed_teacher_ids),
             teachers, t_by_id, cg_by_id)
         allowed = ids if allowed is None else [t for t in allowed if t in set(ids)]
     return allowed or []
