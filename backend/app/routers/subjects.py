@@ -10,7 +10,7 @@ from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import (
     ClassGroup,
-    ElectiveBlock, ElectiveOption, Subject, SubjectFreeze, SubjectRequirement, TimetableEntry,
+    ElectiveBlock, ElectiveOption, Subject, SubjectFreeze, SubjectRequirement, Teacher, TimetableEntry,
 )
 from app.models.user import User
 from app.schemas.bulk_import import BulkCommitIn, BulkImportOut, BulkPreviewOut
@@ -102,6 +102,12 @@ def delete_subject(subject_id: int, db: Session = Depends(get_db), current_user:
                 {TimetableEntry.elective_block_id: None}
             )
             db.query(ElectiveBlock).filter(ElectiveBlock.id == block_id).delete()
+    # Teachers qualified in it: otherwise the deleted id stays in their list,
+    # and the next edit to that teacher (adding a subject) sends it back and
+    # is refused as "Subject not found".
+    for t in db.query(Teacher).filter(Teacher.school_id == subject.school_id).all():
+        if subject_id in (t.qualified_subject_ids or []):
+            t.qualified_subject_ids = [i for i in t.qualified_subject_ids if i != subject_id]
     db.delete(subject)
     db.commit()
 

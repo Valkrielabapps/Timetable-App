@@ -19,6 +19,19 @@ from app.services.bulk_import import TEMPLATES, import_teachers
 router = APIRouter(prefix="/api/teachers", tags=["teachers"])
 
 
+def _drop_stale_subjects(db: Session, ids, already: list[int] | None, school_id: int):
+    """Drop subject ids the teacher already had that no longer exist.
+
+    A subject deleted before deletion cleaned up teachers' lists left its id
+    behind, and the next edit (adding ENG2, say) sent it straight back and
+    was refused as "Subject not found". Only ids the teacher already had are
+    forgiven; a new id that isn't this school's is still refused below."""
+    if not ids or not already:
+        return ids
+    known = {i for (i,) in db.query(Subject.id).filter(Subject.id.in_(set(ids)), Subject.school_id == school_id)}
+    return [i for i in dict.fromkeys(ids) if i in known or i not in set(already)]
+
+
 @router.post("", response_model=TeacherOut, status_code=201)
 def create_teacher(payload: TeacherCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     require_school_access(db, current_user, payload.school_id, min_role="admin")
@@ -53,6 +66,9 @@ def update_teacher(teacher_id: int, payload: TeacherUpdate, db: Session = Depend
         raise HTTPException(status_code=404, detail="Teacher not found")
     require_school_access(db, current_user, teacher.school_id, min_role="admin")
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("qualified_subject_ids") is not None:
+        changes["qualified_subject_ids"] = _drop_stale_subjects(
+            db, changes["qualified_subject_ids"], teacher.qualified_subject_ids, teacher.school_id)
     require_in_school(db, Subject, changes.get("qualified_subject_ids"), teacher.school_id, "Subject")
     require_in_school(db, Period, changes.get("unavailable_period_ids"), teacher.school_id, "Period")
     for field, value in changes.items():
