@@ -85,18 +85,60 @@ data class TimetableSummary(
 @Serializable
 data class Timetable(val id: Int, val entries: List<Entry> = emptyList())
 
-/** Everything one school's screens read, cached together. */
+/**
+ * Everything one school's screens read, cached together. `sections` and
+ * `gradeParts` (grade -> part of the school: "primary", "high", ... or null)
+ * let cover be arranged a part of the school at a time, as on the website.
+ */
 @Serializable
-data class SchoolData(val periods: List<Period>, val teachers: List<Teacher>, val timetable: Timetable?)
+data class SchoolData(
+    val periods: List<Period>,
+    val teachers: List<Teacher>,
+    val timetable: Timetable?,
+    val sections: List<ClassGroup> = emptyList(),
+    val gradeParts: Map<String, String?> = emptyMap(),
+) {
+    /** Section id -> its part of the school (null: in no part). */
+    fun partOfSection(): Map<Int, String?> = sections.associate { it.id to it.grade?.let { g -> gradeParts[g] } }
+}
 
 @Serializable
 data class SavedChange(val periodId: Int, val absentTeacherId: Int, val substituteId: Int?, val classGroupId: Int, val subjectId: Int? = null)
 
 @Serializable
-data class SavedCover(val id: Int, val date: String?, val category: String?, val absentIds: Set<Int>, val changes: List<SavedChange>)
+data class SavedCover(
+    val id: Int,
+    val date: String?,
+    val category: String?,
+    val absentIds: Set<Int>,
+    val changes: List<SavedChange>,
+    /** Teacher -> null (away all day) or the periods they're away. */
+    val absences: Map<Int, List<Int>?> = emptyMap(),
+)
 
-data class SummaryRow(val period: String, val classGroup: String, val subject: String?, val absent: String, val substitute: String?)
+data class SummaryRow(
+    val period: String,
+    val classGroup: String,
+    val subject: String?,
+    val absent: String,
+    val substitute: String?,
+    val part: String? = null,
+    val partLabel: String = "",
+)
 
-data class Summary(val weekday: String, val onLeave: List<String>, val rows: List<SummaryRow>, val uncovered: Int)
+/** Someone on leave: all day (periods null) or for those periods ("Period 2"). */
+data class Leave(val teacher: String, val periods: List<String>?) {
+    val text get() = "$teacher (${periods?.joinToString(", ") ?: "whole day"})"
+}
+
+data class Summary(
+    val weekday: String,
+    val onLeave: List<Leave>,
+    val rows: List<SummaryRow>,
+    val uncovered: Int,
+    val date: String = "",
+    val part: String? = null,
+    val partLabel: String = "Whole school",
+)
 
 data class NotifyResult(val configured: Boolean, val sent: List<String>, val noEmail: List<String>, val failed: List<String>, val reason: String?)

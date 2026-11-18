@@ -59,10 +59,47 @@ class ApiShapesTest {
 
         val lesson = Lesson("10:1:4", 10, 1, 1, "Deva", 4, "Maths", listOf(2, 3), listOf("7 A", "7 B"))
         val body = json.encodeToString(com.timetablz.app.data.SaveCoverRequest.serializer(),
-            Cover.body("2026-11-16", setOf(1), listOf(lesson), mapOf(lesson.key to null)))
+            Cover.body("2026-11-16", Cover.WHOLE, mapOf(1 to null), listOf(lesson), mapOf(lesson.key to null)))
         assertTrue(body.contains("\"absent_teacher_id\":1"))
         assertTrue(body.contains("\"class_group_id\":3"))  // one change per section of a shared class
         assertFalse(body.contains("substituting_teacher_id"))  // uncovered: left out, the server reads it as none
+        assertFalse(body.contains("category"))  // whole school
+        assertFalse(body.contains("period_ids"))  // away all day
+        assertEquals(mapOf(1 to null), log.absences)
+    }
+
+    @Test
+    fun coverForOnePartAwaySomePeriods() {
+        val lesson = Lesson("10:1:4", 10, 1, 1, "Deva", 4, "Maths", listOf(2), listOf("7 A"), "middle")
+        val body = json.encodeToString(com.timetablz.app.data.SaveCoverRequest.serializer(),
+            Cover.body("2026-11-16", "middle", mapOf(1 to setOf(12, 10), 5 to emptySet()), listOf(lesson), mapOf(lesson.key to 2)))
+        assertTrue(body.contains("\"category\":\"middle\""))
+        assertTrue(body.contains("\"period_ids\":[10,12]"))
+        assertFalse(body.contains("\"teacher_id\":5"))  // "some periods" with none ticked: not away
+    }
+
+    @Test
+    fun aSummaryForOnePart() {
+        val s = json.decodeFromString(com.timetablz.app.data.SummaryDto.serializer(), """
+            {"date":"2026-11-16","weekday":"Monday","category":"high","category_label":"High school",
+             "on_leave":[{"teacher_id":1,"teacher":"Deva","periods":["Period 2"]}],
+             "rows":[{"period":"Period 2","class_group":"Grade 9 A","subject":"Maths","category":"high",
+                      "category_label":"High school","absent_teacher":"Deva","substitute":null}],
+             "uncovered":1}""").toDomain()
+        assertEquals("High school", s.partLabel)
+        assertEquals("Deva (Period 2)", s.onLeave[0].text)
+        val text = Cover.summaryText(s)
+        assertTrue(text.startsWith("*Substitutions - Monday, 16 November 2026*\nHigh school"))
+        assertTrue(text.contains("Period 2 · Grade 9 A · Maths: Deva → *NOT COVERED*"))
+        assertTrue(text.contains("1 period still needs cover."))
+    }
+
+    @Test
+    fun anOlderOfflineCopyStillReads() {
+        val old = """{"periods":[],"teachers":[],"timetable":null}"""
+        val data = json.decodeFromString(SchoolData.serializer(), old)
+        assertTrue(data.sections.isEmpty())
+        assertTrue(data.gradeParts.isEmpty())
     }
 }
 

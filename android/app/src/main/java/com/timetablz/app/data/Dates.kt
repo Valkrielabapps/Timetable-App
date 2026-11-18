@@ -25,5 +25,9 @@ object Dates {
     fun pretty(date: String): String =
         SimpleDateFormat("EEEE, d MMM", Locale.getDefault()).format(iso().parse(date)!!)
 
+    /** "Friday, 13 November 2026" - as the website's summary writes it. */
+    fun long(date: String): String =
+        SimpleDateFormat("EEEE, d MMMM yyyy", Locale.US).format(iso().parse(date)!!)
+
     val dayShort = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 }

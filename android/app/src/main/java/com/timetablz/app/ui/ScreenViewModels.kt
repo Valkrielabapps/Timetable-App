@@ -38,7 +38,10 @@ class TimetableViewModel : ViewModel() {
 
 data class CoverUi(
     val date: String = Dates.today(),
-    val absent: Set<Int> = emptySet(),
+    /** The part of the school being arranged (Cover.WHOLE or a part key); null until chosen. */
+    val part: String? = null,
+    /** Teacher -> null (away all day) or the periods they're away. */
+    val absences: Map<Int, Set<Int>?> = emptyMap(),
     /** lesson key -> substitute id (null = left uncovered). */
     val picks: Map<String, Int?> = emptyMap(),
     val busy: String? = null,
@@ -49,10 +52,11 @@ data class CoverUi(
 )
 
 /**
- * A day's cover being arranged. Starts from what's saved for the day; marking
- * someone away fills each of their lessons with the best free teacher
- * (Cover.autofill - the website's rules); Save and Email go to the server.
- * Unsaved changes survive rotation and a background refresh.
+ * A day's cover being arranged, in the website's steps: date, part of the
+ * school, who's away (all day or some periods), then a substitute for each
+ * lesson (Cover.rank - the website's three groups). Starts from what's saved
+ * for that date and part; Save, Email and the summary go to the server for
+ * that part. Unsaved changes survive rotation and a background refresh.
  */
 class CoverViewModel(private val c: AppContainer) : ViewModel() {
     private val _ui = MutableStateFlow(CoverUi())
@@ -66,6 +70,7 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
     private var watching: Job? = null
 
     fun bind(schoolId: Int, isAdmin: Boolean, data: SchoolData) {
+        val changed = this.data !== data
         this.data = data
         this.isAdmin = isAdmin
         if (this.schoolId != schoolId) {
@@ -73,25 +78,59 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
             dirty = false
             watching?.cancel()
             watching = viewModelScope.launch {
+                // The part chosen last time for this school, as the website remembers it.
+                val part = c.store.coverPart(schoolId)
+                _ui.update { it.copy(part = part, absences = emptyMap(), picks = emptyMap(), summary = null) }
                 c.cover.covers(schoolId).collect { list ->
                     saved = list ?: emptyList()
                     if (!dirty) loadDay()
                 }
             }
+        } else if (changed && !dirty) {
+            loadDay()
         }
     }
 
     private val entries get() = data?.timetable?.entries ?: emptyList()
-    private var loadCache: Pair<SchoolData?, Map<Int, Int>> = null to emptyMap()
-    private val load: Map<Int, Int>
-        get() = if (loadCache.first === data) loadCache.second else Cover.weeklyLoad(entries).also { loadCache = data to it }
 
-    fun dayLessons(): List<Lesson> = Cover.lessonsOn(entries, Dates.weekday(_ui.value.date))
-    fun toCover(): List<Lesson> = dayLessons().filter { it.teacherId in _ui.value.absent }
+    private var derivedFor: SchoolData? = null
+    private var _load: Map<Int, Int> = emptyMap()
+    private var _partOf: Map<Int, String?> = emptyMap()
+    private var _teacherParts: Map<Int, Set<String?>> = emptyMap()
+    private fun derive() {
+        if (derivedFor === data) return
+        derivedFor = data
+        _load = Cover.weeklyLoad(entries)
+        _partOf = data?.partOfSection() ?: emptyMap()
+        _teacherParts = Cover.partsOfTeachers(entries, _partOf)
+    }
+    private val load get() = derive().let { _load }
+    private val partOf get() = derive().let { _partOf }
+    private val teacherParts get() = derive().let { _teacherParts }
+
+    private fun lessonsFor(u: CoverUi): List<Lesson> =
+        u.part?.let { Cover.lessonsOn(entries, Dates.weekday(u.date), it, partOf) } ?: emptyList()
+    private fun coverFor(u: CoverUi, lessons: List<Lesson> = lessonsFor(u)) =
+        lessons.filter { Cover.isAway(u.absences, it.teacherId, it.periodId) }
+    private fun elsewhereFor(u: CoverUi) = Cover.elsewhere(saved, u.date, u.part ?: Cover.WHOLE)
+
+    fun dayLessons(): List<Lesson> = lessonsFor(_ui.value)
+    fun toCover(): List<Lesson> = coverFor(_ui.value)
     fun weeklyLoad(): Map<Int, Int> = load
 
-    fun rank(lesson: Lesson): Ranked =
-        Cover.rank(lesson, data?.teachers ?: emptyList(), entries, _ui.value.absent, _ui.value.picks, toCover(), load)
+    fun rank(lesson: Lesson): Ranked {
+        val u = _ui.value
+        return Cover.rank(lesson, data?.teachers ?: emptyList(), entries, u.absences, u.picks, coverFor(u), load, teacherParts, elsewhereFor(u))
+    }
+
+    /** "3 today + 1 cover · 24/week" - what a teacher already carries, beside their name. */
+    fun loadText(teacherId: Int, forLesson: String): String {
+        val u = _ui.value
+        val today = Cover.lessonsToday(entries, Dates.weekday(u.date))[teacherId] ?: 0
+        val cover = elsewhereFor(u).taken.count { it.second == teacherId } +
+            coverFor(u).count { it.key != forLesson && u.picks[it.key] == teacherId }
+        return "$today today${if (cover > 0) " + $cover cover" else ""} · ${load[teacherId] ?: 0}/week"
+    }
 
     fun setDate(date: String) {
         dirty = false
@@ -99,9 +138,21 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
         loadDay()
     }
 
-    fun setAbsent(ids: Set<Int>) {
+    fun setPart(part: String) {
+        if (part == _ui.value.part) return
+        dirty = false
+        _ui.update { it.copy(part = part, note = null, error = null, summary = null) }
+        schoolId?.let { id -> viewModelScope.launch { c.store.setCoverPart(id, part) } }
+        loadDay()
+    }
+
+    fun setAbsences(absences: Map<Int, Set<Int>?>) {
         dirty = true
-        _ui.update { it.copy(absent = ids, note = null) }
+        _ui.update { u ->
+            // A lesson no longer needing cover drops its pick, so marking the teacher away again re-suggests.
+            val still = coverFor(u.copy(absences = absences)).map { it.key }.toSet()
+            u.copy(absences = absences, picks = u.picks.filterKeys { it in still }, note = null)
+        }
         autofill()
     }
 
@@ -111,15 +162,15 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     private fun loadDay() {
-        val date = _ui.value.date
-        val here = saved.firstOrNull { it.date == date && it.category == null }
-        val absent = here?.absentIds?.ifEmpty { here.changes.map { it.absentTeacherId }.toSet() } ?: emptySet()
+        val u = _ui.value
+        val part = u.part
+        val here = part?.let { p -> saved.firstOrNull { it.date == u.date && (it.category ?: Cover.WHOLE) == p } }
         _ui.update {
             it.copy(
-                absent = absent,
-                picks = if (here != null) Cover.picksFrom(here, dayLessons()) else emptyMap(),
+                absences = here?.let { s -> Cover.absencesFrom(s) } ?: emptyMap(),
+                picks = here?.let { s -> Cover.picksFrom(s, lessonsFor(u)) } ?: emptyMap(),
                 savedToday = here != null,
-                summary = if (here == null) null else it.summary,
+                summary = if (here == null && isAdmin) null else it.summary,
             )
         }
         autofill()
@@ -132,35 +183,46 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
     private fun autofill() {
         val d = data ?: return
         val snapshot = _ui.value
-        val lessons = Cover.lessonsOn(entries, Dates.weekday(snapshot.date)).filter { it.teacherId in snapshot.absent }
+        if (snapshot.part == null) return
+        val lessons = coverFor(snapshot)
         val all = entries
+        val ld = load
+        val tp = teacherParts
+        val away = elsewhereFor(snapshot)
         filling?.cancel()
         filling = viewModelScope.launch {
             val picks = withContext(Dispatchers.Default) {
-                Cover.autofill(lessons, d.teachers, all, snapshot.absent, snapshot.picks, Cover.weeklyLoad(all))
+                Cover.autofill(lessons, d.teachers, all, snapshot.absences, snapshot.picks, ld, tp, away)
             }
-            _ui.update { if (it.date == snapshot.date && it.absent == snapshot.absent) it.copy(picks = it.picks + picks.filterKeys { k -> k !in it.picks }) else it }
+            _ui.update {
+                if (it.date == snapshot.date && it.part == snapshot.part && it.absences == snapshot.absences)
+                    it.copy(picks = it.picks + picks.filterKeys { k -> k !in it.picks })
+                else it
+            }
         }
     }
 
+    /** The summary for the date and part (a viewer who hasn't chosen sees the whole school). */
     private fun loadSummary() {
         val id = schoolId ?: return
         val date = _ui.value.date
+        val part = _ui.value.part ?: Cover.WHOLE
         viewModelScope.launch {
-            val s = runCatching { c.cover.summary(id, date) }.getOrNull()
-            if (_ui.value.date == date) _ui.update { it.copy(summary = s) }
+            val s = runCatching { c.cover.summary(id, date, part.takeUnless { it == Cover.WHOLE }) }.getOrNull()
+            if (_ui.value.date == date && (_ui.value.part ?: Cover.WHOLE) == part) _ui.update { it.copy(summary = s) }
         }
     }
 
     fun save() {
         val id = schoolId ?: return
         val u = _ui.value
+        val part = u.part ?: return
         viewModelScope.launch {
             _ui.update { it.copy(busy = "save", error = null, note = null) }
             try {
-                c.cover.save(id, Cover.body(u.date, u.absent, toCover(), u.picks))
+                c.cover.save(id, Cover.body(u.date, part, u.absences, coverFor(u), u.picks))
                 dirty = false
-                _ui.update { it.copy(busy = null, savedToday = true, note = "Saved. Teachers can see it on the website and in the app.") }
+                _ui.update { it.copy(busy = null, savedToday = true, note = "Saved for ${Cover.partLabel(part).lowercase()}. Teachers can see it on the website and in the app.") }
                 loadSummary()
             } catch (e: ApiException) {
                 _ui.update { it.copy(busy = null, error = e.message) }
@@ -171,10 +233,11 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
     fun email() {
         val id = schoolId ?: return
         val date = _ui.value.date
+        val part = _ui.value.part ?: return
         viewModelScope.launch {
             _ui.update { it.copy(busy = "email", error = null) }
             try {
-                val r = c.cover.notify(id, date)
+                val r = c.cover.notify(id, date, part.takeUnless { it == Cover.WHOLE })
                 val note = when {
                     !r.configured -> "Email isn't set up for Timetablz yet."
                     r.sent.isEmpty() && r.noEmail.isEmpty() && r.failed.isEmpty() -> "Nobody needed an email."

@@ -22,6 +22,9 @@ interface TimetablzApi {
 
     @GET("schools/{id}/substitutions") suspend fun covers(@Path("id") schoolId: Int): List<CoverLogDto>
     @POST("schools/{id}/substitutions") suspend fun saveCover(@Path("id") schoolId: Int, @Body body: SaveCoverRequest): CoverLogDto
-    @GET("schools/{id}/substitutions/summary") suspend fun summary(@Path("id") schoolId: Int, @Query("date") date: String): SummaryDto
+    @GET("schools/{id}/substitutions/summary") suspend fun summary(
+        @Path("id") schoolId: Int, @Query("date") date: String, @Query("category") category: String? = null,
+    ): SummaryDto
+    @GET("schools/{id}/grade-categories") suspend fun gradeParts(@Path("id") schoolId: Int): List<GradePartDto>
     @POST("schools/{id}/substitutions/notify") suspend fun notify(@Path("id") schoolId: Int, @Body body: NotifyRequest): NotifyDto
 }

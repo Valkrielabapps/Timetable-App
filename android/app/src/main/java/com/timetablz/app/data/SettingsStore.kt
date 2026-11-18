@@ -47,6 +47,7 @@ class SettingsStore(private val context: Context) {
         val notified = stringSetPreferencesKey("notified")
         val intro = booleanPreferencesKey("intro_seen")
         fun me(schoolId: Int) = intPreferencesKey("me_$schoolId")
+        fun coverPart(schoolId: Int) = stringPreferencesKey("cover_part_$schoolId")
     }
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
@@ -91,6 +92,11 @@ class SettingsStore(private val context: Context) {
         if (teacherId == null) p.remove(K.me(schoolId)) else p[K.me(schoolId)] = teacherId
         Unit
     }
+
+    /** The part of the school last chosen on the Cover screen, per school (as the website remembers it). */
+    suspend fun coverPart(schoolId: Int): String? = context.dataStore.data.first()[K.coverPart(schoolId)]
+
+    suspend fun setCoverPart(schoolId: Int, part: String) = set { it[K.coverPart(schoolId)] = part }
 
     suspend fun addNotified(keys: Collection<String>) = set { p ->
         p[K.notified] = ((p[K.notified] ?: emptySet()) + keys).toList().takeLast(300).toSet()

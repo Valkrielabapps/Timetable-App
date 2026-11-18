@@ -8,7 +8,8 @@ import kotlinx.serialization.Serializable
 @Serializable data class LoginRequest(val email: String, val password: String)
 @Serializable data class GoogleRequest(val credential: String)
 @Serializable data class TermsRequest(val version: String)
-@Serializable data class NotifyRequest(val date: String, val everyone: Boolean = false)
+@Serializable data class NotifyRequest(val date: String, val category: String? = null, val everyone: Boolean = false)
+@Serializable data class GradePartDto(val grade: String, val category: String? = null)
 
 @Serializable
 data class TokenResponse(@SerialName("access_token") val accessToken: String, val user: User)
@@ -36,10 +37,11 @@ data class CoverLogDto(
         id = id, date = date, category = category,
         absentIds = absences.orEmpty().map { it.teacherId }.toSet(),
         changes = changes.map { SavedChange(it.periodId, it.absentTeacherId, it.substituteId, it.classGroupId, it.subjectId) },
+        absences = absences.orEmpty().associate { it.teacherId to it.periodIds },
     )
 }
 
-/** The whole school's cover for a day, whole-day absences (what the app makes). */
+/** A day's cover for one part of the school (category null = whole school). */
 @Serializable
 data class SaveCoverRequest(
     val date: String,
@@ -48,7 +50,7 @@ data class SaveCoverRequest(
     val changes: List<ChangeDto>,
 )
 
-@Serializable data class LeaveDto(val teacher: String)
+@Serializable data class LeaveDto(val teacher: String, val periods: List<String>? = null)
 
 @Serializable
 data class RowDto(
@@ -57,17 +59,25 @@ data class RowDto(
     val subject: String? = null,
     @SerialName("absent_teacher") val absentTeacher: String,
     val substitute: String? = null,
+    val category: String? = null,
+    @SerialName("category_label") val categoryLabel: String = "",
 )
 
 @Serializable
 data class SummaryDto(
+    val date: String = "",
     val weekday: String = "",
+    val category: String? = null,
+    @SerialName("category_label") val categoryLabel: String = "Whole school",
     @SerialName("on_leave") val onLeave: List<LeaveDto> = emptyList(),
     val rows: List<RowDto> = emptyList(),
     val uncovered: Int = 0,
 ) {
-    fun toDomain() = Summary(weekday, onLeave.map { it.teacher },
-        rows.map { SummaryRow(it.period, it.classGroup, it.subject, it.absentTeacher, it.substitute) }, uncovered)
+    fun toDomain() = Summary(
+        weekday, onLeave.map { Leave(it.teacher, it.periods) },
+        rows.map { SummaryRow(it.period, it.classGroup, it.subject, it.absentTeacher, it.substitute, it.category, it.categoryLabel) },
+        uncovered, date, category, categoryLabel,
+    )
 }
 
 @Serializable

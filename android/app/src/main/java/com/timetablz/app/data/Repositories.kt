@@ -77,7 +77,12 @@ class SchoolRepository(private val api: TimetablzApi, dao: CacheDao, json: Json)
         val timetable = pick?.let { apiCall { api.timetable(it.id) } }?.let { tt ->
             tt.copy(entries = tt.entries.map { e -> sections[e.classGroupId]?.let { e.copy(classGroupName = it.label) } ?: e })
         }
-        return SchoolData(periods, teachers, timetable).also { cache.put("school:$schoolId", it) }
+        // Which part of the school each grade is in, for arranging cover by part.
+        // Not needed to show timetables, so an older server without it is fine.
+        val parts = runCatching { apiCall { api.gradeParts(schoolId) } }.getOrDefault(emptyList())
+            .associate { it.grade to it.category }
+        return SchoolData(periods, teachers, timetable, sections.values.toList(), parts)
+            .also { cache.put("school:$schoolId", it) }
     }
 }
 
@@ -95,7 +100,10 @@ class CoverRepository(private val api: TimetablzApi, dao: CacheDao, json: Json) 
         refresh(schoolId)
     }
 
-    suspend fun summary(schoolId: Int, date: String): Summary = apiCall { api.summary(schoolId, date) }.toDomain()
+    /** A day's summary for one part of the school (null = whole school). */
+    suspend fun summary(schoolId: Int, date: String, part: String? = null): Summary =
+        apiCall { api.summary(schoolId, date, part) }.toDomain()
 
-    suspend fun notify(schoolId: Int, date: String): NotifyResult = apiCall { api.notify(schoolId, NotifyRequest(date)) }.toDomain()
+    suspend fun notify(schoolId: Int, date: String, part: String? = null): NotifyResult =
+        apiCall { api.notify(schoolId, NotifyRequest(date, part)) }.toDomain()
 }
