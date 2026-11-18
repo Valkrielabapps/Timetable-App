@@ -197,10 +197,16 @@ _STATUS_FROM_SHEET = {
 }
 
 
+# Every part bounded (an address's local part is at most 64 characters, a
+# domain label 63), and a match only starts at the start of a word: unbounded,
+# a page with one long run of letters took a quarter of an hour to search.
+_EMAIL_RE = re.compile(r"(?<![\w.%+-])[\w.%+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
+
+
 def _split_emails(value) -> list[str]:
     if not value:
         return []
-    found = re.findall(r"[\w.%+-]+@[\w-]+(?:\.[\w-]+)+", str(value))
+    found = _EMAIL_RE.findall(str(value))
     return list(dict.fromkeys(e.lower() for e in found))
 
 
@@ -292,15 +298,44 @@ _PRINCIPAL_PATTERNS = [
     re.compile(rf"\b(?:Principal|PRINCIPAL)\b[ \t]*\n\s*({_TITLE}\s*{_NAME})"),
     re.compile(rf"({_TITLE}\s*{_NAME})\s*[,\-–\u2014(|\n]{{0,3}}\s*(?:M\.?\w*\.?,?\s*(?:B\.?\s?Ed\.?)?\s*)?[,\-–\u2014(|\n]{{0,3}}\s*(?:The\s+)?Principal\b"),
 ]
+# How far before "Principal" (or another role) a name written ahead of it can
+# start: a title and up to five words, each at most 20 letters (_clean_name
+# refuses longer ones), with the separators between.
+_NAME_REACH = 200
+_PRINCIPAL_WORD = re.compile(r"Principal\b")
+
+
+def _search_before(pattern: re.Pattern, text: str, anchor: re.Pattern) -> re.Match | None:
+    """pattern.search(text), for a pattern that must end with the role word
+    `anchor` finds: tried only just before each place the role is named.
+    Searched over the whole page, such a pattern starts afresh at every "Mr"
+    and "Dr" on it - seconds on a long page - when only the few places that
+    name the role can match."""
+    for a in anchor.finditer(text):
+        found = pattern.search(text, max(0, a.start() - _NAME_REACH), a.end())
+        if found:
+            return found
+    return None
+
+
 _OTHER_ROLES = ("Vice Principal", "Academic Coordinator", "Headmistress", "Head Mistress", "Headmaster", "Correspondent")
 
 
 def _page_text(raw: str) -> str:
     raw = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
     raw = re.sub(r"(?s)<[^>]+>", "\n", raw)
-    text = html.unescape(raw)
-    text = re.sub(r"[ \t\r\f\v]+", " ", text)
-    return re.sub(r"\n\s*\n+", "\n", text)
+    return _squash_spaces(html.unescape(raw))
+
+
+def _squash_spaces(text: str) -> str:
+    """Every run of whitespace down to one space, or one line break.
+
+    All of it, not just ASCII spaces: html.unescape turns &nbsp; into a
+    non-breaking space, which \\s matches. The name patterns below put
+    several \\s* side by side, and a name followed by a few thousand
+    &nbsp; - common in hand-made school pages - took them minutes to try."""
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return re.sub(r" ?\n[\s]*", "\n", text)
 
 
 def _clean_name(candidate: str) -> str | None:
@@ -323,9 +358,11 @@ def _clean_name(candidate: str) -> str | None:
 
 def extract_people(text: str) -> dict:
     """The principal and one other useful contact named in a page's text."""
+    text = _squash_spaces(text)
     out = {}
     for pattern in _PRINCIPAL_PATTERNS:
-        m = pattern.search(text)
+        # The last pattern is the name written before "Principal".
+        m = _search_before(pattern, text, _PRINCIPAL_WORD) if pattern is _PRINCIPAL_PATTERNS[-1] else pattern.search(text)
         if m:
             name = _clean_name(m.group(1))
             if name:
@@ -333,8 +370,9 @@ def extract_people(text: str) -> dict:
                 break
     for role in _OTHER_ROLES:
         m = re.search(rf"\b{role}\b\s*[:\-–\u2014|]\s*((?:{_TITLE}\s*)?{_NAME})", text, re.I) or re.search(
-            rf"\b{role}\b[ \t]*\n\s*({_TITLE}\s*{_NAME})", text, re.I) or re.search(
-            rf"({_TITLE}\s*{_NAME})\s*[,\-–\u2014(|\n]{{0,3}}\s*(?:The\s+)?{role}\b", text)
+            rf"\b{role}\b[ \t]*\n\s*({_TITLE}\s*{_NAME})", text, re.I) or _search_before(
+            re.compile(rf"({_TITLE}\s*{_NAME})\s*[,\-–\u2014(|\n]{{0,3}}\s*(?:The\s+)?{role}\b"), text,
+            re.compile(rf"{role}\b"))
         if m:
             name = _clean_name(m.group(1))
             if name and name != out.get("principal_name"):

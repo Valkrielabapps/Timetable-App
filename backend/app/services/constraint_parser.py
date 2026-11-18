@@ -88,8 +88,10 @@ _GAP_RE = re.compile(
 # "Math can't immediately follow PE" / "Math should not directly follow PE" /
 # "Math cannot come right after PE" - captures (second_subject, first_subject),
 # since "X follows Y" means Y happens first.
+# Anchored at the start: without the ^, a search retried the lazy (.+?) from
+# every position, and a line of spaces took minutes (see parse_constraint).
 _SEQUENCE_RE = re.compile(
-    r"(.+?)\s+(?:can'?t|cannot|should\s+not|shouldn'?t|must\s+not|mustn'?t)\s+"
+    r"^(.+?)\s+(?:can'?t|cannot|should\s+not|shouldn'?t|must\s+not|mustn'?t)\s+"
     r"(?:immediately\s+|directly\s+|right\s+)?follow\s+(.+)",
     re.IGNORECASE,
 )
@@ -180,8 +182,18 @@ def _empty(**overrides) -> dict:
     return base
 
 
+# Longer than any rule anyone types; the API already refuses more than 2,000.
+MAX_TEXT_CHARS = 2000
+
+
 def parse_constraint(text: str, teacher_names: list[str], subject_names: list[str] | None = None) -> ParsedConstraint:
     subject_names = subject_names or []
+    # One space between words, whatever whitespace was typed (tabs, non-breaking
+    # spaces, runs of them). Several patterns below put \s+ next to each other;
+    # on a long run of spaces they could each take a share of it in so many
+    # ways that one rule held the server for minutes. Nothing a rule says is
+    # carried by its spacing.
+    text = " ".join(text.split())[:MAX_TEXT_CHARS]
     teacher = _find_teacher(text, teacher_names)
     subject = _find_subject(text, subject_names)
 
