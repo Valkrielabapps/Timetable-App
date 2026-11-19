@@ -7,10 +7,15 @@ SDK request/response models, environment selection and error translation.
 That also makes the payment endpoints testable without network access - the
 tests replace these three functions.
 
-Secrets: the secret key is only ever handed to the SDK client. It is never
+Secrets: the secret key is only ever handed to the SDK client, and used
+to check webhook signatures. It is never
 logged, and SDK errors are logged by status code and Cashfree's message only,
 never with request bodies (which contain customer contact details).
 """
+import base64
+import hashlib
+import hmac
+import json
 import logging
 from dataclasses import dataclass
 
@@ -142,13 +147,30 @@ def fetch_order(order_id: str) -> FetchedOrder:
 
 def verify_webhook(signature: str | None, raw_body: str, timestamp: str | None) -> dict:
     """Return the parsed webhook payload if its signature is valid, else raise
-    ValueError. Uses the SDK's PGVerifyWebhookSignature, which implements
-    Base64(HMAC-SHA256(timestamp + rawBody, secret)) exactly as documented."""
+    ValueError.
+
+    The signature is Base64(HMAC-SHA256(timestamp + rawBody, secret)), as
+    Cashfree documents. Worked out here rather than with the SDK's
+    PGVerifyWebhookSignature because that compares with `==`, which stops at
+    the first wrong character - how long a forged signature took to refuse
+    would hint at how much of it was right. hmac.compare_digest takes the
+    same time however much matches."""
     if not signature or not timestamp:
         raise ValueError("Missing webhook signature headers")
-    client = _client()
+    if not is_configured():
+        raise PaymentsNotConfigured()
+    digest = hmac.new(
+        settings.cashfree_secret_key.encode("utf-8"),
+        (timestamp + raw_body).encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    expected = base64.b64encode(digest)
+    if not hmac.compare_digest(expected, signature.encode("utf-8")):
+        raise ValueError("Webhook signature did not match")
     try:
-        event = client.PGVerifyWebhookSignature(signature, raw_body, timestamp)
-    except Exception as exc:
-        raise ValueError("Webhook signature did not match") from exc
-    return event.object
+        event = json.loads(raw_body)
+    except ValueError:
+        raise ValueError("Webhook body isn't JSON") from None
+    if not isinstance(event, dict):
+        raise ValueError("Webhook body isn't a JSON object")
+    return event

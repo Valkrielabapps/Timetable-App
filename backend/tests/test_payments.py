@@ -3,9 +3,9 @@ Cashfree checkout: create order, verify, webhook.
 
 Cashfree itself is never called: the three functions in
 app/services/cashfree_service.py that touch the network (create_order,
-fetch_order, and the SDK client used by verify_webhook) are replaced. The
-webhook tests still run the real signature check through the official SDK,
-with a known test secret, so a broken HMAC would fail here.
+fetch_order) are replaced. The webhook tests run the real signature check
+(cashfree_service.verify_webhook) with a known test secret, so a broken HMAC
+would fail here.
 """
 import base64
 import hashlib
@@ -190,6 +190,27 @@ def test_webhook_with_bad_signature_is_rejected(client, configured):
     headers["x-webhook-signature"] = "forged"
     assert client.post("/api/payments/webhook", content=raw, headers=headers).status_code == 400
     assert _school(client, h, school["id"])["plan"] is None
+
+
+def test_a_signature_off_by_one_character_is_rejected(client, configured):
+    raw, headers = _signed({"type": "PAYMENT_SUCCESS_WEBHOOK", "data": {"order": {"order_id": "tz_unknown"}}})
+    sig = headers["x-webhook-signature"]
+    headers["x-webhook-signature"] = sig[:-2] + ("A" if sig[-2] != "A" else "B") + sig[-1]
+    assert client.post("/api/payments/webhook", content=raw, headers=headers).status_code == 400
+    # A non-ASCII signature is refused the same way, not with a server error.
+    headers["x-webhook-signature"] = ("é" * len(sig)).encode("utf-8")
+    assert client.post("/api/payments/webhook", content=raw, headers=headers).status_code == 400
+
+
+def test_the_signature_is_checked_in_constant_time(configured, monkeypatch):
+    import hmac as hmac_module
+    calls = []
+    real = hmac_module.compare_digest
+    monkeypatch.setattr(cashfree_service.hmac, "compare_digest", lambda a, b: calls.append(1) or real(a, b))
+    raw, headers = _signed({"type": "PAYMENT_SUCCESS_WEBHOOK"})
+    assert cashfree_service.verify_webhook(headers["x-webhook-signature"], raw, headers["x-webhook-timestamp"]) == {
+        "type": "PAYMENT_SUCCESS_WEBHOOK"}
+    assert calls == [1]
 
 
 def test_webhook_for_unknown_order_is_acknowledged(client, configured):
