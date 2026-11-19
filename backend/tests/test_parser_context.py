@@ -265,3 +265,30 @@ def test_a_negated_right_after_is_a_ban_not_a_requirement():
         f = P._sanity(follow, text, LUNCH_WEEK).rule.form
         assert not f.must_follow and f.directional
     assert P._sanity(follow, "Physics practical must come right after Physics theory", LUNCH_WEEK) is follow
+
+
+def test_periods_named_reads_lists():
+    assert P._periods_named("only in periods 6 and 7") == {6, 7}
+    assert P._periods_named("periods 2, 3 and 5 only") == {2, 3, 5}
+    assert P._periods_named("in period 6 or 7") == {6, 7}
+
+
+def test_only_periods_with_the_periods_left_out_bans_the_others():
+    """Seen live: "Bhagya's Grade 12 Biology classes only in periods 6 and 7"
+    came back as "at most 0 of them in the week" - a ban on every one."""
+    wrong = _parsed({"form": "count", "scope": ["class_group"],
+                     "selector": {"teachers": ["Bhagya"], "subjects": ["Biology"], "class_groups": ["Grade 12"]},
+                     "relation": "<=", "value": 0})
+    nine = [(d, o, None, False) for d in range(5) for o in range(1, 10)]
+    fixed = P._sanity(wrong, "Bhagya's Grade 12 Biology classes only in periods 6 and 7", nine)
+    f = fixed.rule.form
+    assert f.selector.period_orders == (1, 2, 3, 4, 5, 8, 9) and f.value == 0
+    assert "period" in fixed.sentence
+
+
+def test_a_ban_on_every_lesson_when_periods_are_named_is_asked_about():
+    wrong = _parsed({"form": "count", "scope": [],
+                     "selector": {"subjects": ["Biology"], "class_groups": ["Grade 12"]},
+                     "relation": "==", "value": 0})
+    asked = P._sanity(wrong, "Grade 12 Biology in periods 5 and 6", WEEK)
+    assert asked.rule is None and asked.unclear is not None

@@ -1320,6 +1320,9 @@ def _periods_named(text: str) -> set[int]:
         out |= set(range(1, n + 1))
     for a, b in re.findall(r"(?:periods?|p)\s*(\d+)\s*(?:to|-|–|till|through)\s*(?:p(?:eriod)?\s*)?(\d+)", low):
         out |= set(range(int(a), int(b) + 1))
+    # "periods 6 and 7", "periods 2, 3 and 5", "period 6 or 7"
+    for listed in re.findall(r"\bperiods?\s+((?:\d{1,2}\s*(?:,|and|&|or)\s*)+\d{1,2})\b", low):
+        out |= {int(n) for n in re.findall(r"\d{1,2}", listed)}
     if not out:
         for n in re.findall(r"\b(\d)(?:st|nd|rd|th)\b(?=[^.]*\bperiod)", low):
             out.add(int(n))
@@ -1381,6 +1384,28 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
     form = rule.form
     if isinstance(form, Count):
         sel = form.selector
+
+        # 3a. "only in periods 6 and 7" read as a ban with the periods left
+        #    out altogether - a ban on every lesson of that teacher or subject.
+        #    "Only" names the allowed periods, so the ban is on the others.
+        is_ban = form.relation in ("==", "<=") and form.value == 0
+        if is_ban and not sel.period_orders and not sel.period_positions and numbers:
+            named = _periods_named(text)
+            if named and named < set(numbers):
+                if _ONLY_WORDS.search(text) and not _AWAY_WORDS.search(text):
+                    others = tuple(n for n in numbers if n not in named)
+                    form = _replace(form, selector=_replace(sel, period_orders=others))
+                    rule = _replace(rule, form=form)
+                    sel = form.selector
+                    changed = True
+                elif not sel.days:
+                    # Periods named but none kept: as read it bans them everywhere.
+                    return IRParse(usage=result.usage, unclear=Unclear(
+                        reason="ambiguous",
+                        explanation="As read, this would rule out every one of those lessons, though the "
+                                    "sentence names particular periods.",
+                        question="Which periods should they be allowed in, or kept out of?",
+                    ))
 
         # 3. "only in periods 1 to 3" read as "at least one in periods 1 to 3",
         #    or as a ban on 1 to 3: it bans every other period.
