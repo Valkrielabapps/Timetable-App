@@ -113,16 +113,24 @@ def grade_off_period_ids(periods, limits) -> dict[str, set[int]]:
 
 def fixed_period_slots(periods, rules) -> list[tuple[int, set[str], set[int]]]:
     """School.fixed_periods as (subject id, grades, lesson slot ids): the
-    period-number-th lesson of each chosen day."""
+    period-number-th lesson of each chosen day.
+
+    One entry per subject and grade, holding every slot fixed for it. Two
+    rules for one subject and grade - Electives in period 1 and period 2 on
+    Friday, a double - mean both slots; read one rule at a time, "Electives
+    only in period 1" and "only in period 2" left it nowhere at all, and the
+    timetable couldn't be made."""
     numbers = lesson_numbers(periods)
-    out = []
+    merged: dict[tuple[int, str], set[int]] = {}
     for rule in rules or []:
         days = set(rule.get("days") or []) or None
         slots = {p.id for p in periods if numbers.get(p.id) == rule.get("period")
                  and (days is None or p.day_of_week in days)}
-        if slots:
-            out.append((rule.get("subject_id"), set(rule.get("grades") or []), slots))
-    return out
+        if not slots:
+            continue
+        for grade in rule.get("grades") or []:
+            merged.setdefault((rule.get("subject_id"), grade), set()).update(slots)
+    return [(subject_id, {grade}, slots) for (subject_id, grade), slots in merged.items()]
 
 
 def describe_periods(db: Session, school_id: int, periods=None) -> list[dict]:

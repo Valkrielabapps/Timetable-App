@@ -71,3 +71,46 @@ def test_the_setup_check_says_when_the_periods_dont_match(db):  # noqa: F811
     db.commit()
     hit = [i for i in check_setup(db, school.id)["errors"] if i["kind"] == "fixed_period_count"]
     assert hit and "fixed to 3 periods a week" in hit[0]["message"]
+
+
+def test_a_subject_fixed_at_two_periods_goes_in_both(db):  # noqa: F811
+    """Electives as a double on Friday: one rule for period 1, one for period 2,
+    for the same grades. Both slots are the subject's - not neither."""
+    school = _school(db, days=3, per_day=4)
+    electives = _subject(db, school, "ELECTIVES")
+    eng = _subject(db, school, "English")
+    _teacher(db, school, "Persis", [electives.id])
+    _teacher(db, school, "Rao", [eng.id])
+    _teacher(db, school, "Iyer", [electives.id, eng.id])
+    six = _class_group(db, school, grade="Grade 6", name="A")
+    eight = _class_group(db, school, grade="Grade 8", name="A")
+    for cg in (six, eight):
+        _require(db, cg, electives, 2)
+        _require(db, cg, eng, 10)
+    row = db.get(School, school.id)
+    row.fixed_periods = [
+        {"subject_id": electives.id, "grades": ["Grade 6"], "period": 1, "days": [2]},
+        {"subject_id": electives.id, "grades": ["Grade 6"], "period": 2, "days": [2]},
+        {"subject_id": electives.id, "grades": ["Grade 8"], "period": 3, "days": [2]},
+        {"subject_id": electives.id, "grades": ["Grade 8"], "period": 4, "days": [2]},
+    ]
+    db.commit()
+
+    from app.services.setup_check import check_setup
+    assert not [i for i in check_setup(db, school.id)["errors"] if i["kind"] == "fixed_period_count"]
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    periods = db.query(Period).filter(Period.school_id == school.id).all()
+    numbers = lesson_numbers(periods)
+    day = {p.id: p.day_of_week for p in periods}
+
+    def slots(cg, subject_id):
+        return {(day[a["period_id"]], numbers[a["period_id"]]) for a in result.assignments
+                if a["class_group_id"] == cg.id and a["subject_id"] == subject_id}
+
+    assert slots(six, electives.id) == {(2, 1), (2, 2)}
+    assert slots(eight, electives.id) == {(2, 3), (2, 4)}
+    # Nothing else goes in a grade's fixed slots.
+    assert not slots(six, eng.id) & {(2, 1), (2, 2)}
+    assert not slots(eight, eng.id) & {(2, 3), (2, 4)}
