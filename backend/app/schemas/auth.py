@@ -1,4 +1,30 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+def _lowercase(email: str) -> str:
+    return email.strip().lower()
+
+
+def _plain_new_email(email: str) -> str:
+    """An address someone is giving us for a new account or invite.
+
+    Lowercased, so Allen@school.in and allen@school.in are one account, as
+    every mail server treats them. And plain ASCII only: an address may
+    legally use other scripts, which lets two look-alike addresses (a Cyrillic 'а' for a Latin 'a') name two accounts - nothing a
+    school's staff address needs."""
+    email = _lowercase(email)
+    if not email.isascii():
+        raise ValueError("Use an email address made of plain letters (a-z), numbers and . _ - + only.")
+    return email
+
+
+# Every email that reaches the API, lowercased: stored and compared in one form.
+# Signing in or resetting only lowercases - an older account keeps working
+# whatever its address looks like.
+Email = Annotated[EmailStr, AfterValidator(_lowercase)]
+# Signing up, or inviting someone: lowercased and plain ASCII.
+NewEmail = Annotated[EmailStr, AfterValidator(_plain_new_email)]
 
 MIN_PASSWORD_LENGTH = 8
 # bcrypt only reads the first 72 bytes; anything past that would be silently
@@ -18,7 +44,7 @@ def check_new_password(password: str) -> str:
 
 
 class SignupRequest(BaseModel):
-    email: EmailStr
+    email: NewEmail
     password: str
     name: str | None = Field(default=None, max_length=100)
 
@@ -26,7 +52,7 @@ class SignupRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str
 
 
@@ -59,7 +85,7 @@ class TokenResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+    email: Email
 
 
 class ResetPasswordRequest(BaseModel):

@@ -1,7 +1,9 @@
 """Pydantic schemas for school membership and invites - see
 app/models/school.py (SchoolMembership, SchoolInvite) and
 app/routers/schools.py / app/routers/invites.py."""
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.auth import NewEmail
 
 
 class MemberOut(BaseModel):
@@ -20,7 +22,7 @@ class MemberRoleUpdate(BaseModel):
 
 
 class InviteCreate(BaseModel):
-    email: EmailStr
+    email: NewEmail
     role: str = "viewer"  # "admin" | "viewer"
 
 

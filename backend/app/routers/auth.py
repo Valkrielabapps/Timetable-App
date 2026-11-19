@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core.rate_limit import LOGIN_ATTEMPTS_PER_HOUR, SIGNUPS_PER_HOUR_SITE, check_quota, client_ip, limiter
 from app.core.auth import (
-    create_access_token, get_current_user, hash_password, hash_token, sign_out_everywhere, verify_password,
+    create_access_token, get_current_user, hash_password, hash_token, sign_out_everywhere, user_by_email,
+    verify_password,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -49,7 +50,7 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
     # this holds whatever IPs the requests claim, so nobody can open accounts
     # by the thousand. Far above the few real schools signing up in an hour.
     check_quota("signup:site", limit=SIGNUPS_PER_HOUR_SITE, window_seconds=3600)
-    existing = db.query(User).filter(User.email == payload.email).first()
+    existing = user_by_email(db, payload.email)
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
@@ -72,7 +73,7 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
     # Keyed on the email as well as the IP: rotating IPs is the whole point
     # of credential stuffing, and an IP limit alone does nothing against it.
     check_quota(f"login:{payload.email.lower()}", limit=LOGIN_ATTEMPTS_PER_HOUR, window_seconds=3600)
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = user_by_email(db, payload.email)
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
@@ -106,7 +107,7 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
         logger.warning("Google sign-in token verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid Google sign-in token")
 
-    email = claims.get("email")
+    email = (claims.get("email") or "").strip().lower()
     if not email or not claims.get("email_verified"):
         raise HTTPException(status_code=401, detail="Google account has no verified email")
     google_sub = claims["sub"]
@@ -118,7 +119,7 @@ def google_login(request: Request, payload: GoogleLoginRequest, db: Session = De
     # duplicate account with the same email).
     user = db.query(User).filter(User.google_sub == google_sub).first()
     if not user:
-        user = db.query(User).filter(User.email == email).first()
+        user = user_by_email(db, email)
         if user:
             if not user.email_verified and user.hashed_password:
                 # Someone signed up with this address and a password but never
@@ -219,7 +220,7 @@ def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Sessio
     # sending reputation.
     check_quota(f"forgot:{payload.email.lower()}", limit=3, window_seconds=3600)
 
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = user_by_email(db, payload.email)
     if user:
         raw = secrets.token_urlsafe(32)
         db.add(PasswordResetToken(

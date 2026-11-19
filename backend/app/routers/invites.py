@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.rate_limit import LOGIN_ATTEMPTS_PER_HOUR, check_quota, limiter
-from app.core.auth import create_access_token, hash_password, verify_password
+from app.core.auth import create_access_token, hash_password, user_by_email, verify_password
 from app.schemas.auth import check_new_password
 from app.core.database import get_db
 from app.models.school import School, SchoolInvite, SchoolMembership
@@ -61,7 +61,7 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
     if not invite:
         raise HTTPException(status_code=404, detail="This invite is invalid or has already been used.")
 
-    existing = db.query(User).filter(User.email == invite.email).first()
+    existing = user_by_email(db, invite.email)
     if existing:
         # The same allowance as signing in to this account: the 20/hour above
         # is per IP, which anyone calling the server directly can make up (see
@@ -81,7 +81,7 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
             check_new_password(payload.password)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from None
-        user = User(email=invite.email, hashed_password=hash_password(payload.password), name=payload.name)
+        user = User(email=invite.email.strip().lower(), hashed_password=hash_password(payload.password), name=payload.name)
         db.add(user)
         db.commit()
         db.refresh(user)

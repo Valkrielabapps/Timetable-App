@@ -18,6 +18,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.access import get_membership_role, require_school_access
@@ -472,7 +473,7 @@ def create_invite(
     plans.require_member_capacity(db, db.get(School, school_id))
     existing_pending = (
         db.query(SchoolInvite)
-        .filter(SchoolInvite.school_id == school_id, SchoolInvite.email == payload.email, SchoolInvite.status == "pending")
+        .filter(SchoolInvite.school_id == school_id, func.lower(SchoolInvite.email) == payload.email, SchoolInvite.status == "pending")
         .first()
     )
     if existing_pending:

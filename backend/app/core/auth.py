@@ -13,6 +13,7 @@ from fastapi.security import OAuth2PasswordBearer
 import jwt
 from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -38,6 +39,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def hash_token(token: str) -> str:
     """How one-time link tokens (password reset) are stored."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def user_by_email(db: Session, email: str) -> User | None:
+    """The account for an address, whatever its capitals.
+
+    New addresses are stored lowercased (app/schemas/auth.py), but accounts
+    made before that keep the capitals they were typed with, so the stored
+    side is lowercased in the comparison too."""
+    return db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
 
 
 def create_access_token(user: User) -> str:
