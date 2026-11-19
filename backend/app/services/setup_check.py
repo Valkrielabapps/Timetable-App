@@ -112,8 +112,8 @@ def fixed_period_clashes(db: Session, school_id: int) -> list[str]:
             if cg.grade not in grades or cg.frozen:
                 continue
             req = next((r for r in cg.requirements if r.subject_id == subject_id and r.periods_per_week), None)
-            if req is None:
-                continue
+            if req is None or req.periods_per_week < len(slots):
+                continue  # fewer lessons than slots: which slots it skips isn't known yet
             cands = _solver._candidate_teacher_ids(req, teachers, t_by_id, cg_by_id)
             if not cands:
                 continue  # "No teacher yet": takes nobody's time
@@ -270,7 +270,8 @@ def _check(db: Session, school_id: int, school: School | None) -> list[dict]:
                     f"{_label(cg)} has {have} periods a week of {sname(subject_id)}, but it's fixed to "
                     f"{len(free)} {'period' if len(free) == 1 else 'periods'} a week. "
                     + ("Make them the same, or the timetable can't be made." if have > len(free)
-                       else "The rest of those periods will be left empty."),
+                       else "Its other subjects can use the spare "
+                            + ("one." if len(free) - have == 1 else "ones.")),
                     _section_fix(cg),
                 ))
 

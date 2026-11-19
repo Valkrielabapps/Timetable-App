@@ -167,3 +167,36 @@ def test_fixed_lessons_with_too_few_teachers_are_named(db):  # noqa: F811
     (message,) = fixed_period_clashes(db, school.id)
     assert message.startswith("Mon period 1: 2 fixed lessons")
     assert "only 1 teacher who can take them is free then: Persis" in message
+
+
+def test_a_section_with_fewer_fixed_lessons_uses_the_spare_slot(db):  # noqa: F811
+    """Grade 6 has C.T in period 2 every day; 6 A only on two of the three days.
+    Its week is otherwise full, so the spare period 2 has to take another lesson."""
+    school = _school(db, days=3, per_day=2)
+    ct = _subject(db, school, "C.T")
+    eng = _subject(db, school, "English")
+    _teacher(db, school, "Mary", [ct.id])
+    _teacher(db, school, "Ragu", [eng.id])
+    _teacher(db, school, "Kani", [ct.id, eng.id])
+    a = _class_group(db, school, grade="Grade 6", name="A")
+    b = _class_group(db, school, grade="Grade 6", name="B")
+    _require(db, a, ct, 2)
+    _require(db, a, eng, 4)  # 6 lessons, 6 periods: no slot to spare
+    _require(db, b, ct, 3)
+    _require(db, b, eng, 3)
+    row = db.get(School, school.id)
+    row.fixed_periods = [{"subject_id": ct.id, "grades": ["Grade 6"], "period": 2, "days": None}]
+    db.commit()
+
+    from app.services.setup_check import check_setup
+    warning = [i for i in check_setup(db, school.id)["warnings"] if i["kind"] == "fixed_period_count"]
+    assert warning and "can use the spare one" in warning[0]["message"]
+
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors
+    numbers = lesson_numbers(db.query(Period).filter(Period.school_id == school.id).all())
+    a_ct = [numbers[x["period_id"]] for x in result.assignments if x["class_group_id"] == a.id and x["subject_id"] == ct.id]
+    b_eng = [numbers[x["period_id"]] for x in result.assignments if x["class_group_id"] == b.id and x["subject_id"] == eng.id]
+    assert sorted(a_ct) == [2, 2]          # C.T still only in period 2
+    assert 2 not in b_eng                  # 6 B's period 2 is all C.T
+    assert sum(1 for x in result.assignments if x["class_group_id"] == a.id) == 6

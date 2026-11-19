@@ -55,8 +55,10 @@ class School(Base):
     # school has an ordinary lesson then. A list of
     #   {"subject_id": 12, "grades": ["Grade 1", ...], "period": 8, "days": [0, 1, 2, 3, 4] | null}
     # "period" is the lesson number (breaks not counted); days null = every
-    # school day. The subject's lessons for those grades go only there, nothing
-    # else does, and they're ordinary lessons: taught by whoever the plan says
+    # school day. The subject's lessons for those grades go only there, and
+    # nothing else does - except in a section with fewer periods of it than
+    # there are slots, whose other lessons may use the spare ones. They're
+    # ordinary lessons: taught by whoever the plan says
     # (the class teacher) and counted in that teacher's week. Null = none.
     fixed_periods = Column(JSON, nullable=True)
     # The timetable version the school works from: what the Timetable tab

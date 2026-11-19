@@ -1267,6 +1267,16 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         fixed_rules = [(sid, grades, slots) for sid, grades, slots in fixed_rules
                        if not any(f"fixed:{sid}:{g}" in _RELAX.get() for g in grades)]
 
+    # How many periods of a fixed subject each section has. One with as many
+    # as the subject's fixed slots fills them all; one with fewer (6 A has
+    # its class teacher period four days a week, the rest of Grade 6 five)
+    # leaves some spare, and its other lessons may use them - left empty,
+    # a section whose week was otherwise full had nowhere to put its last one.
+    fixed_count: dict[tuple[int, int], int] = {}
+    for r in requirements:
+        fixed_count[(r.class_group_id, r.subject_id)] = (
+            fixed_count.get((r.class_group_id, r.subject_id), 0) + (r.periods_per_week or 0))
+
     req_restricted_periods: dict[int, set[int]] = {}
     req_required_periods: dict[int, set[int] | None] = {}
     # Soft placement preferences, as period_id -> accumulated penalty weight.
@@ -1322,8 +1332,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 continue
             if req.subject_id == subject_id:
                 required = slots if required is None else (required & slots)
-            else:
-                restricted |= slots
+            elif fixed_count.get((req.class_group_id, subject_id), 0) >= len(slots):
+                restricted |= slots  # the fixed subject fills them all
 
         if required is not None:
             required -= restricted  # a ban always wins over a same-subject requirement
