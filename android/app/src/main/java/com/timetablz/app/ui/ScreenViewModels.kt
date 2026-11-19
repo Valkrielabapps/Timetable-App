@@ -30,8 +30,8 @@ import kotlinx.coroutines.launch
 /** Which day and which section or teacher a timetable page shows. One per page, kept across rotation. */
 class TimetableViewModel : ViewModel() {
     val day = MutableStateFlow<Int?>(null)
-    val sectionId = MutableStateFlow<Int?>(null)
-    val teacherId = MutableStateFlow<Int?>(null)
+    /** My timetable: the whole week in one frame instead of one day. */
+    val week = MutableStateFlow(false)
 }
 
 // ---------------------------------------------------------- make substitutions
