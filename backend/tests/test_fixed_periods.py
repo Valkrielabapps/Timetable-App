@@ -114,3 +114,56 @@ def test_a_subject_fixed_at_two_periods_goes_in_both(db):  # noqa: F811
     # Nothing else goes in a grade's fixed slots.
     assert not slots(six, eng.id) & {(2, 1), (2, 2)}
     assert not slots(eight, eng.id) & {(2, 3), (2, 4)}
+
+
+def test_fixed_lessons_with_too_few_teachers_are_named(db):  # noqa: F811
+    """Three sections have H.W at once and only two teachers can take it; and
+    Persis is pinned to C.T in one grade and H.W in another at the same time."""
+    from app.models.school import SubjectRequirement
+    from app.services.setup_check import check_setup, fixed_period_clashes
+    from app.services.solver import find_blocking_rules
+
+    school = _school(db, days=2, per_day=3)
+    hw = _subject(db, school, "H.W")
+    ct = _subject(db, school, "C.T")
+    eng = _subject(db, school, "English")
+    _teacher(db, school, "Asha", [hw.id])
+    _teacher(db, school, "Bina", [hw.id])
+    persis = _teacher(db, school, "Persis", [ct.id, eng.id])
+    for name in "ABC":
+        _teacher(db, school, f"Eng {name}", [eng.id])
+    ones = [_class_group(db, school, grade="Grade 1", name=n) for n in "ABC"]
+    for cg in ones:
+        _require(db, cg, hw, 2)
+        _require(db, cg, eng, 4)
+    row = db.get(School, school.id)
+    row.fixed_periods = [{"subject_id": hw.id, "grades": ["Grade 1"], "period": 3, "days": None}]
+    db.commit()
+
+    (message,) = fixed_period_clashes(db, school.id)
+    assert message.startswith("Mon period 3, Tue period 3: 3 fixed lessons need a teacher at the same moment")
+    assert "only 2 teachers who can take them are free then: Asha, Bina" in message
+    assert "H.W in Grade 1 A; H.W in Grade 1 B; H.W in Grade 1 C" in message
+    assert [i["kind"] for i in check_setup(db, school.id)["errors"]] == ["fixed_period_staffing"]
+    # And the impossible-timetable message names them too.
+    lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
+    assert "more sections have a fixed lesson than there are teachers" in lines[0]
+    assert lines[1] == message
+
+    # A third H.W teacher fixes the shortage...
+    _teacher(db, school, "Chitra", [hw.id])
+    assert fixed_period_clashes(db, school.id) == []
+    # ...but the same teacher pinned to two fixed lessons at once is caught.
+    six = _class_group(db, school, grade="Grade 6", name="A")
+    db.add(SubjectRequirement(class_group_id=six.id, subject_id=ct.id, periods_per_week=2,
+                              preferred_teacher_id=persis.id))
+    db.add(SubjectRequirement(class_group_id=ones[0].id, subject_id=ct.id, periods_per_week=1,
+                              preferred_teacher_id=persis.id))
+    row.fixed_periods = row.fixed_periods + [
+        {"subject_id": ct.id, "grades": ["Grade 6"], "period": 1, "days": None},
+        {"subject_id": ct.id, "grades": ["Grade 1"], "period": 1, "days": [0]},
+    ]
+    db.commit()
+    (message,) = fixed_period_clashes(db, school.id)
+    assert message.startswith("Mon period 1: 2 fixed lessons")
+    assert "only 1 teacher who can take them is free then: Persis" in message

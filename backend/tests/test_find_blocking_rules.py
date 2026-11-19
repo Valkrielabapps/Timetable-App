@@ -190,7 +190,9 @@ def test_names_the_fixed_period_that_makes_it_impossible(db):  # noqa: F811
 
     message, *lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
     assert "fixed periods" in message
-    assert lines == ["ELECTIVES for Grade 6 - Mon period 1"]
+    (line,) = lines
+    assert line.startswith("Mon period 1: 2 fixed lessons need a teacher at the same moment")
+    assert "free then: Persis" in line and "ELECTIVES in Grade 6 A; ELECTIVES in Grade 6 B" in line
 
 
 def test_names_the_teacher_whose_unavailable_periods_make_it_impossible(db):  # noqa: F811
@@ -211,3 +213,24 @@ def test_names_the_teacher_whose_unavailable_periods_make_it_impossible(db):  # 
     message, *lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
     assert "unavailable periods" in message
     assert lines == ["Anil: unavailable for 1 period a week"]
+
+
+def test_narrows_fixed_periods_that_only_clash_together(db):  # noqa: F811
+    """Three subjects fixed at period 1 for one section: taking any one away
+    still leaves two clashing, so no single one is to blame. The message
+    narrows it to a pair that can't hold together, and doesn't blame the
+    harmless fourth."""
+    from app.models.school import School
+
+    school = _school(db, days=1, per_day=4)
+    subs = [_subject(db, school, n) for n in ("Art", "Music", "Dance", "Games")]
+    cg = _class_group(db, school, grade="Grade 6", name="A")
+    for s_ in subs:
+        _require(db, cg, s_, 1)
+    db.get(School, school.id).fixed_periods = [
+        {"subject_id": s_.id, "grades": ["Grade 6"], "period": 1, "days": None} for s_ in subs[:3]
+    ] + [{"subject_id": subs[3].id, "grades": ["Grade 6"], "period": 4, "days": None}]
+    db.commit()
+    message, *lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
+    assert "can't all hold together" in message
+    assert len(lines) == 2 and not any("Games" in x for x in lines), lines

@@ -78,6 +78,104 @@ def _matching(options: list[tuple]) -> bool:
     return all(place(i, set()) for i in range(len(options)))
 
 
+_DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def fixed_period_clashes(db: Session, school_id: int) -> list[str]:
+    """Fixed periods (School.fixed_periods) that can't be staffed: at a fixed
+    slot every section of those grades has the subject at once, so each needs
+    a different teacher free then. Where there are more such lessons than
+    teachers who could take them - the same class teacher pinned in two
+    sections, or ten sections of H.W at once with six H.W teachers - no
+    timetable exists, and this names the lessons and the teachers short.
+
+    Lessons nobody can teach yet book no one and are left out. A section
+    keeps one teacher per subject all week, so this is a floor: passing it
+    doesn't promise the slots can be staffed, failing it proves they can't."""
+    from app.services.timetable_structure import fixed_period_slots, lesson_numbers
+
+    school = db.get(School, school_id)
+    if not school or not school.fixed_periods:
+        return []
+    lessons = [p for p in db.query(Period).filter(Period.school_id == school_id).all() if not p.is_break]
+    period_by_id = {p.id: p for p in lessons}
+    numbers = lesson_numbers(lessons)
+    class_groups = db.query(ClassGroup).filter(ClassGroup.school_id == school_id).all()
+    cg_by_id = {cg.id: cg for cg in class_groups}
+    teachers = db.query(Teacher).filter(Teacher.school_id == school_id).all()
+    t_by_id = {t.id: t for t in teachers}
+    subjects = {x.id: x.name for x in db.query(Subject).filter(Subject.school_id == school_id).all()}
+
+    by_slot: dict[int, list[tuple[str, list[int]]]] = {}
+    for subject_id, grades, slots in fixed_period_slots(lessons, school.fixed_periods):
+        for cg in sorted(class_groups, key=_label):
+            if cg.grade not in grades or cg.frozen:
+                continue
+            req = next((r for r in cg.requirements if r.subject_id == subject_id and r.periods_per_week), None)
+            if req is None:
+                continue
+            cands = _solver._candidate_teacher_ids(req, teachers, t_by_id, cg_by_id)
+            if not cands:
+                continue  # "No teacher yet": takes nobody's time
+            what = f"{subjects.get(subject_id, 'A subject')} in {_label(cg)}"
+            for pid in slots:
+                free = [t for t in cands if pid not in set(t_by_id[t].unavailable_period_ids or [])]
+                by_slot.setdefault(pid, []).append((what, free))
+
+    # Per slot, the most lessons that can each have their own teacher. Where
+    # one is left over, the lessons and teachers reachable from it by
+    # alternating paths are the ones too many for too few (Hall's condition).
+    found: dict[tuple, list[int]] = {}
+    for pid, demands in by_slot.items():
+        owner: dict[int, int] = {}
+
+        def place(i: int, seen: set[int]) -> bool:
+            for t in demands[i][1]:
+                if t in seen:
+                    continue
+                seen.add(t)
+                if t not in owner or place(owner[t], seen):
+                    owner[t] = i
+                    return True
+            return False
+
+        for i in range(len(demands)):
+            if place(i, set()):
+                continue
+            lesson_set, teacher_set, todo = {i}, set(), [i]
+            while todo:
+                for t in demands[todo.pop()][1]:
+                    if t not in teacher_set:
+                        teacher_set.add(t)
+                        j = owner.get(t)
+                        if j is not None and j not in lesson_set:
+                            lesson_set.add(j)
+                            todo.append(j)
+            key = (tuple(sorted(demands[j][0] for j in lesson_set)),
+                   tuple(sorted(t_by_id[t].name for t in teacher_set)))
+            found.setdefault(key, []).append(pid)
+            break  # one shortage per slot is enough to name
+
+    out = []
+    for (what, who), pids in found.items():
+        when = ", ".join(
+            f"{_DAY_SHORT[period_by_id[p].day_of_week]} period {numbers.get(p)}"
+            for p in sorted(pids, key=lambda p: (period_by_id[p].day_of_week, numbers.get(p) or 0))
+        )
+        shown = list(what[:12]) + ([f"and {len(what) - 12} more"] if len(what) > 12 else [])
+        if who:
+            teachers_text = (f"only {len(who)} {'teacher' if len(who) == 1 else 'teachers'} who can take "
+                             f"them {'is' if len(who) == 1 else 'are'} free then: {', '.join(who)}")
+        else:
+            teachers_text = "none of the teachers who can take them is free then"
+        out.append(
+            f"{when}: {len(what)} fixed lessons need a teacher at the same moment, but {teachers_text}. "
+            f"The lessons: {'; '.join(shown)}. Pin a different teacher to some of them, qualify more "
+            f"teachers for the subject, or fix them at different periods."
+        )
+    return out
+
+
 def check_setup(db: Session, school_id: int) -> dict:
     school = db.get(School, school_id)
     token = _solver._STANDARD.set(_std.for_school(school))
@@ -175,6 +273,10 @@ def _check(db: Session, school_id: int, school: School | None) -> list[dict]:
                        else "The rest of those periods will be left empty."),
                     _section_fix(cg),
                 ))
+
+    for message in fixed_period_clashes(db, school_id):
+        issues.append(_issue("error", "fixed_period_staffing", message,
+                             {"type": "periods", "id": None, "label": "Open fixed periods"}))
 
     # ------------------------------------------------------------------
     # Who can teach what. Mirrors the solver's own rules for "qualified".

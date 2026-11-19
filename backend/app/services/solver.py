@@ -3589,13 +3589,35 @@ def _diagnose_setup(db, school_id, attempt, all_ids, had_rules) -> list[str]:
             )
             return f"{subjects.get(sid, 'A subject')} for {grade} - {where}"
 
+        from app.services.setup_check import fixed_period_clashes
+        clashes = fixed_period_clashes(db, school_id)
+        if clashes:
+            return [
+                lead + "It works once the fixed periods (Setup) are taken off, so they are the problem: "
+                "at these moments more sections have a fixed lesson than there are teachers to take them.",
+                *clashes,
+            ]
+        # No single one: narrow down to the fixed periods that clash together,
+        # dropping each one that isn't needed for the clash, as far as time allows.
+        needed = list(entries)
+        if not culprits:
+            for e in entries:
+                trial = [x for x in needed if x != e]
+                if not trial:
+                    break
+                r = attempt(all_ids, frozenset(f"fixed:{x[0]}:{x[1]}" for x in entries if x not in trial))
+                if r is None:
+                    break  # out of time: what's left still holds the clash
+                if r.status not in ("optimal", "feasible"):
+                    needed = trial  # still impossible without it: not part of the clash
         return [
             lead + "It works once the fixed periods (Setup) are taken off, so they are the problem. "
             "Every section of those grades has that subject at the same moment: each section needs its "
             "own teacher free then (or none, if nobody teaches it yet), its class plan needs as many "
             "periods of it as there are fixed slots, and nothing else can need those sections then."
-            + (" Removing any one of these fixes it:" if culprits else " It's these together:"),
-            *[describe(e) for e in (culprits or entries)],
+            + (" Removing any one of these fixes it:" if culprits else
+               " These can't all hold together - change any one of them:"),
+            *[describe(e) for e in (culprits or needed)],
         ]
 
     # Teachers' unavailable periods - set on the Teachers page, or by an
