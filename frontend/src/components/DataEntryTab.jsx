@@ -562,6 +562,7 @@ export default function DataEntryTab({
           schoolId={schoolId}
           subjects={subjects}
           onSubjectsChanged={subjectsApi}
+          onTeachersChanged={teachersApi}
           institutionType={institutionType}
           readOnly={readOnly}
           allRequirements={allRequirements}

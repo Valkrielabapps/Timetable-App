@@ -35,8 +35,11 @@ export default function SubjectsSection({
   allRequirements = [],
   teachers = [],
   electiveBlocks = [],
+  // To give the teachers ticked when adding a subject that subject too.
+  onTeachersChanged = null,
 }) {
   const [error, setError] = useState(null)
+  const [addSubjectOpen, setAddSubjectOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [sort, setSortState] = useState(() => loadChoice(SORT_KEY, 'name'))
   const setSort = (value) => {
@@ -153,15 +156,6 @@ export default function SubjectsSection({
     })
   }
 
-  async function handleAddSubject() {
-    try {
-      const created = await onSubjectsChanged.create({ school_id: schoolId, name: 'New subject' })
-      return created
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
   async function handleRemoveSubject(id, name) {
     const ok = await confirmDialog({
       title: `Remove ${name}?`,
@@ -220,13 +214,36 @@ export default function SubjectsSection({
         </div>
         {!readOnly && (
           <button
-            onClick={handleAddSubject}
+            onClick={() => setAddSubjectOpen(true)}
             className="w-fit rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
           >
             + Add subject
           </button>
         )}
       </div>
+
+      <AnimatePresence>
+        {addSubjectOpen && (
+          <AddSubjectModal
+            subjects={subjects}
+            teachers={teachers}
+            onClose={() => setAddSubjectOpen(false)}
+            onAdd={async ({ name, requiredRoomType, teacherIds }) => {
+              const created = await onSubjectsChanged.create({
+                school_id: schoolId, name, required_room_type: requiredRoomType || null,
+              })
+              if (created && onTeachersChanged) {
+                for (const t of teachers.filter((x) => teacherIds.includes(x.id))) {
+                  await onTeachersChanged.update(t.id, {
+                    qualified_subject_ids: [...new Set([...(t.qualified_subject_ids || []), created.id])],
+                  })
+                }
+              }
+              setAddSubjectOpen(false)
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       {!readOnly && (
         <div className="rounded-lg border border-neutral-200 bg-neutral-100/40 p-4">
@@ -451,5 +468,131 @@ export default function SubjectsSection({
         </tbody>
       </table>
     </div>
+  )
+}
+
+
+/**
+ * "+ Add subject": a name, who teaches it and the room it needs, in one box -
+ * the same shape as Add teacher, so the two pages work alike.
+ */
+function AddSubjectModal({ subjects, teachers, onClose, onAdd }) {
+  const [name, setName] = useState('')
+  const [teacherIds, setTeacherIds] = useState([])
+  const [requiredRoomType, setRequiredRoomType] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+  const taken = subjects.some((x) => x.name.trim().toLowerCase() === name.trim().toLowerCase())
+
+  function toggleTeacher(id) {
+    setTeacherIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!name.trim() || taken || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await onAdd({ name: name.trim(), requiredRoomType: requiredRoomType.trim(), teacherIds })
+    } catch (err) {
+      setError(err.message)
+      setSubmitting(false)
+    }
+  }
+
+  const shownTeachers = [...teachers].sort((a, b) => compareNames(a.name, b.name))
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97, y: 6 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.97, y: 6 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+        role="dialog"
+        aria-label="Add subject"
+      >
+        <h3 className="text-base font-semibold">Add subject</h3>
+        <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="new-subject-name" className="text-xs font-medium text-slate-500">
+              Name
+            </label>
+            <input
+              id="new-subject-name"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Subject name"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+            {taken && <p className="text-xs text-amber-700">There's already a subject called that.</p>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-500">
+              Teachers who teach it (optional; a subject can have more than one)
+            </span>
+            {shownTeachers.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                No teachers yet. Add this subject now and tick it for teachers when you add them.
+              </p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto rounded-md border border-slate-200 p-2">
+                {shownTeachers.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-slate-50"
+                  >
+                    <input type="checkbox" checked={teacherIds.includes(t.id)} onChange={() => toggleTeacher(t.id)} />
+                    {t.name}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="new-subject-room" className="text-xs font-medium text-slate-500">
+              Room it needs (optional, e.g. lab)
+            </label>
+            <input
+              id="new-subject-room"
+              value={requiredRoomType}
+              onChange={(e) => setRequiredRoomType(e.target.value)}
+              placeholder="Leave empty for any classroom"
+              title="If set, this subject can only be given a room whose type matches exactly"
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none"
+            />
+          </div>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="mt-1 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={!name.trim() || taken || submitting}
+              className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            >
+              {submitting ? 'Adding…' : 'Add subject'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
   )
 }
