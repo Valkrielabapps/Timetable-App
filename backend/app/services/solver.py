@@ -122,7 +122,21 @@ _TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", defau
 # Parts of the school's setup to relax for a diagnostic re-solve:
 #   "one_teacher"  - let a section's subject be split between teachers
 #   "max_periods"  - ignore teachers' max periods/week
+#   "day_max"      - ignore the school's teacher periods/day limit
+#   "availability" - ignore every teacher's unavailable periods;
+#                    "availability:<teacher id>" just that teacher's
+#   "fixed_periods" - ignore School.fixed_periods;
+#                    "fixed:<subject id>:<grade>" just that subject for that grade
 _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozenset())
+
+
+def _unavailable(teacher) -> set[int]:
+    """A teacher's unavailable periods, unless a diagnostic re-solve is
+    seeing whether they are what makes the school impossible."""
+    relax = _RELAX.get()
+    if "availability" in relax or f"availability:{teacher.id}" in relax:
+        return set()
+    return set(teacher.unavailable_period_ids or [])
 # Rules (Constraint ids) treated as strong preferences instead of
 # requirements, for a timetable made with compromises: kept wherever
 # possible, broken only where they can't all hold. See generate_with_compromises.
@@ -1247,6 +1261,11 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
     from app.services.timetable_structure import fixed_period_slots
     grade_of_cg = {cg.id: cg.grade for cg in class_groups}
     fixed_rules = fixed_period_slots(periods, school_row.fixed_periods if school_row else None)
+    if "fixed_periods" in _RELAX.get():
+        fixed_rules = []
+    else:
+        fixed_rules = [(sid, grades, slots) for sid, grades, slots in fixed_rules
+                       if not any(f"fixed:{sid}:{g}" in _RELAX.get() for g in grades)]
 
     req_restricted_periods: dict[int, set[int]] = {}
     req_required_periods: dict[int, set[int] | None] = {}
@@ -1450,10 +1469,10 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             # teacher_total_vars entries below.
             assistant_id = req.assistant_teacher_id
             assistant = teachers_by_id.get(assistant_id) if assistant_id else None
-            assistant_unavailable = set(assistant.unavailable_period_ids or []) if assistant else set()
+            assistant_unavailable = _unavailable(assistant) if assistant else set()
             for teacher_id in candidate_ids:
                 teacher = teachers_by_id[teacher_id]
-                unavailable = set(teacher.unavailable_period_ids or [])
+                unavailable = _unavailable(teacher)
                 for period in periods:
                     if period.id in unavailable:
                         continue
@@ -1514,7 +1533,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
                 continue
             free_teacher_ids = [
                 t_id for t_id in candidate_ids
-                if period.id not in set(teachers_by_id[t_id].unavailable_period_ids or [])
+                if period.id not in _unavailable(teachers_by_id[t_id])
             ]
             if len(free_teacher_ids) < batch_count:
                 continue  # not enough free teachers to staff every batch at this period
@@ -1657,7 +1676,7 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             for o in staffed_opts:
                 f = [
                     t for t in candidates[o.id]
-                    if period.id not in set(teachers_by_id[t].unavailable_period_ids or [])
+                    if period.id not in _unavailable(teachers_by_id[t])
                 ]
                 locked_teacher = locked_here.get(o.option_id, (None, None))[0]
                 if locked_teacher is not None and locked_teacher not in f:
@@ -3545,6 +3564,53 @@ def _diagnose_setup(db, school_id, attempt, all_ids, had_rules) -> list[str]:
             lead + "It works only if some teachers go over their max periods/week. "
             "Raise these limits, or move some of their sections to another qualified teacher:",
             *(over or ["(the limits are tight across several teachers rather than one)"]),
+        ]
+
+    def works(relax) -> bool:
+        r = attempt(all_ids, frozenset(relax))
+        return r is not None and r.status in ("optimal", "feasible")
+
+    # Fixed periods (School.fixed_periods): every section of those grades has
+    # the subject at that moment, so each needs a teacher free then.
+    school_row = db.get(School, school_id)
+    from app.services.timetable_structure import fixed_period_slots, lesson_numbers
+    fixed = fixed_period_slots(list(periods_by_id.values()), school_row.fixed_periods if school_row else None)
+    if fixed and works({"fixed_periods"}):
+        numbers = lesson_numbers(list(periods_by_id.values()))
+        day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        entries = [(sid, next(iter(grades)), slots) for sid, grades, slots in fixed]
+        culprits = [e for e in entries if works({f"fixed:{e[0]}:{e[1]}"})]
+
+        def describe(entry) -> str:
+            sid, grade, slots = entry
+            where = ", ".join(
+                f"{day_names[periods_by_id[pid].day_of_week]} period {numbers.get(pid)}"
+                for pid in sorted(slots, key=lambda pid: (periods_by_id[pid].day_of_week, numbers.get(pid) or 0))
+            )
+            return f"{subjects.get(sid, 'A subject')} for {grade} - {where}"
+
+        return [
+            lead + "It works once the fixed periods (Setup) are taken off, so they are the problem. "
+            "Every section of those grades has that subject at the same moment: each section needs its "
+            "own teacher free then (or none, if nobody teaches it yet), its class plan needs as many "
+            "periods of it as there are fixed slots, and nothing else can need those sections then."
+            + (" Removing any one of these fixes it:" if culprits else " It's these together:"),
+            *[describe(e) for e in (culprits or entries)],
+        ]
+
+    # Teachers' unavailable periods - set on the Teachers page, or by an
+    # availability rule read before rules were stored as rules.
+    away = [t for t in sorted(teachers.values(), key=lambda t: t.name) if t.unavailable_period_ids]
+    if away and works({"availability"}):
+        culprits = [t for t in away if works({f"availability:{t.id}"})]
+        return [
+            lead + "It works once teachers' unavailable periods are ignored, so those are the problem: "
+            "some teacher isn't free enough to take all their lessons. "
+            + ("Freeing up any one of these teachers fixes it - give them more available periods or "
+               "fewer lessons:" if culprits else
+               "No single teacher is the cause; between them they're too restricted. Their unavailable periods:"),
+            *[f"{t.name}: unavailable for {len(t.unavailable_period_ids)} "
+              f"{'period' if len(t.unavailable_period_ids) == 1 else 'periods'} a week" for t in (culprits or away)],
         ]
 
     return [

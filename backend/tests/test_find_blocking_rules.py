@@ -162,3 +162,52 @@ def test_running_out_of_time_still_says_something(db, monkeypatch):  # noqa: F81
     lead, *rest = find_blocking_rules(db, school.id, budget_seconds=6, per_try_seconds=5)
     assert "There wasn't time to test every rule" in lead
     assert rest  # the rules it didn't get to are listed
+
+
+# ---------------------------------------------------------------------------
+# Fixed periods and teachers' unavailable periods are part of the setup too:
+# switching every rule off leaves them on, so they're checked on their own.
+# ---------------------------------------------------------------------------
+
+def test_names_the_fixed_period_that_makes_it_impossible(db):  # noqa: F811
+    from app.models.school import School
+
+    school = _school(db, days=2, per_day=3)
+    electives = _subject(db, school, "ELECTIVES")
+    eng = _subject(db, school, "English")
+    _teacher(db, school, "Persis", [electives.id])  # the only one who can teach it
+    _teacher(db, school, "Rao", [eng.id])
+    _teacher(db, school, "Iyer", [eng.id])
+    for name in "AB":
+        cg = _class_group(db, school, grade="Grade 6", name=name)
+        _require(db, cg, electives, 1)
+        _require(db, cg, eng, 5)
+    # Both sections at once, with one teacher: impossible. Anywhere else, fine.
+    db.get(School, school.id).fixed_periods = [
+        {"subject_id": electives.id, "grades": ["Grade 6"], "period": 1, "days": [0]}]
+    db.commit()
+    assert generate_school_timetable(db, school.id).status not in ("optimal", "feasible")
+
+    message, *lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
+    assert "fixed periods" in message
+    assert lines == ["ELECTIVES for Grade 6 - Mon period 1"]
+
+
+def test_names_the_teacher_whose_unavailable_periods_make_it_impossible(db):  # noqa: F811
+    from app.models.school import Period
+
+    school = _school(db, days=1, per_day=3)
+    maths = _subject(db, school, "Maths")
+    eng = _subject(db, school, "English")
+    anil = _teacher(db, school, "Anil", [maths.id])  # the only Maths teacher
+    rao = _teacher(db, school, "Rao", [eng.id])
+    _require(db, _class_group(db, school), maths, 3)
+    periods = db.query(Period).filter(Period.school_id == school.id).order_by(Period.order).all()
+    anil.unavailable_period_ids = [periods[2].id]  # 3 Maths lessons, 2 periods he's free
+    rao.unavailable_period_ids = [periods[0].id]   # restricted too, but not the cause
+    db.commit()
+    assert generate_school_timetable(db, school.id).status not in ("optimal", "feasible")
+
+    message, *lines = find_blocking_rules(db, school.id, budget_seconds=60, per_try_seconds=5)
+    assert "unavailable periods" in message
+    assert lines == ["Anil: unavailable for 1 period a week"]
