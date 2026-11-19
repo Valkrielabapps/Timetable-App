@@ -835,6 +835,9 @@ class IRParse:
 
     rule: Rule | None = None
     unclear: Unclear | None = None
+    # True when a deterministic check (_sanity) changed the model's reading:
+    # it was wrong once, so the admin should see what it became before saving.
+    adjusted: bool = False
     # The validator's complaint, verbatim. For a person this needs rewording;
     # for working out why a rule failed it is the only thing that helps.
     invalid: str | None = None
@@ -1204,7 +1207,7 @@ def parse_rule_llm(
 
     result = _read_block(block, text, usage)
     if result.invalid is None:
-        return _sanity(result, text, periods)
+        return _in_school_terms(_sanity(result, text, periods), periods)
 
     # The rule was refused. Most often the model read the sentence right and
     # built it wrong - "a double once a week" sent as "always doubles" plus
@@ -1248,7 +1251,18 @@ def parse_rule_llm(
     second = _read_block(retry_block, text, combined)
     if second.invalid is not None:
         logger.warning("model produced an invalid IR rule twice for %r: %s", text, second.invalid)
-    return _sanity(second, text, periods)
+    return _in_school_terms(_sanity(second, text, periods), periods)
+
+
+def _in_school_terms(result: "IRParse", periods) -> "IRParse":
+    """Say the rule against this school's own week, so a ban on most of the
+    day reads as what it allows - "only in periods 6 and 7"."""
+    if result.rule is None or not periods:
+        return result
+    from dataclasses import replace as _replace
+    numbers, _ = _lesson_layout(periods)
+    days = sorted({p[0] for p in periods})
+    return _replace(result, sentence=render(result.rule, (numbers, days)))
 
 
 def _usage(response) -> tuple[int, int, int, int]:
@@ -1494,7 +1508,7 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
 
     if not changed:
         return result
-    return IRParse(rule=rule, sentence=render(rule), usage=result.usage)
+    return IRParse(rule=rule, sentence=render(rule), usage=result.usage, adjusted=True)
 
 
 _NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "once": 1, "twice": 2, "ek": 1, "do": 2}

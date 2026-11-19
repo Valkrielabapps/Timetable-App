@@ -190,7 +190,7 @@ def _scope_time(scope: tuple[str, ...], sel: Selector) -> str:
 
 def _amount(relation: str, value: int, noun: str) -> str:
     """"no periods", "at most 6 periods", "at least 1 Maths period"."""
-    if relation == "==" and value == 0:
+    if relation in ("==", "<=") and value == 0:
         return f"no {noun}"
     singular = noun.endswith("s") and value == 1
     shown = noun[:-1] if singular else noun
@@ -206,7 +206,70 @@ _EXISTS_NOUN = {"day": "day", "period": "period", "class_group": "class",
                 "teacher": "teacher", "subject": "subject"}
 
 
-def _render_count(form: Count, suppress_time: bool = False) -> str:
+def _render_ban(form: Count, layout: tuple | None) -> str | None:
+    """A rule that some lessons never happen, said the way a school says it.
+
+    "Grade 12 has at most 0 Bhagya's Biology periods in periods 1, 2, 3, 4, 5,
+    8 or 9" is complete and correct, and nobody can check it at a glance. A ban
+    reads as what it allows when it rules out most of the day or week - "only
+    in periods 6 and 7" - and as a plain "no ..." otherwise.
+
+    A ban is the same whatever it is grouped by (none in every class is none
+    at all), so the scope adds nothing here and is left out. `layout` is
+    (lesson numbers, school days); without it there is no "only" reading.
+    Returns None for anything that isn't a plain ban.
+    """
+    sel = form.selector
+    if form.distinct or form.exists_over or form.value != 0 or form.relation not in ("==", "<="):
+        return None
+    numbers, school_days = layout or (None, None)
+
+    only = None
+    if sel.period_orders and numbers and not sel.period_positions and set(sel.period_orders) <= set(numbers):
+        allowed = [n for n in numbers if n not in sel.period_orders]
+        if allowed and len(allowed) < len(sel.period_orders):
+            where = f"period {allowed[0]}" if len(allowed) == 1 else f"periods {_join(allowed, 'and')}"
+            only = f"only in {where}" + (f" on {_days(sel.days)}" if sel.days else "")
+    elif sel.days and school_days and not sel.period_orders and not sel.period_positions \
+            and set(sel.days) <= set(school_days):
+        allowed_days = [d for d in school_days if d not in sel.days]
+        if allowed_days and len(allowed_days) < len(sel.days):
+            only = "only on " + _join([DAY_NAMES[d] for d in allowed_days], "and")
+
+    what = None
+    if sel.subjects:
+        what = _join(sel.subjects, "or")
+    elif sel.not_subjects:
+        what = f"lessons other than {_join(sel.not_subjects, 'or')}"
+    classes = _join(sel.class_groups, "or") if sel.class_groups else None
+    teachers = _join(sel.teachers, "or") if sel.teachers else None
+    when = _when(sel)
+
+    if what:
+        thing = what + (f" for {classes}" if classes else "") + (f" with {teachers}" if teachers else "")
+        if only:
+            return f"{thing} {only}"
+        return f"no {thing} {when}".strip() if when else f"no {thing} at all"
+    if teachers:
+        if only:
+            return f"{teachers} teaches " + (f"{classes} " if classes else "") + only
+        tail = (f" with {classes}" if classes else "") + (f" {when}" if when else " at all")
+        return f"{teachers} has no lessons{tail}"
+    if classes:
+        if only:
+            return f"{classes} has lessons {only}"
+        return f"{classes} has no lessons " + (when or "at all")
+    if only:
+        return f"lessons {only}"
+    return f"no lessons {when}".strip() if when else None
+
+
+def _render_count(form: Count, suppress_time: bool = False, layout: tuple | None = None,
+                  as_ban: bool = True) -> str:
+    if as_ban and not suppress_time:
+        ban = _render_ban(form, layout)
+        if ban:
+            return ban
     sel = form.selector
     subject, used = _scope_subject(form.scope, sel)
     time = "" if suppress_time else _scope_time(form.scope, sel)
@@ -423,7 +486,7 @@ def _render_span(form: Span) -> str:
 
 
 def _render_conditional(form: Conditional) -> str:
-    condition = _render_count(form.when)
+    condition = _render_count(form.when, as_ban=False)
     if isinstance(form.then, Count) and form.then.scope == form.when.scope:
         # "...on any day, ... on any day" - the condition already framed it.
         consequence = _render_count(form.then, suppress_time=True)
@@ -437,9 +500,9 @@ def _drop_empty_scope(sentence: str) -> str:
     return sentence[len("for the school, "):] if sentence.startswith("for the school, ") else sentence
 
 
-def render_form(form: Form) -> str:
+def render_form(form: Form, layout: tuple | None = None) -> str:
     if isinstance(form, Count):
-        return _render_count(form)
+        return _render_count(form, layout=layout)
     if isinstance(form, Run):
         return _render_run(form)
     if isinstance(form, Adjacency):
@@ -466,9 +529,12 @@ _STRENGTH_PREFIX = {
 }
 
 
-def render(rule: Rule) -> str:
-    """The sentence shown to the admin for confirmation."""
-    body = render_form(rule.form)
+def render(rule: Rule, layout: tuple | None = None) -> str:
+    """The sentence shown to the admin for confirmation.
+
+    `layout` - (lesson numbers, school days) - lets a ban on most of the day
+    or week be said as what it allows: "only in periods 6 and 7"."""
+    body = render_form(rule.form, layout)
     prefix = _STRENGTH_PREFIX.get(rule.strength, "")
     sentence = f"{prefix}{body}" if prefix else body
     sentence = sentence.strip()

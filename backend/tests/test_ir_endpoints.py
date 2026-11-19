@@ -70,6 +70,36 @@ def test_interpret_returns_the_sentence_and_saves_nothing(client, school, monkey
     assert listed.json() == []
 
 
+def test_a_plain_reading_is_marked_confident(client, school, monkeypatch):
+    """Every name it uses is in the sentence and nothing corrected it: the page
+    can save it straight away instead of asking "did you mean"."""
+    school_row, headers = school
+    _stub(monkeypatch, _understood(RAO_DAILY_CAP))
+    r = client.post("/api/constraints/interpret",
+                    json={"school_id": school_row["id"], "text": "Mrs. Rao no more than 6 periods a day"},
+                    headers=headers)
+    assert r.json()["confident"] is True
+
+
+def test_a_reading_that_guessed_a_name_is_asked_about(client, school, monkeypatch):
+    school_row, headers = school
+    _stub(monkeypatch, _understood(RAO_DAILY_CAP))
+    r = client.post("/api/constraints/interpret",
+                    json={"school_id": school_row["id"], "text": "the maths lady max 6 a day"},
+                    headers=headers)
+    assert r.json()["confident"] is False
+
+
+def test_a_reading_a_check_corrected_is_asked_about(client, school, monkeypatch):
+    from dataclasses import replace
+    school_row, headers = school
+    _stub(monkeypatch, replace(_understood(RAO_DAILY_CAP), adjusted=True))
+    r = client.post("/api/constraints/interpret",
+                    json={"school_id": school_row["id"], "text": "Mrs. Rao no more than 6 periods a day"},
+                    headers=headers)
+    assert r.json()["confident"] is False
+
+
 def test_interpret_passes_a_decline_straight_through(client, school, monkeypatch):
     """The parser is given a tool to say it cannot read a sentence, and that
     answer is worth more than a guess - so it must survive the trip to the UI

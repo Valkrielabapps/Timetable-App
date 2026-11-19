@@ -127,6 +127,10 @@ class ConstraintInterpretResponse(BaseModel):
     # Names the rule used that this school doesn't have. Non-empty means it
     # cannot be saved as-is, whatever else looks right.
     unknown_names: list[str] = []
+    # Nothing in the reading is a guess - every name it uses is in the
+    # sentence and no check corrected it - so it can be saved straight away,
+    # with the sentence shown afterwards and an undo, rather than asked about.
+    confident: bool = False
     # --- when not understood ---
     reason: str | None = None
     explanation: str | None = None

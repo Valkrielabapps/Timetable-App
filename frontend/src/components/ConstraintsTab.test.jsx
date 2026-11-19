@@ -140,4 +140,31 @@ describe('ConstraintsTab rule entry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     expect(api.interpretConstraint).not.toHaveBeenCalled()
   })
+
+  it('saves a plain reading straight away, with an Undo', async () => {
+    api.interpretConstraint.mockResolvedValue({ ...READING, confident: true, sentence: 'No PE on Friday.' })
+    api.confirmConstraint.mockResolvedValue({ id: 7 })
+    api.deleteConstraint.mockResolvedValue(undefined)
+    const { onReload } = setup()
+    type('no PE on fridays')
+
+    // No "is this what you meant" for a rule that says what was typed.
+    await waitFor(() => expect(api.confirmConstraint).toHaveBeenCalledWith(1, READING.rule, 'no PE on fridays'))
+    expect(screen.queryByRole('button', { name: /that's right/i })).toBeNull()
+    expect(await screen.findByTestId('rule-added')).toHaveTextContent('Added: No PE on Friday.')
+    await waitFor(() => expect(onReload).toHaveBeenCalled())
+
+    // Undo removes it and puts the words back to edit.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(api.deleteConstraint).toHaveBeenCalledWith(7))
+    expect(screen.getByPlaceholderText(/Math can't immediately follow PE/)).toHaveValue('no PE on fridays')
+  })
+
+  it('still asks when the reading guessed something', async () => {
+    api.interpretConstraint.mockResolvedValue({ ...READING, confident: false })
+    setup()
+    type('no PE on fridays')
+    expect(await screen.findByRole('button', { name: /that's right/i })).toBeInTheDocument()
+    expect(api.confirmConstraint).not.toHaveBeenCalled()
+  })
 })

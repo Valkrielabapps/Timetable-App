@@ -165,21 +165,21 @@ def test_r012_teacher_daily_cap():
 def test_r001_whole_day_off():
     assert _english(form="count", scope=[],
                     selector={"teachers": ["Mrs. Rao"], "days": [5]},
-                    relation="==", value=0) == "Mrs. Rao has no periods on Saturday."
+                    relation="==", value=0) == "Mrs. Rao has no lessons on Saturday."
 
 
 def test_r041_a_universal_ban_reads_as_a_ban():
-    """"Every class has no PE periods" is grammatical and unreadable; the
-    negative belongs on the subject."""
+    """"Every class has no PE periods" is grammatical and unreadable. A ban is
+    the same in every class as overall, so it's said plainly."""
     assert _english(form="count", scope=["class_group"],
                     selector={"subjects": ["PE"], "days": [4]},
-                    relation="==", value=0) == "No class has PE periods on Friday."
+                    relation="==", value=0) == "No PE on Friday."
 
 
 def test_r003_a_period_scoped_block_says_both_the_period_and_the_day():
     assert _english(form="count", scope=[],
                     selector={"teachers": ["Mr. Khan"], "days": [1], "period_orders": [1]},
-                    relation="==", value=0) == "Mr. Khan has no periods in period 1 on Tuesday."
+                    relation="==", value=0) == "Mr. Khan has no lessons in period 1 on Tuesday."
 
 
 def test_a_scope_subject_is_not_also_repeated_as_a_possessive():
@@ -329,3 +329,23 @@ def test_a_rule_with_no_description_still_renders():
     renderer, so rendering cannot depend on it."""
     assert render(Rule(form=rule_from_dict(
         {"form": "count", "scope": [], "relation": "==", "value": 0}).form))
+
+
+def test_a_ban_on_most_of_the_day_reads_as_what_it_allows():
+    """Seen live: "Grade 12 has at most 0 Bhagya's Biology periods in periods
+    1, 2, 3, 4, 5, 8 or 9" for "Bhagya's Grade 12 Biology only in periods 6 and 7"."""
+    from app.services.constraint_ir import rule_from_dict
+    from app.services.constraint_ir_english import render
+    week = ([1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4])
+    rule = rule_from_dict({"form": "count", "scope": ["class_group"], "relation": "<=", "value": 0,
+                           "selector": {"teachers": ["Bhagya"], "subjects": ["Biology"], "class_groups": ["Grade 12"],
+                                        "period_orders": [1, 2, 3, 4, 5, 8, 9]}})
+    assert render(rule, week) == "Biology for Grade 12 with Bhagya only in periods 6 and 7."
+    # Without the school's week there is no "only": the ban is said as it is.
+    assert render(rule) == "No Biology for Grade 12 with Bhagya in periods 1, 2, 3, 4, 5, 8 or 9."
+    days = rule_from_dict({"form": "count", "scope": [], "relation": "==", "value": 0,
+                           "selector": {"teachers": ["Sabina"], "days": [2, 3, 4]}})
+    assert render(days, week) == "Sabina teaches only on Monday and Tuesday."
+    few = rule_from_dict({"form": "count", "scope": [], "relation": "==", "value": 0,
+                          "selector": {"teachers": ["Sabina"], "days": [2, 4]}})
+    assert render(few, week) == "Sabina has no lessons on Wednesday or Friday."

@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from dataclasses import dataclass
 
@@ -1186,6 +1187,49 @@ def _unknown_names(rule, data: _ResolutionData) -> list[str]:
     return missing
 
 
+_TITLES = {"mr", "mrs", "ms", "miss", "dr", "smt", "shri", "sri", "fr", "sr", "rev", "prof", "madam", "maam", "sir"}
+_ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
+          "xi": 11, "xii": 12}
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def _name_in_text(kind: str, name: str, text: str) -> bool:
+    """Whether the sentence plainly names what the rule picked - so the reading
+    isn't resting on a guess at who or what was meant."""
+    words = set(_words(text))
+    low = " ".join(_words(text))
+    if kind == "teacher":
+        parts = [w for w in _words(name) if w not in _TITLES and len(w) >= 3]
+        return bool(parts) and any(p in words for p in parts)
+    if kind == "subject":
+        return " ".join(_words(name)) in low
+    # A grade ("Grade 12") or a section ("Grade 12 - A"): the number must be
+    # there (12, 12th, XII), and for a section its letter right after it.
+    m = re.search(r"(\d+)\s*(?:-\s*)?([A-Za-z])?\s*$", name.strip())
+    if not m:
+        return " ".join(_words(name)) in low
+    number, section = m.group(1), (m.group(2) or "").lower()
+    numerals = {number, *[r for r, n in _ROMAN.items() if str(n) == number]}
+    words = _words(text)
+    for i, w in enumerate(words):
+        bare = re.sub(r"(?<=\d)(st|nd|rd|th)$", "", w)
+        if not section and bare in numerals:
+            return True
+        if section and (w in {f"{n}{section}" for n in numerals}
+                        or (bare in numerals and i + 1 < len(words) and words[i + 1] == section)):
+            return True
+    return False
+
+
+def _plainly_read(rule, text: str) -> bool:
+    """Every teacher, subject and class the rule uses is named in the sentence."""
+    found = referenced_names(rule)
+    return all(_name_in_text(kind, name, text) for kind, names in found.items() for name in names)
+
+
 @router.post("/interpret", response_model=ConstraintInterpretResponse)
 def interpret_constraint(
     payload: ConstraintInterpretRequest,
@@ -1247,12 +1291,18 @@ def interpret_constraint(
         )
 
     unknown = _unknown_names(result.rule, data)
-    log("interpreted", {"sentence": result.sentence, "rule": rule_to_dict(result.rule), "unknown_names": unknown})
+    # Saved without a "did you mean" when nothing about the reading is a guess:
+    # every name it uses is in the sentence, and no check had to correct it.
+    # Anything else is shown first.
+    confident = not unknown and not result.adjusted and _plainly_read(result.rule, payload.text)
+    log("interpreted", {"sentence": result.sentence, "rule": rule_to_dict(result.rule), "unknown_names": unknown,
+                        "confident": confident})
     return ConstraintInterpretResponse(
         understood=True,
         sentence=result.sentence,
         rule=rule_to_dict(result.rule),
         unknown_names=unknown,
+        confident=confident,
     )
 
 

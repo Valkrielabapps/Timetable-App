@@ -84,6 +84,9 @@ export default function ConstraintsTab({
   // otherwise. Nothing is saved until it clears.
   const [pending, setPending] = useState(null)
   const [confirming, setConfirming] = useState(false)
+  // { id, sentence } for a rule just saved without asking (the reading was
+  // plain - see handleAdd), shown with an Undo until the next rule.
+  const [justAdded, setJustAdded] = useState(null)
   // Batch entry ("add several rules at once") is a separate mode rather
   // than trying to detect multi-line input in the single-rule form - 
   // keeping them distinct means the single-rule flow's behavior (and its
@@ -237,8 +240,22 @@ export default function ConstraintsTab({
     if (!text) return
     setSubmitting(true)
     setError(null)
+    setJustAdded(null)
     try {
-      setPending({ typed: text, interpretation: await api.interpretConstraint(schoolId, text) })
+      const interpretation = await api.interpretConstraint(schoolId, text)
+      // Nothing in the reading was a guess (every name it uses is in what was
+      // typed, and no check had to correct it): save it straight away and show
+      // the sentence with an Undo, rather than asking "is this what you meant"
+      // about a rule that says exactly what was typed. Anything else is asked.
+      if (interpretation?.understood && interpretation.confident && interpretation.rule
+          && !(interpretation.unknown_names || []).length) {
+        const saved = await api.confirmConstraint(schoolId, interpretation.rule, text)
+        setInput('')
+        setJustAdded({ id: saved?.id, sentence: interpretation.sentence, typed: text })
+        await onReload()
+      } else {
+        setPending({ typed: text, interpretation })
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -449,6 +466,32 @@ export default function ConstraintsTab({
                 Got several rules at once? Add them all together
               </button>
             </>
+          )}
+          {justAdded && !pending && !batchMode && (
+            <div data-testid="rule-added" className="flex flex-wrap items-baseline justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              <p className="min-w-0 flex-1">
+                <span className="font-medium">Added:</span> {justAdded.sentence}
+              </p>
+              {justAdded.id != null && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { id, typed } = justAdded
+                    setJustAdded(null)
+                    try {
+                      await api.deleteConstraint(id)
+                      setInput(typed)
+                      await onReload()
+                    } catch (err) {
+                      setError(err.message)
+                    }
+                  }}
+                  className="text-xs font-medium text-emerald-800 underline underline-offset-2 hover:text-emerald-950"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
           )}
           {batchResultCount !== null && batchResultCount > 0 && (
             <p className="text-xs text-emerald-700">

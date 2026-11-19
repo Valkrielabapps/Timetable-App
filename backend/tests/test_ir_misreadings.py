@@ -149,7 +149,7 @@ def test_a_morning_preference_reads_as_the_afternoon_being_empty():
                     selector={"teachers": ["Mrs. Rao"], "period_orders": [6, 7, 8]},
                     relation="==", value=0, strength="preference")
     assert sentence == (
-        "Where it can be arranged, Mrs. Rao has no periods in periods 6, 7 or 8."
+        "Where it can be arranged, Mrs. Rao has no lessons in periods 6, 7 or 8."
     )
 
 
