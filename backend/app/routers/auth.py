@@ -16,7 +16,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import check_quota, client_ip, limiter
+from app.core.rate_limit import LOGIN_ATTEMPTS_PER_HOUR, SIGNUPS_PER_HOUR_SITE, check_quota, client_ip, limiter
 from app.core.auth import (
     create_access_token, get_current_user, hash_password, hash_token, sign_out_everywhere, verify_password,
 )
@@ -45,6 +45,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/signup", response_model=TokenResponse, status_code=201)
 @limiter.limit("5/hour")
 def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_db)):
+    # The 5/hour above is per IP, and an IP can be made up (see client_ip);
+    # this holds whatever IPs the requests claim, so nobody can open accounts
+    # by the thousand. Far above the few real schools signing up in an hour.
+    check_quota("signup:site", limit=SIGNUPS_PER_HOUR_SITE, window_seconds=3600)
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
@@ -67,7 +71,7 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
 def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
     # Keyed on the email as well as the IP: rotating IPs is the whole point
     # of credential stuffing, and an IP limit alone does nothing against it.
-    check_quota(f"login:{payload.email.lower()}", limit=10, window_seconds=3600)
+    check_quota(f"login:{payload.email.lower()}", limit=LOGIN_ATTEMPTS_PER_HOUR, window_seconds=3600)
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")

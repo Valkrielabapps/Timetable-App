@@ -11,7 +11,7 @@ guessing one isn't practical.
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.core.rate_limit import limiter
+from app.core.rate_limit import LOGIN_ATTEMPTS_PER_HOUR, check_quota, limiter
 from app.core.auth import create_access_token, hash_password, verify_password
 from app.schemas.auth import check_new_password
 from app.core.database import get_db
@@ -63,6 +63,11 @@ def accept_invite(request: Request, token: str, payload: AcceptInviteRequest, db
 
     existing = db.query(User).filter(User.email == invite.email).first()
     if existing:
+        # The same allowance as signing in to this account: the 20/hour above
+        # is per IP, which anyone calling the server directly can make up (see
+        # client_ip), so without this an invite link would be a way round the
+        # login's limit on password guesses.
+        check_quota(f"login:{invite.email.lower()}", limit=LOGIN_ATTEMPTS_PER_HOUR, window_seconds=3600)
         if not existing.hashed_password or not verify_password(payload.password, existing.hashed_password):
             raise HTTPException(
                 status_code=401,

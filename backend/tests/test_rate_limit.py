@@ -264,3 +264,44 @@ def test_signups_are_limited_per_ip(client, limiter_on):
     codes = [client.post("/api/auth/signup", json={"email": f"new{i}@example.com", "password": "password123"}).status_code
              for i in range(6)]
     assert codes[:5] == [201] * 5 and codes[5] == 429, codes
+
+
+# --- limits a made-up X-Forwarded-For can't get round -----------------------
+
+def test_an_invite_link_shares_the_accounts_password_allowance(client):
+    """Accepting an invite to an existing account checks its password, so it
+    counts against the same allowance as signing in - from any 'IP'."""
+    from tests.conftest import create_school, signup
+
+    signup(client, email="existing@school.example", password="correcthorse")
+    _, owner = signup(client, email="owner@school.example")
+    school = create_school(client, owner)
+    token = client.post(f"/api/schools/{school['id']}/invites",
+                        json={"email": "existing@school.example", "role": "viewer"}, headers=owner).json()["token"]
+
+    for i in range(5):
+        r = client.post(f"/api/invites/{token}/accept", json={"password": "wrong-password"},
+                        headers={"X-Forwarded-For": f"203.0.113.{i}"})
+        assert r.status_code == 401
+    for i in range(5):
+        r = client.post("/api/auth/login", json={"email": "existing@school.example", "password": "wrong-password"},
+                        headers={"X-Forwarded-For": f"198.51.100.{i}"})
+        assert r.status_code == 401
+    # Ten wrong guesses between the two routes: both now refuse, even the right password.
+    r = client.post(f"/api/invites/{token}/accept", json={"password": "correcthorse"},
+                    headers={"X-Forwarded-For": "192.0.2.77"})
+    assert r.status_code == 429
+    r = client.post("/api/auth/login", json={"email": "existing@school.example", "password": "correcthorse"})
+    assert r.status_code == 429
+
+
+def test_signups_have_a_ceiling_for_the_whole_site(client, monkeypatch):
+    """However many IPs the requests claim, new accounts stop at the site's hourly ceiling."""
+    from app.core import rate_limit
+    from app.routers import auth as auth_router
+
+    monkeypatch.setattr(auth_router, "SIGNUPS_PER_HOUR_SITE", 3)
+    codes = [client.post("/api/auth/signup", json={"email": f"site{i}@example.com", "password": "password123"},
+                         headers={"X-Forwarded-For": f"203.0.113.{i}"}).status_code for i in range(4)]
+    assert codes == [201, 201, 201, 429], codes
+    assert rate_limit.SIGNUPS_PER_HOUR_SITE >= 50  # the real ceiling is well above any real day

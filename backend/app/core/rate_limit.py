@@ -54,11 +54,19 @@ def client_ip(request: Request) -> str:
 
     That header is trivially forged by anything talking to the Railway URL
     directly, and Railway offers no practical way to reject non-Vercel
-    traffic on this plan. So this is a throttle on ordinary abuse, not a
-    defence against a determined attacker, and the credential-stuffing
-    case - the one that actually matters - is covered by the per-email
-    quotas in the auth router, which hold regardless of what IP a request
-    claims to come from.
+    traffic on this plan. Trusting a fixed number of proxies from the right
+    doesn't help either: a request straight to Railway has one hop fewer
+    than one through Vercel, so whatever position is trusted, a direct
+    caller can put a made-up address there. The only address that can't be
+    made up is the one Railway itself sees, and for traffic through Vercel
+    that is Vercel's, shared by everyone.
+
+    So this is a throttle on ordinary abuse, not a defence against a
+    determined attacker. Everything that matters is also limited by
+    something that can't be made up: password attempts per account
+    (LOGIN_ATTEMPTS_PER_HOUR, shared by sign-in and invite acceptance),
+    reset emails per address, new accounts across the whole site
+    (SIGNUPS_PER_HOUR_SITE), and every signed-in route per user.
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -88,6 +96,13 @@ def caller_key(request: Request) -> str:
 
 
 limiter = Limiter(key_func=caller_key, enabled=settings.rate_limit_enabled)
+
+# Password attempts per account per hour, by any route that checks one (sign-in,
+# accepting an invite to an existing account). Shared, so neither is a way
+# round the other.
+LOGIN_ATTEMPTS_PER_HOUR = 10
+# New accounts per hour across the whole site, whatever IPs they come from.
+SIGNUPS_PER_HOUR_SITE = 100
 
 # Far above what anyone clicking through the app does (a page load is a few
 # dozen requests; scrolling through teachers is one a teacher), low enough to
