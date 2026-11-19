@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.school import Subject
-from app.services.uploads import capped, check_xlsx
+from app.services.uploads import capped, check_xlsx, safe_xml
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +113,10 @@ def read_sheets(filename: str, content: bytes, kind: str = "teachers") -> list[t
         sheets = [("CSV", capped(csv.reader(io.StringIO(text))))]
     elif lower.endswith(".xlsx"):
         check_xlsx(content)
-        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        sheets = [(ws.title, [["" if c is None else str(c) for c in row]
-                              for row in capped(ws.iter_rows(values_only=True))]) for ws in wb.worksheets]
+        with safe_xml():
+            wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            sheets = [(ws.title, [["" if c is None else str(c) for c in row]
+                                  for row in capped(ws.iter_rows(values_only=True))]) for ws in wb.worksheets]
     elif lower.endswith(".docx"):
         sheets = docx_sheets(content, kind)
     elif lower.endswith(".doc"):
@@ -208,7 +209,9 @@ def docx_sheets(content: bytes, kind: str = "teachers") -> list[tuple[str, list[
     with the same headings, one per department say, joined into one), and a
     document without tables is read as a list, one per line."""
     import zipfile
-    from xml.etree import ElementTree
+
+    from defusedxml import DefusedXmlException
+    from defusedxml.ElementTree import ParseError, fromstring
 
     check_xlsx(content, what="Word document")
     try:
@@ -216,9 +219,14 @@ def docx_sheets(content: bytes, kind: str = "teachers") -> list[tuple[str, list[
             xml = archive.read("word/document.xml")
     except KeyError:
         raise ValueError("That file isn't a valid Word document (.docx).") from None
-    if b"<!DOCTYPE" in xml or b"<!ENTITY" in xml:
-        raise ValueError("That file isn't a valid Word document (.docx).")
-    body = ElementTree.fromstring(xml).find(f"{_W}body")
+    # A real document never declares a DTD or entities; one that does could
+    # expand into gigabytes when read. defusedxml refuses them whatever the
+    # file's encoding - looking for the bytes "<!DOCTYPE" missed UTF-16.
+    try:
+        root = fromstring(xml, forbid_dtd=True)
+    except (DefusedXmlException, ParseError):
+        raise ValueError("That file isn't a valid Word document (.docx).") from None
+    body = root.find(f"{_W}body")
     if body is None:
         raise ValueError("The file has no data in it.")
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from contextlib import contextmanager
 
 from fastapi import HTTPException, UploadFile
 
@@ -52,3 +53,28 @@ def capped(rows, limit: int = MAX_ROWS):
             raise ValueError(f"That file has more than {limit} rows - split it into smaller files.")
         out.append(row)
     return out
+
+
+@contextmanager
+def safe_xml(what: str = "spreadsheet"):
+    """Around reading an .xlsx with openpyxl. With defusedxml installed
+    (requirements.txt) openpyxl refuses DTDs and entity definitions - which
+    no real Excel file has, and which could make a small file expand into
+    gigabytes - by raising DefusedXmlException; this turns that into the
+    ValueError every upload route already shows the school. openpyxl may
+    raise it wrapped in a ValueError of its own, so the chain is searched."""
+    from defusedxml import DefusedXmlException
+
+    try:
+        yield
+    except ValueError as exc:
+        # openpyxl wraps parse errors in its own ValueError; look down the chain.
+        cause: BaseException | None = exc
+        while cause is not None and not isinstance(cause, DefusedXmlException):
+            cause = cause.__cause__ or cause.__context__
+        if cause is None:
+            raise
+        raise ValueError(
+            f"That {what} has something in it Excel files never have, so it wasn't read. "
+            f"Open it in Excel, save it again as .xlsx and upload that."
+        ) from None
