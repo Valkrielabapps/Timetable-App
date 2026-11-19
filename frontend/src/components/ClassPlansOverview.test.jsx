@@ -28,4 +28,14 @@ describe('class plans overview', () => {
     fireEvent.click(screen.getByTitle('0 of 10 periods planned'))
     expect(onPick).toHaveBeenCalledWith(3)
   })
+
+  it('counts a block\'s periods for every section in it', () => {
+    // 1 B has 7 of its own and shares a 3-period block with 2 A: both fill the week.
+    const blocks = [{ id: 9, class_group_id: 2, section_ids: [2, 3], periods_per_week: 3 }]
+    const reqs = [...REQS, { class_group_id: 3, periods_per_week: 7 }]
+    render(<ClassPlansOverview classGroups={SECTIONS} allRequirements={reqs} allBlocks={blocks} periods={PERIODS}
+      activeSectionId={null} onPick={() => {}} />)
+    expect(screen.getByText('3 of 3 sections fill the week\'s 10 lessons')).toBeInTheDocument()
+    expect(screen.getAllByTitle('10 of 10 periods planned')).toHaveLength(3)
+  })
 })

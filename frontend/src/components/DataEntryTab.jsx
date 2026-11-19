@@ -13,7 +13,7 @@ import {
   useRooms,
 } from '../hooks/useSchoolData'
 import ElectiveBlocksPanel from './ElectiveBlocksPanel'
-import { inBlock, optionsFor } from '../electiveSections'
+import { blockSectionIds, inBlock, optionsFor } from '../electiveSections'
 import SearchableSelect from './SearchableSelect'
 import { rankMatches, sortByName, sortSections } from '../sorting'
 import TeacherPicker from './TeacherPicker'
@@ -540,6 +540,7 @@ export default function DataEntryTab({
         <ClassPlansOverview
           classGroups={classGroups}
           allRequirements={allRequirements}
+          allBlocks={allElectiveBlocks}
           periods={periods}
           activeSectionId={activeSectionId}
           onPick={setActiveSectionId}
@@ -681,10 +682,14 @@ export default function DataEntryTab({
  * planned against the week's lessons - so the school can go through them in
  * order. Clicking one opens its plan below.
  */
-export function ClassPlansOverview({ classGroups, allRequirements, periods, activeSectionId, onPick }) {
+export function ClassPlansOverview({ classGroups, allRequirements, allBlocks = [], periods, activeSectionId, onPick }) {
   const lessons = periods.filter((p) => !(p.kind && p.kind !== 'lesson') && !p.is_break).length
   const planned = new Map()
-  for (const r of allRequirements) planned.set(r.class_group_id, (planned.get(r.class_group_id) ?? 0) + (r.periods_per_week || 0))
+  const add = (id, n) => planned.set(id, (planned.get(id) ?? 0) + (n || 0))
+  for (const r of allRequirements) add(r.class_group_id, r.periods_per_week)
+  // A block's periods count once for every section in it - the same total the
+  // section's own plan shows below ("45 total periods/week").
+  for (const b of allBlocks) for (const id of blockSectionIds(b)) add(id, b.periods_per_week)
   const sections = sortSections(classGroups)
   const done = sections.filter((c) => lessons > 0 && planned.get(c.id) === lessons).length
   if (sections.length === 0) {

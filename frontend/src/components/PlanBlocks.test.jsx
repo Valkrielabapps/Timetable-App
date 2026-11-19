@@ -78,8 +78,9 @@ describe("a section's plan with elective blocks", () => {
     // English 5 + Block 1's 6. Not 5 + 6 + 6 for two options, and not the
     // other section's block.
     renderPlan()
-    // In the summary above the table and in its Total row.
-    expect(screen.getAllByText('11')).toHaveLength(2)
+    // On the section's chip in Class plans, in the summary above the table
+    // and in its Total row - all three counting the block the same way.
+    expect(screen.getAllByText('11')).toHaveLength(3)
   })
 
   it('shows the section’s blocks under its subjects', () => {
