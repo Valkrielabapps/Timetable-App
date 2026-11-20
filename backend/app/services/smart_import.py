@@ -188,7 +188,12 @@ def pdf_tables(content: bytes) -> list[tuple[str, list[list[str]]]] | None:
                         above = page.within_bbox((0, top, page.width, y0)).extract_text() or ""
                     rows = [[(c or "").strip() for c in r] for r in t.extract()]
                     lines = [[ln.strip()] for ln in above.splitlines() if ln.strip()]
-                    if any(any(c for c in r) for r in rows):
+                    # A table carried over from the last page: no title above
+                    # it, the same columns - the rest of that table.
+                    if (sheets and not lines and top == 0 and rows
+                            and len(rows[0]) == max((len(r) for r in sheets[-1][1]), default=0)):
+                        sheets[-1][1].extend(rows)
+                    elif any(any(c for c in r) for r in rows):
                         sheets.append((f"page {n}", lines + rows))
                     top = y1
                 if not found and text.strip():
@@ -1362,13 +1367,44 @@ def _people(text: str) -> list[str]:
     return out
 
 
+def _subject_then_name(t: str) -> tuple[str, list[str]] | None:
+    """"Math Deepa", "Social Science Rajesh", "English Lang Sarah": a subject
+    and its teacher with only a space between - a PDF cell whose two lines
+    were joined into one."""
+    words = t.split()
+    if len(words) < 2 or _key(t) in _SUBJECT_ALIASES or _concept(t) in _CONCEPT_NAMES:
+        return None
+    generic = {"period", "periods", "literature", "language", "lang", "grammar", "lab", "practical", "prac",
+               "theory", "skills", "skill", "studies", "science", "class", "teacher", "activity", "club", "group"}
+    if any(w.lower().strip(".") in generic for w in words[1:]) and not _subjectish(" ".join(words[:-1])):
+        return None
+    for k in range(min(len(words) - 1, 4), 0, -1):
+        subj, rest = " ".join(words[:k]), words[k:]
+        exact = _key(subj) in _SUBJECT_ALIASES or _concept(subj) in _CONCEPT_NAMES
+        if not (exact or (_subjectish(subj) and all(re.fullmatch(r"[A-Za-z]{2,}", w) for w in words[:k]))) \
+                or len(rest) > 3:
+            continue
+        name = " ".join(rest)
+        if _subjectish(name) or any(w.lower() in _OWN_PERIOD for w in rest):
+            return None
+        if any(w.lower().strip(".") in generic for w in rest) or any(
+                re.fullmatch(r"(?:[IVX]+|[A-Z])", w) for w in rest):
+            return None   # "Hindi I", "English Literature", "Maths Lab"
+        if all(re.fullmatch(r"[A-Z][A-Za-z'.]*\.?", w) for w in rest):
+            return subj, _people(name)
+        return None
+    return None
+
+
 def _split_cell(text: str) -> tuple[str, list[str]]:
     """"BIO-ROS,BHAG" -> ("BIO", ["ROS", "BHAG"]); "BHAGYA" -> ("", ["BHAGYA"]);
     "Maths (Mrs. Rao)", "Maths" over "K. Rao", "Maths/K. Rao" -> the subject
     and the teacher. Options of a block ("Tamil/Hindi") stay one value."""
     raw = text.replace("\xa0", " ").strip()
     lines = [x.strip() for x in raw.split("\n") if x.strip()]
-    if len(lines) >= 2 and _subjectish(lines[0]) and not _subjectish(lines[1]):
+    # A line break only separates subject and teacher when nothing else does:
+    # "MATHEMATICS-Mrs." over "Sangeetha Nair" is one cell wrapped in a PDF.
+    if len(lines) >= 2 and not re.search(r"[-–(]", raw) and _subjectish(lines[0]) and not _subjectish(lines[1]):
         return lines[0].strip(" ."), _people(" ".join(lines[1:]))
     t = re.sub(r"\s+", " ", raw).strip()
     m = re.fullmatch(r"(.+?)\s*\(([^()]+)\)", t)
@@ -1383,7 +1419,7 @@ def _split_cell(text: str) -> tuple[str, list[str]]:
     # "ENG-2-SOFIA": English 2, taught by Sofia.
     m = re.match(r"^([^-–]+?)\s*[-–]\s*(\d)\s*[-–]\s*(.+)$", t) or re.match(r"^([^-–]+?)\s*[-–]\s*(.+)$", t)
     if not m:
-        return "", [t] if t else []
+        return _subject_then_name(t) or ("", [t] if t else [])
     subj, rest = (f"{m.group(1).strip()} {m.group(2)}", m.group(3)) if m.lastindex == 3 else (m.group(1), m.group(2))
     if re.search(r"[-–]", rest):
         return "?", []  # several subjects run together in one cell: not readable
