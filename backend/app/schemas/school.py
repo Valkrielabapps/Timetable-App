@@ -78,6 +78,7 @@ class SchoolStandardRulesUpdate(BaseModel):
     teacher_week_max: StandardRuleSetting | None = None
     teacher_day_max: StandardRuleSetting | None = None
     teacher_spread: StandardRuleSetting | None = None
+    subject_spread: StandardRuleSetting | None = None
     core_morning: StandardRuleSetting | None = None
 
 

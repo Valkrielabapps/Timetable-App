@@ -78,3 +78,43 @@ def test_a_try_to_rule_is_still_applied_after_the_first_timetable(db):  # noqa: 
     assert result.status in ("optimal", "feasible"), result.errors
     # Keeping Maths off Tuesday (worth 10 per lesson) beats spreading it (1).
     assert {_day(db, x) for x in result.assignments} == {0}
+
+
+def _one_a_day_school(db, maths_per_week):  # noqa: F811
+    school = _school(db, days=5, per_day=4)
+    maths = _subject(db, school, "Maths")
+    fill = _subject(db, school, "Activity")
+    _teacher(db, school, "Rao", [maths.id])
+    _teacher(db, school, "Iyer", [fill.id])
+    a = _class_group(db, school)
+    _require(db, a, maths, maths_per_week)
+    _require(db, a, fill, 20 - maths_per_week)
+    return school, maths
+
+
+def _maths_per_day(db, result, maths):
+    return Counter(_day(db, x) for x in result.assignments if x["subject_id"] == maths.id)
+
+
+def test_one_period_of_a_subject_a_day_unless_the_week_needs_more(db):  # noqa: F811
+    """The tick box, on by default: 5 Maths over 5 days is one a day, and 6 or
+    7 over 5 days gives only the extra ones a second period - not two a day
+    on three days, which the old fair-share spreading allowed."""
+    for per_week, days_with_two in ((5, 0), (6, 1), (7, 2)):
+        db.rollback()
+        school, maths = _one_a_day_school(db, per_week)
+        result = generate_school_timetable(db, school.id)
+        assert result.status in ("optimal", "feasible"), result.errors
+        counts = _maths_per_day(db, result, maths)
+        assert max(counts.values()) <= 2 and sum(1 for n in counts.values() if n == 2) == days_with_two, counts
+
+
+def test_one_a_day_can_be_unticked(db):  # noqa: F811
+    from app.models.school import School
+    from app.services import standard_rules
+    school, maths = _one_a_day_school(db, 6)
+    db.get(School, school.id).standard_rules = standard_rules.to_store({"subject_spread": {"on": False}})
+    db.commit()
+    assert standard_rules.for_school(db.get(School, school.id)).subject_spread is False
+    result = generate_school_timetable(db, school.id)
+    assert result.status in ("optimal", "feasible"), result.errors

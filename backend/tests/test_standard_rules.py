@@ -33,7 +33,9 @@ def _per_day(db, result, teacher):
 def test_defaults_leave_the_caps_off_and_spreading_on():
     rules = standard_rules.for_school(None)
     assert (rules.week_max, rules.day_max, rules.spread) == (None, None, True)
+    assert rules.subject_spread is True  # one period of a subject a day, where the week allows
     shown = standard_rules.merged(None)
+    assert shown["subject_spread"] == {"on": True}
     assert shown["teacher_week_max"] == {"on": False, "value": 30}
     assert shown["teacher_day_max"] == {"on": False, "value": 6}
 

@@ -9,6 +9,9 @@ sentences the admin has to type and the parser has to read:
   teacher_spread    Spread each teacher's periods out over the day and the
                     week: not three in a row, not two back to back when it
                     can be helped, and a similar number of periods each day.
+  subject_spread    Each subject at most once a day per class, where the
+                    week allows: a subject with more periods than there are
+                    days gets its extra ones as the only second periods.
   core_morning      Demanding subjects (Maths, the sciences, Social Science,
                     ...) in the first N periods of the day (default 5), while
                     students are fresh; lighter ones (PE, Art, Library) later.
@@ -37,6 +40,7 @@ DEFAULTS: dict[str, dict] = {
     "teacher_week_max": {"on": False, "value": 30},
     "teacher_day_max": {"on": False, "value": 6},
     "teacher_spread": {"on": True},
+    "subject_spread": {"on": True},
     # include/exclude: subject ids added to, or taken out of, the ones
     # is_demanding picks - so a subject added later is still recognised.
     "core_morning": {"on": True, "value": 5, "include": [], "exclude": []},
@@ -64,7 +68,8 @@ class StandardRules:
     week_max: int | None   # None = off
     day_max: int | None
     spread: bool
-    core_by: int | None = None          # None = off; else "within the first N periods"
+    core_by: int | None = None
+    subject_spread: bool = True          # None = off; else "within the first N periods"
     core_include: frozenset = field(default_factory=frozenset)
     core_exclude: frozenset = field(default_factory=frozenset)
 
@@ -103,6 +108,7 @@ def for_school(school) -> StandardRules:
         week_max=m["teacher_week_max"]["value"] if m["teacher_week_max"]["on"] else None,
         day_max=m["teacher_day_max"]["value"] if m["teacher_day_max"]["on"] else None,
         spread=m["teacher_spread"]["on"],
+        subject_spread=m["subject_spread"]["on"],
         core_by=m["core_morning"]["value"] if m["core_morning"]["on"] else None,
         core_include=frozenset(m["core_morning"]["include"]),
         core_exclude=frozenset(m["core_morning"]["exclude"]),

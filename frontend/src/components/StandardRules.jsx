@@ -6,6 +6,7 @@ const DEFAULTS = {
   teacher_week_max: { on: false, value: 30 },
   teacher_day_max: { on: false, value: 6 },
   teacher_spread: { on: true },
+  subject_spread: { on: true },
   core_morning: { on: true, value: 5, include: [], exclude: [] },
 }
 
@@ -37,6 +38,11 @@ const RULES = [
     key: 'teacher_spread',
     before: "Spread each teacher's periods out across the day and the week",
     hint: 'Avoids back-to-back periods and gives each teacher a similar load every day, where the timetable allows.',
+  },
+  {
+    key: 'subject_spread',
+    before: 'Keep each subject to one period a day for every class',
+    hint: 'A subject with more periods a week than there are school days gets its extra ones as the only second periods in a day. Planned double periods are left alone.',
   },
   {
     key: 'core_morning',

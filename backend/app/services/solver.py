@@ -402,6 +402,11 @@ def _find_timetable(model, rng, remaining):
 # in one place: one unit of "try to keep Hindi out of the last period" is worth
 # more than one lesson's worth of spreading or a teacher's third period in a row.
 _USER_WEIGHT = 10
+# A second period of a subject on one day, under the "one period of a subject
+# a day" tick box. Above the other habits, so it wins over spreading teachers'
+# days, and below anything the school typed (_USER_WEIGHT), so their own rules
+# come first.
+_SUBJECT_SPREAD_WEIGHT = 4
 # Per period a shared subject is off an even split between its teachers.
 _SHARE_WEIGHT = 3
 
@@ -423,7 +428,9 @@ def _add_default_habits(
 
     1. Spread each subject over the week. A section's Maths, 7 a week over 6
        days, should be one a day with one day of two - not three on Monday.
-       Every lesson over a fair share for its day costs 1. Skipped for a
+       With the "one period of a subject a day" tick box (on by default) every
+       lesson past the first on a day costs _SUBJECT_SPREAD_WEIGHT; without
+       it, every lesson over a fair share for its day costs 1. Skipped for a
        subject the school has given a double-period rule, where two on one
        day is the point.
     2. Teachers aren't taught solid. Three periods back to back (within a
@@ -461,7 +468,14 @@ def _add_default_habits(
         if (c.parameters or {}).get("teacher_id") is not None
     }
 
-    # 1. Spread across the week.
+    # 1. Spread across the week. With the "one period of a subject a day" tick
+    # box (on unless unticked) every period of a subject beyond the first on a
+    # day costs _SUBJECT_SPREAD_WEIGHT - so a subject with 6 periods over 5
+    # days gets exactly one day of two, and one with 5 or fewer none. Untick
+    # it and only bunching beyond a fair share costs (1 each): 6 over 5 days
+    # could then be two a day on three days.
+    once_a_day = _STANDARD.get().subject_spread
+
     def spread(tag, cg_id, per_week, vars_by_period):
         if per_week <= 1:
             return
@@ -469,14 +483,14 @@ def _add_default_habits(
         days = [d for d, ps in sorted_periods_by_day.items() if any(p.id not in off for p in ps)]
         if len(days) < 2:
             return
-        fair = -(-per_week // len(days))  # ceiling
+        allowed = 1 if once_a_day else -(-per_week // len(days))  # ceiling: a fair share
         for d in days:
             day_vars = [v for p in sorted_periods_by_day[d] for v in vars_by_period.get(p.id, [])]
-            if len(day_vars) <= fair:
+            if len(day_vars) <= allowed:
                 continue
             over = model.NewIntVar(0, len(day_vars), f"habit_spread_{tag}_d{d}")
-            model.Add(sum(day_vars) - fair <= over)
-            terms.append(over)
+            model.Add(sum(day_vars) - allowed <= over)
+            terms.append(over * _SUBJECT_SPREAD_WEIGHT if once_a_day else over)
 
     for req in requirements:
         if names_by_id.get(req.subject_id) in doubled:

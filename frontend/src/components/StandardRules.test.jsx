@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import StandardRules, { isDemanding } from './StandardRules'
 
 describe('the tick-box rules on the Constraints page', () => {
-  it('shows the defaults: caps off at 30 and 6, spreading on', () => {
+  it('shows the defaults: caps off at 30 and 6, spreading and one-a-day on', () => {
     render(<StandardRules rules={null} onSave={vi.fn()} />)
     const boxes = screen.getAllByRole('checkbox')
-    expect(boxes.map((b) => b.checked)).toEqual([false, false, true, true])
+    expect(boxes.map((b) => b.checked)).toEqual([false, false, true, true, true])
     expect(screen.getByLabelText('Number of early periods').value).toBe('5')
     expect(screen.getByLabelText('Number of periods in a week').value).toBe('30')
     expect(screen.getByLabelText('Number of periods in a day').value).toBe('6')
