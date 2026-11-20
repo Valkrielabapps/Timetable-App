@@ -339,14 +339,25 @@ def test_student_timetables_can_leave_the_watermark_off_too(client, world, monke
     assert "Timetablz" not in _branding_text(r.content)
 
 
-def test_a_free_school_cannot_remove_the_watermark(client, world, monkeypatch):
+def test_a_school_whose_trial_has_ended_cannot_remove_the_watermark(client, world, monkeypatch):
+    """The free trial has everything unlocked, the watermark option too (see
+    the Pricing page); once it ends without a plan, exports carry it."""
+    from datetime import datetime, timedelta
     from app.core.config import settings
+    from app.models.school import School
     monkeypatch.setattr(settings, "plan_limits_enabled", True)
     w, h = world
     _set_plan(w["school"], None)
+    assert _export(client, w, h, format="pdf", branding="false").status_code == 200   # still in the trial
+    db = SessionLocal()
+    try:
+        db.get(School, w["school"]).free_trial_ends_at = datetime.utcnow() - timedelta(days=1)
+        db.commit()
+    finally:
+        db.close()
     r = _export(client, w, h, format="pdf", branding="false")
     assert r.status_code == 402
-    assert "Pro" in r.json()["detail"]
+    assert "paid plan" in r.json()["detail"]
     # The ordinary export still works, watermark and all.
     ok = _export(client, w, h, format="xlsx")
     assert ok.status_code == 200 and "Made with Timetablz Free" in _branding_text(ok.content)

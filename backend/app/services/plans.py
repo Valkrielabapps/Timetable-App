@@ -379,7 +379,10 @@ def require_ai(db: Session, school: School) -> None:
 
 
 def clean_exports(school: School) -> bool:
+    """Exports without the watermark: a paid plan, or the free trial (which
+    has everything unlocked). A school whose trial or plan has run out keeps
+    exporting, with the watermark."""
     if not settings.plan_limits_enabled:
         return True
-    plan, _, _ = effective_plan(school)
-    return plan.clean_exports
+    plan, status, _ = effective_plan(school)
+    return plan.clean_exports and status != "locked"
