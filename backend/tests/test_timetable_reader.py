@@ -237,3 +237,38 @@ def test_twice_a_week_at_one_period_is_not_a_fixed_period():
     r = read_timetable(read_sheets("t.xlsx", xlsx(("Sheet1", rows))))
     subjects = {f["subject"] for f in r["fixed"]}
     assert "AI" not in subjects and "CT" in subjects
+
+
+def test_a_pdf_made_by_software_is_read_off_the_page_without_the_ai(monkeypatch, tmp_path):
+    """A timetable exported as PDF (Excel, aSc, Timetablz itself) has its text
+    in it: read in seconds, exactly, and the AI is never asked."""
+    import pytest
+    pytest.importorskip("pdfplumber")
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib import colors
+
+    story, st = [], getSampleStyleSheet()
+    for sec, week in (("VI A", WEEK_6A), ("VI B", WEEK_6B)):
+        story.append(Paragraph(sec, st["Heading4"]))
+        data = [["Day", "1", "2", "3", "4", "5"]] + [[DAYS[d]] + r for d, r in enumerate(week)]
+        t = Table(data)
+        t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.black)]))
+        story.append(t)
+    path = tmp_path / "t.pdf"
+    SimpleDocTemplate(str(path), pagesize=landscape(A4)).build(story)
+    monkeypatch.setattr(smart_import.LiveAI, "transcribe", lambda *a: (_ for _ in ()).throw(AssertionError("AI asked")))
+    smart_import._TRANSCRIBED.clear()
+    r = read_timetable(read_sheets("t.pdf", path.read_bytes(), "timetable"))
+    assert [s["label"] for s in r["sections"]] == ["Class VI A", "Class VI B"]
+    assert {(l["day"], l["period"], l["subject"]) for l in r["sections"][0]["lessons"]} >= {(0, 1, "ENG")}
+
+
+def test_a_long_scanned_pdf_is_refused_with_what_to_do(monkeypatch):
+    monkeypatch.setattr(smart_import, "pdf_tables", lambda content: None)
+    smart_import._TRANSCRIBED.clear()
+    pdf = b"%PDF-1.4 " + b"<< /Type /Page >> " * 12 + b"<< /Type /Pages >>"
+    import pytest
+    with pytest.raises(ValueError, match="12 pages of scanned images"):
+        read_sheets("scan.pdf", pdf)

@@ -155,6 +155,53 @@ _MEDIA = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", 
 _TRANSCRIBED: dict[str, list] = {}
 
 
+_AI_PAGES = 8
+
+
+def pdf_page_count(content: bytes) -> int:
+    """Pages in a PDF, counted from its page objects (no library needed)."""
+    return len(re.findall(rb"/Type\s*/Page(?![s\w])", content)) or 1
+
+
+def pdf_tables(content: bytes) -> list[tuple[str, list[list[str]]]] | None:
+    """Every table on every page of a PDF that has its text in it, with the
+    lines just above each table (the class, its class teacher). None if the
+    PDF reader isn't installed or the PDF is pictures only (a scan)."""
+    try:
+        import pdfplumber
+    except ImportError:
+        return None
+    sheets: list[tuple[str, list[list[str]]]] = []
+    any_text = False
+    try:
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for n, page in enumerate(pdf.pages[:200], start=1):
+                text = page.extract_text() or ""
+                if text.strip():
+                    any_text = True
+                top = 0
+                found = page.find_tables()
+                for t in found:
+                    x0, y0, x1, y1 = t.bbox
+                    above = ""
+                    if y0 > top + 1:
+                        above = page.within_bbox((0, top, page.width, y0)).extract_text() or ""
+                    rows = [[(c or "").strip() for c in r] for r in t.extract()]
+                    lines = [[ln.strip()] for ln in above.splitlines() if ln.strip()]
+                    if any(any(c for c in r) for r in rows):
+                        sheets.append((f"page {n}", lines + rows))
+                    top = y1
+                if not found and text.strip():
+                    # No ruled table: the text a line a row, columns at wide gaps.
+                    rows = [re.split(r"\s{2,}", ln.strip()) for ln in (page.extract_text(layout=True) or text).splitlines()
+                            if ln.strip()]
+                    sheets.append((f"page {n}", rows))
+    except Exception:  # noqa: BLE001 - an unreadable PDF falls through to the AI
+        logger.exception("reading a PDF's text failed")
+        return None
+    return sheets if any_text and sheets else None
+
+
 def needs_ai_reading(filename: str) -> bool:
     """A PDF or a photo: only the AI can read it."""
     return any((filename or "").lower().endswith(ext) for ext in _MEDIA)
@@ -172,7 +219,22 @@ def transcribe(filename: str, content: bytes, ai=None) -> list[tuple[str, list[l
     if key in _TRANSCRIBED:
         return _TRANSCRIBED[key]
     ext = next(e for e in _MEDIA if filename.lower().endswith(e))
+    # A PDF made by software (exported from Excel, aSc, Timetablz) has its
+    # text in it: read straight off the page - exact, and seconds even for
+    # fifty pages. Only a scan or a photo needs the AI to read it.
+    if ext == ".pdf":
+        digital = pdf_tables(content)
+        if digital:
+            _TRANSCRIBED[key] = digital
+            return digital
+        pages = pdf_page_count(content)
+        if pages > _AI_PAGES:
+            raise ValueError(f"That PDF is {pages} pages of scanned images, too long to read from pictures. "
+                             f"Upload up to {_AI_PAGES} pages at a time, or the Excel or Word file if you have it.")
     out = (ai or LiveAI()).transcribe(content, _MEDIA[ext])
+    if out == "too_long":
+        raise ValueError("That file has more in it than can be read from a picture in one go. Upload it a few "
+                         "pages at a time, or the Excel or Word file if you have it.")
     if out is None:
         raise ValueError("PDFs and photos are read by the AI, which isn't available right now. Upload the "
                          "Excel or Word file if you have it, or try again in a little while.")
@@ -449,6 +511,9 @@ class LiveAI:
                 tool_choice={"type": "tool", "name": tool["name"]},
                 messages=[{"role": "user", "content": [block, {"type": "text", "text": prompt}]}],
             )
+            if getattr(response, "stop_reason", None) == "max_tokens":
+                logger.warning("smart import transcription ran out of room (%s)", media_type)
+                return "too_long"
             for b in response.content:
                 if b.type == "tool_use":
                     tables = b.input.get("tables")
