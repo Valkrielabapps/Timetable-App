@@ -2,6 +2,13 @@ import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+// Next until the last box, where the plans are saved.
+function toTheEnd() {
+  for (let i = 0; i < 20 && screen.queryByRole('button', { name: 'Next' }); i++) {
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  }
+}
+
 const api = vi.hoisted(() => ({ classPlanPreview: vi.fn(), classPlanCommit: vi.fn() }))
 vi.mock('../api', () => ({ api }))
 import ClassPlanImport from './ClassPlanImport'
@@ -37,6 +44,7 @@ describe('filling in every class from the allotment sheet', () => {
     expect(screen.getByText('Staff list: staff list.docx')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Read file' }))
     await waitFor(() => expect(api.classPlanPreview).toHaveBeenCalledWith(1, tt, sl))
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }))
     expect(await screen.findByText(/matched to your staff list \(62 people\)/)).toBeInTheDocument()
   })
 
@@ -48,7 +56,11 @@ describe('filling in every class from the allotment sheet', () => {
     render(<ClassPlanImport schoolId={1} file={new File(['x'], 'last year.xlsx')} title="Start from last year’s timetable" />)
     expect(await screen.findByText(/Read as last year’s timetable/)).toBeInTheDocument()
     expect(screen.getByText(/Mon, Tue, Wed, Thu, Fri, 9 periods a day/)).toBeInTheDocument()
-    expect(screen.getByText(/New teachers that will be added \(2\): Deva, Rosee/)).toBeInTheDocument()
+    // One box at a time: the teachers come next.
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText(/New teachers that will be added \(2\)/)).toBeInTheDocument()
+    expect(screen.getByText('Rosee')).toBeInTheDocument()
+    toTheEnd()
     fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
     expect(await screen.findByRole('status')).toHaveTextContent('your week (45 periods)')
   })
@@ -63,6 +75,7 @@ describe('filling in every class from the allotment sheet', () => {
     render(<ClassPlanImport schoolId={1} file={new File(['x'], 'last year.pdf')} />)
     expect(await screen.findByText(/short break after period 2 and lunch after period 4/)).toBeInTheDocument()
     expect(screen.getByText('3 blocks (taught to a group at once)')).toBeInTheDocument()
+    toTheEnd()
     fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
     const done = await screen.findByRole('status')
     expect(done).toHaveTextContent('1 fixed periods')
@@ -77,16 +90,21 @@ describe('filling in every class from the allotment sheet', () => {
     render(<ClassPlanImport schoolId={1} file={file} onDone={onDone} />)
     expect(await screen.findByText(/We found plans for/)).toHaveTextContent('2 classes')
     expect(api.classPlanPreview).toHaveBeenCalledWith(1, file)
-    expect(screen.getByText(/Worth checking before the timetable is made/)).toBeInTheDocument()
     expect(screen.getByText(/Left out because they have 0 periods: Assembly/)).toBeInTheDocument()
-
-    const go = screen.getByRole('button', { name: 'Answer 2 questions to fill in the plans' })
-    expect(go).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))   // subjects
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))   // worth checking
+    expect(screen.getByText(/Worth checking before the timetable is made/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))   // question 1
+    expect(screen.getByText(/Question 1 of 2/)).toBeInTheDocument()
+    // A question's Next waits for an answer.
+    expect(screen.getByRole('button', { name: 'Pick an answer to go on' })).toBeDisabled()
     fireEvent.click(screen.getByLabelText(/Two each/))
-    expect(screen.getByRole('button', { name: 'Answer the question to fill in the plans' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByText(/Question 2 of 2/)).toBeInTheDocument()
+    // The rest suggested: straight to the last box, keeping the answer given.
     fireEvent.click(screen.getByRole('button', { name: 'Use the suggested answers' }))
     fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
-    await waitFor(() => expect(api.classPlanCommit).toHaveBeenCalledWith(1, PREVIEW.plan, { 'sections:all': 'n:1', 'shared:all': 'order' }))
+    await waitFor(() => expect(api.classPlanCommit).toHaveBeenCalledWith(1, PREVIEW.plan, { 'sections:all': 'n:2', 'shared:all': 'order' }))
     expect(await screen.findByRole('status')).toHaveTextContent('3 new sections, 3 subject plans, 1 new subjects')
     expect(onDone).toHaveBeenCalled()
   })
