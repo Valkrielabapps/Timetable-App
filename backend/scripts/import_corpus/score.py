@@ -232,9 +232,11 @@ def score_teachers(path: Path, res: Resolver, ai) -> dict:
         if how != "exact":
             messy.append(r.get("name"))
         t = by_name[who]
-        got = {res.subject(s) for s in _split_list(r.get("qualified_subjects", ""))} - {None}
+        # The class teacher period is the class teacher's, not a subject they
+        # specialise in: an allotment list naming it is right either way.
+        got = {res.subject(s) for s in _split_list(r.get("qualified_subjects", ""))} - {None, "Class Teacher Period"}
         subj_n += 1
-        subj_ok += got == set(t["subjects"])
+        subj_ok += got == set(t["subjects"]) - {"Class Teacher Period"}
         if res.expected["layout"] in ("free_text", "by_department", "allotment"):
             grade_n += 1
             grade_ok += _grades(r.get("qualified_grades", "")) == set(t["grades"]) or (

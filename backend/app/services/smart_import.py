@@ -62,6 +62,7 @@ FIELDS = {
                         "the teacher teaches it",
         "grade_mark": "a column for one grade or class (named in the heading): a mark means the teacher "
                       "teaches it",
+        "designation": "their post, such as TGT (Maths), PGT - Physics, PRT, Principal or Clerk",
     },
 }
 
@@ -70,12 +71,15 @@ FIELDS = {
 # "TEACHER NAME" are the same.
 SYNONYMS = {
     "subjects": {
-        "name": ["name", "subject", "subjects", "subjectname", "subjecttitle", "title", "course", "paper"],
+        "name": ["name", "subject", "subjects", "subjectname", "subjecttitle", "title", "course", "paper",
+                 "nameofsubject", "nameofthesubject", "subjectsoffered", "listofsubjects"],
         "required_room_type": ["requiredroomtype", "roomtype", "room", "roomneeded", "lab", "venue", "venuetype"],
     },
     "teachers": {
         "name": ["name", "teacher", "teachername", "teachersname", "staff", "staffname", "faculty", "facultyname",
-                 "fullname", "nameofteacher", "nameofthestaff", "nameofstaff", "employeename", "employee"],
+                 "fullname", "nameofteacher", "nameofthestaff", "nameofstaff", "employeename", "employee",
+                 "nameoftheteacher", "nameoftheteachers", "nameoftheemployee", "nameofthefaculty", "teachers",
+                 "nameofteachers", "staffmember", "nameofthestaffmember"],
         "first_name": ["firstname", "givenname", "fname"],
         "last_name": ["lastname", "surname", "familyname", "lname"],
         "email": ["email", "emailid", "emailaddress", "mail", "mailid"],
@@ -84,7 +88,9 @@ SYNONYMS = {
         "qualified_subjects": ["qualifiedsubjects", "subjects", "subject", "subjectstaught", "subjecttaught",
                                "teaches", "subjecthandled", "subjectshandled", "specialisation", "specialization"],
         "qualified_grades": ["qualifiedgrades", "grades", "grade", "eligiblegrades", "classes", "class",
-                             "classestaught", "classtaught", "standards", "standard", "std", "gradestaught"],
+                             "classestaught", "classtaught", "standards", "standard", "std", "gradestaught",
+                             "classeshandled", "classhandled", "classestaken"],
+        "designation": ["designation", "post", "position", "role", "cadre", "desig", "postheld", "category"],
     },
 }
 
@@ -122,6 +128,11 @@ def read_sheets(filename: str, content: bytes, kind: str = "teachers") -> list[t
     elif lower.endswith(".doc"):
         raise ValueError("That's an old Word file (.doc). In Word: File > Save As > Word Document (.docx), "
                          "then upload that.")
+    elif lower.endswith(".txt"):
+        # Typed text: a line a row, split at tabs if it has them.
+        text = content.decode("utf-8-sig", errors="replace")
+        lines = capped(text.splitlines())
+        sheets = [("the text", [re.split(r"\t+", ln) if "\t" in ln else [ln] for ln in lines])]
     elif needs_ai_reading(filename):
         sheets = transcribe(filename, content)
     else:
@@ -783,10 +794,10 @@ def _transpose(rows: list[list[str]], start: int) -> list[list[str]]:
 # several side by side and several stacked. Read as one big table it gives
 # "Total" and "CLASS 6-AB" as subjects and misses every table but the first.
 
-_SUBJECT_HEADS = {"subjects", "subject", "subjectname"}
+_SUBJECT_HEADS = {"subjects", "subject", "subjectname", "nameofsubject", "nameofthesubject", "subjectsoffered"}
 _TEACHER_HEADS = {"teacher", "teachers", "teachername", "faculty", "staff", "subjectteacher", "nameofteacher"}
 _PERIOD_HEADS = {"periods", "period", "periodsperweek", "noofperiods", "periodsweek", "pds", "load"}
-_CLASS_LABEL = re.compile(r"^\s*(?:class|grade|std\.?|standard)\b", re.I)
+_CLASS_LABEL = re.compile(r"^\s*(?:class|grade|std\.?|standard)\b(?!\s*teacher)", re.I)
 # What a sheet says about itself, above or below the list.
 _SHEET_DETAILS = {
     "schoolyear", "academicyear", "year", "session", "academicsession", "term", "schoolterm", "semester",
@@ -951,6 +962,11 @@ def _grid(rows: list[list[str]]) -> list[dict]:
     """A heading row of subjects (or classes) over rows of counts."""
     best: list[dict] = []
     for h, head in enumerate(rows):
+        # "Subject | 3 | 4 | 5 ..." - classes across the top written as bare numbers.
+        nums = [c for c in range(1, len(head)) if re.fullmatch(r"\d{1,2}", head[c].strip())
+                and 1 <= int(head[c]) <= 12]
+        if len(nums) >= 3 and (_key(head[0]) in _SUBJECT_HEADS or _key(head[0]) in ("nameofsubject", "class")):
+            head = [f"Class {v.strip()}" if c in nums else v for c, v in enumerate(head)]
         cols = [c for c in range(1, len(head)) if head[c].strip() and not _COUNT.match(head[c])]
         if len(cols) < 3:
             continue
@@ -963,7 +979,8 @@ def _grid(rows: list[list[str]]) -> list[dict]:
             if not first and not filled:
                 continue
             numbers = [v for v in cells if _COUNT.match(v)]
-            if first and len(numbers) >= 2 and all(_countish(v) for v in cells):
+            # A subject only one class has ("Robotics | | | 1") has one number.
+            if first and numbers and (len(numbers) >= 2 or len(body) >= 2) and all(_countish(v) for v in cells):
                 body.append((first, cells))
             else:
                 break
@@ -1065,7 +1082,7 @@ def _side_blocks(rows: list[list[str]]) -> list[dict]:
 # "VIII A-3 PHY" is Class 8 section A, 3 periods of Physics; with no subject
 # it's the teacher's own (the "-PHY" after the name) or the heading's.
 
-_TITLE = re.compile(r"^\s*(?:mrs|mr|ms|miss|dr|sr|fr|sis|bro|smt|shri|sri)\b\.?\s*", re.I)
+_TITLE = re.compile(r"^\s*(?:mrs|mr|ms|miss|dr|sr|fr|sis|bro|smt|shri|sri|sh|kum|km|prof|rev)\b\.?\s*", re.I)
 _LEVEL_WORDS = re.compile(r"\b(?:high\s*school|highschool|higher\s*secondary|secondary|primary|middle\s*school|"
                           r"middle|senior|junior|pre\s*primary|dept\.?|department|teachers?|staff)\b", re.I)
 _ENTRY = re.compile(
@@ -1076,15 +1093,23 @@ _ENTRY = re.compile(
 _LANG = re.compile(r"\b([23])\s*(?:LN|LANG|LANGUAGE|L)\b")
 
 
+_POST_MARK = re.compile(r"\s*[(\[]\s*(?:PRT|TGT|PGT|PET|PTI|PRT\s*-\s*\w+|HM|VP|LIBRARIAN|LIB)\s*[)\]]\s*$", re.I)
+
+
 def _teacher_cell(text: str) -> list[tuple[str, str]] | None:
     """"MRS.HARINIKA-PHY" -> [("Harinika", "PHY")]; "MR.A/MR.B" -> both;
-    not a name (no Mr / Mrs / Ms) -> None."""
+    "IMRAN GEORGE (TGT)" -> [("Imran George", "")]; not a name (no Mr / Mrs
+    / Ms, no post after it) -> None."""
+    if _POST_MARK.search(text) and not _TITLE.match(text):
+        name = _POST_MARK.sub("", text).strip(" .-:")
+        if name and not re.search(r"\d", name) and len(name.split()) <= 5:
+            return [(_staff_name(name), "")]
     parts = [p.strip() for p in re.split(r"\s*/\s*(?=(?:mrs|mr|ms|miss|dr)\b)", text.strip(), flags=re.I) if p.strip()]
     if not parts or not all(_TITLE.match(p) for p in parts):
         return None
     out = []
     for p in parts:
-        name = _TITLE.sub("", p).strip(" .")
+        name = _TITLE.sub("", _POST_MARK.sub("", p)).strip(" .")
         subj = ""
         m = re.match(r"^(.*?)\s*[-–]\s*([A-Za-z.&, ]{2,30})$", name)
         if m:
@@ -1109,7 +1134,17 @@ def _entry(text: str) -> tuple[str, list[str], int, str] | None:
     m = _ENTRY.match(t)
     if not m:
         return None
+    # The class is a word of its own, or straight before a section letter
+    # ("VB-3"): "VIDYA DAS" is a name, not Class VI.
+    after = t[len(m.group(1)):]
+    if after[:1].isalpha() and not re.match(r"[A-H]{1,6}(?![A-Z])", after):
+        return None
     grade, secs, per, subj = m.group(1), m.group(2) or "", m.group(3), m.group(4).strip(" -–.:")
+    # "VI A - ART - 1": the periods after the subject.
+    if per is None and subj:
+        tail = re.match(r"^(.*?)\s*[-–:]\s*(\d{1,2})$", subj)
+        if tail:
+            subj, per = tail.group(1).strip(" -–.:"), tail.group(2)
     if per is None and not subj and not secs and not lang:
         return None
     if subj and (len(subj.split()) > 3 or re.search(r"\d{3,}", subj)):
@@ -1682,7 +1717,20 @@ def _from_class_tables(tables: list[dict], kind: str, school_grades: list[str]) 
     """The class tables as one plain table the rest of the importer reads:
     subjects, or teachers with what and which classes they teach."""
     if kind == "subjects":
+        per_table = [{s for subj, _, _ in t["items"] for s in _split_subjects(subj)} for t in tables]
         names = list(dict.fromkeys(s for t in tables for subj, _, _ in t["items"] for s in _split_subjects(subj)))
+        # "E" in one class's list and "English" in the others, never both in
+        # one class: the same subject, shortened.
+        same = {}
+        for x in names:
+            k = _key(x)
+            if len(k) > 2 or k in _SUBJECT_ALIASES:
+                continue
+            cands = [n for n in names if n != x and _key(n).startswith(k) and _concept(n) in _CONCEPT_NAMES
+                     and not any(x in t and n in t for t in per_table)]
+            if len(cands) == 1:
+                same[x] = cands[0]
+        names = [n for n in names if n not in same]
         return ["Subject"], [[n] for n in names], {0: "name"}
     teachers: dict[str, dict] = {}
     for t in tables:
@@ -1703,6 +1751,79 @@ def _from_class_tables(tables: list[dict], kind: str, school_grades: list[str]) 
     return headings, body, mapping
 
 
+_TEACHING_POST = re.compile(r"\b(?:PRT|TGT|PGT|PET|PTI|teacher|lecturer|instructor|coach|faculty|librarian|"
+                            r"special\s*educator|educator|tutor|trainer)\b", re.I)
+_NON_TEACHING = re.compile(
+    r"\b(?:principal|vice\s*principal|head\s*master|headmaster|head\s*mistress|headmistress|director|manager|"
+    r"correspondent|administrator|admin|office|clerk|accountant|cashier|peon|sub\s*staff|attender|attendant|"
+    r"ayah|aaya|driver|conductor|watchman|security|guard|gardener|sweeper|cook|helper|lab\s*assistant|"
+    r"technician|receptionist|nurse|counsell?or|warden|store\s*keeper|housekeeping|maid|electrician|"
+    r"plumber|mts|multi\s*tasking)\b", re.I)
+
+
+def _grade_lists(sheets) -> list[tuple[str, list[str]]]:
+    """Lines of "Class VI: English, Maths, Science" (or the class in one
+    cell and the list in the next): [(class, [subjects])]."""
+    out = []
+    for _, rows in sheets:
+        for r in rows:
+            cells = [c.strip() for c in r if c and c.strip()]
+            if not cells:
+                continue
+            if len(cells) >= 2 and (_CLASS_LABEL.match(cells[0]) or _grade_of(cells[0])) and len(cells[0]) <= 20:
+                label, rest = cells[0], ", ".join(cells[1:])
+            else:
+                m = re.match(r"^((?:class|grade|std\.?|standard)\s*[-:]?\s*[0-9IVXivx]{1,4}\b[^:–-]{0,12})\s*[:–-]\s*(.+)$",
+                             cells[0], re.I)
+                if not m:
+                    continue
+                label, rest = m.group(1).strip(), m.group(2)
+            items = [x.strip(" .") for x in re.split(r"\s*[,;]\s*|\s+and\s+", rest) if x.strip(" .")]
+            if len(items) >= 2 and _grade_of(label):
+                out.append((label, items))
+    return out
+
+
+def _department(text: str) -> list[str] | None:
+    """"ENGLISH DEPARTMENT", "Dept. of Maths", "SCIENCE FACULTY", "PHY/CHEM" ->
+    its subjects; None if the line isn't a department."""
+    t = text.strip()
+    if _TITLE.match(t) or re.search(r"\d", t) or len(t) > 60:
+        return None
+    marked = re.search(r"\b(?:department|dept\.?|faculty|section|wing)\b", t, re.I)
+    core = re.sub(r"\b(?:department|dept\.?|faculty|section|wing|of|the|teachers?|staff)\b", " ", t, flags=re.I)
+    core = _LEVEL_WORDS.sub(" ", core).strip(" -–:.")
+    if not core:
+        return None
+    parts = [core] if _subjectish(core) else [p.strip() for p in re.split(r"[,/]|\band\b", core) if p.strip()]
+    if not parts or not (marked or all(_subjectish(p) for p in parts)):
+        return None
+    return parts
+
+
+def _post_subjects(post: str) -> list[str]:
+    """"TGT (Maths)", "PGT - Physics", "TGT(English)", "PRT: EVS" -> the subject."""
+    m = re.search(r"\(([^)]+)\)", post) or re.search(
+        r"^\s*(?:PRT|TGT|PGT|PET|PTI|teacher|lecturer)\b\s*[-–:,/]?\s*(.+)$", post, re.I)
+    if not m:
+        return []
+    inner = re.sub(r"^\s*(?:PRT|TGT|PGT|PET|PTI)\b\s*[-–:]?\s*", "", m.group(1), flags=re.I).strip(" -–:.")
+    if not inner or _NON_TEACHING.search(inner) or re.fullmatch(r"(?:PRT|TGT|PGT|PET|PTI)", inner, re.I):
+        return []
+    return _split_items(inner)
+
+
+def _clean_person(name: str) -> str:
+    """"Shri. Anand Raj", "MS.SANGEETHA", "|Mary", "Vidya (Tgt)" -> a clean name."""
+    n = re.sub(r"^[|\\/*#•·\-–_.,\s]+|[|\\/*#•·\-–_,\s]+$", "", name)
+    n = _POST_MARK.sub("", n)
+    n = re.sub(r"\s+", " ", _TITLE.sub("", n)).strip(" .,")
+    if not n:
+        return name.strip()
+    return " ".join(w[:1].upper() + w[1:].lower() if (w.isupper() and len(w) > 2) or w.islower() else w
+                    for w in n.split())
+
+
 def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), school_grades=(),
                ai=None, aliases: dict | None = None) -> tuple[list[dict], dict]:
     """The file's rows keyed by bulk_import's field names, with subjects and
@@ -1721,12 +1842,24 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     # Or a grid of counts per class, or a column of subjects per stream.
     by_class = plan_tables(sheets)
     class_tables = by_class[1] if len(by_class[1]) >= 2 else []
+    # A staff list with a Name column ("Name | Subjects | Classes 6 to 8")
+    # can pass for class tables with no teachers in them: it's a staff list.
+    named = any("name" in _header_row(rows, kind)[1].values() for _, rows in sheets) if kind == "teachers" else False
+    no_teachers = class_tables and not any(cell for t in class_tables for _, _, cell in t["items"])
+    if no_teachers and kind == "teachers" and named:
+        class_tables = []
     if class_tables and kind == "teachers" and not any(cell for t in class_tables for _, _, cell in t["items"]):
         raise ValueError(
             "This file has the periods for each class but no teachers' names in it. Upload it under "
             "Subjects to add its subjects, or at the top of Setup (Start from last year's timetable) to fill in "
             "every class's periods. Then upload a staff list here."
         )
+
+    # "Class VI: English, Maths, Science" - a line of subjects per class.
+    if kind == "subjects" and not class_tables:
+        by_grade = _grade_lists(sheets)
+        if len(by_grade) >= 2:
+            class_tables = [{"label": g, "items": [(x, "", "") for x in subs]} for g, subs in by_grade]
 
     used_ai = False
     layout = "rows"
@@ -1797,6 +1930,14 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             headings = ["Teacher", "Department"]
             body = [[p["name"], ";".join(p["subjects"])] for p in people]
             mapping, idx = {0: "name", 1: "qualified_subjects"}, -1
+    if not ({"name", "first_name"} & set(mapping.values())) and any(
+            all(len([c for c in r if c.strip()]) <= 1 for r in rws) for t, rws in sheets if t == "the text"):
+        # Typed text with no headings: "Priya Sharma - Maths", one a line.
+        listed = _list_rows([r[0] for t, rws in sheets if t == "the text" for r in rws if r and r[0].strip()], kind)
+        if listed:
+            headings, body = listed[0], listed[1:]
+            mapping = {0: "name"} | ({1: "qualified_subjects"} if kind == "teachers" and len(headings) > 1 else {})
+            idx = -1
     if not ({"name", "first_name"} & set(mapping.values())):
         what = "subject" if kind == "subjects" else "teacher"
         raise ValueError(
@@ -1804,13 +1945,19 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             f"\"{what.capitalize()} name\" and upload again."
         )
 
-    # Read every row, as typed.
+    # Read every row, as typed. A row with only a department in it ("ENGLISH
+    # DEPARTMENT") gives its subject to the teachers under it.
     raw_rows = []
+    department: list[str] = []
     for row in body:
+        filled = [v.strip() for v in row if v and v.strip()]
+        if kind == "teachers" and len(filled) == 1 and _department(filled[0]) is not None:
+            department = _department(filled[0])
+            continue
         rec: dict = {}
         subjects: list[str] = []
         grades: list[str] = []
-        first = last = ""
+        first = last = post = ""
         for i, field in sorted(mapping.items()):
             value = row[i].strip() if i < len(row) else ""
             if not value:
@@ -1818,7 +1965,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
             if field == "qualified_subjects":
                 subjects += _split_items(value)
             elif field == "qualified_grades":
-                grades += _split_items(value)
+                grades += [g for x in _split_items(value) for g in re.split(r"\s*(?:&|\band\b)\s*", x) if g]
             elif field == "subject_mark":
                 if _marked(value):
                     subjects.append(headings[i].strip())
@@ -1829,12 +1976,21 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
                 first = value
             elif field == "last_name":
                 last = value
+            elif field == "designation":
+                post = value
+                subjects += _post_subjects(value)
             else:
                 rec.setdefault(field, value)
         if not rec.get("name") and (first or last):
             rec["name"] = f"{first} {last}".strip()
         # Headings repeated down the sheet, totals, class labels, notes.
         subjects = [x for x in subjects if not is_label(x)]
+        if kind == "teachers" and department and not subjects:
+            subjects = list(department)
+        if kind == "teachers" and rec.get("name"):
+            if post and _NON_TEACHING.search(post) and not _TEACHING_POST.search(post):
+                continue  # the principal, the office, the drivers: not on the timetable
+            rec["name"] = _clean_person(rec["name"])
         if rec.get("name") and not is_label(rec["name"]) and _key(rec["name"]) not in (
                 _NOT_A_TEACHER if kind == "teachers" else set()):
             if kind == "teachers" and _key(rec["name"]) in teacher_aliases:
@@ -1994,9 +2150,32 @@ def look_alike_people(names: list[str]) -> list[tuple[str, str]]:
             initial = (len(wa) == len(wb) == 2 and wa[0] == wb[0]
                        and (wa[1].rstrip(".") == wb[1][:len(wa[1].rstrip("."))] or wb[1].rstrip(".") == wa[1][:len(wb[1].rstrip("."))])
                        and min(len(wa[1].rstrip(".")), len(wb[1].rstrip("."))) <= 2)
-            if initial or (min(len(na), len(nb)) >= 4 and SequenceMatcher(None, na, nb).ratio() >= 0.88):
+            if initial or _same_by_initials(a, b) or (
+                    min(len(na), len(nb)) >= 4 and SequenceMatcher(None, na, nb).ratio() >= 0.88):
                 pairs.append((a, b))
     return pairs
+
+
+def _same_by_initials(a: str, b: str) -> bool:
+    """"K. Rao", "Rao K", "Priya", "Mrs. Anitha" against "Kavitha Rao",
+    "Priya Sharma", "Anitha": every word of the shorter is a word of the
+    longer or its initial, and at least one is a whole word."""
+    def words(x):
+        return [w for w in re.split(r"[^a-z]+", _TITLE.sub("", x).lower()) if w]
+    wa, wb = words(a), words(b)
+    if not wa or not wb or wa == wb:
+        return False
+    short, long_ = (wa, wb) if len(wa) <= len(wb) else (wb, wa)
+    pool = list(long_)
+    whole = 0
+    for w in short:
+        hit = next((x for x in pool if x == w), None) or (next((x for x in pool if x.startswith(w)), None)
+                                                           if len(w) == 1 else None)
+        if hit is None:
+            return False
+        whole += len(w) > 1
+        pool.remove(hit)
+    return whole >= 1 and len(short[0]) + sum(map(len, short)) > 2
 
 
 def check_rows(kind: str, rows: list[dict], school_subjects=(), school_grades=(),
