@@ -1367,6 +1367,26 @@ def _people(text: str) -> list[str]:
     return out
 
 
+_NOT_NAMES = {"period", "periods", "literature", "language", "lang", "grammar", "lab", "practical", "prac",
+              "theory", "skills", "skill", "studies", "science", "class", "teacher", "activity", "club", "group",
+              "education", "time", "break", "lunch", "free", "games", "sports", "library", "elective", "electives",
+              "assembly", "and", "of", "the"}
+
+
+def _name_like(text: str) -> bool:
+    """"Persis", "Siva Priya", "K. Rao", "MRS. RAO": a person, not a subject's second line."""
+    t = _TITLE.sub("", text.strip())
+    if re.search(r"[/,&]", t):   # "Kalkath/Joseph": two people sharing it
+        parts = [x for x in re.split(r"\s*[/,&]\s*", t) if x.strip()]
+        return len(parts) >= 2 and all(_name_like(x) for x in parts)
+    words = t.split()
+    if not words or len(words) > 4 or _subjectish(t) or _key(t) in _SUBJECT_ALIASES:
+        return False
+    if any(w.lower().strip(".") in _NOT_NAMES for w in words):
+        return False
+    return all(re.fullmatch(r"[A-Za-z][A-Za-z'.]*", w) for w in words) and any(len(w.strip(".")) > 1 for w in words)
+
+
 def _subject_then_name(t: str) -> tuple[str, list[str]] | None:
     """"Math Deepa", "Social Science Rajesh", "English Lang Sarah": a subject
     and its teacher with only a space between - a PDF cell whose two lines
@@ -1378,21 +1398,25 @@ def _subject_then_name(t: str) -> tuple[str, list[str]] | None:
                "theory", "skills", "skill", "studies", "science", "class", "teacher", "activity", "club", "group"}
     if any(w.lower().strip(".") in generic for w in words[1:]) and not _subjectish(" ".join(words[:-1])):
         return None
-    for k in range(min(len(words) - 1, 4), 0, -1):
+    # A subject everyone knows by that name first ("English" in "English POOJA
+    # JOSEPH"), longest first; else the longest that reads as a subject.
+    ks = range(min(len(words) - 1, 4), 0, -1)
+    exact_k = next((k for k in ks if _key(" ".join(words[:k])) in _SUBJECT_ALIASES
+                    or _concept(" ".join(words[:k])) in _CONCEPT_NAMES), None)
+    for k in ([exact_k] if exact_k else []) + [k for k in ks if k != exact_k]:
         subj, rest = " ".join(words[:k]), words[k:]
-        exact = _key(subj) in _SUBJECT_ALIASES or _concept(subj) in _CONCEPT_NAMES
+        exact = k == exact_k
         if not (exact or (_subjectish(subj) and all(re.fullmatch(r"[A-Za-z]{2,}", w) for w in words[:k]))) \
                 or len(rest) > 3:
             continue
         name = " ".join(rest)
         if _subjectish(name) or any(w.lower() in _OWN_PERIOD for w in rest):
-            return None
+            continue
         if any(w.lower().strip(".") in generic for w in rest) or any(
                 re.fullmatch(r"(?:[IVX]+|[A-Z])", w) for w in rest):
-            return None   # "Hindi I", "English Literature", "Maths Lab"
+            continue   # "Hindi I", "English Literature", "Maths Lab"
         if all(re.fullmatch(r"[A-Z][A-Za-z'.]*\.?", w) for w in rest):
             return subj, _people(name)
-        return None
     return None
 
 
@@ -1404,8 +1428,36 @@ def _split_cell(text: str) -> tuple[str, list[str]]:
     lines = [x.strip() for x in raw.split("\n") if x.strip()]
     # A line break only separates subject and teacher when nothing else does:
     # "MATHEMATICS-Mrs." over "Sangeetha Nair" is one cell wrapped in a PDF.
+    if len(lines) >= 2 and not re.search(r"[-–(]", raw) and _name_like(lines[-1]):
+        # A known subject, then a name wrapped over the lines: "English POOJA"
+        # / "JOSEPH" is English by Pooja Joseph.
+        whole = _subject_then_name(" ".join(lines))
+        if whole:
+            return whole
     if len(lines) >= 2 and not re.search(r"[-–(]", raw) and _subjectish(lines[0]) and not _subjectish(lines[1]):
         return lines[0].strip(" ."), _people(" ".join(lines[1:]))
+    # "No teacher yet" / "TBA" under a subject: the subject, nobody teaching it.
+    if len(lines) >= 2 and re.fullmatch(r"(?i)no teacher(?: yet)?|tba|tbd|vacant|not assigned|-+", lines[-1]):
+        return " ".join(lines[:-1]).strip(" ."), []
+    # A block written out: its name, then each group's subject and teacher -
+    # "SECOND LANGUAGE" / "Tamil" / "Beaula" / "Hindi" / "Sabina".
+    if len(lines) >= 4 and "-" not in raw:
+        rest = lines[1:] if len(lines) % 2 == 1 else lines
+        pairs = [(rest[i], rest[i + 1]) for i in range(0, len(rest) - 1, 2)]
+        if len(pairs) >= 2 and all(_name_like(t) and not _name_like(sj) for sj, t in pairs):
+            return "/".join(sj for sj, _ in pairs), [_TITLE.sub("", t).strip(" .") for _, t in pairs]
+    # The subject on its line(s) and the teacher on the last: "H.W" over
+    # "Persis", "Environmental" / "Science" / "Krithika" (Timetablz's own
+    # export, and most printed grids) - even when the subject is a code
+    # nobody knows yet.
+    if len(lines) >= 2 and not re.search(r"[-–]", raw) and not lines[-1].startswith("(") \
+            and _name_like(lines[-1]):
+        # A known subject first, then a name wrapped over two lines:
+        # "English POOJA" / "JOSEPH" is English by Pooja Joseph.
+        whole = _subject_then_name(" ".join(lines))
+        if whole and len(whole[0]) < len(" ".join(lines[:-1])):
+            return whole
+        return " ".join(lines[:-1]).strip(" ."), _people(lines[-1])
     t = re.sub(r"\s+", " ", raw).strip()
     m = re.fullmatch(r"(.+?)\s*\(([^()]+)\)", t)
     if m and _subjectish(m.group(1)) and not _subjectish(m.group(2)) and not any(
@@ -1496,7 +1548,7 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
     codes = Counter(_ck(s) for _, s, _ in raw)
     spelt = {}
     for _, s, _ in raw:
-        spelt.setdefault(_ck(s), s.upper())
+        spelt.setdefault(_ck(s), s if not s.islower() else s.upper())   # as the file writes it: "Hindi (3rd language)", "MAT"
 
     def letters(c):
         return re.sub(r"\d", "", c)
@@ -1519,7 +1571,7 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
     # "Biology/Maths") is one line of the plan, under its commonest spelling.
     def signature(c):
         parts = [x for x in re.split(r"\s*/\s*", spelt.get(c, c)) if x.strip()]
-        return tuple(sorted({_concept(x) for x in parts}))
+        return tuple(sorted(_concept(x) for x in parts))   # counted: Tamil x3 + Hindi is not Hindi x3 + Tamil
     by_sig: dict[tuple, list] = {}
     for c in codes:
         by_sig.setdefault(signature(code_of[c]), []).append(c)

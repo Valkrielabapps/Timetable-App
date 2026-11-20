@@ -614,8 +614,12 @@ def _same_block_codes(codes: set[str]) -> dict[str, str]:
 
     def subjects(code):
         parts = [x for x in re.split(r"\s*/\s*", code) if x.strip()]
-        known = {_concept(x) for x in parts if len(_key(x)) > 1 or _key(x) in _SUBJECT_ALIASES}
-        return frozenset(known)
+        # Counted, not just named: a 2nd language of three Tamil groups and a
+        # Hindi one is not the 3rd language of three Hindi groups and a Tamil.
+        return Counter(_concept(x) for x in parts if len(_key(x)) > 1 or _key(x) in _SUBJECT_ALIASES)
+
+    def within(a, b):
+        return all(b[k] >= n for k, n in a.items())
 
     sig = {c: subjects(c) for c in codes}
     parent = {c: c for c in codes}
@@ -629,14 +633,14 @@ def _same_block_codes(codes: set[str]) -> dict[str, str]:
     ordered = sorted(codes)
     for i, a in enumerate(ordered):
         for b in ordered[i + 1:]:
-            if sig[a] and sig[b] and (sig[a] <= sig[b] or sig[b] <= sig[a]):
+            if sig[a] and sig[b] and (within(sig[a], sig[b]) or within(sig[b], sig[a])):
                 parent[find(a)] = find(b)
     groups: dict[str, list] = defaultdict(list)
     for c in codes:
         groups[find(c)].append(c)
     out = {}
     for members in groups.values():
-        best = max(members, key=lambda c: (len(sig[c]), len(c)))
+        best = max(members, key=lambda c: (sum(sig[c].values()), len(c)))
         for c in members:
             out[c] = best
     return out

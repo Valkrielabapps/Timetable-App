@@ -97,7 +97,7 @@ def test_a_grid_per_teacher_is_turned_into_each_sections_week():
     r = read_timetable(read_sheets("t.xlsx", xlsx(("Sheet1", rows))))
     assert r["view"] == "teacher"
     by = {t["label"]: {s: (n, w) for s, n, w in t["items"]} for t in r["tables"]}
-    assert by["Class VI A"]["MATHS"] == ("5", "Kavitha Rao") and by["Class VI A"]["SCI"] == ("5", "Anu")
+    assert by["Class VI A"]["Maths"] == ("5", "Kavitha Rao") and by["Class VI A"]["SCI"] == ("5", "Anu")
     assert by["Class VI B"]["ENGLISH"] == ("5", "Tgt: English 1")
 
 
@@ -272,3 +272,24 @@ def test_a_long_scanned_pdf_is_refused_with_what_to_do(monkeypatch):
     import pytest
     with pytest.raises(ValueError, match="12 pages of scanned images"):
         read_sheets("scan.pdf", pdf)
+
+
+def test_cells_of_a_timetable_exported_as_pdf():
+    """How Timetablz's own PDF (and most printed grids) lay out a cell: the
+    subject on its line(s), the teacher on the last; a block as its name then
+    each group's subject and teacher; "No teacher yet"."""
+    cases = {
+        "H.W\nPersis": ("H.W", ["Persis"]),
+        "Environmental\nScience\nKrithika": ("Environmental Science", ["Krithika"]),
+        "Games\nKalkath/Joseph": ("Games", ["Kalkath", "Joseph"]),
+        "Hindi (3rd language)\nParameshwari": ("Hindi (3rd language)", ["Parameshwari"]),
+        "ELECTIVES\nNo teacher yet": ("ELECTIVES", []),
+        "SECOND LANGUAGE\nTamil\nBeaula\nTamil\nAbirami\nHindi\nSabina": ("Tamil/Tamil/Hindi", ["Beaula", "Abirami", "Sabina"]),
+        "BIO/CS\nComputer Science\nVignesh\nBiology\nRosee": ("Computer Science/Biology", ["Vignesh", "Rosee"]),
+        "Math Deepa": ("Math", ["Deepa"]),
+        "MATHEMATICS-Mrs.\nSangeetha Nair": ("MATHEMATICS", ["Sangeetha Nair"]),
+    }
+    for cell, want in cases.items():
+        assert _split_cell(cell) == want, cell
+    for whole in ["Environmental\nScience", "Physical\nEducation", "Class Teacher Period", "English Literature", "Hindi I"]:
+        assert _split_cell(whole)[0] in ("",), whole
