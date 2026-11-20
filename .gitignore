@@ -5,3 +5,9 @@ docs/research/.parse-cache.json
 
 # Outreach lists (school contact research) - kept local, not in the repository
 outreach/
+
+# Import test corpus: real school files, public samples and generated cases
+# hold names of real people - kept local, never in the repository.
+school-imports/real/
+school-imports/public/
+school-imports/generated/
