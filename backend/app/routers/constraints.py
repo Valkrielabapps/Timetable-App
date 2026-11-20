@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,7 +12,8 @@ from app.core.rate_limit import check_ai_quota
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import ClassGroup, Constraint, Period, School, Subject, Teacher
-from app.services import plans, rule_events
+from app.services import aliases as school_aliases, plans, rule_events
+from app.services.rule_text_hints import typed_short_forms
 from app.models.user import User
 from app.schemas.constraint import (
     ConstraintBatchParseRequest,
@@ -575,6 +576,9 @@ class _ResolutionData:
     # (day_of_week, order, label) per period, for the LLM prompt's timetable
     # structure summary - see _period_summary in llm_constraint_parser.py.
     periods: list[tuple[int, int, str | None, bool]]
+    # Short forms the school confirmed in its imports ("BEAUL" is Beula Rao),
+    # {"subject": {key: name}, "teacher": {key: name}} - services/aliases.py.
+    short_forms: dict = field(default_factory=dict)
 
 
 def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
@@ -601,6 +605,7 @@ def _load_resolution_data(db: Session, school_id: int) -> _ResolutionData:
         subject_names=[s.name for s in subjects],
         class_group_labels=list(label_to_class_groups.keys()),
         periods=[(p.day_of_week, p.order, p.label, p.kind) for p in periods],
+        short_forms=school_aliases.for_school(db, school_id),
     )
 
 
@@ -965,7 +970,8 @@ def _batch_rows_via_ir(db, school_id, lines, data, seen_text, seen_rule, unread:
         # it used to send that line silently to the older parser.
         for attempt in range(2):
             try:
-                result = parse_rule_llm(line, data.teacher_names, data.subject_names, data.class_group_labels, data.periods)
+                result = parse_rule_llm(line, data.teacher_names, data.subject_names, data.class_group_labels, data.periods,
+                                        short_forms=data.short_forms)
             except Exception:  # one bad call must not sink the whole paste
                 result = None
             if result is not None:
@@ -1224,10 +1230,13 @@ def _name_in_text(kind: str, name: str, text: str) -> bool:
     return False
 
 
-def _plainly_read(rule, text: str) -> bool:
-    """Every teacher, subject and class the rule uses is named in the sentence."""
+def _plainly_read(rule, text: str, short_forms: dict | None = None) -> bool:
+    """Every teacher, subject and class the rule uses is named in the
+    sentence - in full, or by a short form the school confirmed before."""
     found = referenced_names(rule)
-    return all(_name_in_text(kind, name, text) for kind, names in found.items() for name in names)
+    typed = typed_short_forms(text, short_forms)
+    return all(_name_in_text(kind, name, text) or name.lower() in typed
+               for kind, names in found.items() for name in names)
 
 
 @router.post("/interpret", response_model=ConstraintInterpretResponse)
@@ -1249,7 +1258,7 @@ def interpret_constraint(
     data = _load_resolution_data(db, payload.school_id)
     result = parse_rule_llm(
         payload.text, data.teacher_names, data.subject_names,
-        data.class_group_labels, data.periods,
+        data.class_group_labels, data.periods, short_forms=data.short_forms,
     )
 
     if result is None:
@@ -1294,7 +1303,7 @@ def interpret_constraint(
     # Saved without a "did you mean" when nothing about the reading is a guess:
     # every name it uses is in the sentence, and no check had to correct it.
     # Anything else is shown first.
-    confident = not unknown and not result.adjusted and _plainly_read(result.rule, payload.text)
+    confident = not unknown and not result.adjusted and _plainly_read(result.rule, payload.text, data.short_forms)
     log("interpreted", {"sentence": result.sentence, "rule": rule_to_dict(result.rule), "unknown_names": unknown,
                         "confident": confident})
     return ConstraintInterpretResponse(

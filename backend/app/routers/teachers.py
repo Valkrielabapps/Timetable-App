@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.rate_limit import check_ai_quota
 from app.services.smart_import import add_missing_subjects, build_preview, smart_rows
 from app.services.uploads import read_upload
+from app.services import aliases as short_forms
 from app.core.access import require_in_school, require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
@@ -172,6 +173,7 @@ async def bulk_import_teachers(
             "teachers", file.filename, content,
             school_subjects=[x.name for x in db.query(Subject).filter(Subject.school_id == school_id)],
             school_grades=sorted({g for (g,) in db.query(ClassGroup.grade).filter(ClassGroup.school_id == school_id) if g}),
+            aliases=short_forms.for_school(db, school_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -214,5 +216,9 @@ def commit_teachers_import(
     rows = payload.rows
     new_subjects = add_missing_subjects(db, school_id, rows)
     result = import_teachers(db, school_id, rows)
+    # The short forms its answers confirmed, never asked about again.
+    if payload.remember:
+        short_forms.remember_many(db, school_id, payload.remember, source="teachers")
+        db.commit()
     return BulkImportOut(created=result.created, updated=result.updated, errors=result.errors,
                          new_subjects=new_subjects)

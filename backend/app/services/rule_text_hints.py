@@ -223,12 +223,66 @@ def _edits(a: str, b: str) -> int:
     return prev[-1]
 
 
+def _phrases(text: str, longest: int = 3):
+    """Every run of one to three words, as typed, without edge punctuation."""
+    words = text.split()
+    for n in range(longest, 0, -1):
+        for i in range(len(words) - n + 1):
+            phrase = " ".join(words[i:i + n]).strip(",;:!?()\"'")
+            if phrase:
+                yield phrase
+
+
+def _alias_key(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def typed_short_forms(text: str, short_forms: dict | None) -> dict[str, str]:
+    """{name in lower case: short form as typed} for every short form the
+    school confirmed that this sentence uses ("BEAUL", "S. Sc.")."""
+    out: dict[str, str] = {}
+    if not short_forms or not text:
+        return out
+    for phrase in _phrases(text):
+        k = _alias_key(phrase)
+        if len(k) < 2:
+            continue
+        for kind in ("teacher", "subject"):
+            name = (short_forms.get(kind) or {}).get(k)
+            if name and name.lower() not in out:
+                out[name.lower()] = phrase
+    return out
+
+
+def _short_form_hints(text: str, short_forms: dict | None) -> list[str]:
+    """The school's own confirmed short forms, which it was told it would
+    never be asked about again: 'BEAUL' = Beula Rao."""
+    hints = []
+    if not short_forms:
+        return hints
+    for kind in ("teacher", "subject"):
+        forms = short_forms.get(kind) or {}
+        seen = set()
+        for phrase in _phrases(text):
+            k = _alias_key(phrase)
+            if len(k) >= 2 and k in forms and k not in seen and phrase.lower() != forms[k].lower():
+                seen.add(k)
+                hints.append(f"'{phrase}' = {forms[k]} (the school's own short form)")
+    return hints
+
+
 def sentence_hints(text: str, teacher_names: list[str], subject_names: list[str],
-                   class_group_labels: list[str]) -> list[str]:
-    """Hints for the parser, each "'as typed' = as the school stores it"."""
+                   class_group_labels: list[str], short_forms: dict | None = None) -> list[str]:
+    """Hints for the parser, each "'as typed' = as the school stores it".
+    `short_forms`: what the school confirmed in its imports (services/aliases.py),
+    read before the built-in guesses and taking their place."""
     try:
-        return (_teacher_hints(text, teacher_names) + _class_hints(text, class_group_labels)
-                + _subject_hints(text, subject_names) + _misspelt_subject_hints(text, subject_names)
-                + _spelling_hints(text))
+        own = _short_form_hints(text, short_forms)
+        mine = {h.split("'")[1].lower() for h in own}
+        built_in = [h for h in _teacher_hints(text, teacher_names) + _class_hints(text, class_group_labels)
+                    + _subject_hints(text, subject_names) + _misspelt_subject_hints(text, subject_names)
+                    if h.split("'")[1].lower() not in mine]
+        return own + built_in + _spelling_hints(text)
     except Exception:  # noqa: BLE001 - reading aids must never break parsing
         return []
+

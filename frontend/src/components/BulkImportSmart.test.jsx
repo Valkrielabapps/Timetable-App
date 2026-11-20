@@ -93,7 +93,8 @@ describe('importing a school’s own staff list', () => {
           id: 'teacher:Kavita K|Kavita Khana',
           text: 'Are “Kavita K” and “Kavita Khana” the same teacher?',
           options: [
-            { label: 'Yes, call them “Kavita Khana”', edits: [{ row: 0, field: 'name', remove: ['Kavita K'], add: ['Kavita Khana'] }] },
+            { label: 'Yes, call them “Kavita Khana”', edits: [{ row: 0, field: 'name', remove: ['Kavita K'], add: ['Kavita Khana'] }],
+              remember: [{ kind: 'teacher', text: 'Kavita K', meaning: 'Kavita Khana' }] },
             { label: 'Yes, call them “Kavita K”', edits: [{ row: 1, field: 'name', remove: ['Kavita Khana'], add: ['Kavita K'] }] },
             { label: 'No, two different teachers', edits: [] },
           ],
@@ -130,6 +131,8 @@ describe('importing a school’s own staff list', () => {
       { name: 'Kavita Khana', qualified_subjects: 'Hindi;Comp Sci' },
       { name: 'Anil', qualified_subjects: 'Maths' },
     ])
+    // The confirmed short form is kept for the school, so it isn't asked again.
+    expect(api.bulkImportCommit.mock.calls[0][3]).toEqual([{ kind: 'teacher', text: 'Kavita K', meaning: 'Kavita Khana' }])
   })
 
   it('rooms still import in one step', async () => {

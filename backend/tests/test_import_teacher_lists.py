@@ -61,10 +61,10 @@ def test_the_teachers_import_reads_every_teacher():
     rows, info = smart_rows("teachers", "t.xlsx", FILE, ai=NoAI())
     by = {r["name"]: r["qualified_subjects"].split(";") for r in rows}
     assert by["Martina"] == ["Maths"]
-    assert set(by["Anupriya"]) == {"Maths", "C.T"}
+    assert set(by["Anupriya"]) == {"Maths", "Class Teacher Period"}
     assert by["Harinika"] == ["Physics"]  # her own, from "-PHY"
     assert set(by["Mukesh"]) == {"Physics", "Chemistry"}  # said on each line
-    assert set(by["Albert"]) == {"Physics", "Chemistry", "C.T"}  # the heading's, both
+    assert set(by["Albert"]) == {"Physics", "Chemistry", "Class Teacher Period"}  # the heading's, both
     assert by["Kalkath"] == by["Joseph"] == ["Physical Education"]
     assert "Hindi (3rd language)" in by["Malar"] and "Hindi (2nd language)" in by["Kavitha"]
     assert "Listening" in by["Kavitha"]

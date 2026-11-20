@@ -753,12 +753,12 @@ def _core_examples_text() -> str:
     )
 
 
-def _sentence_context(text, teacher_names, subject_names, class_group_labels) -> str:
+def _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms=None) -> str:
     """The part of the prompt that changes with every sentence: reading aids
     for the names in it, and the worked examples closest to it. Sent after the
     cache breakpoint so the cached prefix stays identical between calls."""
     parts = []
-    hints = sentence_hints(text, teacher_names, subject_names, class_group_labels)
+    hints = sentence_hints(text, teacher_names, subject_names, class_group_labels, short_forms)
     if hints:
         parts.append(
             "Reading aids for this sentence, worked out from the school's data. They are "
@@ -1146,8 +1146,11 @@ def parse_rule_llm(
     subject_names: list[str],
     class_group_labels: list[str],
     periods: list[tuple[int, int, str | None, bool]] | None = None,
+    short_forms: dict | None = None,
 ) -> IRParse | None:
     """Parse one rule into the IR. Returns None if the LLM path is unavailable.
+    `short_forms`: the school's confirmed short forms (services/aliases.py),
+    given to the model as reading aids.
 
     An IRError from a well-formed-looking tool call is turned into an Unclear
     rather than being raised: from the admin's side a rule the model built
@@ -1173,7 +1176,7 @@ def parse_rule_llm(
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
         system = _system_prompt(teacher_names, subject_names, class_group_labels, periods)
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
-        context = _sentence_context(text, teacher_names, subject_names, class_group_labels)
+        context = _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms)
         if context:
             # After the breakpoint: varies per sentence, so it must not be part
             # of the cached prefix.

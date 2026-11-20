@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { api } from '../api'
 import BulkImportPanel from './BulkImportPanel'
+import ShortFormsPanel from './ShortFormsPanel'
 import { confirmDialog } from './confirmDialog'
 import { useElectiveBlocks, useTimetable, useTimetables } from '../hooks/useSchoolData'
 import { compareNames, loadChoice, matchesSearch, rankMatches, saveChoice, sortByName } from '../sorting'
@@ -286,6 +287,7 @@ export default function TeachersSection({ schoolId, teachers, subjects, classGro
           {showImport && (
             <div className="mt-3">
               <BulkImportPanel schoolId={schoolId} resource="teachers" onImported={onTeachersChanged.reload} />
+              <ShortFormsPanel schoolId={schoolId} kind="teacher" />
             </div>
           )}
         </div>

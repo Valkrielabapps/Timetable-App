@@ -134,11 +134,11 @@ def _school(db: Session, school_id: int) -> dict:
     }
 
 
-def _subject_name(raw: str, school_subjects: list[str]) -> str:
+def _subject_name(raw: str, school_subjects: list[str], aliases: dict[str, str] | None = None) -> str:
     by_norm = {_norm(s): s for s in school_subjects}
     if _norm(raw) in by_norm:
         return by_norm[_norm(raw)]
-    return _rule_subjects([raw], school_subjects)[raw][0] if _concept(raw) else raw.strip()
+    return _rule_subjects([raw], school_subjects, aliases)[raw][0] if _concept(raw) else raw.strip()
 
 
 def _one_name(subjects: list[str]) -> str:
@@ -165,8 +165,12 @@ def _staff_from(filename: str, content: bytes) -> list[dict]:
 
 def build_preview(db: Session, school_id: int, filename: str, content: bytes,
                   staff_file: tuple[str, bytes] | None = None) -> dict:
+    from app.services import aliases as short_forms
+
     sheets = read_sheets(filename, content, "teachers")
     s = _school(db, school_id)
+    # Short forms the school confirmed before: never asked about again.
+    known_forms = short_forms.for_school(db, school_id)
     # Names to match short spellings to: the teachers already here, and the
     # staff list if one came with the file.
     by_id = {x.id: x.name for x in s["subjects"]}
@@ -204,6 +208,9 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
             people[raw] = {"match": None, "class_teacher": True}
         elif _norm(raw) in by_teacher:
             people[raw] = {"match": by_teacher[_norm(raw)]}
+        elif short_forms.meaning_of(known_forms["teacher"], raw):
+            meant = short_forms.meaning_of(known_forms["teacher"], raw)
+            people[raw] = {"match": by_teacher.get(_norm(meant), meant), "remembered": True}
         else:
             cands = [b if a == raw else a for a, b in look_alike_people([raw] + teacher_names) if raw in (a, b)]
             if not cands:
@@ -249,7 +256,7 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
         for j, (subj_cell, per_cell, teacher_cell) in enumerate(t["items"]):
             periods = _periods(per_cell)
             # "PT/Games" is one subject spelt two ways, not two subjects.
-            subjects = list(dict.fromkeys(_subject_name(x, subject_names) for x in _split_subjects(subj_cell)))
+            subjects = list(dict.fromkeys(_subject_name(x, subject_names, known_forms["subject"]) for x in _split_subjects(subj_cell)))
             if not subjects:
                 continue
             if periods == 0:
@@ -411,7 +418,10 @@ def _answer(answers: dict, qid: str | None, allowed_prefixes: tuple[str, ...]) -
 
 
 def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
+    from app.services import aliases as short_forms
+
     s = _school(db, school_id)
+    known_forms = short_forms.for_school(db, school_id)
     subjects = {_norm(x.name): x for x in s["subjects"]}
     teachers = {_norm(t.name): t for t in s["teachers"]}
     created = {"sections": [], "subjects": [], "teachers": [], "requirements": 0, "blocks": 0, "periods": 0}
@@ -430,11 +440,13 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
         if info.get("class_teacher") or _key(raw) in _CLASS_TEACHER:
             return "class_teacher"
         name = info.get("match")
+        confirmed = False
         if info.get("q"):
             a = _answer(answers, info["q"], ("is:", "new", "none"))
             if a == "none":
                 return None
             name = raw if a == "new" else a[3:]
+            confirmed = a.startswith("is:")
         name = name or raw
         if _norm(name) not in teachers:
             if _key(name) in _NOT_A_TEACHER:
@@ -444,6 +456,10 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             db.flush()
             teachers[_norm(name)] = t
             created["teachers"].append(t.name)
+        if confirmed:
+            # "BEAUL" is Beula Rao: kept, so no import asks again.
+            short_forms.remember(db, school_id, "teacher", raw, teachers[_norm(name)].name,
+                                 target_id=teachers[_norm(name)].id, source="timetable")
         return teachers[_norm(name)]
 
     def subjects_names():
@@ -465,7 +481,7 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
         if isinstance(t, Teacher):
             for x in person.get("subjects") or []:
                 if str(x).strip():
-                    qualify(t, subject(_subject_name(str(x), list(subjects_names()))), None)
+                    qualify(t, subject(_subject_name(str(x), list(subjects_names()), known_forms["subject"])), None)
     week = plan.get("week") or {}
     if week.get("periods") and not s["lessons"]:
         days = list(week.get("days") or range(5))

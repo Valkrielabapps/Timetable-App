@@ -47,3 +47,6 @@ class BulkCommitIn(BaseModel):
 
     school_id: int
     rows: list[dict[str, str]] = Field(max_length=5000)
+    # Short forms confirmed by the answers to the preview's questions
+    # ({kind, text, meaning}), kept for the school - services/aliases.py.
+    remember: list[dict[str, str]] = Field(default_factory=list, max_length=500)

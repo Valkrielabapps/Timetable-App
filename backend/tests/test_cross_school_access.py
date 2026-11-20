@@ -22,7 +22,7 @@ from app.models.outreach import OutreachMessage, OutreachSchool
 from app.models.payment import Invoice, PaymentOrder, PlanOffer
 from app.models.problems import ProblemEvent
 from app.models.school import (
-    ClassGroup, Constraint, ElectiveBlock, ElectiveOption, Period, Room, RuleReadEvent, SchoolInvite,
+    ClassGroup, Constraint, ElectiveBlock, ElectiveOption, Period, Room, RuleReadEvent, SchoolAlias, SchoolInvite,
     SchoolMembership, Subject, SubjectFreeze, SubjectRequirement, SubstitutionLog, Teacher, Timetable,
     TimetableEntry,
 )
@@ -75,10 +75,11 @@ def seed(db, sid, owner_id, staff_id, tag, teacher_name):
     offer = PlanOffer(school_id=sid, name=f"{tag} offer", price_inr=1)
     problem = ProblemEvent(kind="error", summary=f"{tag} problem", school_id=sid)
     rule_event = RuleReadEvent(kind="read", text=f"{tag} rule text", school_id=sid)
+    alias = SchoolAlias(school_id=sid, kind="teacher", key=f"{tag}x".lower(), text=f"{tag}X", meaning=teacher_name)
     prospect = OutreachSchool(name=f"{tag} prospect")
     membership = SchoolMembership(school_id=sid, user_id=staff_id, role="viewer")
     db.add_all([requirement, block, entry, entry2, freeze, log, invite, order, invoice, offer, problem, rule_event,
-                prospect, membership])
+                prospect, membership, alias])
     db.flush()
     message = OutreachMessage(school_id=prospect.id, to_email="p@example.com", subject="Hi", body="Hi")
     db.add(message)
@@ -91,6 +92,7 @@ def seed(db, sid, owner_id, staff_id, tag, teacher_name):
         "invoice_id": invoice.id, "order_id": order.order_id, "offer_id": offer.id, "problem_id": problem.id,
         "event_id": rule_event.id, "message_id": message.id, "user_id": staff_id,
         "elective_block_id": block.id, "elective_option_id": block.options[0].id, "log_id": log.id,
+        "alias_id": alias.id,
     }
 
 

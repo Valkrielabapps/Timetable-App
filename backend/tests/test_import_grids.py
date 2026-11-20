@@ -49,7 +49,7 @@ def test_the_subjects_import_reads_every_subject_once():
     rows, info = smart_rows("subjects", "a.docx", DOC, ai=NoAI())
     names = [r["name"] for r in rows]
     for want in ("English", "Tamil", "Maths", "Physics", "Chemistry", "Physical Education", "Biology",
-                 "Economics", "Accountancy", "Artificial Intelligence", "C.T"):
+                 "Economics", "Accountancy", "Artificial Intelligence", "Class Teacher Period"):
         assert want in names
     assert len(names) == len({n.lower() for n in names})
     assert not {"TOTAL", "CLASS", "I", "VI", "NEET"} & set(names)

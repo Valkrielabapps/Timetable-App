@@ -495,6 +495,28 @@ _SUBJECT_ALIASES = {
     "acco": "accounts", "bs": "business", "ip": "ip", "informaticspractices": "ip",
     "2ln": "lang2", "secondlanguage": "lang2", "2ndlanguage": "lang2", "3ln": "lang3", "thirdlanguage": "lang3",
     "3rdlanguage": "lang3", "read": "reading", "reading": "reading", "lis": "listening", "listening": "listening", "speak": "speaking", "speaking": "speaking",
+    # Short forms Indian schools use, CBSE, ICSE and state boards alike.
+    "ssc": "social", "ssci": "social", "socsc": "social", "socstudies": "social",
+    "gensci": "science", "gensc": "science", "genscience": "science", "generalscience": "science",
+    "libraryperiod": "library", "libperiod": "library",
+    "envstudies": "evs", "envsc": "evs",
+    "compsc": "computer", "compsci": "computer",
+    "ct": "ctp", "ctp": "ctp", "classteacher": "ctp", "classteacherperiod": "ctp", "ctperiod": "ctp",
+    "ve": "valueed", "valueed": "valueed", "valueeducation": "valueed", "moralscience": "valueed",
+    "moraled": "valueed", "moraleducation": "valueed",
+    "we": "supw", "workeducation": "supw", "workexperience": "supw", "workexp": "supw", "worked": "supw",
+    "mus": "music", "music": "music", "dance": "dance", "yoga": "yoga",
+    "drawing": "art", "finearts": "art", "fineart": "art", "draw": "art",
+    "pet": "pe", "phe": "pe", "hpe": "pe", "healthandphysicaleducation": "pe", "physicalandhealtheducation": "pe",
+    "acct": "accounts", "accy": "accounts", "che": "chemistry",
+    "psy": "psychology", "psych": "psychology", "psychology": "psychology",
+    "polsc": "polsci", "polsci": "polsci", "politicalscience": "polsci",
+    "urdu": "urdu", "marathi": "marathi", "mar": "marathi", "bengali": "bengali", "beng": "bengali",
+    "punjabi": "punjabi", "pun": "punjabi", "gujarati": "gujarati", "guj": "gujarati", "odia": "odia",
+    "german": "german", "ger": "german", "spanish": "spanish", "spa": "spanish",
+    "abacus": "abacus", "happiness": "happiness", "happinessclass": "happiness",
+    "secondlang": "lang2", "2ndlang": "lang2", "iilang": "lang2", "thirdlang": "lang3", "3rdlang": "lang3",
+    "iiilang": "lang3",
 }
 
 # A clean name for a known subject the school doesn't have yet, so "PT",
@@ -511,6 +533,10 @@ _CONCEPT_NAMES = {
     "malayalam": "Malayalam", "sanskrit": "Sanskrit", "french": "French", "robotics": "Robotics",
     "ai": "Artificial Intelligence", "ip": "Informatics Practices", "reading": "Reading", "listening": "Listening",
     "speaking": "Speaking", "lang2": "2nd Language", "lang3": "3rd Language",
+    "ctp": "Class Teacher Period", "valueed": "Value Education", "supw": "SUPW", "music": "Music",
+    "dance": "Dance", "yoga": "Yoga", "psychology": "Psychology", "polsci": "Political Science", "urdu": "Urdu",
+    "marathi": "Marathi", "bengali": "Bengali", "punjabi": "Punjabi", "gujarati": "Gujarati", "odia": "Odia",
+    "german": "German", "spanish": "Spanish", "abacus": "Abacus", "happiness": "Happiness Class",
 }
 
 
@@ -530,14 +556,32 @@ def _best_spelling(spellings: list[str]) -> str:
     return max(spellings, key=lambda x: (not x.isupper() or len(x) <= 3, not x.islower(), len(x), x))
 
 
-def _rule_subjects(items: list[str], school_subjects: list[str]) -> dict[str, list[str]]:
+def _school_meaning(meaning: str, school_subjects: list[str]) -> str:
+    """A confirmed short form's subject as the school spells it now."""
+    for s in school_subjects:
+        if _key(s) == _key(meaning):
+            return s
+    c = _concept(meaning)
+    return next((s for s in school_subjects if _concept(s) == c), meaning)
+
+
+def _rule_subjects(items: list[str], school_subjects: list[str],
+                   aliases: dict[str, str] | None = None) -> dict[str, list[str]]:
+    """What each subject value means, without the AI. `aliases`: the short
+    forms this school confirmed before ({key: name}), read first."""
+    aliases = aliases or {}
     by_concept = {_concept(s): s for s in school_subjects}
     out, new_by_concept = {}, {}
     for item in items:
+        if _key(item) in aliases:
+            out[item] = [_school_meaning(aliases[_key(item)], school_subjects)]
+    for item in items:
         c = _concept(item)
-        if c and c not in by_concept:
+        if c and c not in by_concept and item not in out:
             new_by_concept.setdefault(c, []).append(item.strip())
     for item in items:
+        if item in out:
+            continue
         c = _concept(item)
         if not c:
             out[item] = []
@@ -1467,12 +1511,17 @@ def _from_class_tables(tables: list[dict], kind: str, school_grades: list[str]) 
 
 
 def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), school_grades=(),
-               ai=None) -> tuple[list[dict], dict]:
+               ai=None, aliases: dict | None = None) -> tuple[list[dict], dict]:
     """The file's rows keyed by bulk_import's field names, with subjects and
     grades already matched to the school's own, and an account of how it was
-    read: {"sheet", "header_row", "layout", "read_as", "matched", "used_ai"}."""
+    read: {"sheet", "header_row", "layout", "read_as", "matched", "used_ai"}.
+    `aliases`: the school's confirmed short forms, {"subject": {key: name},
+    "teacher": {key: name}} (services/aliases.py) - read before anything
+    else and never asked about again."""
     ai = LiveAI() if ai is None else ai
     school_subjects, school_grades = list(school_subjects), list(school_grades)
+    subject_aliases = (aliases or {}).get("subject") or {}
+    teacher_aliases = (aliases or {}).get("teacher") or {}
 
     sheets = read_sheets(filename, content, kind)
     # One small table per class, anywhere on a sheet: read every one of them.
@@ -1595,6 +1644,8 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
         subjects = [x for x in subjects if not is_label(x)]
         if rec.get("name") and not is_label(rec["name"]) and _key(rec["name"]) not in (
                 _NOT_A_TEACHER if kind == "teachers" else set()):
+            if kind == "teachers" and _key(rec["name"]) in teacher_aliases:
+                rec["name"] = teacher_aliases[_key(rec["name"])]
             raw_rows.append((rec, subjects, grades))
 
     # What the subject and grade values mean.
@@ -1603,15 +1654,18 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     subject_items = sorted({s for _, subs, _ in raw_rows for s in subs}
                            | ({r["name"] for r, _, _ in raw_rows} if kind == "subjects" else set()))
     grade_items = sorted({g for _, _, gs in raw_rows for g in gs})
-    by_rule_subjects = _rule_subjects(subject_items, school_subjects)
+    by_rule_subjects = _rule_subjects(subject_items, school_subjects, subject_aliases)
     by_rule_grades = {g: _resolve_grades(g, school_grades)[0] for g in grade_items}
     unsure_grades = [g for g in grade_items if not by_rule_grades[g]]
-    answer = ai.values(subject_items, unsure_grades, school_subjects, school_grades) if (
-        subject_items or unsure_grades) else None
+    # What the school confirmed before isn't put to the AI or asked again.
+    settled = {i for i in subject_items if _key(i) in subject_aliases}
+    ask_items = [i for i in subject_items if i not in settled]
+    answer = ai.values(ask_items, unsure_grades, school_subjects, school_grades) if (
+        ask_items or unsure_grades) else None
     if answer:
         used_ai = True
     subject_meaning = {i: (_checked(i, answer["subjects"][i], by_rule_subjects[i])
-                           if answer and i in answer["subjects"] else by_rule_subjects[i])
+                           if answer and i in answer["subjects"] and i not in settled else by_rule_subjects[i])
                        for i in subject_items}
     grade_meaning = {g: by_rule_grades[g] or ((answer or {}).get("grades", {}).get(g) or []) for g in grade_items}
 
@@ -1620,7 +1674,7 @@ def smart_rows(kind: str, filename: str, content: bytes, school_subjects=(), sch
     def low(xs):
         return [x.lower() for x in xs]
 
-    doubtful_subjects = {i for i in subject_items if answer and i in answer["subjects"]
+    doubtful_subjects = {i for i in ask_items if answer and i in answer["subjects"]
                          and subject_meaning[i] and low(subject_meaning[i]) != low(by_rule_subjects[i])}
     doubtful_grades = {g for g in grade_items if not by_rule_grades[g] and grade_meaning[g]}
 
@@ -1840,12 +1894,19 @@ def _rename_teacher(rows: list[dict], old: str, new: str) -> list[dict]:
             for n, r in enumerate(rows) if _norm(r.get("name", "")) == _norm(old)]
 
 
+def _mem(kind: str, text: str, meaning: str) -> dict:
+    """A short form to keep for the school if this answer is chosen."""
+    return {"kind": kind, "text": text, "meaning": meaning}
+
+
 def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), school_teachers=()) -> list[dict]:
     """What the school is asked before anything is saved, so nothing is
     guessed: two spellings that may be one teacher or one subject (in the
     sheet, or the sheet and what's already here), and readings only the AI
     made. Each answer is a list of edits to the previewed rows:
-    {"row", "field", "remove": [...], "add": [...]}."""
+    {"row", "field", "remove": [...], "add": [...]}. An option's "remember"
+    lists the short forms kept for the school when it's chosen, so the same
+    question is never asked again."""
     questions: list[dict] = []
     school_subjects, school_teachers = list(school_subjects), list(school_teachers)
 
@@ -1863,7 +1924,8 @@ def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), 
                     "id": f"teacher:{sheet}|{here}",
                     "text": f"Is “{sheet}” in the sheet the same teacher as “{here}”, who is already here?",
                     "options": [
-                        {"label": f"Yes, the same person (keep “{here}”)", "edits": _rename_teacher(rows, sheet, here)},
+                        {"label": f"Yes, the same person (keep “{here}”)", "edits": _rename_teacher(rows, sheet, here),
+                         "remember": [_mem("teacher", sheet, here)]},
                         {"label": f"No, “{sheet}” is someone new", "edits": []},
                     ],
                 })
@@ -1872,8 +1934,10 @@ def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), 
                     "id": f"teacher:{a}|{b}",
                     "text": f"Are “{a}” and “{b}” the same teacher?",
                     "options": [
-                        {"label": f"Yes, call them “{b}”", "edits": _rename_teacher(rows, a, b)},
-                        {"label": f"Yes, call them “{a}”", "edits": _rename_teacher(rows, b, a)},
+                        {"label": f"Yes, call them “{b}”", "edits": _rename_teacher(rows, a, b),
+                         "remember": [_mem("teacher", a, b)]},
+                        {"label": f"Yes, call them “{a}”", "edits": _rename_teacher(rows, b, a),
+                         "remember": [_mem("teacher", b, a)]},
                         {"label": "No, two different teachers", "edits": []},
                     ],
                 })
@@ -1887,7 +1951,8 @@ def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), 
                 "id": f"subject:{sheet}|{here}",
                 "text": f"Is “{sheet}” in the sheet the same subject as “{here}”, which is already here?",
                 "options": [
-                    {"label": f"Yes, the same (keep “{here}”)", "edits": _rename_subject(kind, rows, sheet, here)},
+                    {"label": f"Yes, the same (keep “{here}”)", "edits": _rename_subject(kind, rows, sheet, here),
+                     "remember": [_mem("subject", sheet, here)]},
                     {"label": f"No, “{sheet}” is a different subject", "edits": []},
                 ],
             })
@@ -1896,8 +1961,10 @@ def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), 
                 "id": f"subject:{a}|{b}",
                 "text": f"Are “{a}” and “{b}” the same subject?",
                 "options": [
-                    {"label": f"Yes, call it “{b}”", "edits": _rename_subject(kind, rows, a, b)},
-                    {"label": f"Yes, call it “{a}”", "edits": _rename_subject(kind, rows, b, a)},
+                    {"label": f"Yes, call it “{b}”", "edits": _rename_subject(kind, rows, a, b),
+                     "remember": [_mem("subject", a, b)]},
+                    {"label": f"Yes, call it “{a}”", "edits": _rename_subject(kind, rows, b, a),
+                     "remember": [_mem("subject", b, a)]},
                     {"label": "No, two different subjects", "edits": []},
                 ],
             })
@@ -1912,7 +1979,8 @@ def make_questions(kind: str, rows: list[dict], info: dict, school_subjects=(), 
             "id": f"meaning:{item}",
             "text": f"Is “{item}” {' and '.join(f'“{m}”' for m in means)}?",
             "options": [
-                {"label": "Yes", "edits": []},
+                {"label": "Yes", "edits": [],
+                 "remember": [_mem("subject", item, means[0])] if len(means) == 1 else []},
                 {"label": f"No, keep “{item}” as its own subject",
                  "edits": [{"row": n, "field": field, "remove": list(means), "add": [item]} for n in where]},
             ],
@@ -1973,9 +2041,12 @@ def build_preview(db: Session, school_id: int, kind: str, filename: str, content
     check. Nothing is written."""
     from app.models.school import Teacher
 
+    from app.services import aliases as short_forms
+
     school_subjects, school_grades = school_context(db, school_id)
+    known_forms = {k: short_forms.lookup(db, school_id, k) for k in short_forms.KINDS}
     rows, info = smart_rows(kind, filename, content, school_subjects=school_subjects,
-                            school_grades=school_grades, ai=ai)
+                            school_grades=school_grades, ai=ai, aliases=known_forms)
     checks, check_notes = check_rows(kind, rows, school_subjects, school_grades, look_alikes=False)
     model = Subject if kind == "subjects" else Teacher
     existing = [x.name for x in db.query(model).filter(model.school_id == school_id)]

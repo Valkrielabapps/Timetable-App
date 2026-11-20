@@ -540,6 +540,33 @@ class RuleReadEvent(Base):
     triage = Column(String(16), nullable=True)
 
 
+class SchoolAlias(Base):
+    """A short form the school confirmed once: "MAT" is Mathematics, "BEAUL"
+    is Beula Rao, "2LN" is 2nd Language. Every importer (last year's
+    timetable, subjects, teachers) and the rules page read these first, so
+    the school is never asked about the same short form twice.
+
+    `key` is the text reduced to letters and digits (smart_import._key), so
+    "S. Sc." and "SSC" are one entry. `meaning` is the name it stands for;
+    `target_id` the subject or teacher it was confirmed as, if known, so a
+    later rename is followed. No foreign key: a deleted target just leaves
+    the name, which the importers still understand.
+    """
+    __tablename__ = "school_aliases"
+    __table_args__ = (UniqueConstraint("school_id", "kind", "key", name="uq_alias_school_kind_key"),)
+
+    id = Column(Integer, primary_key=True)
+    school_id = Column(Integer, ForeignKey("schools.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(16), nullable=False)  # subject | teacher
+    key = Column(String(100), nullable=False)
+    text = Column(String(100), nullable=False)
+    meaning = Column(String(100), nullable=False)
+    target_id = Column(Integer, nullable=True)
+    # Where it was confirmed: timetable | subjects | teachers | rules | manual
+    source = Column(String(16), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class Timetable(Base):
     """A generated schedule (one solver run's output).
 

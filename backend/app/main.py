@@ -28,6 +28,7 @@ from app.routers import (
     grade_categories,
     invites,
     outreach,
+    short_forms,
     payments,
     plans,
     periods,
@@ -124,6 +125,7 @@ app.include_router(payments.router)
 app.include_router(plans.router)
 app.include_router(admin.router)
 app.include_router(outreach.router)
+app.include_router(short_forms.router)
 
 
 @app.on_event("startup")

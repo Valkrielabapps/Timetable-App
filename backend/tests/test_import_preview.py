@@ -17,16 +17,16 @@ GRADES = ["Grade 6", "Grade 7", "Grade 8", "Grade 9"]
 
 def test_only_what_the_ai_alone_read_is_doubtful():
     sheet = [["Name", "Subjects", "Classes"],
-             ["Priya", "Maths", "Std 9"], ["Rahul", "Comp Sci", "Middle school"]]
+             ["Priya", "Maths", "Std 9"], ["Rahul", "Info Tech", "Middle school"]]
     ai = FakeAI(columns={0: "name", 1: "qualified_subjects", 2: "qualified_grades"},
-                subjects={"Maths": ["Mathematics"], "Comp Sci": ["Computer Science"]},
+                subjects={"Maths": ["Mathematics"], "Info Tech": ["Information Technology"]},
                 grades={"Middle school": ["Grade 6", "Grade 7", "Grade 8"]})
     rows, info = smart_rows("teachers", "s.xlsx", xlsx(("S", sheet)),
-                            school_subjects=["Mathematics", "Computer Science"], school_grades=GRADES, ai=ai)
-    # Maths -> Mathematics the rules knew too; Comp Sci and Middle school only the AI.
-    assert info["doubtful"] == ["“Comp Sci” as Computer Science", "“Middle school” as Grade 6, Grade 7, Grade 8"]
+                            school_subjects=["Mathematics", "Information Technology"], school_grades=GRADES, ai=ai)
+    # Maths -> Mathematics the rules knew too; Info Tech and Middle school only the AI.
+    assert info["doubtful"] == ["“Info Tech” as Information Technology", "“Middle school” as Grade 6, Grade 7, Grade 8"]
     assert info["row_notes"][0] == []
-    assert info["row_notes"][1] == ["“Comp Sci” → Computer Science?", "“Middle school” → Grade 6, Grade 7, Grade 8?"]
+    assert info["row_notes"][1] == ["“Info Tech” → Information Technology?", "“Middle school” → Grade 6, Grade 7, Grade 8?"]
 
 
 def test_checks_duplicates_no_subjects_unknown_grades_and_typos():
@@ -118,8 +118,8 @@ def test_a_viewer_cannot_preview_or_commit(client, school):
 
 def test_questions_about_teachers_and_what_each_answer_changes(client, school):
     sid, h = school  # "Rahul Mehta" is already here
-    sheet = [["Name", "Subjects"], ["Rahul Meta", "Maths"], ["Kavita K", "Hindi"], ["Kavita Khana", "Hindi, Comp Sci"]]
-    ai = FakeAI(columns={0: "name", 1: "qualified_subjects"}, subjects={"Comp Sci": ["Computer Science"]})
+    sheet = [["Name", "Subjects"], ["Rahul Meta", "Maths"], ["Kavita K", "Hindi"], ["Kavita Khana", "Hindi, Info Tech"]]
+    ai = FakeAI(columns={0: "name", 1: "qualified_subjects"}, subjects={"Info Tech": ["Information Technology"]})
     smart_import_live = smart_import.LiveAI
     try:
         smart_import.LiveAI = lambda: ai
@@ -131,16 +131,16 @@ def test_questions_about_teachers_and_what_each_answer_changes(client, school):
     assert set(qs) == {
         "Is “Rahul Meta” in the sheet the same teacher as “Rahul Mehta”, who is already here?",
         "Are “Kavita K” and “Kavita Khana” the same teacher?",
-        "Is “Comp Sci” “Computer Science”?",
+        "Is “Info Tech” “Information Technology”?",
     }
-    # Answers: Rahul is the one already here; the Kavitas are one person; Comp Sci stays as typed.
+    # Answers: Rahul is the one already here; the Kavitas are one person; Info Tech stays as typed.
     edits = (qs["Is “Rahul Meta” in the sheet the same teacher as “Rahul Mehta”, who is already here?"]["options"][0]["edits"]
              + qs["Are “Kavita K” and “Kavita Khana” the same teacher?"]["options"][0]["edits"]
-             + qs["Is “Comp Sci” “Computer Science”?"]["options"][1]["edits"])
+             + qs["Is “Info Tech” “Information Technology”?"]["options"][1]["edits"])
     rows = smart_import.apply_edits(p["rows"], edits)
     assert rows == [{"name": "Rahul Mehta", "qualified_subjects": "Maths"},
                     {"name": "Kavita Khana", "qualified_subjects": "Hindi"},
-                    {"name": "Kavita Khana", "qualified_subjects": "Hindi;Comp Sci"}]
+                    {"name": "Kavita Khana", "qualified_subjects": "Hindi;Info Tech"}]
     r = client.post("/api/teachers/bulk-import/commit", json={"school_id": sid, "rows": rows}, headers=h).json()
     assert (r["created"], r["updated"]) == (1, 2)  # Kavita once; Rahul and Kavita's second row update
     db = SessionLocal()

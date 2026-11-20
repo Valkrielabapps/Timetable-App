@@ -56,6 +56,9 @@ EXTRA_NAMES = {
     "Value Education": ["Moral Science", "Moral Education", "Value Ed"],
     "EVS": ["Environmental Studies", "Environmental Science"],
     "Library": ["Lib", "Library Period", "Reading"],
+    # The app's clean name for the language blocks (smart_import._CONCEPT_NAMES).
+    "Second Language": ["2nd Language"],
+    "Third Language": ["3rd Language"],
 }
 
 

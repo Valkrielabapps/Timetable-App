@@ -521,7 +521,11 @@ export const api = {
   // A school's own sheet (subjects, teachers): read and shown first, saved
   // only when the school clicks Import. See app/services/smart_import.py.
   bulkImportPreview: (resource, schoolId, file) => uploadFile(`/${resource}/bulk-import/preview`, schoolId, file),
-  bulkImportCommit: (resource, schoolId, rows) => post(`/${resource}/bulk-import/commit`, { school_id: schoolId, rows }),
+  bulkImportCommit: (resource, schoolId, rows, remember = []) =>
+    post(`/${resource}/bulk-import/commit`, { school_id: schoolId, rows, remember }),
+  shortForms: (schoolId) => get(`/schools/${schoolId}/short-forms`),
+  addShortForm: (schoolId, body) => post(`/schools/${schoolId}/short-forms`, body),
+  deleteShortForm: (schoolId, id) => del(`/schools/${schoolId}/short-forms/${id}`),
   // Every section's weekly plan from the allotment sheet (backend
   // app/services/class_plan.py): read and asked about first, then saved.
   // staffFile (optional): the staff list, so short names are matched to full ones.

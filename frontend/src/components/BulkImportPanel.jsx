@@ -74,11 +74,14 @@ export default function BulkImportPanel({ schoolId, onImported, resource, onFile
     }
   }
 
-  async function handleCommit(rows) {
+  async function handleCommit(rows, remember = []) {
     setSaving(true)
     setError(null)
     try {
-      const res = await api.bulkImportCommit(resource, schoolId, rows)
+      // Short forms the answers confirmed are kept, so no import asks again.
+      const res = remember.length
+        ? await api.bulkImportCommit(resource, schoolId, rows, remember)
+        : await api.bulkImportCommit(resource, schoolId, rows)
       // Keep how it was read alongside what was saved.
       setResult({ ...res, sheet: preview.sheet, read_as: preview.read_as, matched: preview.matched })
       setPreview(null)
@@ -234,6 +237,7 @@ function ImportPreview({ preview, saving, onImport, onCancel }) {
     () => applyEdits(preview.rows, questions.flatMap((q) => (answers[q.id] === undefined ? [] : q.options[answers[q.id]].edits))),
     [preview.rows, questions, answers],
   )
+  const remember = questions.flatMap((q) => (answers[q.id] === undefined ? [] : q.options[answers[q.id]].remember || []))
   const doubtful = new Set(preview.doubtful)
   const notes = preview.row_notes
   const shown = rows
@@ -372,7 +376,7 @@ function ImportPreview({ preview, saving, onImport, onCancel }) {
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          onClick={() => onImport(rows)}
+          onClick={() => onImport(rows, remember)}
           disabled={saving || preview.total === 0 || unanswered > 0}
           className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >

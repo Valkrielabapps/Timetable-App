@@ -2,6 +2,7 @@ import { groupSectionIds } from '../electiveSections'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import BulkImportPanel from './BulkImportPanel'
+import ShortFormsPanel from './ShortFormsPanel'
 import { confirmDialog } from './confirmDialog'
 import { compareNames, loadChoice, matchesSearch, saveChoice } from '../sorting'
 
@@ -265,6 +266,7 @@ export default function SubjectsSection({
           {showImport && (
             <div className="mt-3">
               <BulkImportPanel schoolId={schoolId} resource="subjects" onImported={onSubjectsChanged.reload} />
+              <ShortFormsPanel schoolId={schoolId} kind="subject" />
             </div>
           )}
         </div>
