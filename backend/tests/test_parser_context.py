@@ -292,3 +292,30 @@ def test_a_ban_on_every_lesson_when_periods_are_named_is_asked_about():
                      "relation": "==", "value": 0})
     asked = P._sanity(wrong, "Grade 12 Biology in periods 5 and 6", WEEK)
     assert asked.rule is None and asked.unclear is not None
+
+
+def test_same_subject_twice_a_day_counts_each_subject_not_different_subjects():
+    """Seen live: "As far as possible, no class should have the same subject
+    twice in one day" came back as "Every class has at most 1 different subject
+    on any day" - a day of one subject, and as a requirement."""
+    wrong = _parsed({"form": "count", "scope": ["class_group", "day"], "selector": {},
+                     "relation": "<=", "value": 1, "distinct": "subject"})
+    fixed = P._sanity(wrong, "As far as possible, no class should have the same subject twice in one day", WEEK)
+    f = fixed.rule.form
+    assert f.distinct is None and set(f.scope) == {"class_group", "subject", "day"} and f.value == 1
+    assert fixed.rule.strength == "strong_preference"
+    assert fixed.sentence.startswith("As far as possible")
+    assert "different" not in fixed.sentence
+
+
+def test_a_real_cap_on_different_subjects_is_left_alone():
+    right = _parsed({"form": "count", "scope": ["class_group", "day"], "selector": {"class_groups": ["Grade 6"]},
+                     "relation": "<=", "value": 6, "distinct": "subject"})
+    assert P._sanity(right, "Grade 6 can have at most 6 different subjects in a day", WEEK) is right
+
+
+def test_unless_necessary_makes_a_rule_give_way():
+    hard = _parsed({"form": "count", "scope": ["class_group", "subject", "day"], "selector": {},
+                    "relation": "<=", "value": 1})
+    soft = P._sanity(hard, "no double periods of a subject on one day unless absolutely necessary", WEEK)
+    assert soft.rule.strength == "strong_preference"

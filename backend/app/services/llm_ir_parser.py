@@ -450,6 +450,11 @@ _EXAMPLES = """Worked examples:
 "Grade 6 can have at most 6 different subjects in a day"
   form=count scope=["class_group","day"] selector={class_groups:["Grade 6"]} relation="<=" value=6 distinct="subject"
 
+"As far as possible, no class should have the same subject twice in one day"
+  form=count scope=["class_group","subject","day"] selector={} relation="<=" value=1 strength="strong_preference"
+  - "the same subject twice" counts periods of EACH subject (scope gains subject) - NOT
+    distinct="subject", which would allow only one subject in the whole day.
+
 "Not more than 2 Maths periods in a row"
   form=run scope=["class_group"] selector={subjects:["Maths"]} max_consecutive=2
 
@@ -1277,7 +1282,8 @@ def _usage(response) -> tuple[int, int, int, int]:
 _PREFERENCE_MARKERS = re.compile(
     r"\btry\b|\btrying\b|if (?:at all )?possible|where possible|when(?:ever)? possible|\bideally\b|\bprefer"
     r"|would (?:be )?(?:like|nice|good|better)|\bpreferabl|as much as poss|\bif poss|\bavoid\b|\bwhere it can\b"
-    r"|\bbetter if\b|\bnice if\b|\brather\b|\bpreferably\b|\bif you can\b",
+    r"|\bbetter if\b|\bnice if\b|\brather\b|\bpreferably\b|\bif you can\b"
+    r"|as far as poss|wherever poss|unless (?:it(?:'s| is) )?(?:absolutely |really )?(?:necessary|needed|unavoidable)",
     re.IGNORECASE,
 )
 _DAY_WORDS = [
@@ -1379,6 +1385,12 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
     if rule.strength != "required" and not _PREFERENCE_MARKERS.search(text) \
             and not isinstance(rule.form, (Balance, Span)):
         rule = _replace(rule, strength="required")
+        changed = True
+    # The other way: "as far as possible", "unless necessary", "if possible"
+    # say the rule may give way, so it isn't a requirement. ("avoid" and
+    # "rather" are left as the model read them - they can be either.)
+    elif rule.strength == "required" and _SOFTENERS.search(text):
+        rule = _replace(rule, strength="strong_preference")
         changed = True
 
     form = rule.form
@@ -1494,6 +1506,17 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
             rule = _replace(rule, form=Count(scope=scope, selector=f.selector, relation="<=", value=n))
             changed = True
 
+    # 8b. "no class should have the same subject twice in one day" read as
+    #     "at most 1 DIFFERENT subject a day" - a day of one subject. A cap of
+    #     a couple of different subjects a day is never meant; the sentence
+    #     counts periods of each subject.
+    f = rule.form
+    if isinstance(f, Count) and f.distinct == "subject" and "day" in f.scope and f.value <= 2 \
+            and f.relation in ("<=", "==") and _SAME_SUBJECT.search(text):
+        scope = tuple(dict.fromkeys([*f.scope, "subject"]))
+        rule = _replace(rule, form=_replace(f, scope=scope, distinct=None, relation="<="))
+        changed = True
+
     # 9. "English ko Hindi ke turant baad mat karna" / "English must not come
     #    right after Hindi" read as REQUIRING it to follow. A negation before
     #    the "after" makes it a ban.
@@ -1511,6 +1534,14 @@ def _sanity(result: "IRParse", text: str, periods) -> "IRParse":
     return IRParse(rule=rule, sentence=render(rule), usage=result.usage, adjusted=True)
 
 
+_SOFTENERS = re.compile(
+    r"as far as poss|as much as poss|wherever poss|where(?:ver)? possible|if (?:at all )?poss|when(?:ever)? possible"
+    r"|unless (?:it(?:'s| is) )?(?:absolutely |really )?(?:necessary|needed|unavoidable)|\bideally\b|\bpreferabl"
+    r"|\btry\b|\btrying\b|if you can",
+    re.IGNORECASE)
+_SAME_SUBJECT = re.compile(
+    r"same subject|\btwice\b|more than once|\brepeat|\bdouble|two periods of|2 periods of|\bsubject\b.{0,30}\bagain\b",
+    re.IGNORECASE)
 _NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "once": 1, "twice": 2, "ek": 1, "do": 2}
 _PER_DAY_CAP = re.compile(
     r"(?:more than|max(?:imum)?(?: of)?|at most|not more than|upto|up to)\s+(\w+)\s+[\w ]{0,30}?"
