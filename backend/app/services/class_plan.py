@@ -163,6 +163,102 @@ def _staff_from(filename: str, content: bytes) -> list[dict]:
             for r in rows if r.get("name")]
 
 
+def _days_text(days) -> str:
+    names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    return "every day" if not days else ", ".join(names[d] for d in days)
+
+
+def _timetable_part(reading: dict, out_tables: list[dict], subject_names: list[str], school_grades: list[str],
+                    aliases: dict, questions: list[dict]) -> dict:
+    """What last year's timetable adds to the plan, in the school's names,
+    and the questions about it: blocks, fixed periods, keeping it as it is."""
+    from app.services.timetable_reader import grade_number, section_of
+
+    def names_for(code: str) -> list[str]:
+        return list(dict.fromkeys(_subject_name(x, subject_names, aliases) for x in _split_subjects(code))) or [code]
+
+    by_label = {t["label"]: t for t in out_tables}
+    blocks = []
+    for n, b in enumerate(reading.get("blocks") or []):
+        secs = [[by_label[lab]["grade"], (by_label[lab]["sections"] or ["A"])[0]] for lab in b["sections"]
+                if lab in by_label]
+        if not secs:
+            continue
+        options = [{"subject": names_for(o["subject"])[0], "teacher": o.get("teacher") or ""} for o in b["options"]]
+        lang = _concept(b["code"]) in ("lang2", "lang3")
+        subjects = list(dict.fromkeys(o["subject"] for o in options))
+        name = f"{secs[0][0]} {subjects[0] if lang else ' / '.join(subjects)}"
+        blocks.append({"id": f"b{n}", "name": name[:60], "periods": b["periods"], "sections": secs,
+                       "labels": b["sections"], "slots": b["slots"], "options": options,
+                       "together": bool(b.get("together"))})
+    if blocks:
+        ex = "; ".join(f"{b['name']} ({', '.join(f'{g} {x}' for g, x in b['sections'][:4])}, {b['periods']} "
+                       f"period{'' if b['periods'] == 1 else 's'})" for b in blocks[:3]) + ("…" if len(blocks) > 3 else "")
+        questions.append({
+            "id": "blocks:all",
+            "text": f"Last year's timetable has {len(blocks)} {'lesson' if len(blocks) == 1 else 'lessons'} taught at "
+                    f"the same time to a group: {ex}. Set them up as blocks, so they stay together?",
+            "options": [{"key": "yes", "label": "Yes, as blocks (the sections or groups meet at the same time)"},
+                        {"key": "no", "label": "No, as ordinary subjects of each section"}],
+            "suggested": "yes",
+        })
+    same = reading.get("same_names") or []
+    for x in same:
+        questions.append({
+            "id": f"same:{x['name']}",
+            "text": f"“{x['name']}” is down for two classes at once ({x['example']}). Is that "
+                    f"{len(x['people'])} different teachers with the same name?",
+            "options": [{"key": "split", "label": f"Yes: {', '.join(x['people'])} (rename them afterwards)"},
+                        {"key": "one", "label": "No, one teacher taking those classes together"}],
+            "suggested": "split",
+        })
+    fixed = []
+    for f in reading.get("fixed") or []:
+        grades = list(dict.fromkeys(_grade_name(g, school_grades) for g in f["grades"]))
+        fixed.append({"subject": names_for(f["subject"])[0], "grades": grades, "period": f["period"],
+                      "days": f.get("days")})
+    if fixed:
+        ex = "; ".join(f"{f['subject']} in period {f['period']} {_days_text(f['days'])} ({', '.join(f['grades'][:5])})"
+                       for f in fixed[:3])
+        questions.append({
+            "id": "fixed:all",
+            "text": f"These were always at the same time: {ex}. Keep them fixed there when the new timetable is made?",
+            "options": [{"key": "yes", "label": "Yes, keep them fixed"},
+                        {"key": "no", "label": "No, they can go anywhere"}],
+            "suggested": "yes",
+        })
+    lessons = {sec["label"]: [{"day": l["day"], "period": l["period"], "subjects": names_for(l["subject"]),
+                               "code": l["subject"], "teachers": l.get("teachers") or []} for l in sec["lessons"]]
+               for sec in reading.get("sections") or [] if sec["label"] in by_label}
+    if lessons:
+        questions.append({
+            "id": "asis",
+            "text": "Also keep last year's timetable exactly as it was, as a timetable version you can open, "
+                    "check and edit (the plan above is made either way)?",
+            "options": [{"key": "yes", "label": "Yes, keep it as a version"},
+                        {"key": "no", "label": "No, only the plan"}],
+            "suggested": "yes",
+        })
+    return {"blocks": blocks, "fixed": fixed, "lessons": lessons, "view": reading.get("view"), "same_names": same}
+
+
+def _found_summary(part: dict | None, week: dict | None) -> list[str]:
+    """One line per thing read from last year's timetable, for the preview."""
+    out = []
+    if week and week.get("bell_times"):
+        times = [v for _, v in sorted(((int(k), v) for k, v in week["bell_times"].items()))]
+        out.append(f"Bell times: {times[0]} to {times[-1]}, {len(times)} periods")
+    if week and week.get("breaks"):
+        out.append("Breaks: " + ", ".join(f"{b['name']} after period {b['after']}" for b in week["breaks"]))
+    if part and part.get("blocks"):
+        out.append(f"{len(part['blocks'])} blocks (taught to a group at once)")
+    if part and part.get("fixed"):
+        out.append(f"{len(part['fixed'])} fixed periods")
+    if part and part.get("lessons"):
+        out.append(f"Every lesson where it was, for {len(part['lessons'])} sections")
+    return out
+
+
 def build_preview(db: Session, school_id: int, filename: str, content: bytes,
                   staff_file: tuple[str, bytes] | None = None) -> dict:
     from app.services import aliases as short_forms
@@ -179,7 +275,15 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
              for t in s["teachers"]] + staff_listed
     # A table per class, a grid of counts (classes down, subjects across, or
     # the other way), a list under each teacher, or last year's timetable.
-    title, tables = plan_tables(sheets, staff)
+    tt_sheets = read_sheets(filename, content, "timetable")
+    title, tables = plan_tables(sheets, staff, timetable_sheets=tt_sheets)
+    # Last year's timetable: also its blocks, fixed periods, bell times and
+    # every lesson where it was - see app/services/timetable_reader.py.
+    reading = None
+    if any(t.get("timetable") for t in tables):
+        from app.services.timetable_reader import read_timetable
+        reading = read_timetable(tt_sheets, staff)
+    use_blocks = bool(reading and reading.get("blocks"))
     if not tables:
         raise ValueError("Couldn't find the periods for each class in this file. It can read a table per class "
                          "(Subjects, Periods, Teacher), a grid with classes down one side and subjects across "
@@ -196,10 +300,14 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
 
     # Teachers named in the sheet, matched to the school's.
     raw_people: dict[str, None] = {}
+    for b in (reading or {}).get("blocks") or []:
+        for o in b["options"]:
+            if o.get("teacher"):
+                raw_people.setdefault(o["teacher"], None)
     for t in tables:
         if t.get("class_teacher"):
             raw_people.setdefault(t["class_teacher"], None)
-        for _, _, cell in t["items"]:
+        for _, _, cell in (t.get("block_items", t["items"]) if use_blocks else t["items"]):
             for p in _split_people(cell) + [x for x in re.split(r"\s*/\s*", cell) if _key(x) in _CLASS_TEACHER]:
                 raw_people.setdefault(p, None)
     people: dict[str, dict] = {}
@@ -253,7 +361,8 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
                 existing_with_plan.add(g.id)
 
         shared_items = 0
-        for j, (subj_cell, per_cell, teacher_cell) in enumerate(t["items"]):
+        items_src = t.get("block_items", t["items"]) if use_blocks else t["items"]
+        for j, (subj_cell, per_cell, teacher_cell) in enumerate(items_src):
             periods = _periods(per_cell)
             # "PT/Games" is one subject spelt two ways, not two subjects.
             subjects = list(dict.fromkeys(_subject_name(x, subject_names, known_forms["subject"]) for x in _split_subjects(subj_cell)))
@@ -342,6 +451,11 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
             "suggested": "replace",
         })
 
+    timetable_part = _timetable_part(reading, out_tables, subject_names, s["grades"], known_forms["subject"],
+                                     questions) if reading else None
+    if reading:
+        checks += reading.get("checks") or []
+
     # What would make generating fail, found now (choices counted once).
     # A school with no week yet is checked against last year's, if that's
     # what the file is.
@@ -375,7 +489,8 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
     return {
         "sheet": title,
         "plan": {"tables": out_tables, "people": people, "ask_existing": bool(existing_with_plan), "week": week,
-                 "staff": staff_listed},
+                 "staff": staff_listed, "timetable": timetable_part},
+        "found": _found_summary(timetable_part, file_week),
         "week": week,
         "staff_listed": len(staff_listed),
         "new_teachers": sorted({p for p, v in people.items() if v.get("new")}
@@ -474,6 +589,16 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             t.qualified_grades = gs + [grade]
 
     replace = bool(plan.get("ask_existing")) and _answer(answers, "existing", ("replace", "add")) == "replace"
+    # One name for two people, where the school said so: each lesson goes to
+    # the one who teaches that subject in that section.
+    split_names: dict[str, dict] = {}
+    for x in (plan.get("timetable") or {}).get("same_names") or []:
+        if _answer(answers, f"same:{x['name']}", ("split", "one")) == "split":
+            split_names[x["name"]] = x.get("who") or {}
+
+    def who_for(name: str, code: str, label: str) -> str:
+        m = split_names.get(name)
+        return (m.get(f"{_concept(code)}|{label}") or name) if m else name
     # Everyone on the staff list, with what their department teaches - also
     # those last year's timetable doesn't name.
     for person in plan.get("staff") or []:
@@ -485,12 +610,26 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
     week = plan.get("week") or {}
     if week.get("periods") and not s["lessons"]:
         days = list(week.get("days") or range(5))
+        # Last year's bell times label each period; its breaks go in too.
+        bells = {int(k): str(v) for k, v in (week.get("bell_times") or {}).items()}
+        breaks: dict[int, list[str]] = defaultdict(list)
+        for b in week.get("breaks") or []:
+            if isinstance(b, dict) and b.get("after"):
+                breaks[int(b["after"])].append(str(b.get("name") or "Break")[:40])
         for d in days:
-            for o in range(int(week["periods"])):
-                db.add(Period(school_id=school_id, day_of_week=int(d), order=o, label=f"Period {o + 1}", kind="lesson"))
+            order = 0
+            for n in range(1, int(week["periods"]) + 1):
+                label = f"Period {n}" + (f" ({bells[n]})" if n in bells else "")
+                db.add(Period(school_id=school_id, day_of_week=int(d), order=order, label=label, kind="lesson"))
+                order += 1
+                if n < int(week["periods"]):
+                    for name in breaks.get(n, []):
+                        db.add(Period(school_id=school_id, day_of_week=int(d), order=order, label=name, kind="break"))
+                        order += 1
         db.flush()
         created["periods"] = len(days) * int(week["periods"])
     groups_by_key = {(_norm(g.grade or ""), _norm(g.name)): g for g in s["groups"]}
+    group_of_label: dict[str, ClassGroup] = {}
 
     for table in plan.get("tables", []):
         grade = table.get("grade")
@@ -514,6 +653,8 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
                     db.delete(b)
                 db.flush()
             sections.append(g)
+        if len(sections) == 1:
+            group_of_label[table.get("label") or ""] = sections[0]
         in_order = table.get("shared_q") and _answer(answers, table["shared_q"], ("order", "either")) == "order"
         if table.get("class_teacher"):
             ct = teacher(table["class_teacher"])
@@ -545,7 +686,7 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             periods = int(it.get("periods") or 0)
             if periods <= 0:
                 continue
-            who_all = [teacher(p) for p in it.get("teachers", [])]
+            who_all = [teacher(who_for(p, it.get("raw") or "", table.get("label") or "")) for p in it.get("teachers", [])]
             subs = [str(x) for x in it.get("subjects", []) if str(x).strip()]
             if len(subs) == 1:
                 sub = subject(subs[0])
@@ -595,4 +736,135 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
                                          name=" / ".join(subs)[:60], periods_per_week=periods, options=options))
                     created["blocks"] += 1
             db.flush()
+    part = plan.get("timetable") or {}
+    if part:
+        _commit_timetable_part(db, school_id, plan, part, answers, created, subject, teacher, qualify,
+                               group_of_label, who_for)
     return created
+
+
+def _commit_timetable_part(db, school_id, plan, part, answers, created, subject, teacher, qualify,
+                           group_of_label, who_for=lambda n, c, lab: n) -> None:
+    """Blocks, fixed periods and the timetable as it was, as answered."""
+    from app.models.school import School, Timetable, TimetableEntry
+    from app.services.timetable_structure import lesson_numbers
+    from app.services.versions import next_version_number
+
+    def group_list(labels):
+        return [group_of_label[lab] for lab in labels if lab in group_of_label]
+
+    as_blocks = bool(part.get("blocks")) and _answer(answers, "blocks:all", ("yes", "no")) == "yes"
+    made: list[tuple[dict, ElectiveBlock]] = []
+    for b in part.get("blocks") or []:
+        groups = group_list(b.get("labels") or [])
+        if not groups:
+            continue
+        periods = max(1, int(b.get("periods") or 1))
+        if not as_blocks:
+            # Ordinary subjects of each section instead.
+            subs = list(dict.fromkeys(o["subject"] for o in b["options"]))
+            who = [teacher(o["teacher"]) for o in b["options"] if o.get("teacher")]
+            sub = subject(_one_name(subs))
+            for g in groups:
+                ts = [w for w in who if isinstance(w, Teacher)]
+                for t in ts:
+                    qualify(t, sub, g.grade)
+                req = (db.query(SubjectRequirement)
+                       .filter(SubjectRequirement.class_group_id == g.id, SubjectRequirement.subject_id == sub.id)
+                       .first())
+                if req is None:
+                    db.add(SubjectRequirement(class_group_id=g.id, subject_id=sub.id, periods_per_week=periods,
+                                              preferred_teacher_id=ts[0].id if len(ts) == 1 else None,
+                                              allowed_teacher_ids=[t.id for t in ts] if len(ts) > 1 else None))
+                    created["requirements"] += 1
+            continue
+        options = []
+        same = defaultdict(int)
+        for o in b["options"]:
+            same[o["subject"]] += 1
+        seen = defaultdict(int)
+        for o in b["options"]:
+            sub = subject(o["subject"])
+            t = teacher(o["teacher"]) if o.get("teacher") else None
+            t = t if isinstance(t, Teacher) else None
+            if t:
+                for g in groups:
+                    qualify(t, sub, g.grade)
+            seen[o["subject"]] += 1
+            label = (o.get("teacher") or f"Group {seen[o['subject']]}") if same[o["subject"]] > 1 else None
+            for g in groups:
+                # The block's periods, not a common subject's as well.
+                db.query(SubjectRequirement).filter(
+                    SubjectRequirement.class_group_id == g.id, SubjectRequirement.subject_id == sub.id).delete()
+            options.append(ElectiveOption(subject_id=sub.id, preferred_teacher_id=t.id if t else None,
+                                          label=label[:60] if label else None))
+        block = ElectiveBlock(school_id=school_id, class_group_id=groups[0].id, name=b["name"][:60],
+                              periods_per_week=periods, options=options)
+        block.linked_sections = groups[1:]
+        db.add(block)
+        db.flush()
+        made.append((b, block))
+        created["blocks"] += 1
+
+    if part.get("fixed") and _answer(answers, "fixed:all", ("yes", "no")) == "yes":
+        school = db.get(School, school_id)
+        rules = list(school.fixed_periods or [])
+        taken = {(g, d, r["period"]) for r in rules for g in r.get("grades") or [] for d in (r.get("days") or range(7))}
+        for f in part["fixed"]:
+            grades = [g for g in f.get("grades") or [] if
+                      not any((g, d, f["period"]) in taken for d in (f.get("days") or range(7)))]
+            if not grades:
+                continue
+            rules.append({"subject_id": subject(f["subject"]).id, "grades": grades, "period": int(f["period"]),
+                          "days": f.get("days")})
+            for g in grades:
+                for d in f.get("days") or range(7):
+                    taken.add((g, d, f["period"]))
+            created.setdefault("fixed", 0)
+            created["fixed"] += 1
+        school.fixed_periods = rules or None
+
+    if part.get("lessons") and _answer(answers, "asis", ("yes", "no")) == "yes":
+        periods = db.query(Period).filter(Period.school_id == school_id).all()
+        numbers = lesson_numbers(periods)
+        slot = {(p.day_of_week, numbers[p.id]): p.id for p in periods if p.id in numbers}
+        in_block = {}
+        for b, block in made:
+            for lab in b.get("labels") or []:
+                for d, p in b.get("slots") or []:
+                    in_block[(lab, d, p)] = block
+        tt = Timetable(school_id=school_id, status="draft", solver_status="manual",  # not solved: as it was
+                       version_number=next_version_number(db, school_id), name="Last year's, as it was")
+        db.add(tt)
+        db.flush()
+        placed = missed = 0
+        for lab, lessons in part["lessons"].items():
+            g = group_of_label.get(lab)
+            if g is None:
+                continue
+            for l in lessons:
+                pid = slot.get((int(l["day"]), int(l["period"])))
+                if pid is None:
+                    missed += 1
+                    continue
+                block = in_block.get((lab, int(l["day"]), int(l["period"])))
+                if block is not None:
+                    for opt in block.options:
+                        db.add(TimetableEntry(timetable_id=tt.id, class_group_id=g.id, subject_id=opt.subject_id,
+                                              teacher_id=opt.preferred_teacher_id, period_id=pid,
+                                              elective_block_id=block.id, elective_option_id=opt.id))
+                    placed += 1
+                    continue
+                names = l.get("subjects") or []
+                if not names:
+                    continue
+                sub = subject(names[0] if len(names) == 1 else _one_name(names))
+                who = [teacher(who_for(t, l.get("code") or "", lab)) for t in l.get("teachers") or []]
+                if "class_teacher" in who and g.class_teacher_id:
+                    who = [db.get(Teacher, g.class_teacher_id)]
+                t = next((w for w in who if isinstance(w, Teacher)), None)
+                db.add(TimetableEntry(timetable_id=tt.id, class_group_id=g.id, subject_id=sub.id,
+                                      teacher_id=t.id if t else None, period_id=pid))
+                placed += 1
+        db.flush()
+        created["kept_as_version"] = {"version": tt.version_number, "lessons": placed, "not_placed": missed}

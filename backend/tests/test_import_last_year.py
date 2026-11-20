@@ -81,7 +81,8 @@ def test_every_section_its_periods_teachers_and_class_teacher():
     assert ia["MAT"] == ("5", "Swathy") and ia["EVS"] == ("5", "Krithika") and ia["H.W"] == ("5", "Persis")
     assert by["Class II B"]["class_teacher"] == "Blessy"
     assert {s: w for s, _, w in by["Class II B"]["items"]}["HIN"] == "Parameshwari"
-    assert by["Class I A"]["week"] == {"days": [0, 1, 2, 3, 4], "periods": 5}
+    week = by["Class I A"]["week"]
+    assert (week["days"], week["periods"]) == ([0, 1, 2, 3, 4], 5)
 
 
 def test_the_teachers_import_reads_it_too():
@@ -98,11 +99,22 @@ def test_starting_from_it_sets_up_the_school(client):
                     files={"file": ("last year.xlsx", FILE, "application/octet-stream")}, headers=h)
     assert r.status_code == 200, r.text
     p = r.json()
-    assert p["from_timetable"] and p["week"] == {"days": [0, 1, 2, 3, 4], "periods": 5}
-    assert "Deva" in p["new_teachers"] and p["questions"] == []  # nobody it could be confused with
-    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": {}}, headers=h)
+    assert p["from_timetable"] and (p["week"]["days"], p["week"]["periods"]) == ([0, 1, 2, 3, 4], 5)
+    # Nobody it could be confused with: only what to do with the timetable
+    # itself is asked - the language and elective periods as blocks, the class
+    # teacher's and homework periods at the same time every day, and keeping
+    # last year's as it was.
+    assert "Deva" in p["new_teachers"]
+    # This cut-down file has Swathy and Krithika in I A and II B at the same
+    # time, so it asks whether each is two people; here each is one.
+    assert {q["id"] for q in p["questions"]} == {"blocks:all", "fixed:all", "asis", "same:Swathy", "same:Krithika"}
+    answers = {q["id"]: q["suggested"] for q in p["questions"]}
+    answers.update({"same:Swathy": "one", "same:Krithika": "one"})
+    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": answers},
+                    headers=h)
     assert r.status_code == 200, r.text
     assert r.json()["periods"] == 25
+    assert r.json()["kept_as_version"]["not_placed"] == 0
     db = SessionLocal()
     try:
         assert db.query(Period).filter_by(school_id=sid).count() == 25
@@ -160,7 +172,9 @@ def test_with_the_staff_list_short_names_become_full_ones(client):
     assert by["Class I A"]["MAT"] == ["Swathi"]  # the staff list's own spelling
     assert by["Class X A"]["MAT"] == ["Jerom"]
     assert "Naveen" in p["new_teachers"]  # on the list, not in the timetable: still added
-    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": {}}, headers=h)
+    answers = {q["id"]: q["suggested"] for q in p["questions"]}
+    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": answers},
+                    headers=h)
     assert r.status_code == 200, r.text
     db = SessionLocal()
     try:

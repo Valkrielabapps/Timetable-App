@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 from app.core.rate_limit import check_ai_quota
 from app.services.smart_import import build_preview, smart_rows
 from app.services.uploads import read_upload
+from app.services.smart_import import needs_ai_reading
+from app.services import plans
+from app.models.school import School
 from app.services import aliases as short_forms
 from app.core.access import require_school_access
 from app.core.auth import get_current_user
@@ -141,6 +144,8 @@ async def bulk_import_subjects(
     require_school_access(db, current_user, school_id, min_role="admin")
     # Reading the sheet can call the AI model.
     check_ai_quota("ai-import", current_user.id, per_hour=30)
+    if needs_ai_reading(file.filename):
+        plans.require_ai(db, db.get(School, school_id))  # a PDF or photo is written out by the AI
     content = await read_upload(file)
     # The school's own sheet, whatever its layout - see app/services/smart_import.py.
     try:
@@ -172,6 +177,8 @@ async def preview_subjects_import(
     require_school_access(db, current_user, school_id, min_role="admin")
     # Reading the sheet can call the AI model.
     check_ai_quota("ai-import", current_user.id, per_hour=30)
+    if needs_ai_reading(file.filename):
+        plans.require_ai(db, db.get(School, school_id))  # a PDF or photo is written out by the AI
     content = await read_upload(file)
     try:
         return build_preview(db, school_id, "subjects", file.filename, content)

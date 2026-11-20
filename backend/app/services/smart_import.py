@@ -122,8 +122,11 @@ def read_sheets(filename: str, content: bytes, kind: str = "teachers") -> list[t
     elif lower.endswith(".doc"):
         raise ValueError("That's an old Word file (.doc). In Word: File > Save As > Word Document (.docx), "
                          "then upload that.")
+    elif needs_ai_reading(filename):
+        sheets = transcribe(filename, content)
     else:
-        raise ValueError("Upload the list as an Excel sheet (.xlsx), a CSV or a Word document (.docx).")
+        raise ValueError("Upload the list as an Excel sheet (.xlsx), a CSV, a Word document (.docx), a PDF "
+                         "or a photo.")
     out = []
     for title, rows in sheets:
         rows = [[str(c).strip() for c in r] for r in rows]
@@ -132,6 +135,49 @@ def read_sheets(filename: str, content: bytes, kind: str = "teachers") -> list[t
     if not out:
         raise ValueError("The file has no data in it.")
     return out
+
+
+# ------------------------------------------------------- PDFs and photos
+
+_MEDIA = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+          ".webp": "image/webp", ".gif": "image/gif"}
+_TRANSCRIBED: dict[str, list] = {}
+
+
+def needs_ai_reading(filename: str) -> bool:
+    """A PDF or a photo: only the AI can read it."""
+    return any((filename or "").lower().endswith(ext) for ext in _MEDIA)
+
+
+def transcribe(filename: str, content: bytes, ai=None) -> list[tuple[str, list[list[str]]]]:
+    """A PDF or a photo of the school's sheet, written out by the AI cell by
+    cell - every table with the lines above it - and then read like any
+    spreadsheet, so nothing is guessed that the same file in Excel wouldn't
+    be. The same file is only sent once (the class plan reads a file more
+    than one way)."""
+    import hashlib
+
+    key = hashlib.sha256(content).hexdigest()
+    if key in _TRANSCRIBED:
+        return _TRANSCRIBED[key]
+    ext = next(e for e in _MEDIA if filename.lower().endswith(e))
+    out = (ai or LiveAI()).transcribe(content, _MEDIA[ext])
+    if out is None:
+        raise ValueError("PDFs and photos are read by the AI, which isn't available right now. Upload the "
+                         "Excel or Word file if you have it, or try again in a little while.")
+    sheets = []
+    for n, t in enumerate(out, start=1):
+        rows = [[str(c or "").strip() for c in r] for r in t.get("rows") or [] if isinstance(r, list)]
+        above = [[str(x).strip()] for x in t.get("lines_above") or [] if str(x).strip()]
+        if rows:
+            sheets.append((str(t.get("title") or f"table {n}")[:60], above + rows))
+    if not sheets:
+        raise ValueError("Couldn't find a table in that file. If it's a photo, take it straight on, in good "
+                         "light, with the whole sheet in the picture.")
+    if len(_TRANSCRIBED) > 32:
+        _TRANSCRIBED.clear()
+    _TRANSCRIBED[key] = sheets
+    return sheets
 
 
 # ------------------------------------------------------- Word documents
@@ -232,10 +278,18 @@ def docx_sheets(content: bytes, kind: str = "teachers") -> list[tuple[str, list[
 
     tables: list[tuple[str, list[list[str]]]] = []
     lines: list[str] = []
+    above: list[str] = []
     for el in body:
         if el.tag == f"{_W}tbl":
             rows = capped(_table_rows(el))
             if not any(any(c for c in r) for r in rows):
+                continue
+            if kind == "timetable":
+                # A timetable's tables all have the same headings (Day, 1, 2,
+                # 3...): each stays its own, with the lines above it - the
+                # section's name and its class teacher.
+                tables.append((f"table {len(tables) + 1} of the document", [[x] for x in above] + rows))
+                above = []
                 continue
             head = next((r for r in rows if any(r)), [])
             same = next((t for t in tables if next((r for r in t[1] if any(r)), None) == head), None)
@@ -246,6 +300,7 @@ def docx_sheets(content: bytes, kind: str = "teachers") -> list[tuple[str, list[
                 tables.append((f"table {len(tables) + 1} of the document", rows))
         elif el.tag == f"{_W}p":
             lines += _text(el).split("\n")
+            above += [x for x in _text(el).split("\n") if x.strip()]
     if tables:
         return tables
     rows = _list_rows(capped(lines), kind)
@@ -333,6 +388,62 @@ class LiveAI:
                     return block.input
         except Exception:  # noqa: BLE001 - the rules still stand
             logger.exception("smart import AI call failed (%s)", tool["name"])
+        return None
+
+    def transcribe(self, content: bytes, media_type: str) -> list[dict] | None:
+        """Every table in a PDF or photo, cell by cell, as written:
+        [{"title", "lines_above": [...], "rows": [[...]]}]."""
+        if not settings.anthropic_api_key:
+            return None
+        try:
+            import base64
+
+            import anthropic
+        except ImportError:
+            return None
+        tool = {
+            "name": "write_out_tables",
+            "description": "Write out every table in the document exactly as it is printed.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"tables": {"type": "array", "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "lines_above": {"type": "array", "items": {"type": "string"}},
+                        "rows": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+                    },
+                    "required": ["lines_above", "rows"],
+                }}},
+                "required": ["tables"],
+            },
+        }
+        kind = "document" if media_type == "application/pdf" else "image"
+        block = {"type": kind, "source": {"type": "base64", "media_type": media_type,
+                                          "data": base64.b64encode(content).decode()}}
+        prompt = (
+            "This is a school's timetable, staff list, subject list or similar. Write out every table in it, "
+            "cell by cell, exactly as printed: the same words, abbreviations and spellings, nothing corrected, "
+            "expanded or explained. One row per printed row, every cell in its column - an empty cell is \"\". "
+            "A cell merged across several columns or rows: its text in the first, \"\" in the rest. A cell "
+            "with two lines (a subject over a teacher): both, separated by a newline. Under lines_above, put "
+            "the lines of text printed just above that table (its title, the class, the class teacher, a key "
+            "such as \"(VI L1- TAM/HIN)\"), in order. Several tables on a page are separate tables. If the "
+            "photo is tilted or a word is hard to read, write what is most likely printed."
+        )
+        try:
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            response = client.messages.create(
+                model=settings.llm_model, max_tokens=16000, tools=[tool],
+                tool_choice={"type": "tool", "name": tool["name"]},
+                messages=[{"role": "user", "content": [block, {"type": "text", "text": prompt}]}],
+            )
+            for b in response.content:
+                if b.type == "tool_use":
+                    tables = b.input.get("tables")
+                    return tables if isinstance(tables, list) else None
+        except Exception:  # noqa: BLE001 - said to the school as "not available right now"
+            logger.exception("smart import AI transcription failed")
         return None
 
     def columns(self, headings: list[str], samples: list[list[str]], kind: str,
@@ -1129,9 +1240,46 @@ def _timetable_blocks(rows: list[list[str]]) -> list[dict]:
     return [b for b in blocks if len(b["cells"]) >= 10]
 
 
+def _subjectish(text: str) -> bool:
+    """Reads as a subject, not a person: "MATHS", "Gen. Science", "Robotics Lab"."""
+    k = _key(text)
+    if not k:
+        return False
+    if k in _SUBJECT_ALIASES or _concept(text) in _CONCEPT_NAMES:
+        return True
+    words = [w for w in re.split(r"[^A-Za-z0-9]+", text) if w]
+    return bool(words) and (_key(words[0]) in _SUBJECT_ALIASES or any(
+        w.lower() in _OWN_PERIOD for w in words)) and not _TITLE.match(text)
+
+
+def _people(text: str) -> list[str]:
+    """"Mrs. Kavitha Rao, K. Rao" -> ["Kavitha Rao", "K. Rao"]: titles off."""
+    out = []
+    for w in re.split(r"\s*(?:[,/&]|\band\b)\s*", text):
+        w = _TITLE.sub("", w.strip()).strip(" .")
+        if w:
+            out.append(w)
+    return out
+
+
 def _split_cell(text: str) -> tuple[str, list[str]]:
-    """"BIO-ROS,BHAG" -> ("BIO", ["ROS", "BHAG"]); "BHAGYA" -> ("", ["BHAGYA"])."""
-    t = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
+    """"BIO-ROS,BHAG" -> ("BIO", ["ROS", "BHAG"]); "BHAGYA" -> ("", ["BHAGYA"]);
+    "Maths (Mrs. Rao)", "Maths" over "K. Rao", "Maths/K. Rao" -> the subject
+    and the teacher. Options of a block ("Tamil/Hindi") stay one value."""
+    raw = text.replace("\xa0", " ").strip()
+    lines = [x.strip() for x in raw.split("\n") if x.strip()]
+    if len(lines) >= 2 and _subjectish(lines[0]) and not _subjectish(lines[1]):
+        return lines[0].strip(" ."), _people(" ".join(lines[1:]))
+    t = re.sub(r"\s+", " ", raw).strip()
+    m = re.fullmatch(r"(.+?)\s*\(([^()]+)\)", t)
+    if m and _subjectish(m.group(1)) and not _subjectish(m.group(2)) and not any(
+            w in _OWN_PERIOD or w in ("theory", "i", "ii", "iii") for w in re.split(r"[^a-z]+", m.group(2).lower()) if w):
+        return m.group(1).strip(" ."), _people(m.group(2))
+    if "/" in t and not re.search(r"[-–]", t):
+        parts = [x.strip() for x in t.split("/") if x.strip()]
+        if len(parts) == 2 and _subjectish(parts[0]) and not _subjectish(parts[1]) \
+                and len(re.sub(r"[^A-Za-z]", "", parts[1])) >= 3:
+            return parts[0], _people(parts[1])
     # "ENG-2-SOFIA": English 2, taught by Sofia.
     m = re.match(r"^([^-–]+?)\s*[-–]\s*(\d)\s*[-–]\s*(.+)$", t) or re.match(r"^([^-–]+?)\s*[-–]\s*(.+)$", t)
     if not m:
@@ -1139,8 +1287,8 @@ def _split_cell(text: str) -> tuple[str, list[str]]:
     subj, rest = (f"{m.group(1).strip()} {m.group(2)}", m.group(3)) if m.lastindex == 3 else (m.group(1), m.group(2))
     if re.search(r"[-–]", rest):
         return "?", []  # several subjects run together in one cell: not readable
-    who = [w.strip(" .") for w in re.split(r"[,/&]", rest) if w.strip(" .")]
-    return subj.strip(" ."), who
+    who = [_TITLE.sub("", w.strip()).strip(" .") for w in re.split(r"[,/&]", rest) if w.strip(" .")]
+    return subj.strip(" ."), [w for w in who if w]
 
 
 def _lk(name: str) -> str:
@@ -1170,15 +1318,18 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
     one - every short spelling is then matched to a real name on it, using
     the subject to tell two alike apart (SUPW-SUBHA is Subhashini who takes
     SUPW, ACCO-SUBHA is Subha Sri who takes Accountancy)."""
-    if len(blocks) < 2:
+    if len(blocks) < 2 and not any(b.get("sure") for b in blocks):
         return []
     from collections import Counter
+
+    def parts(v):
+        return v if isinstance(v, tuple) else _split_cell(v)
     # Who appears as a teacher anywhere ("BIO-BHAGYA"), so a name alone in a
     # cell ("BHAGYA") can be told from a subject alone ("ELECTIVES").
     known = set()
     for b in blocks:
         for text in b["cells"].values():
-            subj, who = _split_cell(text)
+            subj, who = parts(text)
             if subj:
                 known.update(_lk(w) for w in who)
 
@@ -1188,10 +1339,11 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
 
     # Every cell as (section, subject code, teacher spellings).
     raw = []
+    slot_of = []  # (day, period) of each raw cell, in step with raw
     for b in blocks:
         last = {}
         for (day, n), text in sorted(b["cells"].items()):
-            subj, who = _split_cell(text)
+            subj, who = parts(text)
             if subj == "?":
                 continue
             if not subj:
@@ -1202,6 +1354,7 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
             last[day] = subj
             if subj:
                 raw.append((b, subj, who))
+                slot_of.append((day, n))
     # Subject codes: rare typos join a common spelling ("BIP" -> "BIO",
     # "EN 2" -> "ENG 2").
     codes = Counter(_ck(s) for _, s, _ in raw)
@@ -1226,6 +1379,22 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
             or (codes[d] >= 3 * codes[c] and len(c) == len(d) >= 3 and c[0] == d[0]
                 and sum(x != y for x, y in zip(c, d)) == 1))]
         code_of[c] = max(better, key=lambda d: codes[d]) if better else c
+    # One subject spelt several ways in one file ("PHY", "Physics"; "Bio/M",
+    # "Biology/Maths") is one line of the plan, under its commonest spelling.
+    def signature(c):
+        parts = [x for x in re.split(r"\s*/\s*", spelt.get(c, c)) if x.strip()]
+        return tuple(sorted({_concept(x) for x in parts}))
+    by_sig: dict[tuple, list] = {}
+    for c in codes:
+        by_sig.setdefault(signature(code_of[c]), []).append(c)
+    for group in by_sig.values():
+        if len(group) > 1:
+            total = Counter()
+            for c in group:
+                total[code_of[c]] += codes[c]
+            best = max(total, key=lambda d: (total[d], len(d)))
+            for c in group:
+                code_of[c] = best
     # Teachers: the class teachers' full names, and every spelling in the cells.
     full = {}
     for b in blocks:
@@ -1318,6 +1487,17 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
             people.append((nm, _lk(nm), [_lk(w) for w in nm.split()],
                            {_concept(x) for x in p.get("subjects") or [] if x}))
 
+    def initials_score(w: str, words: list[str]) -> float:
+        """"K. Rao", "Rao K.", "Kavitha R" against Kavitha Rao."""
+        toks = re.findall(r"[a-z]+", (w or "").lower())
+        longs, shorts = [t for t in toks if len(t) > 1], [t for t in toks if len(t) == 1]
+        if not longs or not shorts or len(words) < 2:
+            return 0
+        if not all(t in words for t in longs):
+            return 0
+        rest = [x for x in words if x not in longs]
+        return 3 if all(any(x.startswith(sh) for x in rest) for sh in shorts) else 0
+
     def name_score(k: str, key: str, words: list[str]) -> float:
         if not k:
             return 0
@@ -1333,13 +1513,13 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
 
     votes: dict[str, Counter] = {}
 
-    def staff_match(k: str, code: str | None, use_votes: bool = False) -> str | None:
+    def staff_match(k: str, code: str | None, use_votes: bool = False, raw: str = "") -> str | None:
         if not people:
             return None
         want = _concept(code) if code else ""
         scored = []
         for nm, key, words, subs in people:
-            sc = name_score(k, key, words)
+            sc = name_score(k, key, words) or (initials_score(raw, words) if raw else 0)
             if not sc:
                 continue
             if want and want in subs:
@@ -1359,7 +1539,7 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
     def final_names(code, raws, keys, use_votes=False):
         out = []
         for w, k in zip(raws, keys):
-            m = staff_match(_lk(w), code, use_votes) or staff_match(same.get(k, k), code, use_votes)
+            m = staff_match(_lk(w), code, use_votes, raw=w) or staff_match(same.get(k, k), code, use_votes)
             out.append(m or display(k))
         return out
 
@@ -1375,14 +1555,20 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
     tables = []
     days = sorted({d for b in blocks for d in b["days"]})
     periods = max((n for b in blocks for (_, n) in b["cells"]), default=0)
+    bells = next((b["bells"] for b in blocks if b.get("bells")), {})
+    breaks = next((b["breaks"] for b in blocks if b.get("breaks")), [])
     for b in blocks:
         per: dict[str, Counter] = {}
         n_cells = Counter()
-        for bb, code, who, raws in resolved:
+        lessons = []
+        for i, (bb, code, who, raws) in enumerate(resolved):
             if bb is not b:
                 continue
             n_cells[code] += 1
-            per.setdefault(code, Counter()).update(final_names(code, raws, who, use_votes=True))
+            names = final_names(code, raws, who, use_votes=True)
+            per.setdefault(code, Counter()).update(names)
+            lessons.append({"day": slot_of[i][0], "period": slot_of[i][1], "subject": spelt.get(code, code.upper()),
+                            "teachers": list(dict.fromkeys(names))})
         grade, sec = b["section"]
         if grade.isdigit():
             grade = next(r for r, n in _ROMAN_N.items() if n == int(grade)).upper()
@@ -1394,7 +1580,8 @@ def _timetables_from(blocks: list[dict], staff: list[dict] | None = None) -> lis
                        "timetable": True,
                        "class_teacher": (staff_match(_lk(b["class_teacher"]), None) or display(_lk(b["class_teacher"])))
                        if b["class_teacher"] else "",
-                       "week": {"days": days, "periods": periods}})
+                       "week": {"days": days, "periods": periods, "bell_times": bells, "breaks": breaks},
+                       "lessons": lessons})
     return tables
 
 
@@ -1426,23 +1613,29 @@ def name_list(sheets: list[tuple[str, list[list[str]]]]) -> list[dict]:
     return best
 
 
-def plan_tables(sheets: list[tuple[str, list[list[str]]]], staff: list[dict] | None = None) -> tuple[str, list[dict]]:
+def plan_tables(sheets: list[tuple[str, list[list[str]]]], staff: list[dict] | None = None,
+                timetable_sheets: list | None = None) -> tuple[str, list[dict]]:
     """Every class table in the file, whichever way it's written: the
     Subjects | Periods | Teacher tables, a grid of counts, side blocks.
     The best sheet's, plus any other sheet nearly as full (a Word document's
     tables are often one class range each)."""
-    proper = max(((_class_score(tb), t, tb) for t, rows in sheets for tb in [_class_tables(rows)]),
-                 key=lambda x: x[0], default=(0, "", []))
-    if len(proper[2]) >= 2:
-        return proper[1], proper[2]
+    from app.services.timetable_reader import find_grids, read_timetable
+
     # Last year's timetable, every sheet together: one teacher is written
     # the same short way on the primary sheet and the senior one.
-    blocks = [b for _, rows in sheets for b in _timetable_blocks(rows)]
-    timetable = _timetables_from(blocks, staff)
+    tt_sheets = timetable_sheets or sheets
+    reading = read_timetable(tt_sheets, staff)
+    timetable = reading["tables"] if reading else []
+    proper = max(((_class_score(tb), t, tb) for t, rows in sheets for tb in [_class_tables(rows)]),
+                 key=lambda x: x[0], default=(0, "", []))
+    # A teacher's grid ("TGT: ART 1", cells "VII B") can pass for a class
+    # table: the timetable reading wins when it reads more.
+    if len(proper[2]) >= 2 and not (timetable and _class_score(timetable) > proper[0]):
+        return proper[1], proper[2]
     scored = [(_class_score(tb), t, tb) for t, rows in sheets
               for tb in [max([_grid(rows) or _side_blocks(rows), _teacher_lists(rows)], key=_class_score)]]
     if timetable and _class_score(timetable) >= sum(sc for sc, _, _ in scored):
-        return ", ".join(t for t, rows in sheets if _timetable_blocks(rows)), timetable
+        return ", ".join(dict.fromkeys(g["sheet"] for g in find_grids(tt_sheets))) or sheets[0][0], timetable
     top = max((s for s, _, _ in scored), default=0)
     if top == 0:
         return proper[1], proper[2]

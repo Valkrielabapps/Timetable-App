@@ -19,7 +19,7 @@ export default function ClassPlanImport({
   inputId = 'class-plan-file',
   withStaffList = false,
   title = 'Fill in every class from your file',
-  blurb = 'Upload your allotment or staff sheet, in any layout: a table per class, a grid of periods, a list under each teacher, or last year’s timetable. We make the sections and fill in every plan from it.',
+  blurb = 'Upload your allotment or staff sheet, in any layout: a table per class, a grid of periods, a list under each teacher, or last year’s timetable (Excel, Word, CSV, a PDF or a photo). We make the sections and fill in every plan from it.',
 }) {
   const [file, setFile] = useState(givenFile ?? null)
   const [staffFile, setStaffFile] = useState(null)
@@ -88,7 +88,7 @@ export default function ClassPlanImport({
           <input
             type="file"
             id={inputId}
-            accept=".xlsx,.csv,.docx"
+            accept=".xlsx,.csv,.docx,.pdf,.png,.jpg,.jpeg,.webp"
             className="sr-only"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
@@ -101,7 +101,7 @@ export default function ClassPlanImport({
               <input
                 type="file"
                 id={`${inputId}-staff`}
-                accept=".xlsx,.csv,.docx"
+                accept=".xlsx,.csv,.docx,.pdf,.png,.jpg,.jpeg,.webp"
                 className="sr-only"
                 onChange={(e) => setStaffFile(e.target.files?.[0] ?? null)}
               />
@@ -135,7 +135,15 @@ export default function ClassPlanImport({
           {result.blocks > 0 && `, ${result.blocks} choice blocks`}
           {result.subjects.length > 0 && `, ${result.subjects.length} new subjects`}
           {result.teachers.length > 0 && `, ${result.teachers.length} new teachers`}
-          {result.periods > 0 && `, and your week (${result.periods} periods)`}.
+          {result.periods > 0 && `, and your week (${result.periods} periods)`}
+          {result.fixed > 0 && `, ${result.fixed} fixed periods`}.
+          {result.kept_as_version && (
+            <>
+              {' '}Last year’s timetable is kept as Version {result.kept_as_version.version} ({result.kept_as_version.lessons}{' '}
+              lessons{result.kept_as_version.not_placed > 0 ? `, ${result.kept_as_version.not_placed} that didn’t fit your week left out` : ''}):
+              open it on the Timetable tab.
+            </>
+          )}
         </p>
       )}
 
@@ -157,9 +165,20 @@ export default function ClassPlanImport({
           {preview.week && (
             <p className="text-xs text-slate-600">
               Your week isn’t set up yet, so we’ll use last year’s:{' '}
-              {preview.week.days.map((d) => DAY_NAMES[d]).join(', ')}, {preview.week.periods} periods a day. You can add
-              breaks and timings afterwards in Setup.
+              {preview.week.days.map((d) => DAY_NAMES[d]).join(', ')}, {preview.week.periods} periods a day
+              {preview.week.breaks?.length > 0
+                ? `, with ${preview.week.breaks.map((b) => `${b.name.toLowerCase()} after period ${b.after}`).join(' and ')}`
+                : ''}
+              . You can change it afterwards in Setup.
             </p>
+          )}
+          {preview.found?.length > 0 && (
+            <div className="text-xs text-slate-600">
+              <p>Also read from the timetable:</p>
+              <ul className="mt-0.5 list-disc pl-4">
+                {preview.found.map((f) => <li key={f}>{f}</li>)}
+              </ul>
+            </div>
           )}
           {preview.staff_listed > 0 && (
             <p className="text-xs text-slate-600">Names matched to your staff list ({preview.staff_listed} people).</p>
@@ -175,7 +194,7 @@ export default function ClassPlanImport({
 
           {preview.checks.length > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900">
-              <p className="font-medium">Fix these first, or the timetable can’t be made</p>
+              <p className="font-medium">Worth checking before the timetable is made</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs">
                 {preview.checks.map((c) => <li key={c}>{c}</li>)}
               </ul>

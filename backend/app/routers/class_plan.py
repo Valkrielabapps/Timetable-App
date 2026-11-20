@@ -13,7 +13,10 @@ from app.core.access import require_school_access
 from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.services import class_plan
+from app.core.rate_limit import check_ai_quota
+from app.models.school import School
+from app.services import class_plan, plans
+from app.services.smart_import import needs_ai_reading
 from app.services.uploads import read_upload
 
 router = APIRouter(prefix="/api/class-plan", tags=["class plan"])
@@ -31,6 +34,10 @@ async def preview_plan(
     file (last year's timetable especially) are matched to the names on it,
     and everyone on it is added as a teacher."""
     require_school_access(db, current_user, school_id, min_role="admin")
+    if needs_ai_reading(file.filename) or (staff_file and needs_ai_reading(staff_file.filename or "")):
+        # A PDF or photo is written out by the AI first.
+        plans.require_ai(db, db.get(School, school_id))
+        check_ai_quota("ai-import", current_user.id, per_hour=30)
     content = await read_upload(file)
     staff = (staff_file.filename, await read_upload(staff_file)) if staff_file and staff_file.filename else None
     try:

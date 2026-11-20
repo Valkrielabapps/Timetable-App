@@ -53,6 +53,22 @@ describe('filling in every class from the allotment sheet', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('your week (45 periods)')
   })
 
+  it('shows the breaks, bell times and blocks read from the timetable, and the version it kept', async () => {
+    const preview = { ...PREVIEW, questions: [], checks: [], skipped: [], from_timetable: true,
+      week: { days: [0, 1, 2, 3, 4], periods: 8, breaks: [{ after: 2, name: 'Short Break' }, { after: 4, name: 'Lunch' }] },
+      found: ['Bell times: 8:40-9:20 to 14:10-14:50, 8 periods', '3 blocks (taught to a group at once)'], new_teachers: [] }
+    api.classPlanPreview.mockResolvedValue(preview)
+    api.classPlanCommit.mockResolvedValue({ sections: [], subjects: [], teachers: [], requirements: 7, blocks: 3, periods: 40,
+      fixed: 1, kept_as_version: { version: 1, lessons: 280, not_placed: 0 } })
+    render(<ClassPlanImport schoolId={1} file={new File(['x'], 'last year.pdf')} />)
+    expect(await screen.findByText(/short break after period 2 and lunch after period 4/)).toBeInTheDocument()
+    expect(screen.getByText('3 blocks (taught to a group at once)')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
+    const done = await screen.findByRole('status')
+    expect(done).toHaveTextContent('1 fixed periods')
+    expect(done).toHaveTextContent('kept as Version 1 (280 lessons)')
+  })
+
   it('reads the file from step 3, asks, and saves only once everything is answered', async () => {
     api.classPlanPreview.mockResolvedValue(PREVIEW)
     api.classPlanCommit.mockResolvedValue({ sections: ['Grade 3 A', 'Grade 6 A', 'Grade 6 B'], subjects: ['Civics'], teachers: [], requirements: 3, blocks: 0 })
@@ -61,7 +77,7 @@ describe('filling in every class from the allotment sheet', () => {
     render(<ClassPlanImport schoolId={1} file={file} onDone={onDone} />)
     expect(await screen.findByText(/We found plans for/)).toHaveTextContent('2 classes')
     expect(api.classPlanPreview).toHaveBeenCalledWith(1, file)
-    expect(screen.getByText(/Fix these first/)).toBeInTheDocument()
+    expect(screen.getByText(/Worth checking before the timetable is made/)).toBeInTheDocument()
     expect(screen.getByText(/Left out because they have 0 periods: Assembly/)).toBeInTheDocument()
 
     const go = screen.getByRole('button', { name: 'Answer 2 questions to fill in the plans' })

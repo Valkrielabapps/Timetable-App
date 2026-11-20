@@ -110,7 +110,7 @@ export default function BulkImportPanel({ schoolId, onImported, resource, onFile
         <input
           type="file"
           id={`bulk-import-file-${resource}`}
-          accept={meta.smart ? '.csv,.xlsx,.docx' : '.csv,.xlsx'}
+          accept={meta.smart ? '.csv,.xlsx,.docx,.pdf,.png,.jpg,.jpeg,.webp' : '.csv,.xlsx'}
           disabled={uploading || saving}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="sr-only"

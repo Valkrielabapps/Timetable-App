@@ -11,6 +11,10 @@ python scripts/import_corpus/score.py --compare ../school-imports/scores/2026-11
 
 `score.py` runs each case through the code the website uses and scores it 0-100 against the truth. It reports an overall score per area, a breakdown by layout and format, why files were refused, and, with `--compare`, which files moved since a saved run. `--detail` prints every case's findings, for example "6A Mathematics: 6 not 5" or "extra lines: S, H, O, R, T" for a break column spelt one letter per row. Rule messages need the AI key, and their scoring comes with Phase 5.
 
+For timetables there is a second number, "+ more": what `app/services/timetable_reader.py` reads beyond the plan - every lesson at its day and period (for keeping last year's timetable as it is), the bell times, the breaks, the blocks and the fixed periods - scored over the parts each file shows. A grid per teacher that never names the subject in its cells can only be as right as the subject in its title; a file that writes only first names can't tell two teachers called Mythili apart, and the importer asks.
+
+PDFs and photos are written out by the AI before they're read, so without `ANTHROPIC_API_KEY` they are refused, and scored 0. Run the scorer with the key set to score them.
+
 `--seed` fixes the corpus: the same seed always gives the same files, so a score before a change can be compared with one after.
 
 ## Where the shapes come from

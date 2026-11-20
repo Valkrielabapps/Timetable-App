@@ -265,7 +265,9 @@ def _truth_plan(truth: dict, section: str) -> dict:
 
 def score_timetable(path: Path, res: Resolver, staff: list[dict] | None) -> dict:
     from app.services.smart_import import plan_tables, read_sheets
-    how, tables = plan_tables(read_sheets(path.name, path.read_bytes()), staff)
+    content = path.read_bytes()
+    how, tables = plan_tables(read_sheets(path.name, content), staff,
+                              timetable_sheets=read_sheets(path.name, content, "timetable"))
     shown = res.expected["shows"]["sections"]
     teachers_shown = res.expected["layout"] == "keren" or res.expected.get("options", {}).get("teacher_in_cell") not in (None, "none")
     got_sections: dict[str, dict] = {}
@@ -334,6 +336,88 @@ def score_timetable(path: Path, res: Resolver, staff: list[dict] | None) -> dict
             "week_right": week, "wrong_counts": wrong, "unplaced_tables": unplaced[:4]}
 
 
+def _clock(text: str) -> str:
+    """"8:40-9:20", "8.40 to 9.20", "08:40 - 09:20" -> "8:40-9:20"."""
+    nums = re.findall(r"(\d{1,2})[:.](\d{2})", text or "")
+    return "-".join(f"{int(h)}:{m}" for h, m in nums[:2])
+
+
+def score_timetable_more(path: Path, res: Resolver, staff: list[dict] | None) -> dict:
+    """What a timetable holds beyond the plan, read by
+    timetable_reader.read_timetable: every lesson where it was (for importing
+    it as it is), the week's bell times and breaks, the blocks and the fixed
+    periods. 0-100 over the parts this file shows; None when it shows none."""
+    try:
+        from app.services.smart_import import read_sheets
+        from app.services.timetable_reader import read_timetable
+    except ImportError:
+        return {"more": 0, "more_parts": "no reader"}
+    reading = read_timetable(read_sheets(path.name, path.read_bytes(), "timetable"), staff) or {}
+    opts = res.expected.get("options", {})
+    layout = res.expected["layout"]
+    shown = res.expected["shows"]["sections"]
+    truth = res.truth
+    parts: dict[str, float] = {}
+
+    # Lessons: each of the truth's, in a shown section, at the right day and
+    # period with the right subject (or block).
+    got: dict[tuple, str] = {}
+    for sec in reading.get("sections", []):
+        key = res.section(sec.get("label", ""))
+        if key not in shown:
+            continue
+        for l in sec.get("lessons", []):
+            got.setdefault((key, l.get("day"), l.get("period")), l.get("subject") or "")
+    want = [l for l in truth["lessons"] if l["section"] in shown]
+    right = 0
+    for l in want:
+        text = got.get((l["section"], l["day"], l["period"]))
+        if text is None:
+            continue
+        grade = int(l["section"][:-1])
+        k = res.block_or_subject(text, grade)
+        if k == (l["block"] or l["subject"]) or (l["block"] and k == l["subject"]):
+            right += 1
+    extra = max(0, len(got) - len(want))
+    parts["lessons"] = right / max(len(want) + extra, 1) if want else 0.0
+
+    week = reading.get("week") or {}
+    if opts.get("bell_row") and layout in ("class_grids", "transposed"):  # the only ones that draw them
+        bells = {int(k): _clock(v) for k, v in (week.get("bell_times") or {}).items()}
+        parts["bells"] = sum(1 for i, b in enumerate(truth["bell_times"], start=1) if bells.get(i) == _clock(b)) \
+            / len(truth["bell_times"])
+    if (layout == "class_grids" and opts.get("break_style") != "none") or layout == "transposed":
+        want_b = {b["after_period"] for b in truth["breaks"]}
+        got_b = {b.get("after") for b in week.get("breaks") or []}
+        parts["breaks"] = _f1(len(want_b & got_b), len(got_b - want_b), len(want_b - got_b))
+
+    grades = {int(s[:-1]) for s in shown}
+    blocks = [b for b in truth["blocks"] if set(b["sections"]) & set(shown)]
+    if blocks:
+        found = 0.0
+        for b in blocks:
+            need = set(b["sections"]) & set(shown)
+            for rb in reading.get("blocks", []):
+                secs = {res.section(x) for x in rb.get("sections", [])}
+                if need <= secs and rb.get("periods") == b["periods"]:
+                    subs = {res.subject(o.get("subject", "")) for o in rb.get("options", [])}
+                    found += 1.0 if {g["subject"] for g in b["groups"]} <= subs else 0.75
+                    break
+        parts["blocks"] = found / len(blocks)
+    fixed = [f for f in truth["fixed_periods"] if set(f["grades"]) & grades]
+    if fixed:
+        ok = 0
+        for f in fixed:
+            for rf in reading.get("fixed", []):
+                if rf.get("period") == f["period"] and res.subject(rf.get("subject", "")) == f["subject"]:
+                    ok += 1
+                    break
+        parts["fixed"] = ok / len(fixed)
+    score = sum(parts.values()) / len(parts) if parts else 0.0
+    return {"more": round(100 * score), "more_parts": {k: round(100 * v) for k, v in parts.items()},
+            "checks": (reading.get("checks") or [])[:3]}
+
+
 # ----------------------------------------------------------------------- main
 
 def run(root: Path, rules: bool, use_staff: bool, only: str | None) -> list[dict]:
@@ -358,6 +442,12 @@ def run(root: Path, rules: bool, use_staff: bool, only: str | None) -> list[dict
             elif exp["kind"] == "timetable":
                 staff = [{"name": t["name"], "subjects": t["subjects"]} for t in truth["teachers"]] if use_staff else None
                 row.update(score_timetable(path, res, staff))
+                try:
+                    row.update(score_timetable_more(path, res, staff))
+                except ValueError:
+                    row.update(more=0)
+                except Exception as e:  # noqa: BLE001
+                    row.update(more=0, more_crashed=f"{type(e).__name__}: {str(e)[:100]}")
             elif exp["kind"] == "rules":
                 if not rules:
                     row.update(score=None, skipped="rules need --rules and the AI key")
@@ -391,6 +481,21 @@ def report(results: list[dict], compare: list[dict] | None) -> None:
             if prev:
                 line += f"   was {sum(prev) / len(prev):5.1f}"
         print(line)
+        if kind == "timetable":
+            ms = [r for r in rs if r.get("more") is not None]
+            if ms:
+                line = (f"  {'  + more':<10} {sum(r['more'] for r in ms) / len(ms):5.1f} / 100   lessons where they "
+                        "are, bell times, breaks, blocks, fixed periods")
+                prev = [before[r["id"]].get("more", 0) for r in ms if r["id"] in before]
+                if before and prev:
+                    line += f"   was {sum(prev) / len(prev):5.1f}"
+                print(line)
+                part_sum: dict[str, list] = defaultdict(list)
+                for r in ms:
+                    for k, v in (r.get("more_parts") or {}).items() if isinstance(r.get("more_parts"), dict) else []:
+                        part_sum[k].append(v)
+                if part_sum:
+                    print("             " + ", ".join(f"{k} {sum(v) / len(v):.0f} ({len(v)})" for k, v in part_sum.items()))
     print("\nBY LAYOUT AND FORMAT (mean score, files)")
     groups = defaultdict(list)
     for r in results:
@@ -409,6 +514,12 @@ def report(results: list[dict], compare: list[dict] | None) -> None:
     if before:
         moved = [(r["id"], before[r["id"]].get("score"), r.get("score")) for r in results
                  if r["id"] in before and before[r["id"]].get("score") != r.get("score")]
+        more_down = [(r["id"], before[r["id"]].get("more", 0), r.get("more")) for r in results
+                     if r["id"] in before and r.get("more") is not None and r["more"] < before[r["id"]].get("more", 0)]
+        if more_down:
+            print(f"\n'MORE' WENT DOWN: {len(more_down)} files")
+            for cid, a, b in more_down[:25]:
+                print(f"  {cid:<55} {a} -> {b}")
         print(f"\nCHANGED SINCE THE SAVED RUN: {len(moved)} files")
         for cid, a, b in sorted(moved, key=lambda m: (m[2] or 0) - (m[1] or 0))[:25]:
             print(f"  {cid:<55} {a} -> {b}")
