@@ -5,7 +5,11 @@ Made-up schools whose every fact is known, written out in the messy layouts and 
 ```
 python scripts/import_corpus/generate.py            # 8 schools, 160 cases -> school-imports/generated/
 python scripts/import_corpus/verify.py              # checks the truths are real timetables and every file opens
+python scripts/import_corpus/score.py --save ../school-imports/scores/today.json
+python scripts/import_corpus/score.py --compare ../school-imports/scores/2026-11-20-baseline.json
 ```
+
+`score.py` runs each case through the code the website uses and scores it 0-100 against the truth. It reports an overall score per area, a breakdown by layout and format, why files were refused, and, with `--compare`, which files moved since a saved run. `--detail` prints every case's findings, for example "6A Mathematics: 6 not 5" or "extra lines: S, H, O, R, T" for a break column spelt one letter per row. Rule messages need the AI key, and their scoring comes with Phase 5.
 
 `--seed` fixes the corpus: the same seed always gives the same files, so a score before a change can be compared with one after.
 
