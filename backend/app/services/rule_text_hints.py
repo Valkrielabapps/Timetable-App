@@ -271,8 +271,78 @@ def _short_form_hints(text: str, short_forms: dict | None) -> list[str]:
     return hints
 
 
+_CLOCK = re.compile(r"(?<![\d:.])(\d{1,2})(?:[:.](\d{2}))?\s*(a\.?m\.?|p\.?m\.?|o'?clock|hrs)?(?![\d:])", re.I)
+_CLOCK_CONTEXT = re.compile(r"\b(?:at|by|after|before|till|until|upto|up to|from|to|since|past)\s*$", re.I)
+
+
+def period_times(periods) -> list[tuple[int, int, int]]:
+    """[(period number, start minute, end minute)] from the school's period
+    labels that carry their times ("Period 3 (10:20-11:00)", "10:20 - 11:00"),
+    Monday's - or the first day that has them."""
+    by_day: dict[int, list] = {}
+    for p in periods or []:
+        day, order, label, kind = (list(p) + [None, None, None, None])[:4]
+        # The fourth value is the slot's kind ("lesson", "break"...), or in
+        # older callers whether it is a break.
+        if kind is True or (isinstance(kind, str) and kind != "lesson"):
+            continue
+        m = re.search(r"(\d{1,2})[:.](\d{2})\s*(?:-|–|to)\s*(\d{1,2})[:.](\d{2})", str(label or ""))
+        if m:
+            by_day.setdefault(day, []).append((order, _minutes(int(m.group(1)), int(m.group(2))),
+                                               _minutes(int(m.group(3)), int(m.group(4)))))
+    for day in sorted(by_day):
+        rows = sorted(by_day[day])
+        if len(rows) >= 3:
+            return [(i, a, b) for i, (_, a, b) in enumerate(rows, start=1)]
+    return []
+
+
+def _minutes(h: int, m: int) -> int:
+    # A school day runs about 7:00 to 18:00: "1:20" written without pm is 13:20.
+    return (h + 12 if h < 7 else h) * 60 + m
+
+
+def _clock_hints(text: str, periods) -> list[str]:
+    """'12.40' = the start of period 6: clock times as the school's periods,
+    from the bell times on its period labels."""
+    times = period_times(periods)
+    if not times:
+        return []
+    out = []
+    for m in _CLOCK.finditer(text):
+        h, mm, suffix = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+        if not m.group(2) and not suffix:
+            # A bare number is a time only after "at", "by", "after"...: "after 1", not "period 1".
+            if not _CLOCK_CONTEXT.search(text[:m.start()]) or h > 12:
+                continue
+        if h > 23 or mm > 59:
+            continue
+        if suffix.startswith("p") and h < 12:
+            h += 12
+        minute = h * 60 + mm if suffix.startswith(("a", "p")) or h >= 7 else _minutes(h, mm)
+        written = m.group(0).strip()
+        start = next((n for n, a, _ in times if a == minute), None)
+        end = next((n for n, _, b in times if b == minute), None)
+        inside = next((n for n, a, b in times if a < minute < b), None)
+        last = times[-1][0]
+        if start:
+            before = f"periods 1-{start - 1}" if start > 2 else ("period 1" if start == 2 else "no period")
+            after = f"periods {start}-{last}" if start < last else f"period {last}"
+            out.append(f"'{written}' = the start of period {start} (before it: {before}; from it on: {after})")
+        elif end:
+            after = f"periods {end + 1}-{last}" if end + 1 < last else (f"period {last}" if end < last else "none")
+            out.append(f"'{written}' = the end of period {end} (up to it: periods 1-{end}; after it: {after})")
+        elif inside:
+            out.append(f"'{written}' falls during period {inside}")
+        elif minute < times[0][1]:
+            out.append(f"'{written}' is before the school day starts")
+        elif minute >= times[-1][2]:
+            out.append(f"'{written}' is after the last period")
+    return list(dict.fromkeys(out))
+
+
 def sentence_hints(text: str, teacher_names: list[str], subject_names: list[str],
-                   class_group_labels: list[str], short_forms: dict | None = None) -> list[str]:
+                   class_group_labels: list[str], short_forms: dict | None = None, periods=None) -> list[str]:
     """Hints for the parser, each "'as typed' = as the school stores it".
     `short_forms`: what the school confirmed in its imports (services/aliases.py),
     read before the built-in guesses and taking their place."""
@@ -282,7 +352,7 @@ def sentence_hints(text: str, teacher_names: list[str], subject_names: list[str]
         built_in = [h for h in _teacher_hints(text, teacher_names) + _class_hints(text, class_group_labels)
                     + _subject_hints(text, subject_names) + _misspelt_subject_hints(text, subject_names)
                     if h.split("'")[1].lower() not in mine]
-        return own + built_in + _spelling_hints(text)
+        return own + built_in + _clock_hints(text, periods) + _spelling_hints(text)
     except Exception:  # noqa: BLE001 - reading aids must never break parsing
         return []
 

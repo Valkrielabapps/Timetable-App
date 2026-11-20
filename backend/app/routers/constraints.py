@@ -13,6 +13,7 @@ from app.core.auth import get_current_user
 from app.core.database import get_db
 from app.models.school import ClassGroup, Constraint, Period, School, Subject, Teacher
 from app.services import aliases as school_aliases, plans, rule_events
+from app.services.rule_splitter import split_rules
 from app.services.rule_text_hints import typed_short_forms
 from app.models.user import User
 from app.schemas.constraint import (
@@ -1059,7 +1060,10 @@ def parse_and_create_constraints_batch(
     }
     seen_rule = {_rule_key(c.type, c.parameters) for c in existing}
 
-    lines = [line.strip() for line in payload.text.splitlines() if line.strip()]
+    # One rule a piece: a forwarded message's timestamp, greeting and sign-off
+    # left out, two rules on one line cut apart - see services/rule_splitter.py.
+    lines = split_rules(payload.text, data.teacher_names, data.subject_names) or \
+        [line.strip() for line in payload.text.splitlines() if line.strip()]
     rows: list[Constraint] = []
     unread: list[dict] = []
     if allow_llm and lines and len(lines) <= _MAX_BATCH_LINES:
@@ -1067,7 +1071,7 @@ def parse_and_create_constraints_batch(
     else:
         # No AI on this plan, or an unusually long paste: the older path,
         # which splits and reads the block in one call (or by regex).
-        for item in _resolve_constraints_batch_text(db, payload.school_id, payload.text, allow_llm):
+        for item in _resolve_constraints_batch_text(db, payload.school_id, "\n".join(lines), allow_llm):
             key = _rule_key(item.db_type, item.parameters)
             if key in seen_rule or _norm(item.description) in seen_text:
                 continue
@@ -1256,6 +1260,14 @@ def interpret_constraint(
     plans.require_ai(db, db.get(School, payload.school_id))
 
     data = _load_resolution_data(db, payload.school_id)
+    # Two rules typed in one go ("Priya is off on Monday and leaves after lunch
+    # on Friday") are added together, each read on its own.
+    pieces = split_rules(payload.text, data.teacher_names, data.subject_names)
+    if len(pieces) >= 2:
+        return ConstraintInterpretResponse(
+            understood=False, reason="several", readings=pieces,
+            explanation=f"That's {len(pieces)} rules. Add them all, and each is read and saved on its own.",
+        )
     result = parse_rule_llm(
         payload.text, data.teacher_names, data.subject_names,
         data.class_group_labels, data.periods, short_forms=data.short_forms,

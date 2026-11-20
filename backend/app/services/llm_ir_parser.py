@@ -753,12 +753,12 @@ def _core_examples_text() -> str:
     )
 
 
-def _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms=None) -> str:
+def _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms=None, periods=None) -> str:
     """The part of the prompt that changes with every sentence: reading aids
     for the names in it, and the worked examples closest to it. Sent after the
     cache breakpoint so the cached prefix stays identical between calls."""
     parts = []
-    hints = sentence_hints(text, teacher_names, subject_names, class_group_labels, short_forms)
+    hints = sentence_hints(text, teacher_names, subject_names, class_group_labels, short_forms, periods)
     if hints:
         parts.append(
             "Reading aids for this sentence, worked out from the school's data. They are "
@@ -1176,7 +1176,7 @@ def parse_rule_llm(
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=3)
         system = _system_prompt(teacher_names, subject_names, class_group_labels, periods)
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
-        context = _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms)
+        context = _sentence_context(text, teacher_names, subject_names, class_group_labels, short_forms, periods)
         if context:
             # After the breakpoint: varies per sentence, so it must not be part
             # of the cached prefix.

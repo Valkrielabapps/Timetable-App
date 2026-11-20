@@ -15,6 +15,16 @@ For timetables there is a second number, "+ more": what `app/services/timetable_
 
 PDFs and photos are written out by the AI before they're read, so without `ANTHROPIC_API_KEY` they are refused, and scored 0. Run the scorer with the key set to score them.
 
+## Rule messages
+
+```
+python scripts/import_corpus/rules_corpus.py     # 96 messages with known meanings -> school-imports/generated/rules/
+python scripts/import_corpus/score_rules.py      # splitting and clock times, no AI
+python scripts/import_corpus/score_rules.py --ai # also reads every rule with the AI and checks what it would do (needs ANTHROPIC_API_KEY)
+```
+
+Each message is a coordinator's note the way it arrives - a WhatsApp forward, a greeting, numbered or one paragraph, two rules on a line, clock times - with what it means as facts: when a teacher can't be given a lesson, which periods a subject can't be in, a daily limit. `--ai` checks the rules the parser made by trying lessons against them (a lesson of that teacher in every period of the week, a day of N and N+1 lessons), so any wording or rule shape that would give the right timetable scores full marks.
+
 `--seed` fixes the corpus: the same seed always gives the same files, so a score before a change can be compared with one after.
 
 ## Where the shapes come from

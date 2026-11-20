@@ -158,6 +158,24 @@ describe('ConstraintInterpretation, when the parser declined', () => {
     expect(screen.getByText('Grade 12 may only use the lab in afternoons')).toBeInTheDocument()
   })
 
+  it('offers to add every rule when several were typed at once', () => {
+    const onAddAll = vi.fn()
+    render(
+      <ConstraintInterpretation
+        typed="Priya is off on Monday and can't take more than 4 periods a day"
+        interpretation={{
+          understood: false, reason: 'several', explanation: "That's 2 rules.",
+          readings: ['Priya is off on Monday', "Priya can't take more than 4 periods a day"],
+        }}
+        saving={false} onConfirm={vi.fn()} onReword={vi.fn()} onCancel={vi.fn()} onAddAll={onAddAll}
+      />,
+    )
+    expect(screen.getByText('That’s more than one rule')).toBeInTheDocument()
+    expect(screen.getByText("Priya can't take more than 4 periods a day")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add all 2' }))
+    expect(onAddAll).toHaveBeenCalled()
+  })
+
   it('says a rule it cannot handle is the app\'s limitation, not the admin\'s mistake', () => {
     render(
       <ConstraintInterpretation

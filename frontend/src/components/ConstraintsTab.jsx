@@ -263,6 +263,27 @@ export default function ConstraintsTab({
     }
   }
 
+  // Several rules typed in one go: each read and saved on its own, the same
+  // way a pasted list is.
+  async function handleAddAll() {
+    if (!pending?.typed) return
+    setConfirming(true)
+    setError(null)
+    try {
+      const result = await api.parseConstraintsBatch(schoolId, pending.typed)
+      const created = Array.isArray(result) ? result : result.created ?? []
+      setBatchResultCount(created.length)
+      setBatchUnread(Array.isArray(result) ? [] : result.unread ?? [])
+      setPending(null)
+      setInput('')
+      await onReload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setConfirming(false)
+    }
+  }
+
   async function handleConfirm() {
     if (!pending?.interpretation?.rule) return
     setConfirming(true)
@@ -433,6 +454,7 @@ export default function ConstraintsTab({
               saving={confirming}
               onConfirm={handleConfirm}
               onReword={handleReword}
+              onAddAll={handleAddAll}
               onCancel={() => {
                 report('cancelled')
                 setPending(null)

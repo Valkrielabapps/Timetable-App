@@ -30,13 +30,15 @@ export default function ConstraintInterpretation({
   onConfirm,
   onReword,
   onCancel,
+  onAddAll,
 }) {
   const { understood, sentence, unknown_names: unknownNames = [] } = interpretation
   const blocked = unknownNames.length > 0
 
   if (!understood) {
     return (
-      <NotUnderstood typed={typed} interpretation={interpretation} onReword={onReword} onCancel={onCancel} />
+      <NotUnderstood typed={typed} interpretation={interpretation} onReword={onReword} onCancel={onCancel}
+        onAddAll={onAddAll} saving={saving} />
     )
   }
 
@@ -109,7 +111,7 @@ export default function ConstraintInterpretation({
  * why the question and the alternative readings matter more than the reason
  * code does.
  */
-function NotUnderstood({ typed, interpretation, onReword, onCancel }) {
+function NotUnderstood({ typed, interpretation, onReword, onCancel, onAddAll, saving }) {
   const { reason, explanation, question, readings = [] } = interpretation
 
   return (
@@ -133,10 +135,22 @@ function NotUnderstood({ typed, interpretation, onReword, onCancel }) {
       </div>
 
       <div className="flex items-center gap-2">
+        {reason === 'several' && onAddAll && (
+          <button
+            type="button"
+            onClick={onAddAll}
+            disabled={saving}
+            className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {saving ? 'Adding…' : `Add all ${readings.length}`}
+          </button>
+        )}
         <button
           type="button"
           onClick={onReword}
-          className="rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+          className={reason === 'several'
+            ? 'rounded-md border border-amber-300 bg-white px-3.5 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100'
+            : 'rounded-md bg-neutral-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-neutral-700'}
         >
           Reword it
         </button>
@@ -156,6 +170,7 @@ function NotUnderstood({ typed, interpretation, onReword, onCancel }) {
 // is not their fault and shouldn't read like it is - the rule is fine, the app
 // can't do it yet.
 const HEADINGS = {
+  several: 'That’s more than one rule',
   ambiguous: 'This could mean more than one thing',
   too_vague: "There's nothing specific enough to schedule on",
   unknown_reference: "That name isn't in your school's data",

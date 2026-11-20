@@ -452,9 +452,9 @@ def run(root: Path, rules: bool, use_staff: bool, only: str | None) -> list[dict
                     row.update(more=0, more_crashed=f"{type(e).__name__}: {str(e)[:100]}")
             elif exp["kind"] == "rules":
                 if not rules:
-                    row.update(score=None, skipped="rules need --rules and the AI key")
+                    row.update(score=None, skipped="see score_rules.py for rule messages")
                 else:
-                    row.update(score=None, skipped="rules scoring: not built yet (Phase 5)")
+                    row.update(score=None, skipped="rule messages are scored by score_rules.py")
         except ValueError as e:  # the importer's own "can't read this" message
             row.update(score=0, refused=str(e)[:120])
         except Exception as e:  # noqa: BLE001 - a crash is a finding, scored 0
