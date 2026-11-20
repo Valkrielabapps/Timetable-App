@@ -193,3 +193,47 @@ def test_without_the_ai_a_pdf_says_so(client, monkeypatch):
     r = client.post("/api/class-plan/preview", data={"school_id": sid},
                     files={"file": ("t.png", b"\x89PNG not really", "image/png")}, headers=h)
     assert r.status_code == 400 and "read by the AI" in r.json()["detail"]
+
+
+def test_a_short_code_nobody_knows_is_asked_once_and_remembered(client):
+    """Seen in Keren's real timetable: ESK, CUET, H.W, COM, SUBW."""
+    sid, h = _school(client)
+    rows = grid("VI A", [["ENG-PRIYA", "SUBW-RAVI", "ESK-ANU", "SST-JOHN", "COM-RAVI"]] * 5, breaks="") \
+        + grid("VI B", [["ESK-ANU", "ENG-PRIYA", "SUBW-RAVI", "COM-RAVI", "SST-JOHN"]] * 5, breaks="")
+    p = _preview(client, sid, h, "t.xlsx", xlsx(("Sheet1", rows)))
+    qs = {q["id"]: q for q in p["questions"]}
+    assert "It's SUPW" in [o["label"] for o in qs["code:SUBW"]["options"]]
+    assert {"It's Computer Science", "It's Commerce"} <= {o["label"] for o in qs["code:COM"]["options"]}
+    answers = {q["id"]: q["suggested"] for q in p["questions"]}
+    answers.update({"code:SUBW": "is:SUPW", "code:COM": "is:Computer Science"})
+    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": answers}, headers=h)
+    assert r.status_code == 200, r.text
+    names = set(r.json()["subjects"])
+    assert {"SUPW", "Computer Science", "ESK"} <= names and "SUBW" not in names and "COM" not in names
+    forms = {(x["text"], x["meaning"]) for x in client.get(f"/api/schools/{sid}/short-forms", headers=h).json()["items"]}
+    assert ("SUBW", "SUPW") in forms
+    # Next time: not asked.
+    p = _preview(client, sid, h, "t.xlsx", xlsx(("Sheet1", rows)))
+    assert "code:SUBW" not in {q["id"] for q in p["questions"]}
+
+
+def test_a_name_that_is_one_person_on_the_staff_list_is_not_offered_as_two():
+    rows = grid("VI A", [["ENG-PRIYA", "MAT-RAVI", "SCI-ANU", "SST-JOHN", "ART-RAVI"]] * 5, breaks="") \
+        + grid("VII A", [["MUS-LATA", "MAT-RAVI", "ENG-PRIYA", "SCI-ANU", "SST-JOHN"]] * 5, breaks="")
+    staff = [{"name": "Ravi", "subjects": ["Maths"]}, {"name": "Priya", "subjects": ["English"]}]
+    r = read_timetable(read_sheets("t.xlsx", xlsx(("Sheet1", rows))), staff)
+    assert r["same_names"] == []
+    assert any(c.startswith("Ravi is down for two classes at once") and "Taught together, or a slip" in c
+               for c in r["checks"])
+
+
+def test_twice_a_week_at_one_period_is_not_a_fixed_period():
+    week = [["ENG-PRIYA", "MAT-RAVI", "AI-ANU", "SST-JOHN", "CT-PRIYA"],
+            ["ENG-PRIYA", "MAT-RAVI", "AI-ANU", "SST-JOHN", "CT-PRIYA"],
+            ["ENG-PRIYA", "MAT-RAVI", "SCI-ANU", "SST-JOHN", "CT-PRIYA"],
+            ["ENG-PRIYA", "MAT-RAVI", "SCI-ANU", "SST-JOHN", "CT-PRIYA"],
+            ["ENG-PRIYA", "MAT-RAVI", "SCI-ANU", "SST-JOHN", "CT-PRIYA"]]
+    rows = grid("XI A", week, breaks="") + grid("XI B", [[c.replace("PRIYA", "MEENA") for c in r] for r in week], breaks="")
+    r = read_timetable(read_sheets("t.xlsx", xlsx(("Sheet1", rows))))
+    subjects = {f["subject"] for f in r["fixed"]}
+    assert "AI" not in subjects and "CT" in subjects

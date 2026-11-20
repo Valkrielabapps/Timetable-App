@@ -163,6 +163,54 @@ def _staff_from(filename: str, content: bytes) -> list[dict]:
             for r in rows if r.get("name")]
 
 
+def _short_code_questions(new_subjects: list[str], out_tables: list[dict], subject_names: list[str]) -> list[dict]:
+    """A short code the sheet uses that isn't a subject anyone knows ("ESK",
+    "CUET", "H.W", "COM"): asked once - it may be a subject the school has
+    under its full name, or another code for the same thing. The answer is
+    kept as the school's short form."""
+    from app.services.smart_import import _CONCEPT_NAMES, _SUBJECT_ALIASES
+
+    def short(x):
+        k = _key(x)
+        return 1 <= len(k) <= 7 and k not in _SUBJECT_ALIASES and _concept(x) not in _CONCEPT_NAMES and \
+            (x.replace(".", "").replace(" ", "").isupper() or len(k) <= 3)
+
+    where: dict[str, list] = defaultdict(list)
+    for t in out_tables:
+        for it in t["items"]:
+            for x in it["subjects"]:
+                where[x].append(t["grade"])
+    known = list(dict.fromkeys(list(subject_names) + [x for x in new_subjects if not short(x)]))
+    out = []
+    for x in new_subjects:
+        if not short(x):
+            continue
+        k = _key(x)
+        cands = [n for n in known if _key(n).startswith(k[:3]) and len(k) >= 2]
+        cands += [n for n in new_subjects if n != x and short(n) and len(k) >= 3 and (k in _key(n) or _key(n) in k)]
+        cands += [v for c, v in _CONCEPT_NAMES.items() if len(k) <= 3 and v.lower().replace(" ", "").startswith(k)
+                  and len(k) >= 2]
+        if re.fullmatch(r"\d?ln|lang\d?", k):
+            cands += ["2nd Language", "3rd Language"]
+        # One letter off a short form everyone knows: "SUBW" is SUPW.
+        if len(k) >= 3:
+            cands += [_CONCEPT_NAMES[c] for a, c in _SUBJECT_ALIASES.items()
+                      if len(a) == len(k) and sum(p != q for p, q in zip(a, k)) == 1 and c in _CONCEPT_NAMES]
+        cands = list(dict.fromkeys(c for c in cands if _norm(c) != _norm(x)))[:4]
+        grades = list(dict.fromkeys(where.get(x, [])))
+        out.append({
+            "id": f"code:{x}",
+            "text": f"What is “{x}”? It's in {len(where.get(x, []))} class plans "
+                    f"({', '.join(grades[:4])}{'…' if len(grades) > 4 else ''}). Pick the subject it means, "
+                    "or keep it as a subject of its own.",
+            "options": [{"key": f"is:{c}", "label": f"It's {c}"} for c in cands]
+            + [{"key": "keep", "label": f"Keep “{x}” as its own subject"}],
+            "suggested": "keep",
+            "note": "Whatever you choose is remembered, so this school isn't asked again.",
+        })
+    return out
+
+
 def _days_text(days) -> str:
     names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     return "every day" if not days else ", ".join(names[d] for d in days)
@@ -451,6 +499,7 @@ def build_preview(db: Session, school_id: int, filename: str, content: bytes,
             "suggested": "replace",
         })
 
+    questions += _short_code_questions(new_subjects, out_tables, subject_names)
     timetable_part = _timetable_part(reading, out_tables, subject_names, s["grades"], known_forms["subject"],
                                      questions) if reading else None
     if reading:
@@ -541,7 +590,15 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
     teachers = {_norm(t.name): t for t in s["teachers"]}
     created = {"sections": [], "subjects": [], "teachers": [], "requirements": 0, "blocks": 0, "periods": 0}
 
+    # Short codes the school said the meaning of: "ESK" is English Speaking.
+    meant: dict[str, str] = {}
+    for qid, a in answers.items():
+        if qid.startswith("code:") and isinstance(a, str) and a.startswith("is:"):
+            meant[_norm(qid[5:])] = a[3:]
+            short_forms.remember(db, school_id, "subject", qid[5:], a[3:], source="timetable")
+
     def subject(name: str) -> Subject:
+        name = meant.get(_norm(name), name)
         if _norm(name) not in subjects:
             sub = Subject(school_id=school_id, name=name.strip()[:100])
             db.add(sub)

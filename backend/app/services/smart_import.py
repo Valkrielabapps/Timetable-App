@@ -613,7 +613,7 @@ _SUBJECT_ALIASES = {
     "tel": "telugu", "telugu": "telugu", "mal": "malayalam", "malayalam": "malayalam", "skt": "sanskrit",
     "sans": "sanskrit", "sanskrit": "sanskrit", "fre": "french", "french": "french",
     "mat": "math", "mths": "math", "soc": "social", "socsci": "social", "game": "pe",
-    "robo": "robotics", "robotics": "robotics", "ai": "ai", "artificialintelligence": "ai",
+    "robo": "robotics", "robotics": "robotics", "robotic": "robotics", "ai": "ai", "artificialintelligence": "ai",
     "acco": "accounts", "bs": "business", "ip": "ip", "informaticspractices": "ip",
     "2ln": "lang2", "secondlanguage": "lang2", "2ndlanguage": "lang2", "3ln": "lang3", "thirdlanguage": "lang3",
     "3rdlanguage": "lang3", "read": "reading", "reading": "reading", "lis": "listening", "listening": "listening", "speak": "speaking", "speaking": "speaking",

@@ -107,7 +107,9 @@ def test_starting_from_it_sets_up_the_school(client):
     assert "Deva" in p["new_teachers"]
     # This cut-down file has Swathy and Krithika in I A and II B at the same
     # time, so it asks whether each is two people; here each is one.
-    assert {q["id"] for q in p["questions"]} == {"blocks:all", "fixed:all", "asis", "same:Swathy", "same:Krithika"}
+    # And what its own short codes "ENG 2" and "H.W" mean.
+    assert {q["id"] for q in p["questions"]} == {"blocks:all", "fixed:all", "asis", "same:Swathy", "same:Krithika",
+                                                 "code:ENG 2", "code:H.W"}
     answers = {q["id"]: q["suggested"] for q in p["questions"]}
     answers.update({"same:Swathy": "one", "same:Krithika": "one"})
     r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": p["plan"], "answers": answers},

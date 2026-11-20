@@ -489,16 +489,16 @@ def read_timetable(sheets: list[tuple[str, list[list[str]]]], staff: list[dict] 
     blocks = find_blocks(sections)
     out = {"tables": tables, "sections": sections, "week": week, "view": view,
            "blocks": blocks, "fixed": find_fixed(sections, week),
-           "same_names": same_names(sections, blocks)}
+           "same_names": same_names(sections, blocks, staff)}
     asked = {n["name"] for n in out["same_names"]}
-    out["checks"] = [c for c in clashes(sections, out["blocks"]) if c.split(" is down for ")[0] not in asked] + (
+    out["checks"] = clashes(sections, out["blocks"], asked) + (
         cross_check(sections, from_teachers, staff) if from_teachers and view == "class" else [])
     for t in tables:
         t["block_items"] = _plain_items(t, out["blocks"])
     return out
 
 
-def same_names(sections: list[dict], blocks: list[dict]) -> list[dict]:
+def same_names(sections: list[dict], blocks: list[dict], staff: list[dict] | None = None) -> list[dict]:
     """One name that may be two people ("Mythili" for Mythili Nair and
     Mythili Rajan): the name is down for two classes at once. Their lessons
     are shared out between as few people as keep everyone in one place at a
@@ -518,6 +518,13 @@ def same_names(sections: list[dict], blocks: list[dict]) -> list[dict]:
             for t in l.get("teachers") or []:
                 at[(t, l["day"], l["period"])].add(s["label"])
     clashing = sorted({t for (t, _, _), labs in at.items() if len(labs) > 1})
+    # A name that is exactly one person on the staff list is one person: the
+    # clash is two classes taken together, or a slip in last year's timetable,
+    # and is reported as that, not offered as two teachers.
+    on_list = defaultdict(int)
+    for p in staff or []:
+        on_list[re.sub(r"\s+", " ", (p.get("name") or "")).strip().lower()] += 1
+    clashing = [t for t in clashing if on_list.get(t.lower(), 0) != 1]
     notes = []
     for name in clashing:
         units: dict[tuple, set] = defaultdict(set)   # (subject, section) -> slots
@@ -544,8 +551,12 @@ def same_names(sections: list[dict], blocks: list[dict]) -> list[dict]:
         for c in people:
             subs = sorted({nice[u[0]] for u, cc in colour.items() if cc == c})
             label = f"{name} ({', '.join(subs[:2])}{'…' if len(subs) > 2 else ''})"
+            k = 2
+            base = label
             while label in labels.values():
-                label = label[:-1] + " 2)" if not label.endswith(" 2)") else label[:-3] + " 3)"
+                # "Maivizhi 2 (Physical Education)": the second person teaching it.
+                label = base.replace(f"{name} (", f"{name} {k} (", 1)
+                k += 1
             labels[c] = label
         example = next(((t, d, p, sorted(labs)) for (t, d, p), labs in sorted(at.items(), key=lambda x: (x[0][1], x[0][2]))
                         if t == name and len(labs) > 1), None)
@@ -740,8 +751,10 @@ def find_fixed(sections: list[dict], week: dict) -> list[dict]:
             periods, days, count = shapes[0]
             if len(periods) != 1 or count != len(days):
                 continue
+            # Every day, or the same three days or more in two sections or
+            # more: twice a week at one period is as likely to be chance.
             every_day = len(days) >= days_n
-            if not every_day and not (len(secs) >= 2 and len(days) >= 2):
+            if not every_day and not (len(secs) >= 2 and len(days) >= 3):
                 continue
             name = per_sec[0][key][0][2]
             rec = found.setdefault((key, periods[0], None if every_day else days),
@@ -754,9 +767,10 @@ def find_fixed(sections: list[dict], week: dict) -> list[dict]:
 _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
-def clashes(sections: list[dict], blocks: list[dict]) -> list[str]:
+def clashes(sections: list[dict], blocks: list[dict], skip=()) -> list[str]:
     """A teacher down for two sections at once, unless it's one block taught
-    to both together."""
+    to both together: one line per teacher, with how often and when first.
+    `skip`: names asked about already (one name, maybe two people)."""
     from app.services.smart_import import _ck
 
     where: dict[tuple, list] = defaultdict(list)
@@ -764,15 +778,22 @@ def clashes(sections: list[dict], blocks: list[dict]) -> list[str]:
         for l in s["lessons"]:
             for t in l.get("teachers") or []:
                 where[(t, l["day"], l["period"])].append((s["label"], _ck(l["subject"])))
-    out = []
+    per: dict[str, list] = defaultdict(list)
     for (t, d, p), places in sorted(where.items(), key=lambda x: (x[0][1], x[0][2], x[0][0])):
         labels = list(dict.fromkeys(lab for lab, _ in places))
         codes = {c for _, c in places}
+        if t in skip:
+            continue
         if len(labels) > 1 and not (len(codes) == 1 and _blockish(places[0][1]) or len(codes) == 1 and
                                     any(set(labels) <= set(b["sections"]) for b in blocks)):
-            out.append(f"{t} is down for {' and '.join(labels)} at once ({_DAY_NAMES[d]}, period {p}).")
-    if len(out) > 6:
-        out = out[:6] + [f"…and {len(out) - 6} more times a teacher is in two places."]
+            per[t].append(f"{' and '.join(labels)} ({_DAY_NAMES[d]}, period {p})")
+    out = []
+    for t, cases in sorted(per.items(), key=lambda x: -len(x[1])):
+        more = f", and {len(cases) - 1} more time{'s' if len(cases) > 2 else ''}" if len(cases) > 1 else ""
+        out.append(f"{t} is down for two classes at once: {cases[0]}{more}. Taught together, or a slip "
+                   "in last year's timetable?")
+    if len(out) > 8:
+        out = out[:8] + [f"…and {len(out) - 8} more teachers down for two classes at once."]
     return out
 
 
