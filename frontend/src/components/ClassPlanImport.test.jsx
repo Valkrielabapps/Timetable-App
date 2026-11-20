@@ -91,6 +91,8 @@ describe('filling in every class from the allotment sheet', () => {
     expect(await screen.findByText(/We found plans for/)).toHaveTextContent('2 classes')
     expect(api.classPlanPreview).toHaveBeenCalledWith(1, file)
     expect(screen.getByText(/Left out because they have 0 periods: Assembly/)).toBeInTheDocument()
+    // Nothing to answer here, so no "Use the suggested answers".
+    expect(screen.queryByRole('button', { name: 'Use the suggested answers' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))   // subjects
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))   // worth checking
     expect(screen.getByText(/Worth checking before the timetable is made/)).toBeInTheDocument()

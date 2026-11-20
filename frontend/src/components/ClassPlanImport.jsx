@@ -208,7 +208,8 @@ function PreviewSteps({ preview, answers, setAnswers, saving, onSave, onCancel }
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Step {at + 1} of {steps.length} · {step.title}
           </p>
-          {questions.length > 0 && step.key !== 'done' && (
+          {/* Only where there's something to answer: on the questions themselves. */}
+          {step.q && (
             <button
               type="button"
               onClick={applySuggested}
