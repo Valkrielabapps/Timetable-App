@@ -33,4 +33,8 @@ openpyxl==3.1.5
 # switches to it by itself when it's installed; smart_import.py uses it too.
 defusedxml==0.7.1
 reportlab==4.2.5
+# Reads the text off PDFs made by software (an exported timetable, a staff
+# list saved as PDF) in seconds and exactly, so only scans and photos need
+# the AI - see smart_import.pdf_tables. Approved 2026-11-20.
+pdfplumber==0.11.10
 cashfree-pg==6.0.1
