@@ -237,6 +237,28 @@ def update_grade_day_limits(
     return _school_out(school, role)
 
 
+class ClearDataIn(BaseModel):
+    # The school's name typed out, so this is never one stray click.
+    confirm: str = Field(max_length=200)
+
+
+@router.post("/{school_id}/clear-data")
+def clear_school_data(school_id: int, payload: ClearDataIn, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    """Start over: every section, teacher, subject, class plan, block, rule,
+    period, room, timetable and short form of this school deleted, and its
+    timetabling settings back to new. The school, its members, plan and
+    invoices stay. Admins only, and the school's name must be typed."""
+    from app.services import erase
+
+    require_school_access(db, current_user, school_id, min_role="admin")
+    school = db.get(School, school_id)
+    if " ".join(payload.confirm.split()).lower() != " ".join(school.name.split()).lower():
+        raise HTTPException(status_code=400, detail="Type the school's name exactly to clear its data.")
+    counts = erase.clear_school(db, school_id)
+    return {"deleted": counts}
+
+
 @router.put("/{school_id}/fixed-periods", response_model=SchoolOut)
 def update_fixed_periods(
     school_id: int, payload: SchoolFixedPeriodsUpdate,

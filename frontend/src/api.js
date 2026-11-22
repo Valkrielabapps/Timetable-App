@@ -193,6 +193,7 @@ export const api = {
   updateFixedPeriods: (schoolId, rules) => put(`/schools/${schoolId}/fixed-periods`, { rules }),
   // Problems that will stop a timetable, found without running the solver.
   setupCheck: (schoolId) => get(`/schools/${schoolId}/setup-check`),
+  clearSchoolData: (schoolId, confirm) => post(`/schools/${schoolId}/clear-data`, { confirm }),
   // "Send to Timetablz support": the school's setup, with what they were
   // looking at, saved for the Timetablz admin page.
   sendToSupport: (schoolId, message, context = {}) =>

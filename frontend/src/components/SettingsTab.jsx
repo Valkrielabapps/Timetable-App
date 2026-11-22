@@ -3,6 +3,7 @@ import { api } from '../api'
 import TeamTab from './TeamTab'
 import BillingSection from './BillingSection'
 import GradeCategoriesSection from './GradeCategoriesSection'
+import ClearDataSection from './ClearDataSection'
 
 /**
  * Settings, opened from the header (left of Sign out). Sections in a
@@ -16,6 +17,7 @@ import GradeCategoriesSection from './GradeCategoriesSection'
  *   - Team: what used to be the Team tab in the header (admins only).
  *   - School categories: which grades are pre-primary, primary, middle and
  *     high school, for substitutions (GradeCategoriesSection).
+ *   - Clear all data: start the school over (ClearDataSection, admins only).
  *
  * Grade order isn't here because the sidebar already has a Reorder mode
  * for it, right next to the grades themselves.
@@ -31,6 +33,7 @@ export default function SettingsTab({
   members,
   invites,
   onReloadTeam,
+  onDataCleared,
   initialSection = 'school',
 }) {
   const sections = [
@@ -39,6 +42,7 @@ export default function SettingsTab({
     { id: 'billing', label: 'Plan & billing', hint: 'Your plan, invoices, renew or change plan' },
     ...(isAdmin ? [{ id: 'team', label: 'Team', hint: 'Who has access' }] : []),
     { id: 'categories', label: 'School categories', hint: 'Grades by part of the school' },
+    ...(isAdmin ? [{ id: 'data', label: 'Clear all data', hint: 'Start this school over' }] : []),
   ]
   const [section, setSection] = useState(
     sections.some((s) => s.id === initialSection) ? initialSection : 'school'
@@ -82,6 +86,9 @@ export default function SettingsTab({
           {section === 'account' && <MyAccount user={user} onUserUpdated={onUserUpdated} />}
           {section === 'billing' && <BillingSection school={school} isAdmin={isAdmin} />}
           {section === 'categories' && <GradeCategoriesSection schoolId={school.id} isAdmin={isAdmin} />}
+          {section === 'data' && isAdmin && (
+            <ClearDataSection school={school} isAdmin={isAdmin} onCleared={onDataCleared} />
+          )}
           {section === 'team' && isAdmin && (
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               <TeamTab schoolId={school.id} members={members} invites={invites} onReload={onReloadTeam} />

@@ -1147,6 +1147,7 @@ function App() {
                     members={members}
                     invites={invites}
                     onReloadTeam={reloadTeam}
+                    onDataCleared={() => Promise.all([loadSchools(), loadSchoolData(selectedSchoolId)])}
                   />
                 )}
             </motion.div>

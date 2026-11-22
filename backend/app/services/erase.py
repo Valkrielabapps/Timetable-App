@@ -42,13 +42,16 @@ def _referencing(table_name):
     return out
 
 
-def plan(db: Session, table_name: str, ids: list[int]) -> tuple[dict, list]:
+def plan(db: Session, table_name: str, ids: list[int], more: list[tuple[str, list[int]]] = ()) -> tuple[dict, list]:
     """What deleting these rows takes: {table: ids to delete} and the
-    (table, column, ids) references to clear instead."""
+    (table, column, ids) references to clear instead. `more`: other
+    (table, ids) to delete in the same go."""
     to_delete: dict[str, set] = defaultdict(set)
-    to_delete[table_name] |= set(ids)
     clear: list = []
-    queue = [(table_name, set(ids))]
+    queue = []
+    for name, row_ids in [(table_name, ids), *more]:
+        to_delete[name] |= set(row_ids)
+        queue.append((name, set(row_ids)))
     while queue:
         name, new_ids = queue.pop()
         if not new_ids:
@@ -70,11 +73,11 @@ def plan(db: Session, table_name: str, ids: list[int]) -> tuple[dict, list]:
     return dict(to_delete), clear
 
 
-def erase(db: Session, table_name: str, ids: list[int]) -> dict[str, int]:
+def erase(db: Session, table_name: str, ids: list[int], more: list[tuple[str, list[int]]] = ()) -> dict[str, int]:
     """Delete the rows and everything that depends on them. Returns how many
     rows went from each table. Commits."""
     tables = _tables()
-    to_delete, clear = plan(db, table_name, ids)
+    to_delete, clear = plan(db, table_name, ids, more)
     # Keep what must be kept, and break every optional link first, so the
     # order of the deletes below never trips a foreign key.
     for child, col, ref_ids in clear:
@@ -100,3 +103,34 @@ def erase(db: Session, table_name: str, ids: list[int]) -> dict[str, int]:
             counts[t.name] = res.rowcount or 0
     db.commit()
     return {k: v for k, v in counts.items() if v}
+
+
+# ------------------------------------------------- start a school over
+
+# A school's own timetabling data: everything its admins entered or imported.
+# Cleared together, with whatever hangs off it (timetable entries, block
+# options, plans...), by clear_school. Everything else about the school stays:
+# the school itself, its members and invitations, its plan, payments and
+# invoices, offers, and the problem and rule-reading logs.
+SCHOOL_DATA = ("constraints", "timetables", "subject_freezes", "substitution_logs", "elective_blocks",
+               "class_groups", "teachers", "subjects", "rooms", "zero_periods", "periods", "school_aliases")
+
+
+def clear_school(db: Session, school_id: int) -> dict[str, int]:
+    """Everything the school set up - sections, teachers, subjects, class
+    plans, blocks, rules, periods, rooms, timetables, short forms - deleted,
+    and its timetabling settings back to new, so it can start over. Commits."""
+    tables = _tables()
+    seeds = []
+    for name in SCHOOL_DATA:
+        t = tables[name]
+        ids = [r for (r,) in db.execute(select(t.c.id).where(t.c.school_id == school_id))]
+        if ids:
+            seeds.append((name, ids))
+    counts = erase(db, seeds[0][0], seeds[0][1], seeds[1:]) if seeds else {}
+    school_t = tables["schools"]
+    db.execute(update(school_t).where(school_t.c.id == school_id).values(
+        grade_order=[], grade_categories=None, grade_day_limits=None, fixed_periods=None,
+        current_timetable_id=None, standard_rules=None))
+    db.commit()
+    return counts
