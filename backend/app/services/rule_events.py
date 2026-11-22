@@ -3,7 +3,7 @@
 Everything the rule parser gets wrong in real use shows up as one of these:
 a line handed back unread, a reading the admin cancelled or reworded, a rule
 deleted minutes after it was saved, a saved rule the timetable can't apply.
-The Timetablz admin page lists them (GET /api/admin/rule-events) so each can be
+The Rivelle admin page lists them (GET /api/admin/rule-events) so each can be
 sorted into what needs fixing - the prompt, the rule checker, a new kind of
 rule, or a better question.
 

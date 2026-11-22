@@ -21,7 +21,7 @@ object CalendarLink {
             data = CalendarContract.Events.CONTENT_URI
             putExtra(CalendarContract.Events.TITLE, "Cover: ${item.classGroup} ${item.subject}".trim())
             putExtra(CalendarContract.Events.DESCRIPTION,
-                "${item.periodLabel} at $school, covering for ${item.forTeacher}. From Timetablz.")
+                "${item.periodLabel} at $school, covering for ${item.forTeacher}. From Rivelle.")
             putExtra(CalendarContract.Events.EVENT_LOCATION, school)
             if (times != null) {
                 fun at(h: Int, m: Int) = Calendar.getInstance().apply {

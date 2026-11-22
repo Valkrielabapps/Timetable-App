@@ -99,14 +99,14 @@ class Settings(BaseSettings):
     # OAuth client in Google Cloud, with this redirect URI added to it.
     outreach_google_client_id: str | None = None
     outreach_google_client_secret: str | None = None
-    outreach_google_redirect_uri: str = "https://timetablz.com/api/admin/outreach/gmail/callback"
+    outreach_google_redirect_uri: str = "https://rivelletimetables.com/api/admin/outreach/gmail/callback"
     # Or from a Zoho Mail mailbox, through Zoho's Mail REST API: a
     # "Server-based Application" client at api-console.zoho.in (or .com for
     # accounts outside India) with this redirect URI.
     outreach_zoho_client_id: str | None = None
     outreach_zoho_client_secret: str | None = None
     outreach_zoho_accounts_url: str = "https://accounts.zoho.in"
-    outreach_zoho_redirect_uri: str = "https://timetablz.com/api/admin/outreach/zoho/callback"
+    outreach_zoho_redirect_uri: str = "https://rivelletimetables.com/api/admin/outreach/zoho/callback"
 
     # Used by app/services/email_service.py to actually send invite emails
     # via Resend's HTTP API (https://resend.com). If unset, invite creation
@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     # "Timetable App <notifications@yourdomain.com>" before relying on this
     # for real users (unverified-domain mail is more likely to land in spam
     # and can only send to the Resend account's own verified address).
-    email_from_address: str = "Timetable App <onboarding@resend.dev>"
+    email_from_address: str = "Rivelle <onboarding@resend.dev>"
     # Base URL of the deployed frontend (no trailing slash), used to build
     # the invite link included in the email - e.g. "https://app.example.com".
     # Defaults to the local Vite dev server so invite emails work out of the
@@ -132,7 +132,7 @@ class Settings(BaseSettings):
     # Inbox that tickets from the in-app support button are sent to (see
     # app/routers/support.py). Not secret, so a default is fine; override
     # with SUPPORT_EMAIL if tickets should land somewhere else.
-    support_email: str = "support@timetablz.com"
+    support_email: str = "support@rivelletimetables.com"
 
     # How long a forgot-password link stays valid before it's rejected as
     # expired (see PasswordResetToken / app/routers/auth.py). Short on
@@ -161,15 +161,15 @@ class Settings(BaseSettings):
     # tests build schools far bigger than the Free plan allows. The plan
     # tests switch them back on.
     plan_limits_enabled: bool = True
-    # Who can open the Timetablz admin page (timetablz.com/admin): custom
+    # Who can open the Rivelle admin page (rivelletimetables.com/admin): custom
     # offers, mark paid, extend free days, downgrade, all accounts. Only the
     # Valkyrie Labs account by default; PLATFORM_ADMIN_EMAILS overrides it
     # (comma-separated) if that ever needs to change.
     platform_admin_emails: str = "valkyrielabapps@gmail.com"
     # Seller details printed on invoices (app/services/billing.py).
-    invoice_seller_name: str = "Arpith David Ratnaraj, trading as Timetablz"
+    invoice_seller_name: str = "Arpith David Ratnaraj, trading as Rivelle"
     invoice_seller_address: str = "Chennai, Tamil Nadu, India"
-    invoice_seller_email: str = "support@timetablz.com"
+    invoice_seller_email: str = "support@rivelletimetables.com"
     # Leave unset until GST-registered; when set it's printed on invoices.
     invoice_seller_gstin: str | None = None
 

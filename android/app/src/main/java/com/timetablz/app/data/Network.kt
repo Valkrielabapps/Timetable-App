@@ -26,7 +26,7 @@ class TokenHolder {
 }
 
 object Network {
-    const val BASE_URL = "https://timetablz.com/api/"
+    const val BASE_URL = "https://rivelletimetables.com/api/"
 
     val json = Json {
         ignoreUnknownKeys = true
@@ -70,9 +70,9 @@ suspend fun <T> apiCall(block: suspend () -> T): T = try {
 } catch (e: HttpException) {
     throw ApiException(e.code(), errorMessage(e.code(), e.response()?.errorBody()?.string()))
 } catch (e: IOException) {
-    throw ApiException(0, "Couldn't reach Timetablz. Check your internet connection.")
+    throw ApiException(0, "Couldn't reach Rivelle. Check your internet connection.")
 } catch (e: SerializationException) {
-    throw ApiException(-1, "Timetablz sent back something unexpected. Update the app, or try again.")
+    throw ApiException(-1, "Rivelle sent back something unexpected. Update the app, or try again.")
 }
 
 private fun errorMessage(code: Int, body: String?): String {

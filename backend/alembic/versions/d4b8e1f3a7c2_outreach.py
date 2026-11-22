@@ -4,7 +4,7 @@ Revision ID: d4b8e1f3a7c2
 Revises: 0ee16a4c4226
 Create Date: 2026-10-31 12:00:00.000000
 
-Timetablz's own sales pipeline, run from the admin page - see
+Rivelle's own sales pipeline, run from the admin page - see
 app/models/outreach.py.
 """
 from typing import Sequence, Union

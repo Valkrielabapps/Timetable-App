@@ -47,7 +47,7 @@ class Plan:
     clean_exports: bool
     max_owned_schools: int | None
     description: str
-    # The same plan with the Timetablz team setting the school up: the first
+    # The same plan with the Rivelle team setting the school up: the first
     # year including setup (renewals are at price_inr). None = not offered online.
     done_for_you_inr: int | None = None
     # Shown on the pricing page and in Plan & billing. Pro is kept only for
@@ -277,7 +277,7 @@ def _upgrade_hint(plan: Plan) -> str:
                    if p.max_sections is not None and p.max_sections > (plan.max_sections or 0)), None)
     if plan.max_sections is not None and bigger is not None:
         return f" Move to {bigger.name} (₹{bigger.price_inr:,} a year, up to {bigger.max_sections} sections) for more."
-    return " Contact support@timetablz.com about the Large / Group plan."
+    return " Contact support@rivelletimetables.com about the Large / Group plan."
 
 
 def plan_limit(message: str) -> HTTPException:
@@ -336,7 +336,7 @@ def require_school_capacity(db: Session, user_id: int) -> None:
     if len(owned) >= allowed:
         raise plan_limit(
             "Each account can run one school. To manage several schools from one account, "
-            "contact support@timetablz.com about the Large / Group plan."
+            "contact support@rivelletimetables.com about the Large / Group plan."
         )
 
 

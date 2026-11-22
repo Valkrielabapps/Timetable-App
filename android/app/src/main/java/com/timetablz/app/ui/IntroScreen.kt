@@ -30,7 +30,7 @@ import kotlinx.coroutines.delay
 const val INTRO_MILLIS = 4000L
 
 /**
- * The opening: after the launch screen's mark fades away, the Timetablz name
+ * The opening: after the launch screen's mark fades away, the Rivelle name
  * and line fade in on the same black, rise gently into place, and hold for
  * about four seconds before the app fades in. One continuous movement -
  * nothing overlaps or swaps half-way. Tap to skip; skipped when the phone has
@@ -65,7 +65,7 @@ fun IntroScreen(onFinished: () -> Unit) {
                 translationY = 24f * (1f - t)
             },
         ) {
-            Text("Timetablz", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+            Text("Rivelle", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
             Text(
                 "Clash-free timetables, made in minutes",
                 color = Color.White.copy(alpha = 0.6f),

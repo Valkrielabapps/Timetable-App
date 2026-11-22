@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Timetablz"
+rootProject.name = "Rivelle"
 include(":app")
  

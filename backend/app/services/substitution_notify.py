@@ -65,7 +65,7 @@ def _esc(text: str) -> str:
 def _ics(events: list[dict], method: str, organizer: str, tz: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     seq = int(datetime.now(timezone.utc).timestamp())  # later sends always win
-    lines = ["BEGIN:VCALENDAR", "PRODID:-//Timetablz//Cover//EN", "VERSION:2.0", "CALSCALE:GREGORIAN",
+    lines = ["BEGIN:VCALENDAR", "PRODID:-//Rivelle//Cover//EN", "VERSION:2.0", "CALSCALE:GREGORIAN",
              f"METHOD:{method}"]
     for e in events:
         lines += ["BEGIN:VEVENT", f"UID:{e['uid']}", f"DTSTAMP:{stamp}", f"SEQUENCE:{seq}"]
@@ -77,7 +77,7 @@ def _ics(events: list[dict], method: str, organizer: str, tz: str) -> str:
             nxt = date_type.fromordinal(e["date"].toordinal() + 1).strftime("%Y%m%d")
             lines += [f"DTSTART;VALUE=DATE:{day}", f"DTEND;VALUE=DATE:{nxt}"]
         lines += [f"SUMMARY:{_esc(e['summary'])}", f"DESCRIPTION:{_esc(e['description'])}",
-                  f"ORGANIZER;CN=Timetablz:mailto:{organizer}",
+                  f"ORGANIZER;CN=Rivelle:mailto:{organizer}",
                   f"ATTENDEE;CN={_esc(e['teacher'])};RSVP=FALSE:mailto:{e['email']}",
                   f"STATUS:{'CANCELLED' if method == 'CANCEL' else 'CONFIRMED'}", "TRANSP:OPAQUE", "END:VEVENT"]
     lines.append("END:VCALENDAR")
@@ -99,7 +99,7 @@ def _pace() -> None:
 
 def _organizer() -> str:
     m = re.search(r"<([^>]+)>", settings.email_from_address or "")
-    return m.group(1) if m else (settings.email_from_address or "noreply@timetablz.com")
+    return m.group(1) if m else (settings.email_from_address or "noreply@rivelletimetables.com")
 
 
 def notify(db: Session, school_id: int, day: date_type, category: str | None = None,
@@ -139,7 +139,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         subject = subjects.get(change.get("subject_id")) or "lesson"
         away = teachers.get(absent)
         events_by_teacher[sub].append({
-            "uid": f"cover-{school_id}-{day.isoformat()}-{pid}-{cgid}@timetablz.com",
+            "uid": f"cover-{school_id}-{day.isoformat()}-{pid}-{cgid}@rivelletimetables.com",
             "date": day, "start": times[0] if times else None, "end": times[1] if times else None,
             "order": p.order if p else 0,
             "summary": f"Cover: {_section_label(cg)} {subject} ({when})",
@@ -166,7 +166,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         items = "".join(f"<li>{html.escape(e['line'])}</li>" for e in events)
         body = (f"<p>Dear {html.escape(t.name)},</p><p>On <b>{nice_day}</b> you are covering:</p><ul>{items}</ul>"
                 f"<p>The calendar invite attached puts {'this' if len(events) == 1 else 'these'} in your calendar.</p>"
-                f"<p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Timetablz.</p>")
+                f"<p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Rivelle.</p>")
         _pace()
         ok = email_service.send_cover_email(
             t.email, f"Cover on {nice_day}: {len(events)} {'period' if len(events) == 1 else 'periods'}",
@@ -210,7 +210,7 @@ def notify(db: Session, school_id: int, day: date_type, category: str | None = N
         body = (f"<p><b>Cover for {nice_day}</b></p><p>On leave: {html.escape(leave)}</p>"
                 "<table border='1' cellpadding='4' style='border-collapse:collapse'>"
                 "<tr><th>Period</th><th>Class</th><th>Subject</th><th>For</th><th>Covered by</th></tr>"
-                f"{rows}</table><p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Timetablz.</p>")
+                f"{rows}</table><p style='color:#64748b;font-size:12px'>Sent for {html.escape(school_name)} by Rivelle.</p>")
         covering = set(events_by_teacher)
         others = [t for t in teachers.values() if t.email and t.id not in covering]
         # One request per hundred teachers (Resend's batch endpoint).

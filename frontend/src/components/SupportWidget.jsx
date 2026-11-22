@@ -21,7 +21,7 @@ import { api } from '../api'
 
 // Paste your Calendly / Google Calendar booking link here when you have one.
 const BOOKING_URL = ''
-const SUPPORT_EMAIL = 'support@timetablz.com'
+const SUPPORT_EMAIL = 'support@rivelletimetables.com'
 
 const CATEGORIES = [
   { value: 'question', label: 'A question' },

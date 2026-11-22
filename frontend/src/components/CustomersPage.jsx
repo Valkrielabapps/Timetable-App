@@ -15,7 +15,7 @@ import SiteFooter from './SiteFooter'
  * here instead, for a dedicated page with more room to be honest about
  * where things actually stand.
  *
- * Timetablz has exactly one real customer as of writing this: Shishya
+ * Rivelle has exactly one real customer as of writing this: Shishya
  * Public School, Dehradun (see TrustBar/Testimonials in LandingPage.jsx
  * for the same standard applied there). This page does not pad that out
  * into a "customers" grid implying more than one, and does not invent a
@@ -46,7 +46,7 @@ export default function CustomersPage({ onBack, onGetStarted }) {
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
           <p className="text-xs font-medium uppercase tracking-widest text-neutral-500">Customers</p>
           <h1 className="mt-3 font-serif text-5xl font-medium leading-tight tracking-tight text-neutral-900 md:text-6xl">
-            Who's using Timetablz
+            Who's using Rivelle
           </h1>
           <p className="mt-5 max-w-2xl text-lg text-neutral-600">
             We're early, and we'd rather show you the one real school we work with today than pad this page
@@ -86,13 +86,13 @@ export default function CustomersPage({ onBack, onGetStarted }) {
             </h2>
             <div className="max-w-2xl space-y-4 text-[15px] leading-relaxed text-neutral-600">
               <p>
-                Our first real school partner. We're building Timetablz alongside them rather than for them,
+                Our first real school partner. We're building Rivelle alongside them rather than for them,
                 which means their timetabling needs are shaping what gets prioritized rather than a guess at
                 what schools in general might want.
               </p>
               <p>
                 We won't put words in their mouth with a manufactured quote, so instead of a testimonial,
-                here's the honest version: they're one of the first schools actually using Timetablz to build
+                here's the honest version: they're one of the first schools actually using Rivelle to build
                 a real timetable, and that relationship is still early.
               </p>
             </div>

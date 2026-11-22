@@ -11,7 +11,7 @@
  * and optionally fill in DEMO_TITLE / DEMO_DESCRIPTION.
  */
 const DEMO_VIDEO_URL = ''
-const DEMO_TITLE = 'See Timetablz in action'
+const DEMO_TITLE = 'See Rivelle in action'
 const DEMO_DESCRIPTION = 'A short walkthrough: add your teachers and subjects, type your rules, and generate a clash-free timetable.'
 
 const isFile = (url) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(url)

@@ -85,8 +85,8 @@ fun LoginScreen(session: SessionViewModel, ui: SessionUi) {
             .padding(horizontal = 24.dp, vertical = 48.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("Timetablz", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-        Text("Sign in with your Timetablz account", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Rivelle", fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        Text("Sign in with your Rivelle account", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (GoogleSignIn.configured) {
             GoogleButton(onClick = ::google, busy = ui.authBusy == "google", modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
@@ -111,11 +111,11 @@ fun LoginScreen(session: SessionViewModel, ui: SessionUi) {
         PrimaryButton("Sign in", ::submit, Modifier.fillMaxWidth(), enabled = email.isNotBlank() && password.isNotEmpty(),
             busy = ui.authBusy == "email")
         Text(
-            "Forgot your password? Reset it on timetablz.com. New here? Sign in and you'll be asked to accept " +
+            "Forgot your password? Reset it on rivelletimetables.com. New here? Sign in and you'll be asked to accept " +
                 "the Terms first.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
+        SecondaryButton("Open rivelletimetables.com", { uri.openUri("https://rivelletimetables.com") }, Modifier.fillMaxWidth())
     }
 }
 
@@ -129,7 +129,7 @@ fun TermsScreen(session: SessionViewModel, ui: SessionUi) {
     ) {
         Text("Terms and conditions", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 24.dp))
         Text(
-            "Before you use Timetablz, please read and accept our Terms of Service and Privacy Policy. " +
+            "Before you use Rivelle, please read and accept our Terms of Service and Privacy Policy. " +
                 "If they change, we'll ask again.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -137,7 +137,7 @@ fun TermsScreen(session: SessionViewModel, ui: SessionUi) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("In short", style = MaterialTheme.typography.titleSmall)
                 listOf(
-                    "Your school owns the data it puts in. We use it only to run Timetablz for you.",
+                    "Your school owns the data it puts in. We use it only to run Rivelle for you.",
                     "Timetables are a planning aid: check them before you share them.",
                     "Some features send parts of your data to our AI provider to read rules and files.",
                     "Don't upload students' personal details; only class-level information is needed.",
@@ -145,8 +145,8 @@ fun TermsScreen(session: SessionViewModel, ui: SessionUi) {
                 ).forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
             }
         }
-        SecondaryButton("Read the Terms of Service", { uri.openUri("https://timetablz.com/terms") }, Modifier.fillMaxWidth())
-        SecondaryButton("Read the Privacy Policy", { uri.openUri("https://timetablz.com/privacy") }, Modifier.fillMaxWidth())
+        SecondaryButton("Read the Terms of Service", { uri.openUri("https://rivelletimetables.com/terms") }, Modifier.fillMaxWidth())
+        SecondaryButton("Read the Privacy Policy", { uri.openUri("https://rivelletimetables.com/privacy") }, Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth().clickable { agreed = !agreed }, verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = agreed, onCheckedChange = { agreed = it },
                 colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary))
@@ -197,11 +197,11 @@ fun SchoolPicker(session: SessionViewModel, ui: SessionUi) {
             ui.schools.isEmpty() && ui.schoolsLoaded -> {
                 Text(
                     "This account isn't part of a school yet. If you made your school with a different email or Google " +
-                        "account, sign out and sign in with that one. Otherwise set one up on timetablz.com, or ask your " +
+                        "account, sign out and sign in with that one. Otherwise set one up on rivelletimetables.com, or ask your " +
                         "school's admin to invite you.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                SecondaryButton("Open timetablz.com", { uri.openUri("https://timetablz.com") }, Modifier.fillMaxWidth())
+                SecondaryButton("Open rivelletimetables.com", { uri.openUri("https://rivelletimetables.com") }, Modifier.fillMaxWidth())
             }
             !ui.schoolsLoaded -> PrimaryButton("Load my schools", { session.retrySchools() }, Modifier.fillMaxWidth())
         }

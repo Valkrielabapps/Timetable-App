@@ -35,7 +35,7 @@ export default function LockedScreen({ entitlements, isAdmin, onUpgrade }) {
           <p className="mt-6 text-sm text-slate-500">Ask a school admin to choose a plan.</p>
         )}
         <p className="mt-4 text-xs text-slate-400">
-          Questions? <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a>
+          Questions? <a className="underline" href="mailto:support@rivelletimetables.com">support@rivelletimetables.com</a>
         </p>
       </div>
     </div>

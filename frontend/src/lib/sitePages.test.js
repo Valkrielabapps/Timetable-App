@@ -7,7 +7,7 @@ const at = (pathname, search = '') => ({ pathname, search })
 describe('public page addresses', () => {
   it('reads the page from its own path', () => {
     expect(pageFromLocation(at('/pricing'))).toBe('pricing')
-    expect(pageFromLocation(at('/why-timetablz/'))).toBe('why')
+    expect(pageFromLocation(at('/why-rivelle/'))).toBe('why')
     expect(pageFromLocation(at('/'))).toBe(null)
     expect(pageFromLocation(at('/admin'))).toBe(null)
   })
@@ -21,9 +21,9 @@ describe('public page addresses', () => {
     for (const [id, meta] of Object.entries(PAGE_META)) {
       expect(meta.title.length).toBeGreaterThan(10)
       expect(meta.description.length).toBeLessThanOrEqual(230)
-      expect(canonicalUrl(id)).toMatch(/^https:\/\/timetablz\.com\//)
+      expect(canonicalUrl(id)).toMatch(/^https:\/\/rivelletimetables\.com\//)
     }
-    expect(canonicalUrl('pricing')).toBe('https://timetablz.com/pricing')
+    expect(canonicalUrl('pricing')).toBe('https://rivelletimetables.com/pricing')
   })
 
   it('describes the product and its price for search engines', () => {

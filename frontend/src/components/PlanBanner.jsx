@@ -3,7 +3,7 @@ import { PLAN_NAMES } from '../lib/plans'
 
 /**
  * A strip above the working area during a paid plan's 15-day grace period:
- * "Your Standard plan ended on X. Renew by Y to keep using Timetablz." After that the
+ * "Your Standard plan ended on X. Renew by Y to keep using Rivelle." After that the
  * school is locked and LockedScreen takes over; free schools see the
  * countdown in the sidebar instead (FreeCountdown).
  */
@@ -13,7 +13,7 @@ export default function PlanBanner({ entitlements, isAdmin, onRenew }) {
   if (!paidPlan || status !== 'grace') return null
   const name = PLAN_NAMES[paidPlan] ?? 'paid'
 
-  const text = `Your ${name} plan ended on ${formatDate(validUntil)}. Renew by ${formatDate(graceEnds)} to keep using Timetablz without interruption.`
+  const text = `Your ${name} plan ended on ${formatDate(validUntil)}. Renew by ${formatDate(graceEnds)} to keep using Rivelle without interruption.`
 
   return (
     <div

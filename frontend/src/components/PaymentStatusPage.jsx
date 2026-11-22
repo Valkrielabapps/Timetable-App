@@ -113,11 +113,11 @@ export default function PaymentStatusPage({ orderId, onDone }) {
           onClick={onDone}
           className="mt-6 rounded-md bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
         >
-          {kind === 'signin' ? 'Sign in' : 'Back to Timetablz'}
+          {kind === 'signin' ? 'Sign in' : 'Back to Rivelle'}
         </button>
         {(kind === 'failed' || kind === 'error' || kind === 'slow') && (
           <p className="mt-4 text-xs text-slate-400">
-            Questions? Write to <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a> with the order reference.
+            Questions? Write to <a className="underline" href="mailto:support@rivelletimetables.com">support@rivelletimetables.com</a> with the order reference.
           </p>
         )}
       </div>

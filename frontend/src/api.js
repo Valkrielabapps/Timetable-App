@@ -194,8 +194,8 @@ export const api = {
   // Problems that will stop a timetable, found without running the solver.
   setupCheck: (schoolId) => get(`/schools/${schoolId}/setup-check`),
   clearSchoolData: (schoolId, confirm) => post(`/schools/${schoolId}/clear-data`, { confirm }),
-  // "Send to Timetablz support": the school's setup, with what they were
-  // looking at, saved for the Timetablz admin page.
+  // "Send to Rivelle support": the school's setup, with what they were
+  // looking at, saved for the Rivelle admin page.
   sendToSupport: (schoolId, message, context = {}) =>
     post(`/schools/${schoolId}/support-snapshot`, { message, context }),
   updateStandardRules: (schoolId, rules) => put(`/schools/${schoolId}/standard-rules`, rules),
@@ -216,7 +216,7 @@ export const api = {
   getEntitlements: (schoolId) => get(`/schools/${schoolId}/entitlements`),
   getInvoices: (schoolId) => get(`/schools/${schoolId}/invoices`),
   downloadInvoice: (invoice) => downloadFile(`/invoices/${invoice.id}/pdf`, `${invoice.number}.pdf`),
-  // Timetablz staff only (backend app/routers/admin.py).
+  // Rivelle staff only (backend app/routers/admin.py).
   admin: {
     schools: (q) => get(`/admin/schools${q ? `?q=${encodeURIComponent(q)}` : ''}`),
     createOffer: (schoolId, data) => post(`/admin/schools/${schoolId}/offers`, data),
@@ -363,7 +363,7 @@ export const api = {
   // agreed to would not be the rule in the database.
   confirmConstraint: (schoolId, rule, sourceText) =>
     post("/constraints/confirm", { school_id: schoolId, rule, source_text: sourceText }),
-  // Tells the Timetablz team a reading was turned down (Cancel / Reword it),
+  // Tells the Rivelle team a reading was turned down (Cancel / Reword it),
   // so misreadings can be found and fixed. Changes nothing for the school.
   reportRuleFeedback: (schoolId, text, action, shown) =>
     post("/constraints/feedback", { school_id: schoolId, text, action, shown: shown || null }),
@@ -489,7 +489,7 @@ export const api = {
   editTimetableByCommand: (timetableId, text) => post(`/timetables/${timetableId}/edit-command`, { text }),
   // Triggers a browser download of the exported file - see downloadFile
   // above for why this can't just be a plain <a href> anymore.
-  // `{ watermark: false }` leaves the Timetablz name off (paid plans only;
+  // `{ watermark: false }` leaves the Rivelle name off (paid plans only;
   // a Free school gets a 402, which opens the upgrade prompt).
   downloadTimetableExport: (id, format, { watermark = true } = {}) =>
     downloadFile(

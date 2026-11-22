@@ -38,7 +38,7 @@ export default function AcceptTermsPage({ user, onAccepted, onSignOut }) {
             {updated ? 'We’ve updated our terms' : 'Before you continue'}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Please read and accept the Timetablz Terms of Service and Privacy Policy to use the app.
+            Please read and accept the Rivelle Terms of Service and Privacy Policy to use the app.
           </p>
         </header>
 

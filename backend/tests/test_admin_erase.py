@@ -19,11 +19,11 @@ from tests.conftest import create_school, signup
 def admin(client, monkeypatch):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "platform_admin_emails", "boss@timetablz.com")
-    _, h = signup(client, email="boss@timetablz.com")
+    monkeypatch.setattr(settings, "platform_admin_emails", "boss@rivelletimetables.com")
+    _, h = signup(client, email="boss@rivelletimetables.com")
     db = SessionLocal()
     try:
-        db.query(User).filter_by(email="boss@timetablz.com").update({"email_verified": True})
+        db.query(User).filter_by(email="boss@rivelletimetables.com").update({"email_verified": True})
         db.commit()
     finally:
         db.close()

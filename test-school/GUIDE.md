@@ -13,7 +13,7 @@ What makes it hard:
 - Part-time teachers.
 - Staffing kept tight on purpose: English needs 80 periods and its teachers can give 86, but because each section keeps one English teacher all week, the sections have to divide up exactly.
 
-> **Plan limit:** Free allows only 5 sections. Before you start, open timetablz.com/admin, find the test school, and click **Mark paid** (Pro) or **Extend free**.
+> **Plan limit:** Free allows only 5 sections. Before you start, open rivelletimetables.com/admin, find the test school, and click **Mark paid** (Pro) or **Extend free**.
 
 ---
 

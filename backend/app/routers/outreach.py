@@ -1,5 +1,5 @@
 """
-The admin page's Outreach section: Timetablz's own sales pipeline. Platform
+The admin page's Outreach section: Rivelle's own sales pipeline. Platform
 admins only - see app/services/outreach.py for how it works.
 
     GET    /api/admin/outreach/overview          numbers, mailbox and sending state

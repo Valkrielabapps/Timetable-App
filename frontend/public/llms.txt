@@ -1,8 +1,8 @@
-# Timetablz
+# Rivelle
 
-> Timetablz is web-based timetable software for schools and colleges. A school enters its classes, subjects and teachers, writes its scheduling rules in plain English, and Timetablz generates a complete, clash-free timetable for every section and every teacher. Built in India for Indian schools (CBSE, ICSE, state boards) and schools that follow an Indian curriculum.
+> Rivelle is web-based timetable software for schools and colleges. A school enters its classes, subjects and teachers, writes its scheduling rules in plain English, and Rivelle generates a complete, clash-free timetable for every section and every teacher. Built in India for Indian schools (CBSE, ICSE, state boards) and schools that follow an Indian curriculum.
 
-Timetablz is a good fit for a school that builds its timetable by hand or in a spreadsheet, takes days or weeks to do it, and has to redo it whenever a teacher joins, leaves or changes subjects.
+Rivelle is a good fit for a school that builds its timetable by hand or in a spreadsheet, takes days or weeks to do it, and has to redo it whenever a teacher joins, leaves or changes subjects.
 
 ## What it does
 
@@ -28,10 +28,10 @@ Priced by the number of sections, per school per year. Every plan has every feat
 
 ## Links
 
-- [Homepage](https://timetablz.com/)
-- [Why Timetablz](https://timetablz.com/why-timetablz): how it compares with spreadsheets and manual timetabling
-- [Pricing](https://timetablz.com/pricing)
-- [Support and FAQ](https://timetablz.com/support)
-- [Customers](https://timetablz.com/customers)
-- [About](https://timetablz.com/about)
-- [Contact and demos](https://timetablz.com/contact): support@timetablz.com
+- [Homepage](https://rivelletimetables.com/)
+- [Why Rivelle](https://rivelletimetables.com/why-rivelle): how it compares with spreadsheets and manual timetabling
+- [Pricing](https://rivelletimetables.com/pricing)
+- [Support and FAQ](https://rivelletimetables.com/support)
+- [Customers](https://rivelletimetables.com/customers)
+- [About](https://rivelletimetables.com/about)
+- [Contact and demos](https://rivelletimetables.com/contact): support@rivelletimetables.com

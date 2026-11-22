@@ -147,7 +147,7 @@ export default function BillingSection({ school, isAdmin }) {
       {onBusiness && !offer ? (
         <p className="mt-5 text-sm text-slate-500">
           Your school is on the Large / Group plan. For changes, write to{' '}
-          <a className="underline" href="mailto:support@timetablz.com">support@timetablz.com</a>.
+          <a className="underline" href="mailto:support@rivelletimetables.com">support@rivelletimetables.com</a>.
         </p>
       ) : isAdmin ? (
         <form onSubmit={handlePay} className="mt-6 flex flex-col gap-4">

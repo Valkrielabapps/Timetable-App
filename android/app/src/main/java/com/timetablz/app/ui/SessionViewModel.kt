@@ -34,7 +34,7 @@ data class SessionUi(
     val loading: Boolean = false,
     /** Refreshing the school's data in the background. */
     val refreshing: Boolean = false,
-    /** Showing the saved copy because Timetablz can't be reached. */
+    /** Showing the saved copy because Rivelle can't be reached. */
     val offline: Boolean = false,
     val error: String? = null,
     val authBusy: String? = null,
@@ -108,7 +108,7 @@ class SessionViewModel(private val c: AppContainer) : ViewModel() {
     /** No signal: open on the account and school as last seen. */
     private suspend fun openOffline() {
         val account = c.auth.cachedAccount() ?: run {
-            _ui.update { it.copy(error = "Couldn't reach Timetablz. Check your internet connection.") }
+            _ui.update { it.copy(error = "Couldn't reach Rivelle. Check your internet connection.") }
             return
         }
         val saved = account.schools.firstOrNull { it.id == settings.value.schoolId || it.id == c.store.current().schoolId }

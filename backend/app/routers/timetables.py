@@ -1819,7 +1819,7 @@ def export_timetable(
     format: str = "xlsx",
     class_group_id: int | None = None,
     student_combinations: bool = False,
-    # False leaves the Timetablz name off the page - a paid-plan option.
+    # False leaves the Rivelle name off the page - a paid-plan option.
     branding: bool = True,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1848,7 +1848,7 @@ def export_timetable(
         school = db.get(School, timetable.school_id)
         if school is not None and not plans.clean_exports(school):
             raise plans.plan_limit(
-                "Exporting without the Timetablz watermark is part of every paid plan. "
+                "Exporting without the Rivelle watermark is part of every paid plan. "
                 "Choose a plan in Settings > Plan & billing."
             )
 

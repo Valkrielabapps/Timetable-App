@@ -27,7 +27,7 @@ def configured(monkeypatch):
     monkeypatch.setattr(settings, "cashfree_app_id", "TEST_APP_ID")
     monkeypatch.setattr(settings, "cashfree_secret_key", SECRET)
     monkeypatch.setattr(settings, "cashfree_env", "sandbox")
-    monkeypatch.setattr(settings, "frontend_base_url", "https://www.timetablz.com")
+    monkeypatch.setattr(settings, "frontend_base_url", "https://www.rivelletimetables.com")
     calls = {"create": [], "status": "ACTIVE", "amount": 14999.0}
 
     def fake_create(**kwargs):
@@ -61,7 +61,7 @@ def test_not_configured_is_a_clear_503(client):
     school = create_school(client, h)
     r = _start(client, h, school["id"])
     assert r.status_code == 503
-    assert "support@timetablz.com" in r.json()["detail"]
+    assert "support@rivelletimetables.com" in r.json()["detail"]
 
 
 def test_create_order_returns_only_session_and_order_id(client, configured):
@@ -75,7 +75,7 @@ def test_create_order_returns_only_session_and_order_id(client, configured):
     sent = configured["create"][0]
     assert sent["amount_rupees"] == 14999  # server-side price, not the client's
     assert sent["customer_phone"] == "9876543210"
-    assert sent["return_url"] == "https://www.timetablz.com/?page=payment-status&order_id={order_id}"
+    assert sent["return_url"] == "https://www.rivelletimetables.com/?page=payment-status&order_id={order_id}"
 
 
 def test_client_cannot_set_the_amount(client, configured):
@@ -243,6 +243,6 @@ def test_done_for_you_charges_its_price_and_says_so_on_the_invoice(client, confi
     db = SessionLocal()
     try:
         (inv,) = db.query(Invoice).filter_by(school_id=school["id"]).all()
-        assert "Timetablz Plus, done for you (first year, including setup)" in inv.description
+        assert "Rivelle Plus, done for you (first year, including setup)" in inv.description
     finally:
         db.close()

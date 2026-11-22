@@ -58,7 +58,7 @@ def _reason(status: int, text: str) -> str:
         return "Resend's monthly email limit is used up. Upgrade the Resend plan or turn on pay-as-you-go"
     if "verify a domain" in low or "testing emails" in low or "own email address" in low:
         return ("the sending domain isn't verified in Resend yet, so it only delivers to the Resend account's own "
-                "address. Verify timetablz.com in Resend and set EMAIL_FROM_ADDRESS to an address on it")
+                "address. Verify rivelletimetables.com in Resend and set EMAIL_FROM_ADDRESS to an address on it")
     if "domain is not verified" in low or "not verified" in low:
         return "the sending domain isn't verified in Resend. Verify it, then try again"
     if status == 401 or status == 403 and "api key" in low:
@@ -159,7 +159,7 @@ def send_invite_email(
 
     return _send(
         to_email=to_email,
-        subject=f"You've been invited to {_one_line(school_name, 80)} on Timetablz",
+        subject=f"You've been invited to {_one_line(school_name, 80)} on Rivelle",
         html=html,
         log_context="invite email",
     )

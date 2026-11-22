@@ -26,7 +26,7 @@ def upgrade() -> None:
         batch.add_column(sa.Column("token_version", sa.Integer(), server_default="0", nullable=False))
 
     # Accounts that have already proved their email: Google verified it for
-    # anyone who has signed in with Google. The Timetablz admin account is
+    # anyone who has signed in with Google. The Rivelle admin account is
     # marked too, so the admin page - which now needs a verified email -
     # keeps working for it.
     users = sa.table("users", sa.column("email", sa.String), sa.column("google_sub", sa.String),

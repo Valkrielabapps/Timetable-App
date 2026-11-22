@@ -1394,7 +1394,7 @@ class _FeedbackIn(BaseModel):
 @router.post("/feedback", status_code=204)
 def rule_feedback(payload: _FeedbackIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """The Constraints tab reports a reading the admin turned down - Cancel, or
-    Reword it. Recorded for the Timetablz team only; changes nothing."""
+    Reword it. Recorded for the Rivelle team only; changes nothing."""
     require_school_access(db, current_user, payload.school_id, min_role="admin")
     rule_events.record(
         payload.action, payload.text, school_id=payload.school_id, user_id=current_user.id,

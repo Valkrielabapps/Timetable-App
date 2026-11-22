@@ -91,7 +91,7 @@ describe('BillingSection', () => {
     render(<BillingSection school={school} isAdmin />)
     expect(screen.getByLabelText(/Software · \$149\/year/)).toBeInTheDocument()
     const link = screen.getByRole('link', { name: /request an invoice · starter · \$149/i })
-    expect(link.getAttribute('href')).toMatch(/^mailto:support@timetablz\.com/)
+    expect(link.getAttribute('href')).toMatch(/^mailto:support@rivelletimetables\.com/)
     expect(screen.queryByRole('button', { name: /pay now/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /pay in rupees/i }))
     expect(screen.getByRole('button', { name: /pay now · starter · ₹9,999/i })).toBeInTheDocument()

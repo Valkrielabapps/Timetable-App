@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { api } from '../api'
 
 /**
- * "Send to Timetablz support": the school's whole setup as it is now, with
+ * "Send to Rivelle support": the school's whole setup as it is now, with
  * what they were looking at (`context`) and an optional note, goes to the
- * Timetablz team (POST /schools/{id}/support-snapshot). Shown where a school
+ * Rivelle team (POST /schools/{id}/support-snapshot). Shown where a school
  * is stuck: a failed generation, a move that can't be made.
  */
 export default function SendToSupport({ schoolId, context = {}, compact = false }) {
@@ -31,7 +31,7 @@ export default function SendToSupport({ schoolId, context = {}, compact = false 
   if (state === 'sent') {
     return (
       <p className="text-xs text-emerald-700" role="status">
-        Sent. The Timetablz team has your setup and will reply to your email.
+        Sent. The Rivelle team has your setup and will reply to your email.
       </p>
     )
   }
@@ -42,7 +42,7 @@ export default function SendToSupport({ schoolId, context = {}, compact = false 
         onClick={() => setOpen(true)}
         className={`w-fit text-xs font-medium text-slate-700 underline hover:text-neutral-900 ${compact ? '' : 'mt-1'}`}
       >
-        Stuck? Send this to Timetablz support
+        Stuck? Send this to Rivelle support
       </button>
     )
   }

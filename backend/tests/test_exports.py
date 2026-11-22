@@ -283,7 +283,7 @@ def test_pages_follow_grade_then_section_order(client):
 
 
 # ---------------------------------------------------------------------------
-# Exporting without the Timetablz watermark
+# Exporting without the Rivelle watermark
 # ---------------------------------------------------------------------------
 
 
@@ -315,18 +315,18 @@ def test_a_paid_school_can_export_without_the_watermark(client, world, monkeypat
     _set_plan(w["school"], "pro")
 
     branded = _export(client, w, h, format="xlsx")
-    assert "Timetablz" in _branding_text(branded.content)
+    assert "Rivelle" in _branding_text(branded.content)
 
     clean = _export(client, w, h, format="xlsx", branding="false")
     assert clean.status_code == 200
     text = _branding_text(clean.content)
-    assert "Timetablz" not in text and "timetablz.com" not in text
+    assert "Rivelle" not in text and "rivelletimetables.com" not in text
     assert "Generated" in text
 
     pdf = _export(client, w, h, format="pdf", branding="false")
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
-    assert b"(Timetablz)" not in pdf.content and b"timetablz.com" not in pdf.content
-    assert b"(Timetablz)" in _export(client, w, h, format="pdf").content
+    assert b"(Rivelle)" not in pdf.content and b"rivelletimetables.com" not in pdf.content
+    assert b"(Rivelle)" in _export(client, w, h, format="pdf").content
 
 
 def test_student_timetables_can_leave_the_watermark_off_too(client, world, monkeypatch):
@@ -336,7 +336,7 @@ def test_student_timetables_can_leave_the_watermark_off_too(client, world, monke
     _set_plan(w["school"], "pro")
     r = _export(client, w, h, format="xlsx", class_group_id=w["a"], student_combinations="true", branding="false")
     assert r.status_code == 200
-    assert "Timetablz" not in _branding_text(r.content)
+    assert "Rivelle" not in _branding_text(r.content)
 
 
 def test_a_school_whose_trial_has_ended_cannot_remove_the_watermark(client, world, monkeypatch):
@@ -360,7 +360,7 @@ def test_a_school_whose_trial_has_ended_cannot_remove_the_watermark(client, worl
     assert "paid plan" in r.json()["detail"]
     # The ordinary export still works, watermark and all.
     ok = _export(client, w, h, format="xlsx")
-    assert ok.status_code == 200 and "Made with Timetablz Free" in _branding_text(ok.content)
+    assert ok.status_code == 200 and "Made with Rivelle Free" in _branding_text(ok.content)
 
 
 def test_teacher_pages_are_in_order_of_name_not_title(client, world):

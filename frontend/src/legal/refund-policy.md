@@ -2,11 +2,11 @@
 
 **Effective date: 9 November 2026**
 
-This policy applies to payments made for Timetablz, provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**"). It forms part of our Terms of Service.
+This policy applies to payments made for Rivelle, provided by Arpith David Ratnaraj, sole proprietor, trading as Rivelle ("**we**", "**us**"). It forms part of our Terms of Service.
 
 ## 1. What you pay for
 
-Every new school starts with a 14-day free trial, which never involves a payment. After that, Timetablz is paid for by plan, per year, in advance, through Cashfree Payments:
+Every new school starts with a 14-day free trial, which never involves a payment. After that, Rivelle is paid for by plan, per year, in advance, through Cashfree Payments:
 
 | Plan | Sections | Software, per year | Done for you, first year |
 |---|---|---|---|
@@ -19,7 +19,7 @@ Every new school starts with a 14-day free trial, which never involves a payment
 
 ## 2. Cancelling
 
-You can cancel at any time. To cancel, email **support@timetablz.com** from the email address of a school admin, with the name of your school. Plans do not renew automatically, so there is nothing to switch off: if you simply don't renew, nothing further is charged, and the school is paused after the 15-day grace period. Your data is kept.
+You can cancel at any time. To cancel, email **support@rivelletimetables.com** from the email address of a school admin, with the name of your school. Plans do not renew automatically, so there is nothing to switch off: if you simply don't renew, nothing further is charged, and the school is paused after the 15-day grace period. Your data is kept.
 
 ## 3. Pro-rata refunds
 
@@ -33,7 +33,7 @@ If you cancel during a paid year, we refund the unused part of the software:
 
 ## 4. Payments that went wrong
 
-If you were charged twice for the same order, or charged but your plan was not applied, write to **support@timetablz.com** with the order reference shown on the payment page. We refund any duplicate or failed payment in full.
+If you were charged twice for the same order, or charged but your plan was not applied, write to **support@rivelletimetables.com** with the order reference shown on the payment page. We refund any duplicate or failed payment in full.
 
 ## 5. How and when refunds are paid
 
@@ -41,7 +41,7 @@ Approved refunds are made to the original payment method (card, UPI or bank acco
 
 ## 6. Contact
 
-Questions about payments or refunds: **support@timetablz.com**
+Questions about payments or refunds: **support@rivelletimetables.com**
 
-Arpith David Ratnaraj, trading as Timetablz
+Arpith David Ratnaraj, trading as Rivelle
 Chennai, Tamil Nadu, India

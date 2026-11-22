@@ -517,7 +517,7 @@ class RuleReadEvent(Base):
 
     Written alongside the normal flow and never read by it: what the admin
     typed, what the parser made of it, and what happened next (confirmed,
-    cancelled, reworded, deleted soon after, handed back unread). The Timetablz
+    cancelled, reworded, deleted soon after, handed back unread). The Rivelle
     admin page lists these so misreadings can be found and fixed - see
     app/services/rule_events.py. Logging failing never affects the rule itself.
     """

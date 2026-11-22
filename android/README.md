@@ -1,8 +1,8 @@
-# Timetablz for Android
+# Rivelle for Android
 
-The phone app for timetablz.com: sign in (email or Google), accept the Terms,
+The phone app for rivelletimetables.com: sign in (email or Google), accept the Terms,
 see timetables by section or teacher, and arrange the day's cover. It uses the
-same backend and accounts as the website (`https://timetablz.com/api`).
+same backend and accounts as the website (`https://rivelletimetables.com/api`).
 
 Open this folder in Android Studio, sync Gradle, and Run.
 

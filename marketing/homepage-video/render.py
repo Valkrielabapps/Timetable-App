@@ -1,4 +1,4 @@
-"""Timetablz homepage ad: an 18-second product run-through, drawn frame by
+"""Rivelle homepage ad: an 18-second product run-through, drawn frame by
 frame with cairo and encoded with ffmpeg. All school data is made up."""
 import math
 import subprocess
@@ -210,7 +210,7 @@ def app_chrome(c, active_step, done_steps, a=1.0):
         c.arc(24 + i * 22, TOP / 2, 6.5, 0, 2 * math.pi)
         fill(c, col)
     box(c, 560, 9, 500, 28, 14, bg="#ffffff")
-    text(c, "timetablz.com", 810, 28, 15, "m", SLATE5, align="c")
+    text(c, "rivelletimetables.com", 810, 28, 15, "m", SLATE5, align="c")
     c.rectangle(0, TOP - 1, WW, 1)
     fill(c, SLATE2)
     # sidebar
@@ -585,7 +585,7 @@ def intro(c, t):
     if a <= 0:
         return
     up = (1 - out(seg(t, 0.15, 0.8))) * 26
-    text(c, "Timetablz", W / 2, 360 + up, 34, "pb", "#ffffff", alpha=a, align="c")
+    text(c, "Rivelle", W / 2, 360 + up, 34, "pb", "#ffffff", alpha=a, align="c")
     l1 = "Your whole school's timetable."
     l2 = "Built in seconds. Zero clashes."
     a2 = out(seg(t, 0.4, 1.0)) * (1 - seg(t, 1.9, 2.3))
@@ -598,12 +598,12 @@ def outro(c, t):
     if a <= 0:
         return
     up = (1 - a) * 30
-    text(c, "Timetablz", W / 2, 400 + up, 40, "pb", "#ffffff", alpha=a, align="c")
+    text(c, "Rivelle", W / 2, 400 + up, 40, "pb", "#ffffff", alpha=a, align="c")
     text(c, "Clash-free timetables for", W / 2, 510 + up, 70, "pb", "#ffffff", alpha=a, align="c")
     text(c, "every school.", W / 2, 600 + up, 70, "pb", "#ffffff", alpha=a, align="c")
     b = back(seg(t, 16.45, 16.95))
     if b > 0:
-        s = "Start free at timetablz.com"
+        s = "Start free at rivelletimetables.com"
         w = tw(c, s, 30, "pm") + 90
         x, y = (W - w) / 2, 680
         c.save()

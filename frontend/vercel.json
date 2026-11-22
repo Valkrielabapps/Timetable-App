@@ -9,8 +9,8 @@
       "destination": "/app.html"
     },
     {
-      "source": "/why-timetablz",
-      "destination": "/why-timetablz/index.html"
+      "source": "/why-rivelle",
+      "destination": "/why-rivelle/index.html"
     },
     {
       "source": "/pricing",
@@ -92,6 +92,44 @@
   ],
   "redirects": [
     {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "timetablz.com"
+        }
+      ],
+      "destination": "https://rivelletimetables.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.timetablz.com"
+        }
+      ],
+      "destination": "https://rivelletimetables.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.rivelletimetables.com"
+        }
+      ],
+      "destination": "https://rivelletimetables.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/why-timetablz",
+      "destination": "/why-rivelle",
+      "permanent": true
+    },
+    {
       "source": "/",
       "has": [
         {
@@ -100,7 +138,7 @@
           "value": "why"
         }
       ],
-      "destination": "/why-timetablz",
+      "destination": "/why-rivelle",
       "permanent": true
     },
     {

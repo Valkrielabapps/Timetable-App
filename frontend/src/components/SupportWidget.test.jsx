@@ -47,7 +47,7 @@ describe('SupportWidget', () => {
       // Pre-attach a handler: vitest keeps the mock's returned promise in
       // mock.results and reports it as unhandled otherwise, even though
       // the component does catch it.
-      const failed = Promise.reject(new Error('Please email support@timetablz.com directly.'))
+      const failed = Promise.reject(new Error('Please email support@rivelletimetables.com directly.'))
       failed.catch(() => {})
       return failed
     })
@@ -57,7 +57,7 @@ describe('SupportWidget', () => {
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Stuck' } })
     fireEvent.change(screen.getByLabelText('Details'), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send ticket' }))
-    await waitFor(() => expect(screen.getByText('Please email support@timetablz.com directly.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Please email support@rivelletimetables.com directly.')).toBeInTheDocument())
     expect(screen.queryByText('Ticket sent')).not.toBeInTheDocument()
   })
 })

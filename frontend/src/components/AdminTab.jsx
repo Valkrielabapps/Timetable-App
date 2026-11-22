@@ -15,7 +15,7 @@ const STATUS_STYLE = {
 const limitText = (v) => (v == null ? 'unlimited' : v)
 
 /**
- * Timetablz admin page (staff only - PLATFORM_ADMIN_EMAILS on the backend).
+ * Rivelle admin page (staff only - PLATFORM_ADMIN_EMAILS on the backend).
  *
  * Every school with its plan and status, and the actions a SaaS billing desk
  * needs: make a custom offer, record a bank transfer, give more free days,

@@ -224,7 +224,7 @@ def transcribe(filename: str, content: bytes, ai=None) -> list[tuple[str, list[l
     if key in _TRANSCRIBED:
         return _TRANSCRIBED[key]
     ext = next(e for e in _MEDIA if filename.lower().endswith(e))
-    # A PDF made by software (exported from Excel, aSc, Timetablz) has its
+    # A PDF made by software (exported from Excel, aSc, Rivelle) has its
     # text in it: read straight off the page - exact, and seconds even for
     # fifty pages. Only a scan or a photo needs the AI to read it.
     if ext == ".pdf":
@@ -1447,7 +1447,7 @@ def _split_cell(text: str) -> tuple[str, list[str]]:
         if len(pairs) >= 2 and all(_name_like(t) and not _name_like(sj) for sj, t in pairs):
             return "/".join(sj for sj, _ in pairs), [_TITLE.sub("", t).strip(" .") for _, t in pairs]
     # The subject on its line(s) and the teacher on the last: "H.W" over
-    # "Persis", "Environmental" / "Science" / "Krithika" (Timetablz's own
+    # "Persis", "Environmental" / "Science" / "Krithika" (Rivelle's own
     # export, and most printed grids) - even when the subject is a code
     # nobody knows yet.
     if len(lines) >= 2 and not re.search(r"[-–]", raw) and not lines[-1].startswith("(") \

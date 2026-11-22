@@ -223,7 +223,7 @@ function App() {
   // A signed-in visitor still lands on the homepage first, with "Open app"
   // in place of "Sign in" / "Get started". Remembered for the browser tab
   // (sessionStorage), so a refresh while working stays in the app but a new
-  // visit to timetablz.com starts at the homepage. Links that are clearly
+  // visit to rivelletimetables.com starts at the homepage. Links that are clearly
   // meant for the app (invites, password resets, the payment return page,
   // or a CTA from a public page) go straight in.
   const [enteredApp, setEnteredApp] = useState(() => {
@@ -639,7 +639,7 @@ function App() {
   // to, not get routed into an unrelated flow first).
   // Cashfree's return_url. Checks the order with the backend itself; see
   // PaymentStatusPage for why arriving here proves nothing on its own.
-  // timetablz.com/admin: the separate Valkyrie Labs admin console, with its
+  // rivelletimetables.com/admin: the separate Valkyrie Labs admin console, with its
   // own sign-in and nothing from the school app around it (AdminPage).
   if (window.location.pathname.replace(/\/+$/, '') === '/admin' || legalPage === 'admin') {
     return <AdminPage />
@@ -768,7 +768,7 @@ function App() {
     return <AcceptTermsPage user={user} onAccepted={setUser} onSignOut={handleLogout} />
   }
 
-  // Signed in, but arrived fresh at timetablz.com: show the homepage, with
+  // Signed in, but arrived fresh at rivelletimetables.com: show the homepage, with
   // every CTA opening the app.
   if (!enteredApp) {
     return <LandingPage signedIn onGetStarted={enterApp} onSignIn={enterApp} />

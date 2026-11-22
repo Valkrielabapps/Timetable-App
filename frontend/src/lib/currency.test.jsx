@@ -44,7 +44,7 @@ describe('currency by country', () => {
 
   it('builds an invoice email', () => {
     const m = invoiceMailto('Standard', 'software', '$229', 40)
-    expect(m.startsWith('mailto:support@timetablz.com?subject=')).toBe(true)
+    expect(m.startsWith('mailto:support@rivelletimetables.com?subject=')).toBe(true)
     expect(decodeURIComponent(m)).toContain('Number of sections: 40')
   })
 

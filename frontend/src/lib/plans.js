@@ -82,7 +82,7 @@ export function planPrice(plan, currency, kind = 'software') {
 export const largeBase = (currency) => (currency === 'USD' ? usd(LARGE.baseUsd) : inr(LARGE.base))
 export const largePerSection = (currency) => (currency === 'USD' ? usd(LARGE.perSectionUsd) : inr(LARGE.perSection))
 
-export const INVOICE_EMAIL = 'support@timetablz.com'
+export const INVOICE_EMAIL = 'support@rivelletimetables.com'
 export function invoiceMailto(planName, kind, price, sections) {
   const subject = `Invoice request: ${planName}${kind === 'done_for_you' ? ', done for you' : ''} (${price})`
   const body = `Hello,\n\nPlease send us an invoice for the ${planName} plan${kind === 'done_for_you' ? ' (done for you)' : ''}, ${price} a year.\n\nSchool name:\nCountry:\nNumber of sections: ${sections ?? ''}\nBilling address:\n\nThank you.`

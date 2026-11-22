@@ -6,7 +6,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
-/** The Timetablz API (the website's backend), as Retrofit sees it. Base: https://timetablz.com/api/ */
+/** The Rivelle API (the website's backend), as Retrofit sees it. Base: https://rivelletimetables.com/api/ */
 interface TimetablzApi {
     @POST("auth/login") suspend fun login(@Body body: LoginRequest): TokenResponse
     @POST("auth/google") suspend fun google(@Body body: GoogleRequest): TokenResponse

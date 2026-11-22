@@ -7,10 +7,10 @@
 //
 // The same list drives the build-time prerender (scripts/prerender.mjs), which
 // writes each page's HTML so crawlers that don't run JavaScript can read it.
-export const SITE_URL = 'https://timetablz.com'
+export const SITE_URL = 'https://rivelletimetables.com'
 
 export const PAGE_PATHS = {
-  why: '/why-timetablz',
+  why: '/why-rivelle',
   pricing: '/pricing',
   customers: '/customers',
   about: '/about',

@@ -54,7 +54,7 @@ describe('admin: a school’s data and deleting', () => {
   })
 
   it('deletes an account, with its schools only when ticked', async () => {
-    api.me.mockResolvedValue({ email: 'boss@timetablz.com', is_platform_admin: true })
+    api.me.mockResolvedValue({ email: 'boss@rivelletimetables.com', is_platform_admin: true })
     api.admin.stats.mockResolvedValue({ by_status: {}, paying: {} })
     api.admin.schools.mockResolvedValue([])
     api.admin.invoices.mockResolvedValue([])

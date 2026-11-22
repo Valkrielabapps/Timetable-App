@@ -134,7 +134,7 @@ def plan_label(plan_id: str, offer: PlanOffer | None = None) -> str:
         return offer.name
     from app.services import plans
 
-    return f"Timetablz {plans.get_plan(plan_id).name}" if plan_id in plans.catalogue() else plan_id.title()
+    return f"Rivelle {plans.get_plan(plan_id).name}" if plan_id in plans.catalogue() else plan_id.title()
 
 
 def service_label(service: str | None) -> str:
@@ -157,7 +157,7 @@ def _date(dt: datetime | None) -> str:
 def invoice_pdf(invoice: Invoice) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
-                            title=f"Invoice {invoice.number}", author="Timetablz")
+                            title=f"Invoice {invoice.number}", author="Rivelle")
     # DejaVu isn't bundled with reportlab; Helvetica has no ₹ glyph, so amounts
     # are written as "Rs." in the PDF.
     h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=22, leading=26, textColor=_INK)
@@ -182,7 +182,7 @@ def invoice_pdf(invoice: Invoice) -> bytes:
 
     story = [
         Table(
-            [[Paragraph("Timetablz", ParagraphStyle("brand", parent=bold, fontSize=13)), Paragraph("INVOICE", ParagraphStyle("t", parent=bold, alignment=2, textColor=_MUTED))]],
+            [[Paragraph("Rivelle", ParagraphStyle("brand", parent=bold, fontSize=13)), Paragraph("INVOICE", ParagraphStyle("t", parent=bold, alignment=2, textColor=_MUTED))]],
             colWidths=[8.25 * cm, 8.25 * cm], hAlign="LEFT",
             style=TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]),
         ),
@@ -230,7 +230,7 @@ def invoice_pdf(invoice: Invoice) -> bytes:
         story.append(Spacer(1, 0.3 * cm))
         story.append(Paragraph("The supplier is not registered under GST, so no GST has been charged.", small))
     story.append(Spacer(1, 1.2 * cm))
-    story.append(Paragraph("Thank you for using Timetablz. Questions about this invoice: support@timetablz.com", small))
+    story.append(Paragraph("Thank you for using Rivelle. Questions about this invoice: support@rivelletimetables.com", small))
 
     doc.build(story)
     return buf.getvalue()

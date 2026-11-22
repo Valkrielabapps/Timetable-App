@@ -149,7 +149,7 @@ def send_to_support(
     school_id: int, payload: SupportSnapshotIn,
     db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
-    """"Send to Timetablz support": the school's whole setup as it is now,
+    """"Send to Rivelle support": the school's whole setup as it is now,
     with what they were looking at and anything they typed, saved for the
     admin page - and the support inbox told, so someone looks."""
     require_school_access(db, current_user, school_id)

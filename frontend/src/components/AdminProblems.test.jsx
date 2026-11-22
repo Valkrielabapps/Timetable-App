@@ -61,7 +61,7 @@ describe('send to support', () => {
   it('sends the note with what the school was looking at', async () => {
     api.sendToSupport.mockResolvedValue({ id: 1 })
     render(<SendToSupport schoolId={4} context={{ where: 'the setup check' }} />)
-    fireEvent.click(screen.getByRole('button', { name: /Send this to Timetablz support/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Send this to Rivelle support/ }))
     fireEvent.change(screen.getByLabelText('Message to support'), { target: { value: 'Help please' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send to support' }))
     expect(await screen.findByText(/has your setup/)).toBeInTheDocument()

@@ -182,7 +182,7 @@ export default function TimetableTab({
   // Which export format is currently downloading, if any - guards against a
   // double-click firing two downloads with no visual feedback either way.
   const [exporting, setExporting] = useState(null) // null | 'xlsx' | 'pdf'
-  // Whether exports carry the Timetablz name. Leaving it off is a paid-plan
+  // Whether exports carry the Rivelle name. Leaving it off is a paid-plan
   // option; on Free, unticking opens the upgrade prompt instead.
   const [watermark, setWatermark] = useState(true)
   const { data: entitlements } = useEntitlements(schoolId)
@@ -193,7 +193,7 @@ export default function TimetableTab({
         new CustomEvent('timetablz:plan-limit', {
           detail: {
             message:
-              'Exporting without the Timetablz watermark is part of every paid plan. Choose a plan in Settings > Plan & billing.',
+              'Exporting without the Rivelle watermark is part of every paid plan. Choose a plan in Settings > Plan & billing.',
           },
         }),
       )
@@ -540,9 +540,9 @@ export default function TimetableTab({
                     >
                       Print
                     </button>
-                    <label title="Adds the Timetablz name to the header and footer of every page">
+                    <label title="Adds the Rivelle name to the header and footer of every page">
                       <input type="checkbox" checked={watermark} onChange={(e) => toggleWatermark(e.target.checked)} />
-                      Timetablz watermark{!cleanExportsAllowed ? ' (paid plans can remove it)' : ''}
+                      Rivelle watermark{!cleanExportsAllowed ? ' (paid plans can remove it)' : ''}
                     </label>
                   </div>
                 )}

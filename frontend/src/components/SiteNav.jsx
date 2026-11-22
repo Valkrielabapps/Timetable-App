@@ -3,7 +3,7 @@ import { getToken } from '../api'
 
 /**
  * The public site's top bar - the same one on the homepage and every page
- * reached from it (Why Timetablz, Pricing, Customers, About, Support and the
+ * reached from it (Why Rivelle, Pricing, Customers, About, Support and the
  * legal pages), so moving between them never loses the navigation. The
  * wordmark goes home; there is no separate "Back to home".
  *
@@ -17,7 +17,7 @@ import { getToken } from '../api'
  */
 
 export const NAV_LINKS = [
-  { id: 'why', label: 'Why Timetablz', href: '/why-timetablz' },
+  { id: 'why', label: 'Why Rivelle', href: '/why-rivelle' },
   { id: 'pricing', label: 'Pricing', href: '/pricing' },
   { id: 'customers', label: 'Customers', href: '/customers' },
   { id: 'about', label: 'About', href: '/about' },
@@ -44,7 +44,7 @@ export default function SiteNav({ current = null, signedIn, onGetStarted, onSign
       <div className="flex items-center px-6 py-4 md:px-10 xl:px-28">
         <div className="flex items-center gap-10">
           <a href="/" className="whitespace-nowrap text-[19px] font-bold tracking-tight text-white">
-            Timetablz
+            Rivelle
           </a>
           <nav aria-label="Site" className="hidden items-center gap-7 text-[15px] text-neutral-300 lg:flex">
             {NAV_LINKS.map((link) => (

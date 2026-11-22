@@ -4,9 +4,9 @@ import SiteNav from './SiteNav'
 import SiteFooter from './SiteFooter'
 
 /**
- * Standalone "Why Timetablz" page - reached via `?page=why` (same
+ * Standalone "Why Rivelle" page - reached via `?page=why` (same
  * no-router pattern as PricingPage/SupportPage; see App.jsx). The nav's
- * "Why Timetablz" link used to jump to the `#features` anchor (the
+ * "Why Rivelle" link used to jump to the `#features` anchor (the
  * WorkflowDemo section); it now navigates here instead, by request.
  *
  * Layout is modeled on Griffin's product page (griffin.com) - a dark,

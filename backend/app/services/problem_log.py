@@ -1,9 +1,9 @@
-"""Record where schools get stuck, for the Timetablz admin page.
+"""Record where schools get stuck, for the Rivelle admin page.
 
   generation_failed  Generate found no timetable (with the diagnosis shown)
   move_blocked       a drag or a fix that couldn't be made, and why
   setup_error        a setup-check problem certain to stop generation
-  support_request    the school pressed "Send to Timetablz support"
+  support_request    the school pressed "Send to Rivelle support"
 
 Failed generations and support requests carry a snapshot of the school's
 whole setup at that moment (see snapshot below), so a problem can be

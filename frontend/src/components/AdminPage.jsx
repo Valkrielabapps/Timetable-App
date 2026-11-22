@@ -8,7 +8,7 @@ import AdminOutreach from './AdminOutreach'
 import { DeleteBox } from './AdminData'
 
 /**
- * timetablz.com/admin - the Valkyrie Labs console. A page of its own, outside
+ * rivelletimetables.com/admin - the Valkyrie Labs console. A page of its own, outside
  * the school app: its own sign-in, no school sidebar.
  *
  * Only the account the backend recognises as a platform admin
@@ -70,7 +70,7 @@ export default function AdminPage() {
           <p className="mt-2 text-sm text-slate-600">You&rsquo;re signed in as {user.email}.</p>
           <div className="mt-6 flex justify-center gap-2">
             <button onClick={() => window.location.assign('/')} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50">
-              Go to Timetablz
+              Go to Rivelle
             </button>
             <button onClick={signOut} className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
               Sign out
@@ -86,7 +86,7 @@ export default function AdminPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-6 px-6 py-4">
           <div className="flex items-baseline gap-2">
-            <span className="text-[17px] font-bold tracking-tight">Timetablz</span>
+            <span className="text-[17px] font-bold tracking-tight">Rivelle</span>
             <span className="rounded bg-neutral-900 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">Admin</span>
           </div>
           <nav className="flex gap-1 text-sm" aria-label="Admin sections">
@@ -303,7 +303,7 @@ function AccountRow({ account: a, open, onToggle, onDeleted }) {
               <div className="flex flex-col gap-3 text-sm">
                 <p className="text-slate-700">
                   Email {detail.email_verified ? 'verified' : 'not verified'} · signs in with {detail.google ? 'Google' : 'email and password'}
-                  {detail.platform_admin && ' · Timetablz admin'}
+                  {detail.platform_admin && ' · Rivelle admin'}
                 </p>
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Terms accepted</p>

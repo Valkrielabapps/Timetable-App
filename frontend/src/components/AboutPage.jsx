@@ -8,7 +8,7 @@ import SiteFooter from './SiteFooter'
  * (black background, matching Hero/WhyTimetablzPage) per explicit
  * request, modeled loosely on the Griffin "Hello, we're Griffin" about
  * page structure the user referenced (short section headings, generous
- * spacing, no narrow centered column) - adapted to Timetablz's own
+ * spacing, no narrow centered column) - adapted to Rivelle's own
  * content rather than reusing Griffin's copy.
  *
  * Kept deliberately honest about where the company actually is right
@@ -33,7 +33,7 @@ const SECTIONS = [
   {
     heading: 'Who we are',
     body: [
-      "Timetablz is a scheduling platform built for schools and colleges, not a generic project-planning tool with \"education\" bolted on. It exists because building a class timetable by hand takes days, sometimes weeks, and most of that work gets redone from scratch every single term.",
+      "Rivelle is a scheduling platform built for schools and colleges, not a generic project-planning tool with \"education\" bolted on. It exists because building a class timetable by hand takes days, sometimes weeks, and most of that work gets redone from scratch every single term.",
     ],
   },
   {
@@ -46,14 +46,14 @@ const SECTIONS = [
   {
     heading: 'What we built',
     body: [
-      "Timetablz takes a school's periods, subjects, teachers, rooms, and scheduling rules, and hands them to a constraint-solving engine that builds every section's timetable at once, with zero clashes. Rules can be typed as plain sentences instead of configured through menus.",
+      "Rivelle takes a school's periods, subjects, teachers, rooms, and scheduling rules, and hands them to a constraint-solving engine that builds every section's timetable at once, with zero clashes. Rules can be typed as plain sentences instead of configured through menus.",
       "When a set of rules genuinely can't all be satisfied together, the product says so and explains which rule is the problem, instead of quietly producing something broken.",
     ],
   },
   {
     heading: 'Where we are today',
     body: [
-      "Timetablz is early. Our first real school partner is Shishya Public School, Dehradun, and we're building alongside them rather than claiming a scale we haven't reached yet.",
+      "Rivelle is early. Our first real school partner is Shishya Public School, Dehradun, and we're building alongside them rather than claiming a scale we haven't reached yet.",
       "If you've read this far, you've probably noticed this site doesn't lean on big customer counts or manufactured social proof. We'd rather be straightforward about being early than dress it up.",
     ],
   },
@@ -67,7 +67,7 @@ export default function AboutPage({ onBack, onGetStarted }) {
       <div className="mx-auto max-w-6xl px-6 py-20">
         <motion.div initial="hidden" animate="show" variants={fadeUp} transition={{ duration: 0.5 }}>
           <h1 className="font-serif text-5xl font-medium leading-tight tracking-tight text-neutral-900 md:text-6xl">
-            Hello, we're Timetablz
+            Hello, we're Rivelle
           </h1>
           <p className="mt-5 max-w-2xl text-lg text-neutral-600">
             We build scheduling software for schools and colleges that want a timetable done in an afternoon,

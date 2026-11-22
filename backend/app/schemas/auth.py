@@ -69,7 +69,7 @@ class UserOut(BaseModel):
     id: int
     email: str
     name: str | None
-    # Timetablz staff: sees the admin page. Read off User.is_platform_admin.
+    # Rivelle staff: sees the admin page. Read off User.is_platform_admin.
     is_platform_admin: bool = False
     # Must accept the current Terms before using the app (first sign-in, or
     # the terms changed). Read off User.needs_terms.

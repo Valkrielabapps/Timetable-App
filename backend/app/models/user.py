@@ -56,7 +56,7 @@ class User(Base):
 
     @property
     def is_platform_admin(self) -> bool:
-        """Timetablz staff (PLATFORM_ADMIN_EMAILS), not a school admin."""
+        """Rivelle staff (PLATFORM_ADMIN_EMAILS), not a school admin."""
         from app.core.config import settings
 
         allowed = {e.strip().lower() for e in (settings.platform_admin_emails or "").split(",") if e.strip()}

@@ -1,6 +1,6 @@
 """
 Where schools get stuck, on the admin page: failed generations, blocked
-moves, setup problems and "Send to Timetablz support", each with enough to
+moves, setup problems and "Send to Rivelle support", each with enough to
 reproduce it.
 """
 import pytest
@@ -11,7 +11,7 @@ from app.models.problems import ProblemEvent
 from app.models.school import Timetable
 from tests.conftest import create_school, signup, verify_email
 
-ADMIN = "staff@timetablz.com"
+ADMIN = "staff@rivelletimetables.com"
 
 
 @pytest.fixture

@@ -46,7 +46,7 @@ fun SettingsScreen(session: SessionViewModel) {
             session.setNotify(true)
             CoverWorker.schedule(context)
         } else {
-            note = "Notifications are blocked for Timetablz. Turn them on in your phone's Settings → Apps → Timetablz."
+            note = "Notifications are blocked for Rivelle. Turn them on in your phone's Settings → Apps → Rivelle."
         }
     }
 

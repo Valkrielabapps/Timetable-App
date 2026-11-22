@@ -1,12 +1,12 @@
-# Timetablz
+# Rivelle
 
 Clash-free school timetables, built from the files a school already has.
 A school uploads last year's timetable, its staff list or its allotment sheet
-in whatever layout it uses; Timetablz reads it, asks about anything it can't
+in whatever layout it uses; Rivelle reads it, asks about anything it can't
 tell, and a constraint solver (Google OR-Tools CP-SAT) builds a timetable for
 every section at once, with no teacher or class double-booked.
 
-Live at [timetablz.com](https://timetablz.com).
+Live at [rivelletimetables.com](https://rivelletimetables.com).
 
 ## Who it's for
 

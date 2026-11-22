@@ -3,7 +3,7 @@ import { api } from '../api'
 import { confirmDialog } from './confirmDialog'
 
 /**
- * Admin page > Outreach: Timetablz's own sales pipeline.
+ * Admin page > Outreach: Rivelle's own sales pipeline.
  *
  * The school list (imported from the outreach workbook), who to write to at
  * each school, the emails drafted for them, and everything sent and
@@ -808,7 +808,7 @@ function Settings({ onChange }) {
         ) : (
           <div className="mt-1 text-slate-600">
             <p>No mailbox is set up on the server yet. For Zoho Mail, create a Server-based Application at api-console.zoho.in with this redirect URI:</p>
-            <code className="mt-1 block rounded bg-slate-100 px-2 py-1 text-xs">https://timetablz.com/api/admin/outreach/zoho/callback</code>
+            <code className="mt-1 block rounded bg-slate-100 px-2 py-1 text-xs">https://rivelletimetables.com/api/admin/outreach/zoho/callback</code>
             <p className="mt-1">then add OUTREACH_ZOHO_CLIENT_ID and OUTREACH_ZOHO_CLIENT_SECRET in Railway.</p>
           </div>
         )}

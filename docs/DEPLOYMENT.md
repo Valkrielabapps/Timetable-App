@@ -15,7 +15,7 @@ in `backend/app/core/config.py` are for a laptop, not the internet:
 | --- | --- | --- |
 | `JWT_SECRET` | A long random string, e.g. the output of `python -c "import secrets; print(secrets.token_urlsafe(48))"` | Signs every login. The default is public (it's in this repository): with it, anyone can make themselves a login as any user. Changing it signs everyone out once. |
 | `DEBUG` | Unset, or `false` | Debug mode answers server errors with their traceback and serves the interactive API docs at `/docs`. Off by default; only `backend/.env` on a laptop should turn it on. |
-| `CORS_ORIGINS` | `https://timetablz.com` (plus any other real frontend URL) | Which websites may call the API from a browser. |
+| `CORS_ORIGINS` | `https://rivelletimetables.com` (plus any other real frontend URL) | Which websites may call the API from a browser. |
 | `MAX_CONCURRENT_GENERATIONS` | Optional, default `3` | How many timetable generations solve at once; the rest queue. Raise it only with more CPU. |
 
 Also worth having, outside the code: two-factor sign-in on GitHub, Railway,

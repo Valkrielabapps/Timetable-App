@@ -240,7 +240,7 @@ def test_twice_a_week_at_one_period_is_not_a_fixed_period():
 
 
 def test_a_pdf_made_by_software_is_read_off_the_page_without_the_ai(monkeypatch, tmp_path):
-    """A timetable exported as PDF (Excel, aSc, Timetablz itself) has its text
+    """A timetable exported as PDF (Excel, aSc, Rivelle itself) has its text
     in it: read in seconds, exactly, and the AI is never asked."""
     import pytest
     pytest.importorskip("pdfplumber")
@@ -275,7 +275,7 @@ def test_a_long_scanned_pdf_is_refused_with_what_to_do(monkeypatch):
 
 
 def test_cells_of_a_timetable_exported_as_pdf():
-    """How Timetablz's own PDF (and most printed grids) lay out a cell: the
+    """How Rivelle's own PDF (and most printed grids) lay out a cell: the
     subject on its line(s), the teacher on the last; a block as its name then
     each group's subject and teacher; "No teacher yet"."""
     cases = {

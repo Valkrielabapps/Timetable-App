@@ -323,7 +323,7 @@ def _excel(grids, school_name: str = "", free_plan: bool = False, branded: bool 
         ws.cell(row=1, column=1, value=meta["heading"]).font = Font(name="Calibri", bold=True, size=18, color="171717")
         ws.cell(row=2, column=1, value=meta["kind"]).font = Font(name="Calibri", size=10, color="737373")
         if branded:
-            brand = ws.cell(row=1, column=last_col, value="Timetablz")
+            brand = ws.cell(row=1, column=last_col, value="Rivelle")
             brand.font = Font(name="Calibri", bold=True, size=10, color="171717")
             brand.alignment = Alignment(horizontal="right", vertical="center")
         if school_name:
@@ -418,8 +418,8 @@ def _excel(grids, school_name: str = "", free_plan: bool = False, branded: bool 
         ws.page_margins.top = ws.page_margins.bottom = 0.6
         ws.print_area = f"A1:{get_column_letter(last_col)}{r}"
         ws.oddFooter.left.text = (
-            f"Made with Timetablz Free  ·  timetablz.com  ·  {generated}" if free_plan
-            else f"Generated {generated}  ·  timetablz.com" if branded
+            f"Made with Rivelle Free  ·  rivelletimetables.com  ·  {generated}" if free_plan
+            else f"Generated {generated}  ·  rivelletimetables.com" if branded
             else f"Generated {generated}"
         )
         ws.oddFooter.left.size = 8
@@ -572,7 +572,7 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         if branded:
             canvas.setFont(font_bold, 10)
             canvas.setFillColor(_INK)
-            canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Timetablz")
+            canvas.drawString(_MARGIN_X, height - 1.05 * cm, "Rivelle")
         canvas.setFont(font, 9)
         canvas.setFillColor(_MUTED)
         if school_name:
@@ -581,20 +581,20 @@ def _pdf(grids, n_days: int, school_name: str = "", free_plan: bool = False, bra
         canvas.setFillColor(_FAINT)
         canvas.drawString(
             _MARGIN_X, 0.8 * cm,
-            f"Generated {generated}  ·  timetablz.com" if branded else f"Generated {generated}",
+            f"Generated {generated}  ·  rivelletimetables.com" if branded else f"Generated {generated}",
         )
         if free_plan:
             # Free-plan exports carry the product name, centred in the footer.
             canvas.setFont(font_bold, 8)
             canvas.setFillColor(_MUTED)
-            canvas.drawCentredString(width / 2, 0.8 * cm, "Made with Timetablz Free")
+            canvas.drawCentredString(width / 2, 0.8 * cm, "Made with Rivelle Free")
         canvas.drawRightString(width - _MARGIN_X, 0.8 * cm, f"Page {doc.page}")
         canvas.restoreState()
 
     doc = SimpleDocTemplate(
         buf, pagesize=_PAGE,
         leftMargin=_MARGIN_X, rightMargin=_MARGIN_X, topMargin=_MARGIN_TOP, bottomMargin=_MARGIN_BOTTOM,
-        title=school_name or "Timetable", author="Timetablz" if branded else (school_name or ""),
+        title=school_name or "Timetable", author="Rivelle" if branded else (school_name or ""),
     )
     heading = ParagraphStyle("H", fontName=font_bold, fontSize=20, leading=24, textColor=_INK)
     sub = ParagraphStyle("S", fontName=font, fontSize=10, leading=12, textColor=_MUTED, spaceBefore=2, spaceAfter=12)
@@ -769,7 +769,7 @@ def _student_grids_with_meta(data: dict, class_group: ClassGroup, combinations) 
 
 
 def _branding(db: Session, timetable: Timetable, branded: bool) -> dict:
-    """Free-plan exports always carry the Timetablz name (the router refuses
+    """Free-plan exports always carry the Rivelle name (the router refuses
     an unbranded one before it gets here). A paid school may leave it off."""
     free = _free_plan(db, timetable)
     return {"free_plan": free, "branded": branded or free}

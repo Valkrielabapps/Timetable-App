@@ -17,7 +17,7 @@ const FOOTER_COLUMNS = [
     // instead of the removed in-page `#pricing` anchor.
     heading: 'Product',
     links: [
-      { label: 'Why Timetablz', href: '/why-timetablz' },
+      { label: 'Why Rivelle', href: '/why-rivelle' },
       { label: 'Pricing', href: '/pricing' },
     ],
   },
@@ -50,12 +50,12 @@ export default function SiteFooter() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
-            <span className="text-[17px] font-bold tracking-tight text-white">Timetablz</span>
+            <span className="text-[17px] font-bold tracking-tight text-white">Rivelle</span>
             <p className="mt-3 max-w-[220px] text-sm leading-relaxed">
               Instant, clash-free timetables for schools and colleges.
             </p>
-            <a href="mailto:support@timetablz.com" className="mt-4 block text-sm text-neutral-300 hover:text-white">
-              support@timetablz.com
+            <a href="mailto:support@rivelletimetables.com" className="mt-4 block text-sm text-neutral-300 hover:text-white">
+              support@rivelletimetables.com
             </a>
             <p className="mt-1 text-sm">Chennai, India</p>
           </div>
@@ -77,7 +77,7 @@ export default function SiteFooter() {
         </div>
 
         <div className="mt-14 border-t border-white/10 pt-6 text-xs">
-          © {new Date().getFullYear()} Timetablz. All rights reserved.
+          © {new Date().getFullYear()} Rivelle. All rights reserved.
         </div>
       </div>
     </footer>

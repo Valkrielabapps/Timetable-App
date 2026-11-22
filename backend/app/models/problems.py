@@ -1,9 +1,9 @@
 """
-Where schools get stuck - for the Timetablz admin page, not for schools.
+Where schools get stuck - for the Rivelle admin page, not for schools.
 
 One row per moment a school hit a wall: a generation that found no
 timetable, a move that couldn't be made, a setup-check problem, or a school
-pressing "Send to Timetablz support". The admin page lists them so the
+pressing "Send to Rivelle support". The admin page lists them so the
 product can be fixed where many schools trip, not one school at a time. See
 app/services/problem_log.py.
 """

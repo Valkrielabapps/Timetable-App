@@ -1,4 +1,4 @@
-"""Rule-reading moments are recorded for the Timetablz team, and never get in
+"""Rule-reading moments are recorded for the Rivelle team, and never get in
 the way of the rule itself."""
 import pytest
 
@@ -10,7 +10,7 @@ from app.services.llm_ir_parser import IRParse, Unclear
 from tests.conftest import verify_email, create_school, signup
 from tests.test_ir_endpoints import RAO_DAILY_CAP, _stub, _understood
 
-ADMIN = "staff@timetablz.com"
+ADMIN = "staff@rivelletimetables.com"
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ import {
  * same no-router pattern as AboutPage/SupportPage).
  *
  * Dark theme (bg-white, white text) matching About/Support/Customers/Why
- * Timetablz, by explicit request. Four plans priced by the number of
+ * Rivelle, by explicit request. Four plans priced by the number of
  * sections (Starter / Standard / Plus / Large), each with a software price
  * and a "done for you" price; the numbers live in src/lib/plans.js.
  *

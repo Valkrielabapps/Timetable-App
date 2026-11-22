@@ -1,7 +1,7 @@
 """
-Sales outreach to schools - Timetablz's own pipeline, run from the admin page.
+Sales outreach to schools - Rivelle's own pipeline, run from the admin page.
 
-Nothing here belongs to a customer school. These are schools Timetablz wants
+Nothing here belongs to a customer school. These are schools Rivelle wants
 to sell to: who they are, who to write to, every email drafted and sent, and
 where each one stands. Only platform admins can see any of it (see
 app/routers/outreach.py).

@@ -13,7 +13,7 @@ import SiteFooter from './SiteFooter'
  * Dark theme and wide two-column rows, matching AboutPage.jsx.
  */
 
-const SUPPORT_EMAIL = 'support@timetablz.com'
+const SUPPORT_EMAIL = 'support@rivelletimetables.com'
 
 export const FAQ_GROUPS = [
   {
@@ -42,7 +42,7 @@ export const FAQ_GROUPS = [
       },
       {
         q: "What happens if a timetable can't be generated?",
-        a: "Some combinations of rules can't all be met at once - for example, a subject needing 8 periods a week when your rules only leave room for 5. Instead of producing a broken timetable, Timetablz shows a popup listing each reason in plain language, so you know exactly which rule or teacher to change.",
+        a: "Some combinations of rules can't all be met at once - for example, a subject needing 8 periods a week when your rules only leave room for 5. Instead of producing a broken timetable, Rivelle shows a popup listing each reason in plain language, so you know exactly which rule or teacher to change.",
       },
       {
         q: 'Can I adjust a generated timetable by hand?',
@@ -58,7 +58,7 @@ export const FAQ_GROUPS = [
       },
       {
         q: 'Can I export the finished timetable?',
-        a: 'Yes, as Excel or PDF: one page per section in grade order, followed by one per teacher, ready to print or send. On a paid plan you can leave off the Timetablz watermark.',
+        a: 'Yes, as Excel or PDF: one page per section in grade order, followed by one per teacher, ready to print or send. On a paid plan you can leave off the Rivelle watermark.',
       },
     ],
   },
@@ -92,10 +92,10 @@ export const FAQ_GROUPS = [
     items: [
       {
         q: 'Does the AI ever see student data?',
-        a: 'No. Timetablz never needs individual student records: a section is just a name and a grade, so there is nothing about students for the AI features to read.',
+        a: 'No. Rivelle never needs individual student records: a section is just a name and a grade, so there is nothing about students for the AI features to read.',
       },
       {
-        q: 'What happens to my data if I stop using Timetablz?',
+        q: 'What happens to my data if I stop using Rivelle?',
         a: 'It stays in your account - moving to the Free plan or letting the free period end never deletes anything. If you want it deleted, email us and we will remove it.',
       },
     ],

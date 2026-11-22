@@ -277,11 +277,11 @@ def test_tokens_from_before_versions_still_work(client):
 
 
 def test_the_admin_page_needs_a_verified_email(client, monkeypatch):
-    monkeypatch.setattr(settings, "platform_admin_emails", "staff@timetablz.com")
-    _, h = signup(client, email="staff@timetablz.com")
+    monkeypatch.setattr(settings, "platform_admin_emails", "staff@rivelletimetables.com")
+    _, h = signup(client, email="staff@rivelletimetables.com")
     assert client.get("/api/auth/me", headers=h).json()["is_platform_admin"] is False
     assert client.get("/api/admin/schools", headers=h).status_code == 404
-    verify_email("staff@timetablz.com")
+    verify_email("staff@rivelletimetables.com")
     assert client.get("/api/auth/me", headers=h).json()["is_platform_admin"] is True
 
 
@@ -301,7 +301,7 @@ def test_invite_emails_escape_what_the_inviter_typed(client):
     assert '<a href="https://evil.example">' not in body["html"]
     assert "&lt;a href=&quot;https://evil.example&quot;&gt;" in body["html"]
     assert "<img" not in body["html"]
-    assert "\n" not in body["subject"] and body["subject"].endswith("on Timetablz")
+    assert "\n" not in body["subject"] and body["subject"].endswith("on Rivelle")
 
 
 def test_invites_are_rate_limited(client, monkeypatch):

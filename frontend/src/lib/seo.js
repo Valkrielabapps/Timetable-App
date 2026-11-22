@@ -4,51 +4,51 @@
 // page's HTML head.
 //
 // Keep descriptions true and specific - they are what Google shows under the
-// link, and what an AI assistant quotes when it recommends Timetablz.
+// link, and what an AI assistant quotes when it recommends Rivelle.
 import { PAGE_PATHS, SITE_URL } from './sitePages.js'
 
-const BRAND = 'Timetablz'
+const BRAND = 'Rivelle'
 
 export const PAGE_META = {
   home: {
     path: '/',
-    title: 'Timetablz | School Timetable Software and Automatic Timetable Generator',
+    title: 'Rivelle | School Timetable Software and Automatic Timetable Generator',
     description:
-      'Timetablz builds clash-free school timetables automatically. Type your rules in plain English, and get a timetable for every class and teacher, with substitutions, locked periods and PDF exports. Free for 14 days.',
+      'Rivelle builds clash-free school timetables automatically. Type your rules in plain English, and get a timetable for every class and teacher, with substitutions, locked periods and PDF exports. Free for 14 days.',
   },
   why: {
-    title: 'Why Timetablz | Automatic Timetables Without the Spreadsheet',
+    title: 'Why Rivelle | Automatic Timetables Without the Spreadsheet',
     description:
-      'Why schools switch from spreadsheets and manual timetabling to Timetablz: rules in plain English, a clash-free timetable in minutes, and a clear reason when a rule makes one impossible.',
+      'Why schools switch from spreadsheets and manual timetabling to Rivelle: rules in plain English, a clash-free timetable in minutes, and a clear reason when a rule makes one impossible.',
   },
   pricing: {
-    title: 'Pricing | Timetablz School Timetable Software',
+    title: 'Pricing | Rivelle School Timetable Software',
     description:
-      'Timetablz pricing by school size: Starter ₹9,999 a year (up to 30 sections), Standard ₹14,999 (31 to 50), Plus ₹19,999 (51 to 80) and Large for bigger schools and groups. Done for you setup available. 14-day free trial.',
+      'Rivelle pricing by school size: Starter ₹9,999 a year (up to 30 sections), Standard ₹14,999 (31 to 50), Plus ₹19,999 (51 to 80) and Large for bigger schools and groups. Done for you setup available. 14-day free trial.',
   },
   customers: {
-    title: 'Customers | Schools Using Timetablz',
-    description: 'Schools that build their timetables with Timetablz, and what changed for them.',
+    title: 'Customers | Schools Using Rivelle',
+    description: 'Schools that build their timetables with Rivelle, and what changed for them.',
   },
   about: {
-    title: 'About Timetablz | School Timetable Software Made in India',
+    title: 'About Rivelle | School Timetable Software Made in India',
     description:
-      'Timetablz is a small team in India building timetable software for schools and colleges: automatic, clash-free timetables from rules written in plain English.',
+      'Rivelle is a small team in India building timetable software for schools and colleges: automatic, clash-free timetables from rules written in plain English.',
   },
   support: {
-    title: 'Support and FAQ | Timetablz',
+    title: 'Support and FAQ | Rivelle',
     description:
-      'Answers to common questions about setting up your school, generating timetables, substitutions, billing and data on Timetablz, and how to reach the team.',
+      'Answers to common questions about setting up your school, generating timetables, substitutions, billing and data on Rivelle, and how to reach the team.',
   },
   contact: {
-    title: 'Contact Timetablz | Book a Demo',
-    description: 'Email the Timetablz team at support@timetablz.com for a demo, help with your timetable, or billing questions.',
+    title: 'Contact Rivelle | Book a Demo',
+    description: 'Email the Rivelle team at support@rivelletimetables.com for a demo, help with your timetable, or billing questions.',
   },
-  privacy: { title: 'Privacy Policy | Timetablz', description: 'How Timetablz collects, uses and protects your school\'s data.' },
-  terms: { title: 'Terms of Service | Timetablz', description: 'The terms for using Timetablz timetable software.' },
+  privacy: { title: 'Privacy Policy | Rivelle', description: 'How Rivelle collects, uses and protects your school\'s data.' },
+  terms: { title: 'Terms of Service | Rivelle', description: 'The terms for using Rivelle timetable software.' },
   refunds: {
-    title: 'Refund and Cancellation Policy | Timetablz',
-    description: 'How refunds and cancellations work for Timetablz plans, including pro-rata refunds of unused months.',
+    title: 'Refund and Cancellation Policy | Rivelle',
+    description: 'How refunds and cancellations work for Rivelle plans, including pro-rata refunds of unused months.',
   },
 }
 for (const [id, path] of Object.entries(PAGE_PATHS)) if (PAGE_META[id]) PAGE_META[id].path = path
@@ -64,12 +64,12 @@ const ORGANIZATION = {
   name: BRAND,
   url: `${SITE_URL}/`,
   logo: `${SITE_URL}/favicon-512.png`,
-  email: 'support@timetablz.com',
+  email: 'support@rivelletimetables.com',
   address: { '@type': 'PostalAddress', addressLocality: 'Chennai', addressRegion: 'Tamil Nadu', addressCountry: 'IN' },
   contactPoint: {
     '@type': 'ContactPoint',
     contactType: 'customer support',
-    email: 'support@timetablz.com',
+    email: 'support@rivelletimetables.com',
     availableLanguage: ['English'],
   },
 }

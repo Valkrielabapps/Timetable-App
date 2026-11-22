@@ -120,7 +120,7 @@ names are a real school's employee data and carry nothing useful.
 
 1. **Collect.** The app records every sentence the parser struggled with: a question asked, a refusal,
    a reading the admin cancelled or reworded, a rule deleted within 30 minutes of saving, a rule saved
-   but not applied. See them at timetablz.com/admin → **Rule reading**.
+   but not applied. See them at rivelletimetables.com/admin → **Rule reading**.
 2. **File.** Mark each one: *Misread* (fix with an example or prompt line), *Checker* (read right,
    refused by the rule checker), *Unsupported* (needs a new kind of rule), *Ambiguous* (needs a
    better question), or *Nothing wrong*.

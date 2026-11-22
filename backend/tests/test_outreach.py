@@ -18,7 +18,7 @@ from app.models.outreach import OutreachMessage, OutreachSchool
 from app.services import outreach as svc
 from tests.conftest import signup, verify_email
 
-ADMIN = "staff@timetablz.com"
+ADMIN = "staff@rivelletimetables.com"
 IST = timezone(timedelta(hours=5, minutes=30))
 # A Tuesday at 11:00 India time - inside the sending window.
 TUESDAY_11 = datetime(2026, 11, 3, 11, 0, tzinfo=IST).astimezone(timezone.utc)
@@ -346,7 +346,7 @@ class FakeZoho:
 
     def get(self, url, headers=None, timeout=None):
         self.calls.append(("GET", url, None))
-        return _Resp(200, {"data": [{"accountId": 555, "primaryEmailAddress": "arpith@timetablz.com"}]})
+        return _Resp(200, {"data": [{"accountId": 555, "primaryEmailAddress": "arpith@rivelletimetables.com"}]})
 
     def request(self, method, url, headers=None, timeout=None, json=None, params=None):
         self.calls.append((method, url, json or params))
@@ -372,11 +372,11 @@ def zoho(monkeypatch):
 
 
 def test_zoho_sends_the_first_email_then_follow_ups_as_replies_to_it(zoho):
-    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    box = svc.ZohoProvider("rt", "arpith@rivelletimetables.com", "555", "mail.zoho.in")
     first = box.send(to="office@sunrise.in", subject="Hello", body="Dear Sir", from_name="Arpith")
     method, url, body = zoho.calls[-1]
     assert url == "https://mail.zoho.in/api/accounts/555/messages"
-    assert body["fromAddress"] == "arpith@timetablz.com" and body["mailFormat"] == "plaintext"
+    assert body["fromAddress"] == "arpith@rivelletimetables.com" and body["mailFormat"] == "plaintext"
     assert zoho.calls[0][1] == "https://accounts.zoho.in/oauth/v2/token"
     assert first["id"] == "111" and first["thread_id"].startswith("office@sunrise.in|")
 
@@ -389,7 +389,7 @@ def test_zoho_sends_the_first_email_then_follow_ups_as_replies_to_it(zoho):
 
 def test_zoho_sends_a_follow_up_fresh_if_the_first_email_cant_be_replied_to(zoho):
     zoho.reply_fails = True
-    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    box = svc.ZohoProvider("rt", "arpith@rivelletimetables.com", "555", "mail.zoho.in")
     box.send(to="a@b.in", subject="Re: Hi", body="x", from_name="A", thread_id="a@b.in|02-Nov-2026",
              in_reply_to="111")
     assert zoho.calls[-1][1].endswith("/accounts/555/messages")
@@ -399,7 +399,7 @@ def test_zoho_finds_replies_and_bounces_by_searching_the_inbox(zoho, client, sta
     zoho.search_results["sender:office@sunrise.in"] = [
         {"fromAddress": "office@sunrise.in", "summary": "Please call us next week"}]
     zoho.search_results["sender:mailer-daemon"] = []
-    box = svc.ZohoProvider("rt", "arpith@timetablz.com", "555", "mail.zoho.in")
+    box = svc.ZohoProvider("rt", "arpith@rivelletimetables.com", "555", "mail.zoho.in")
     found = box.thread_replies("office@sunrise.in|02-Nov-2026")
     assert found == [{"from": "office@sunrise.in", "snippet": "Please call us next week"}]
     keys = [c[2]["searchKey"] for c in zoho.calls if c[0] == "GET" and isinstance(c[2], dict)]
@@ -419,7 +419,7 @@ def test_connecting_zoho_stores_the_mailbox_and_sends_through_it(client, staff, 
                    follow_redirects=False)
     assert r.status_code in (302, 307) and "gmail_connected" in r.headers["location"]
     ov = client.get("/api/admin/outreach/overview", headers=staff).json()
-    assert ov["mailbox"] == "arpith@timetablz.com" and ov["mailbox_provider"] == "zoho"
+    assert ov["mailbox"] == "arpith@rivelletimetables.com" and ov["mailbox_provider"] == "zoho"
     db = SessionLocal()
     try:
         assert isinstance(svc.provider_for(svc.get_settings(db)), svc.ZohoProvider)

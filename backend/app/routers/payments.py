@@ -79,7 +79,7 @@ def _require_configured():
     if not cashfree.is_configured():
         raise HTTPException(
             status_code=503,
-            detail="Online payments aren't set up yet. Please contact support@timetablz.com to upgrade.",
+            detail="Online payments aren't set up yet. Please contact support@rivelletimetables.com to upgrade.",
         )
 
 
@@ -255,9 +255,9 @@ def create_order(
             fits = plans.plan_for_sections(used)
             raise HTTPException(status_code=400, detail=(
                 f"Your school has {used} sections; {chosen.name} covers up to {chosen.max_sections}. "
-                + (f"Choose {fits.name} instead." if fits else "Contact support@timetablz.com about the Large / Group plan.")
+                + (f"Choose {fits.name} instead." if fits else "Contact support@rivelletimetables.com about the Large / Group plan.")
             ))
-        note = f"Timetablz {chosen.name}, 1 year" + (" (done for you)" if payload.service == "done_for_you" else "")
+        note = f"Rivelle {chosen.name}, 1 year" + (" (done for you)" if payload.service == "done_for_you" else "")
 
     # Alphanumeric plus '_'; Cashfree allows 3-45 characters. Random part so
     # the id in the return URL can't be guessed to probe other orders.

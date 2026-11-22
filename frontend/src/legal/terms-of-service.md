@@ -4,13 +4,13 @@
 
 **Version 2026-11-09 · Effective date: 9 November 2026**
 
-These Terms of Service ("**Terms**") govern your access to and use of Timetablz (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**"). They form a binding agreement between us and you, the person using the Service, and, where you use it for a school, college or other institution, that institution as well (together "**you**").
+These Terms of Service ("**Terms**") govern your access to and use of Rivelle (the "**Service**"), provided by Arpith David Ratnaraj, sole proprietor, trading as Rivelle ("**we**", "**us**", "**our**"). They form a binding agreement between us and you, the person using the Service, and, where you use it for a school, college or other institution, that institution as well (together "**you**").
 
 You accept these Terms by ticking the box and clicking **I agree** when the Service asks you to, or by using the Service. That acceptance is an electronic contract under the Information Technology Act, 2000, and we keep a record of it (the version accepted, the date and time, and the IP address it came from). If you do not agree, do not use the Service.
 
 ## 1. Who may use the Service
 
-The Service is intended for schools, colleges and their authorised staff, to build and manage timetables. To use it you must be at least 18 years old. If you create an account for an institution or enter its data, you confirm that you are authorised to act for it and to bind it to these Terms. You are responsible for the accuracy of the information you provide and for keeping your login credentials confidential. Tell us at once at support@timetablz.com if you believe your account has been used without your permission.
+The Service is intended for schools, colleges and their authorised staff, to build and manage timetables. To use it you must be at least 18 years old. If you create an account for an institution or enter its data, you confirm that you are authorised to act for it and to bind it to these Terms. You are responsible for the accuracy of the information you provide and for keeping your login credentials confidential. Tell us at once at support@rivelletimetables.com if you believe your account has been used without your permission.
 
 ## 2. Accounts and roles
 
@@ -52,7 +52,7 @@ We may remove content, or suspend or terminate accounts, that break these rules.
 
 ## 7. Plans and pricing
 
-Every new school gets a 14-day free trial with everything unlocked. After that the Service is offered under the plans described on our website at https://timetablz.com, priced by the number of sections in the school, per year: Starter (up to 30 sections) ₹9,999; Standard (31 to 50) ₹14,999; Plus (51 to 80) ₹19,999; and Large / Group (more than 80 sections, or several schools) ₹19,999 plus ₹250 for each section above 80, priced individually. Each plan can also be bought "done for you" (₹17,999, ₹26,999 and ₹34,999 respectively; quoted for Large / Group), which covers the plan's first year and our team setting the school up; it renews at the software price. Plans and prices may change from time to time; we will give reasonable advance notice before a price change takes effect for an existing plan. Prices are in Indian Rupees (INR). For schools outside India the plans are priced in US dollars (USD), as shown on our website to visitors from outside India: Starter $149, Standard $229 and Plus $299 a year; Done for you $279, $399 and $529; and Large / Group $299 plus $4 for each section above 80. These are paid against an invoice we send by email, in advance for one year, and any local taxes, duties or bank charges on your side are yours. If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
+Every new school gets a 14-day free trial with everything unlocked. After that the Service is offered under the plans described on our website at https://rivelletimetables.com, priced by the number of sections in the school, per year: Starter (up to 30 sections) ₹9,999; Standard (31 to 50) ₹14,999; Plus (51 to 80) ₹19,999; and Large / Group (more than 80 sections, or several schools) ₹19,999 plus ₹250 for each section above 80, priced individually. Each plan can also be bought "done for you" (₹17,999, ₹26,999 and ₹34,999 respectively; quoted for Large / Group), which covers the plan's first year and our team setting the school up; it renews at the software price. Plans and prices may change from time to time; we will give reasonable advance notice before a price change takes effect for an existing plan. Prices are in Indian Rupees (INR). For schools outside India the plans are priced in US dollars (USD), as shown on our website to visitors from outside India: Starter $149, Standard $229 and Plus $299 a year; Done for you $279, $399 and $529; and Large / Group $299 plus $4 for each section above 80. These are paid against an invoice we send by email, in advance for one year, and any local taxes, duties or bank charges on your side are yours. If Goods and Services Tax (GST) becomes applicable to us, it will be shown separately at checkout and on your invoice.
 
 A plan covers up to its number of sections. If your school grows past it, you move to the next plan to add more.
 
@@ -62,7 +62,7 @@ Plans are paid in advance for one year at a time, through our payment processor,
 
 ## 9. Refunds and cancellations
 
-You can cancel at any time by writing to support@timetablz.com from your account's email address. If you cancel, we refund the unused part of the software for your current year on a pro-rata basis: the software price, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. The setup part of a Done for you purchase is refunded in full if you cancel before we have started setting the school up, and not after. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and the school's plan ends when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://timetablz.com/refunds.
+You can cancel at any time by writing to support@rivelletimetables.com from your account's email address. If you cancel, we refund the unused part of the software for your current year on a pro-rata basis: the software price, divided by twelve, for each full month remaining after the date we receive your request. Partial months are not refunded. The setup part of a Done for you purchase is refunded in full if you cancel before we have started setting the school up, and not after. Approved refunds are made to the original payment method, usually within 5 to 7 working days of approval, and the school's plan ends when the refund is issued. The full policy, including examples, is on our Refund and Cancellation Policy page at https://rivelletimetables.com/refunds.
 
 ## 10. Free trials, pilots and new features
 
@@ -78,7 +78,7 @@ The Service relies on third-party providers, including hosting (Railway, Vercel,
 
 ## 13. Availability and support
 
-We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is by email at support@timetablz.com; response times may vary by plan.
+We aim to keep the Service available and reliable but do not guarantee uninterrupted access. We may perform maintenance, make changes, or temporarily suspend the Service, with notice where reasonably possible. Support is by email at support@rivelletimetables.com; response times may vary by plan.
 
 ## 14. Disclaimer of warranties
 
@@ -116,11 +116,11 @@ These Terms are governed by the laws of India. If a dispute arises, we will firs
 - **Severability.** If any part of these Terms is found unenforceable, the rest stays in effect, and that part is applied as far as the law allows.
 - **No waiver.** Not enforcing a right at one time does not waive it.
 - **Assignment.** You may not transfer your rights under these Terms without our written consent. We may transfer ours as part of a reorganisation, sale or transfer of the business, with notice to you.
-- **Notices.** We may send notices to the email address on your account or show them in the Service. Send notices to us at support@timetablz.com.
+- **Notices.** We may send notices to the email address on your account or show them in the Service. Send notices to us at support@rivelletimetables.com.
 
 ## 21. Grievances and contact
 
-Questions, complaints or grievances about the Service, these Terms, or the handling of personal data can be sent to our Grievance Officer, Arpith David Ratnaraj, at **support@timetablz.com**. We will acknowledge a grievance within 48 hours and aim to resolve it within 30 days. By mail:
+Questions, complaints or grievances about the Service, these Terms, or the handling of personal data can be sent to our Grievance Officer, Arpith David Ratnaraj, at **support@rivelletimetables.com**. We will acknowledge a grievance within 48 hours and aim to resolve it within 30 days. By mail:
 
-Arpith David Ratnaraj, sole proprietor, trading as Timetablz
+Arpith David Ratnaraj, sole proprietor, trading as Rivelle
 Chennai, Tamil Nadu, India

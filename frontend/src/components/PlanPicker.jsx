@@ -108,7 +108,7 @@ export default function PlanPicker({ onChoose, onBack, onSignIn }) {
       <div className="sticky top-0 z-30 border-b border-white/10 bg-black">
         <div className="flex items-center px-8 py-4 md:px-16 lg:px-28">
           <button onClick={onBack} className="text-[19px] font-bold tracking-tight text-white">
-            Timetablz
+            Rivelle
           </button>
           <div className="ml-auto flex items-center gap-6">
             <button onClick={onSignIn} className="text-[15px] font-medium text-neutral-300 hover:text-white">

@@ -61,7 +61,7 @@ import com.timetablz.app.ui.theme.Slate500
 fun TimetableScreen(data: SchoolData, mode: String, fixedTeacherId: Int? = null, vm: TimetableViewModel = viewModel(factory = AppViewModels.Factory)) {
     val timetable = data.timetable
     if (timetable == null || timetable.entries.isEmpty()) {
-        Message("No timetable yet", "Generate one on timetablz.com and it shows here.")
+        Message("No timetable yet", "Generate one on rivelletimetables.com and it shows here.")
         return
     }
     // Worked out once per data change, not on every redraw.

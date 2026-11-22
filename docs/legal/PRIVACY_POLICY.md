@@ -4,7 +4,7 @@
 
 **Effective date: 12 October 2026**
 
-Arpith David Ratnaraj, sole proprietor, trading as Timetablz ("**we**", "**us**", "**our**") operates Timetablz (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
+Arpith David Ratnaraj, sole proprietor, trading as Rivelle ("**we**", "**us**", "**our**") operates Rivelle (the "**Service**"), a web application that helps schools and colleges generate and manage class timetables. This Privacy Policy explains what information we collect, why we collect it, and what rights you have over it.
 
 By using the Service, you agree to the collection and use of information as described in this policy. If you do not agree, please do not use the Service.
 
@@ -76,7 +76,7 @@ We use industry-standard measures to protect your information, including encrypt
 
 ## 8. Your rights
 
-Depending on your location, you may have rights to access, correct, delete, or export your personal information, and to object to or restrict certain processing. To exercise any of these rights, contact us at support@timetablz.com. If you are located in India, these rights are provided consistent with the Digital Personal Data Protection Act, 2023.
+Depending on your location, you may have rights to access, correct, delete, or export your personal information, and to object to or restrict certain processing. To exercise any of these rights, contact us at support@rivelletimetables.com. If you are located in India, these rights are provided consistent with the Digital Personal Data Protection Act, 2023.
 
 You can delete individual records (teachers, subjects, etc.) yourself at any time within the app. To delete your entire account or school, contact us.
 
@@ -94,7 +94,7 @@ We may update this Privacy Policy from time to time. If we make material changes
 
 ## 12. Contact us
 
-Questions about this policy or how we handle your data can be sent to **support@timetablz.com**, or by mail to:
+Questions about this policy or how we handle your data can be sent to **support@rivelletimetables.com**, or by mail to:
 
-Arpith David Ratnaraj, sole proprietor, trading as Timetablz
+Arpith David Ratnaraj, sole proprietor, trading as Rivelle
 Chennai, Tamil Nadu, India

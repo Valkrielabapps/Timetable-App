@@ -1,5 +1,5 @@
 """
-Timetablz's sales outreach: the school list, finding who to write to,
+Rivelle's sales outreach: the school list, finding who to write to,
 drafting emails, sending them slowly from a Gmail mailbox, and noticing
 replies. Run from the admin page (app/routers/outreach.py).
 
@@ -62,7 +62,7 @@ STOP_WORDS = re.compile(
 CLOSED = {"replied", "bounced", "opted_out", "demo_booked", "trial", "paid", "not_interested"}
 
 DEFAULT_SENDER = "Arpith David"
-DEFAULT_SIGNATURE = "Arpith David\nTimetablz - timetables for schools\ntimetablz.com | Chennai"
+DEFAULT_SIGNATURE = "Arpith David\nRivelle - timetables for schools\nrivelletimetables.com | Chennai"
 DEFAULT_FOLLOW_UPS = [4, 6]
 DEFAULT_TEMPLATES = {
     "1": {
@@ -70,7 +70,7 @@ DEFAULT_TEMPLATES = {
         "body": (
             "Dear {greeting},\n\n"
             "{personal_line}\n\n"
-            "I'm {sender_first}, and I run Timetablz, a timetable tool made in Chennai for schools like "
+            "I'm {sender_first}, and I run Rivelle, a timetable tool made in Chennai for schools like "
             "{school}. You enter your classes, subjects and teachers, write your rules the way you would "
             "say them (\"Maths in the first half of the day\", \"Mrs. Rao is off on Saturdays\"), and it "
             "builds a clash-free timetable for every section and every teacher in minutes. Electives, "
@@ -443,7 +443,7 @@ def find_contacts_for(website: str, fetch=None) -> dict:
 def _fetch(url: str) -> str | None:
     try:
         r = httpx.get(url, timeout=12, follow_redirects=True, headers={
-            "User-Agent": "Mozilla/5.0 (compatible; Timetablz outreach; +https://timetablz.com)",
+            "User-Agent": "Mozilla/5.0 (compatible; Rivelle outreach; +https://rivelletimetables.com)",
         })
         if r.status_code >= 400 or "html" not in r.headers.get("content-type", "html"):
             return None
@@ -664,7 +664,7 @@ class GmailProvider:
         msg["To"] = to
         msg["From"] = formataddr((from_name, self.address)) if self.address else from_name
         msg["Subject"] = subject
-        rfc_id = make_msgid(domain=(self.address or "timetablz.com").split("@")[-1])
+        rfc_id = make_msgid(domain=(self.address or "rivelletimetables.com").split("@")[-1])
         msg["Message-ID"] = rfc_id
         if in_reply_to:
             msg["In-Reply-To"] = in_reply_to
@@ -868,7 +868,7 @@ def exchange_code(code: str) -> dict:
         raise MailboxError(f"Google refused the connection ({r.status_code}).")
     tokens = r.json()
     if not tokens.get("refresh_token"):
-        raise MailboxError("Google didn't return a long-lived token. Remove Timetablz's access in your "
+        raise MailboxError("Google didn't return a long-lived token. Remove Rivelle's access in your "
                            "Google account and connect again.")
     profile = httpx.get("https://gmail.googleapis.com/gmail/v1/users/me/profile",
                         headers={"Authorization": f"Bearer {tokens['access_token']}"}, timeout=20)

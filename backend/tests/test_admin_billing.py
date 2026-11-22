@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.services import cashfree_service
 from tests.conftest import verify_email, create_school, signup
 
-ADMIN = "staff@timetablz.com"
+ADMIN = "staff@rivelletimetables.com"
 
 
 @pytest.fixture

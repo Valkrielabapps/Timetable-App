@@ -3,7 +3,7 @@ package com.timetablz.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // The website's palette (Tailwind neutral / slate, with emerald and amber for
-// done and needs-attention), so the app and timetablz.com look like one thing.
+// done and needs-attention), so the app and rivelletimetables.com look like one thing.
 val Ink = Color(0xFF171717)          // neutral-900: buttons, headings, selected
 val InkSoft = Color(0xFF404040)      // neutral-700
 val Slate50 = Color(0xFFF8FAFC)

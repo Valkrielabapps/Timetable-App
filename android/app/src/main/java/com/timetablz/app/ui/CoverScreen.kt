@@ -66,7 +66,7 @@ fun CoverScreen(session: SessionViewModel, data: SchoolData, vm: CoverViewModel 
     val school = sessionUi.school ?: return
     val timetable = data.timetable
     if (timetable == null) {
-        Message("No timetable yet", "Cover needs the school's timetable. Generate one on timetablz.com first.")
+        Message("No timetable yet", "Cover needs the school's timetable. Generate one on rivelletimetables.com first.")
         return
     }
     LaunchedEffect(school.id, data) { vm.bind(school.id, school.isAdmin, data) }

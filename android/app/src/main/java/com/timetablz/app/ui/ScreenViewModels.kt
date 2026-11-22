@@ -239,7 +239,7 @@ class CoverViewModel(private val c: AppContainer) : ViewModel() {
             try {
                 val r = c.cover.notify(id, date, part.takeUnless { it == Cover.WHOLE })
                 val note = when {
-                    !r.configured -> "Email isn't set up for Timetablz yet."
+                    !r.configured -> "Email isn't set up for Rivelle yet."
                     r.sent.isEmpty() && r.noEmail.isEmpty() && r.failed.isEmpty() -> "Nobody needed an email."
                     else -> buildString {
                         if (r.sent.isNotEmpty()) append("Emailed ${r.sent.joinToString(", ")}. ")

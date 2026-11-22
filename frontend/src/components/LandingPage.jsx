@@ -413,7 +413,7 @@ function WorkflowDemo() {
           playsInline
           preload="metadata"
           poster="/media/timetablz-demo-poster.jpg"
-          aria-label="Timetablz in 18 seconds: set up a school, write a rule, generate a clash-free timetable and drag a lesson to adjust it"
+          aria-label="Rivelle in 18 seconds: set up a school, write a rule, generate a clash-free timetable and drag a lesson to adjust it"
         >
           <source src="/media/timetablz-demo.webm" type="video/webm" />
           <source src="/media/timetablz-demo.mp4" type="video/mp4" />
@@ -432,10 +432,10 @@ const TIME_SAVED = {
   after: 'Minutes.',
 }
 
-// Real numbers so far, across every school using Timetablz. Update them as
+// Real numbers so far, across every school using Rivelle. Update them as
 // schools join - they are the claim, so they have to stay true.
 const CAPABILITY_STATS = [
-  { n: '01', label: 'Schools', value: '1', unit: 'school', note: 'Running its whole timetable on Timetablz' },
+  { n: '01', label: 'Schools', value: '1', unit: 'school', note: 'Running its whole timetable on Rivelle' },
   { n: '02', label: 'Students', value: '500+', unit: 'students', note: 'On clash-free timetables every week' },
   { n: '03', label: 'Teachers', value: '50+', unit: 'teachers', note: 'Scheduled with no double-booking' },
   { n: '04', label: 'Clashes', value: '0', unit: 'clashes', note: 'Teacher and room, in every timetable' },
@@ -469,7 +469,7 @@ function MetricsSection() {
 
         <div className="mt-16 flex flex-wrap items-baseline justify-between gap-2 border-b border-neutral-200 pb-5">
           <p className="text-[13px] uppercase tracking-[0.08em] text-neutral-500">
-            500+ students and 50+ teachers already on Timetablz
+            500+ students and 50+ teachers already on Rivelle
           </p>
           <p className="text-[13px] text-neutral-500">Live schools · 2026</p>
         </div>
@@ -522,7 +522,7 @@ function MetricsSection() {
  * testimonials.
  */
 /**
- * "Why schools choose Timetablz", laid out like Deel's hero: a black panel
+ * "Why schools choose Rivelle", laid out like Deel's hero: a black panel
  * on the left with the claim, a pick-what-you-need grid and the call to
  * action; a photo on the right with the product floating over it as small
  * cards. Black and white throughout - green only on the "generated" tick,
@@ -798,7 +798,7 @@ const TESTIMONIAL_TILE_STYLES = [
     gradient: 'from-neutral-800 via-neutral-900 to-black',
     image: shishyaPublicSchoolPhoto,
     caption: 'Shishya Public School, Dehradun',
-    subcaption: 'One of the first schools using Timetablz',
+    subcaption: 'One of the first schools using Rivelle',
   },
 ]
 
@@ -908,7 +908,7 @@ function ClosingCta({ onGetStarted, signedIn }) {
         className="mx-auto max-w-6xl px-6 py-24 md:py-28"
       >
         <h2 className="max-w-4xl text-4xl font-medium leading-[1.1] tracking-tight text-neutral-900 md:text-6xl">
-          Make the hardest timetable feel effortless, with Timetablz
+          Make the hardest timetable feel effortless, with Rivelle
         </h2>
         <div className="mt-10 flex flex-wrap items-center gap-4">
           <a

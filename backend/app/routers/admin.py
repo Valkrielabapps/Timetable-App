@@ -1,5 +1,5 @@
 """
-The Timetablz admin page's API - for Timetablz staff (PLATFORM_ADMIN_EMAILS),
+The Rivelle admin page's API - for Rivelle staff (PLATFORM_ADMIN_EMAILS),
 not for school admins.
 
     GET    /api/admin/schools                     every school, its plan and status
