@@ -607,6 +607,9 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             created["subjects"].append(sub.name)
         return subjects[_norm(name)]
 
+    skipped_teachers = {_norm(str(x)) for x in plan.get("skip_teachers") or [] if str(x).strip()}
+    existing_teachers = set(teachers)
+
     def teacher(raw: str) -> Teacher | None | str:
         info = (plan.get("people") or {}).get(raw) or {}
         if info.get("class_teacher") or _key(raw) in _CLASS_TEACHER:
@@ -620,6 +623,10 @@ def _commit(db: Session, school_id: int, plan: dict, answers: dict) -> dict:
             name = raw if a == "new" else a[3:]
             confirmed = a.startswith("is:")
         name = name or raw
+        # Taken off the list of new teachers in the preview: not added, and
+        # their periods are left without a teacher.
+        if _norm(name) in skipped_teachers and _norm(name) not in existing_teachers:
+            return None
         if _norm(name) not in teachers:
             if _key(name) in _NOT_A_TEACHER:
                 return None

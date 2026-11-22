@@ -60,8 +60,15 @@ describe('filling in every class from the allotment sheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByText(/New teachers that will be added \(2\)/)).toBeInTheDocument()
     expect(screen.getByText('Rosee')).toBeInTheDocument()
+    // Taken off the list, then put back, then taken off again.
+    fireEvent.click(screen.getByRole('button', { name: "Don't add Rosee" }))
+    expect(screen.getByText(/New teachers that will be added \(1\)/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add Rosee back' }))
+    expect(screen.getByText(/New teachers that will be added \(2\)/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: "Don't add Rosee" }))
     toTheEnd()
     fireEvent.click(screen.getByRole('button', { name: 'Fill in the plans' }))
+    await waitFor(() => expect(api.classPlanCommit).toHaveBeenCalledWith(1, { ...preview.plan, skip_teachers: ['Rosee'] }, {}))
     expect(await screen.findByRole('status')).toHaveTextContent('your week (45 periods)')
   })
 

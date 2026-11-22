@@ -190,3 +190,21 @@ def test_a_file_without_class_tables_says_what_to_do(client, school):
     r = client.post("/api/class-plan/preview", data={"school_id": sid},
                     files={"file": ("s.csv", b"Name,Subject\nAnil,Maths\n", "text/csv")}, headers=h)
     assert r.status_code == 400 and "table per class" in r.json()["detail"]
+
+
+def test_a_new_teacher_taken_off_the_list_is_not_added(client, school):
+    sid, h = school
+    p = _preview(client, sid, h)
+    answers = {q["id"]: q["suggested"] for q in p["questions"]}
+    answers["teacher:Kavita k"] = "new"
+    plan = {**p["plan"], "skip_teachers": ["Kavita k"]}
+    r = client.post("/api/class-plan/commit", json={"school_id": sid, "plan": plan, "answers": answers}, headers=h)
+    assert r.status_code == 200, r.text
+    assert "Kavita k" not in r.json()["teachers"]
+    db = SessionLocal()
+    try:
+        assert not db.query(Teacher).filter_by(school_id=sid, name="Kavita k").count()
+        # Someone already at the school can't be removed this way.
+        assert db.query(Teacher).filter_by(school_id=sid, name="Anil").count() == 1
+    finally:
+        db.close()

@@ -26,6 +26,8 @@ export default function ClassPlanImport({
   const [reading, setReading] = useState(false)
   const [preview, setPreview] = useState(null)
   const [answers, setAnswers] = useState({})
+  // New teachers the school took off the list: not added when saving.
+  const [removed, setRemoved] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
@@ -37,6 +39,7 @@ export default function ClassPlanImport({
     try {
       setPreview(staffFile ? await api.classPlanPreview(schoolId, f, staffFile) : await api.classPlanPreview(schoolId, f))
       setAnswers({})
+      setRemoved([])
     } catch (err) {
       setError(err.message)
       setPreview(null)
@@ -58,7 +61,8 @@ export default function ClassPlanImport({
     setSaving(true)
     setError(null)
     try {
-      const res = await api.classPlanCommit(schoolId, preview.plan, answers)
+      const plan = removed.length ? { ...preview.plan, skip_teachers: removed } : preview.plan
+      const res = await api.classPlanCommit(schoolId, plan, answers)
       setResult(res)
       setPreview(null)
       await onDone?.(res)
@@ -149,6 +153,8 @@ export default function ClassPlanImport({
           preview={preview}
           answers={answers}
           setAnswers={setAnswers}
+          removed={removed}
+          setRemoved={setRemoved}
           saving={saving}
           onSave={save}
           onCancel={() => setPreview(null)}
@@ -164,7 +170,7 @@ export default function ClassPlanImport({
  * on its own, and last the plans themselves with the button that saves them.
  * Back and Next move between boxes; a question's Next waits for an answer.
  */
-function PreviewSteps({ preview, answers, setAnswers, saving, onSave, onCancel }) {
+function PreviewSteps({ preview, answers, setAnswers, removed, setRemoved, saving, onSave, onCancel }) {
   const questions = preview.questions ?? []
   const steps = []
   steps.push({ key: 'read', title: 'What we read' })
@@ -220,7 +226,8 @@ function PreviewSteps({ preview, answers, setAnswers, saving, onSave, onCancel }
           )}
         </div>
         <div className="mt-2">
-          <StepBody step={step} preview={preview} answers={answers} setAnswers={setAnswers} />
+          <StepBody step={step} preview={preview} answers={answers} setAnswers={setAnswers}
+            removed={removed} setRemoved={setRemoved} />
         </div>
       </div>
 
@@ -272,7 +279,7 @@ function Chips({ items }) {
   )
 }
 
-function StepBody({ step, preview, answers, setAnswers }) {
+function StepBody({ step, preview, answers, setAnswers, removed = [], setRemoved = () => {} }) {
   if (step.key === 'read') {
     return (
       <div className="flex flex-col gap-2 text-slate-700">
@@ -318,8 +325,50 @@ function StepBody({ step, preview, answers, setAnswers }) {
         )}
         {preview.new_teachers?.length > 0 ? (
           <>
-            <p className="mt-1">New teachers that will be added ({preview.new_teachers.length}):</p>
-            <Chips items={preview.new_teachers} />
+            <p className="mt-1">
+              New teachers that will be added ({preview.new_teachers.length - removed.length}):
+            </p>
+            <ul className="mt-2.5 flex flex-wrap gap-2.5">
+              {preview.new_teachers.filter((t) => !removed.includes(t)).map((t) => (
+                <li key={t} className="relative rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs text-slate-700">
+                  {t}
+                  {/* A small cross on the top right corner of each name. */}
+                  <button
+                    type="button"
+                    onClick={() => setRemoved((r) => [...r, t])}
+                    aria-label={`Don't add ${t}`}
+                    title={`Don't add ${t}`}
+                    className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 bg-white text-[10px] leading-none text-slate-500 shadow-sm hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {removed.length > 0 && (
+              <div className="mt-3 text-xs text-slate-600">
+                <p>
+                  Not adding ({removed.length}). Their periods stay in the plan without a teacher, for you to fill in later:
+                </p>
+                <ul className="mt-1 flex flex-wrap gap-1.5">
+                  {removed.map((t) => (
+                    <li key={t} className="flex items-center gap-1 rounded-full border border-dashed border-slate-300 py-0.5 pl-2 pr-1 text-slate-400 line-through">
+                      {t}
+                      <button
+                        type="button"
+                        onClick={() => setRemoved((r) => r.filter((x) => x !== t))}
+                        aria-label={`Add ${t} back`}
+                        title={`Add ${t} back`}
+                        className="rounded-full px-1 text-slate-500 no-underline hover:bg-slate-200 hover:text-slate-800"
+                        style={{ textDecoration: 'none' }}
+                      >
+                        ↺
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         ) : <p className="mt-1">No new teachers: everyone is already here.</p>}
       </div>
