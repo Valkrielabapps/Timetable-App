@@ -22,9 +22,13 @@ The two caps are firm rules. A teacher whose own "max periods/week" is set
 (on the Teachers page, or by a typed rule) keeps their own number - the more
 specific setting wins - so the weekly cap is the default for everyone else.
 
-Spreading and demanding-subjects-first are preferences: they shape the
-timetable but can never make one impossible. They are on unless the school
-turns them off; the two caps are off
+Spreading teachers and demanding-subjects-first are preferences: they shape
+the timetable but can never make one impossible. One period of a subject a
+day is a firm rule wherever the week has room for it (no more periods than
+school days), and a preference for the extra periods beyond that - see
+_add_subject_once_a_day in app/services/solver.py; it is checked on saved
+timetables and drags by app/services/standard_checks.py. These three are on
+unless the school turns them off; the two caps are off
 until the school ticks them, so a school that never visits the page gets
 the same timetables it got before.
 

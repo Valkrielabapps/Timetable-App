@@ -488,6 +488,8 @@ export default function TimetableTab({
               onClick={() => setDrawer(drawer === 'rules' ? null : 'rules')}
             >
               {problems ? `! ${problems} rule${problems > 1 ? 's' : ''} broken` : setupErrors.length ? `! ${setupErrors.length} setup problem${setupErrors.length > 1 ? 's' : ''}` : 'No rules broken'}
+              {/* Preferences give way by design, so they're counted calmly, never in red. */}
+              {!problems && !setupErrors.length && unmetPreferences.length > 0 && ` · ${unmetPreferences.length} preference${unmetPreferences.length > 1 ? 's' : ''} not met`}
             </button>
             {solved && (
               <button type="button" className="tw-btn" onClick={() => setDrawer(drawer === 'freeze' ? null : 'freeze')}>❄ Freezing</button>
@@ -702,7 +704,7 @@ export default function TimetableTab({
               <h3 style={{ fontSize: 13, fontWeight: 600 }}>Preferences not met everywhere</h3>
               {unmetPreferences.map((p) => (
                 <div key={p.description} className="tw-line">
-                  <div>{p.description}<small>Not met in {p.details.length} {p.details.length === 1 ? 'case' : 'cases'}, e.g. {p.details[0]}</small></div>
+                  <div>{p.description}<small>Not met in {p.details.length} {p.details.length === 1 ? 'case' : 'cases'}: {p.details.slice(0, 5).join('; ')}{p.details.length > 5 ? `, and ${p.details.length - 5} more` : ''}</small></div>
                 </div>
               ))}
               <p className="tw-drawer-note" style={{ marginTop: 6, fontSize: 12 }}>That&rsquo;s allowed for a preference. If one must always hold, reword it on the Constraints step without &ldquo;try to&rdquo; to make it a rule.</p>

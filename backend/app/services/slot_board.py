@@ -14,7 +14,9 @@ in one request:
 The checks mirror move-slot's one for one - frozen sections and subjects,
 lesson-free slots, locks, a teacher or room in two places - so a move this
 calls allowed is one move-slot accepts. Rules can't refuse a move (it's kept
-and flagged), so they only turn an answer amber.
+and flagged), so they only turn an answer amber - and so do "try to" rules
+and the "one period of a subject a day" tick box, which are flagged the same
+way, worded as what they are.
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.models.school import ClassGroup, Period, Room, School, Subject, Teacher, Timetable, TimetableEntry
 from app.services.constraint_ir_checker import Placement, check_rules
+from app.services.standard_checks import ONE_A_DAY, OneADay
 from app.services.subject_freezing import frozen_lessons_index
 from app.services.timetable_structure import grade_off_period_ids, zero_period_ids_for
 
@@ -85,7 +88,12 @@ class Board:
         # Lessons that don't exist yet, counted while asking what placing one
         # would break (see rules_broken_by).
         self.extra: list[Placement] = []
-        self.base = self._broken() if rules else set()
+        self.one_a_day = OneADay(db, school_id, self.periods, self.cgs, self.subjects)
+        self.block_entry_ids = {e.id for e in self.entries if e.elective_block_id is not None}
+        # Anything to check moves against: typed rules, or the tick box.
+        self.checks = bool(rules) or self.one_a_day.on
+        self._last = []
+        self.base = self._broken() if self.checks else set()
         # "P3" - the lesson number in its day, what the grid calls it.
         self.number: dict[int, int] = {}
         by_day: dict[int, list[Period]] = {}
@@ -245,7 +253,7 @@ class Board:
                 t = self.teachers.get(e.teacher_id)
                 if t and there in set(t.unavailable_period_ids or []):
                     warnings.append(f"{t.name} is marked unavailable then")
-        if with_rules and self.rules:
+        if with_rules and self.checks:
             snap = self.snapshot()
             self.apply(section, src, dst)
             warnings.extend(self._new_rule_breaks())
@@ -255,7 +263,6 @@ class Board:
         return Verdict("ok")
 
     def _broken(self) -> set:
-        rules, index = self.rules
         placements = []
         for e in self.entries:
             pid = self.pid[e.id]
@@ -265,24 +272,44 @@ class Board:
                 teacher_id=e.teacher_id, period_id=pid, day_of_week=p.day_of_week, order=p.order,
                 occupies_teacher=e.teacher_id is not None,
             ))
-        self._last = check_rules(placements + self.extra, rules, index)
-        return {(v.constraint_id, v.detail) for v in self._last if v.strength == "required"}
+        placements += self.extra
+        self._last = []
+        if self.rules:
+            rules, index = self.rules
+            self._last = check_rules(placements, rules, index)
+        self._last += self.one_a_day.check(placements, self.block_entry_ids)
+        return {self._key(v) for v in self._last}
+
+    @staticmethod
+    def _key(v) -> tuple:
+        return (v.constraint_id, v.description, v.detail)
+
+    @staticmethod
+    def _say(v, plain: bool = False) -> str:
+        """How a newly broken rule is worded on the drop target. `plain`: a
+        typed rule by its sentence alone, for lists that are all rules."""
+        if v.description == ONE_A_DAY and v.constraint_id is None:
+            return f"{v.detail} (“{ONE_A_DAY}”)"
+        if v.strength == "required":
+            return v.description if plain else f"Breaks “{v.description}”"
+        return f"Goes against “{v.description}”"
+
+    def _new(self, now: set, plain: bool = False) -> list[str]:
+        """Rules broken now that weren't before: rules first, then preferences."""
+        fresh = [v for v in self._last if self._key(v) in now - self.base]
+        fresh.sort(key=lambda v: (v.strength != "required", v.description, v.detail))
+        return list(dict.fromkeys(self._say(v, plain) for v in fresh))
 
     def _new_rule_breaks(self) -> list[str]:
-        now = self._broken()
-        names = {v.description for v in self._last
-                 if v.strength == "required" and (v.constraint_id, v.detail) in now - self.base}
-        return [f"Breaks “{n}”" for n in sorted(names)]
+        return self._new(self._broken())
 
     def rules_broken_by(self, extra: list[Placement]) -> list[str]:
-        """The rules that adding these lessons would newly break, by name."""
-        if not self.rules:
+        """The rules (and preferences) that adding these lessons would newly break."""
+        if not self.checks:
             return []
         self.extra = extra
         try:
-            now = self._broken()
-            return sorted({v.description for v in self._last
-                           if v.strength == "required" and (v.constraint_id, v.detail) in now - self.base})
+            return self._new(self._broken(), plain=True)
         finally:
             self.extra = []
 
@@ -383,7 +410,7 @@ class Board:
                 t = self.teachers.get(e.teacher_id)
                 if t and self.pid[e.id] != snap[e.id] and self.pid[e.id] in set(t.unavailable_period_ids or []):
                     warnings.append(f"{t.name} is marked unavailable then")
-            if self.rules:
+            if self.checks:
                 warnings.extend(self._new_rule_breaks())
             return steps, list(dict.fromkeys(warnings))
         finally:

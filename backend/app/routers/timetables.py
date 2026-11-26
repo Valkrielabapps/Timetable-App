@@ -74,6 +74,7 @@ from app.schemas.timetable import (
 )
 from app.services.constraint_ir import IRError, rule_from_dict
 from app.services.constraint_ir_checker import Placement, check_rules
+from app.services.standard_checks import one_a_day_violations
 from app.services.constraint_ir_compiler import SchoolIndex
 from app.services.edit_command_parser import parse_edit_command_llm
 from app.services import lesson_placing, plans, versions
@@ -241,17 +242,19 @@ def _violations_for(db: Session, timetable: Timetable, class_groups: dict,
     to. Reading is cheap: the entries are fixed, so a rule is filtering and
     counting with no solver involved.
 
-    Only the general-representation rules are checked. The nine legacy types
-    have no checker and are skipped rather than reported as satisfied, which
-    would be a claim this cannot make.
+    Only the general-representation rules are checked, plus the "one period
+    of a subject a day" tick box (app/services/standard_checks.py). The nine
+    legacy types have no checker and are skipped rather than reported as
+    satisfied, which would be a claim this cannot make.
     """
     if timetable.status != "draft" or not timetable.entries:
         return []
+    out = [vars(v) for v in one_a_day_violations(db, timetable, periods, class_groups, subjects)]
     setup = _rule_setup(db, timetable, class_groups, subjects, teachers, periods)
     if setup is None:
-        return []
+        return out
     rules, index = setup
-    return [vars(v) for v in check_rules(_placements(timetable.entries, periods), rules, index)]
+    return [vars(v) for v in check_rules(_placements(timetable.entries, periods), rules, index)] + out
 
 
 def _placements(entries, periods: dict, moved: dict | None = None) -> list[Placement]:

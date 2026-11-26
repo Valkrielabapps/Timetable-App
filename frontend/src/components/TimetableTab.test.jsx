@@ -646,8 +646,8 @@ describe('rules', () => {
   it('treats an unmet preference calmly', () => {
     useTimetable({ violations: [{ ...VIOLATION, strength: 'preference', description: 'Try to avoid Mondays', detail: 'x' }] })
     renderTab()
+    expect(screen.getByRole('button', { name: 'No rules broken · 1 preference not met' })).not.toHaveClass('tw-alert')
     openRules()
-    expect(screen.getByRole('button', { name: 'No rules broken' })).toBeInTheDocument()
     expect(screen.getByText('Try to avoid Mondays')).toBeInTheDocument()
     expect(screen.getByText(/Not met in 1 case/)).toBeInTheDocument()
     expect(within(sectionBoard('Grade 9-A')).getByText('Physics').closest('.tw-lesson')).not.toHaveClass('tw-broken')

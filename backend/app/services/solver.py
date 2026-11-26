@@ -125,9 +125,14 @@ _TIME_LIMIT: contextvars.ContextVar = contextvars.ContextVar("time_limit", defau
 #   "day_max"      - ignore the school's teacher periods/day limit
 #   "availability" - ignore every teacher's unavailable periods;
 #                    "availability:<teacher id>" just that teacher's
+#   "subject_spread" - ignore the firm half of the "one period of a subject
+#                    a day" tick box
 #   "fixed_periods" - ignore School.fixed_periods;
 #                    "fixed:<subject id>:<grade>" just that subject for that grade
 _RELAX: contextvars.ContextVar = contextvars.ContextVar("relax", default=frozenset())
+# Counts the firm one-a-day constraints added to the model being built, so a
+# solve that fails knows whether trying again without them could help.
+_ONE_A_DAY_FIRM: contextvars.ContextVar = contextvars.ContextVar("one_a_day_firm", default=None)
 
 
 def _unavailable(teacher) -> set[int]:
@@ -419,10 +424,109 @@ def _valid_ir(c) -> bool:
         return False
 
 
+def _pairs_named(rules, requirements, subjects_by_id, class_group_labels) -> set[tuple[int, int]]:
+    """(section id, subject id) pairs these rules name a subject for. A rule
+    naming sections is about those sections only; one naming none, every
+    section with the subject."""
+    ids_by_name = {s.name: s.id for s in subjects_by_id.values()}
+    pairs: set[tuple[int, int]] = set()
+    for rule in rules:
+        selector = rule.form.selector
+        if not selector.subjects:
+            continue
+        subject_ids = {ids_by_name[n] for n in selector.subjects if n in ids_by_name}
+        sections = None
+        if selector.class_groups is not None:
+            sections = {cid for n in selector.class_groups for cid in class_group_labels.get(n, [])}
+        for req in requirements:
+            if req.subject_id in subject_ids and (sections is None or req.class_group_id in sections):
+                pairs.add((req.class_group_id, req.subject_id))
+    return pairs
+
+
+def _double_period_pairs(ir_rules, requirements, subjects_by_id, class_group_labels) -> set[tuple[int, int]]:
+    """(section, subject) pairs a double-period rule is about. "Grade 9 has
+    Games as a double period" is about Grade 9's Games only: every other
+    section's Games is still kept to one a day."""
+    doubles = [r for r in ir_rules if isinstance(r.form, Run) and r.form.block_size]
+    return _pairs_named(doubles, requirements, subjects_by_id, class_group_labels)
+
+
+def _teachers_kept_off_days(ir_rules, teachers) -> set[int]:
+    """Teachers a rule of the school's keeps off some days or times ("Sabina
+    has no periods on Wednesday or Friday"). Their subjects may have fewer
+    days than periods, which can't be told before solving."""
+    ids_by_name = {t.name: t.id for t in teachers}
+    out: set[int] = set()
+    for rule in ir_rules:
+        selector = getattr(rule.form, "selector", None)
+        if selector is not None and selector.teachers and selector.days is not None:
+            out.update(ids_by_name[n] for n in selector.teachers if n in ids_by_name)
+    return out
+
+
+def _day_rule_pairs(ir_rules, requirements, subjects_by_id, class_group_labels) -> set[tuple[int, int]]:
+    """(section, subject) pairs a rule places on particular days ("all Maths
+    on Monday", "try to keep Maths off Tuesday"). The school's own rule
+    governs there, so one-a-day is only a preference for them."""
+    on_days = [r for r in ir_rules if getattr(r.form, "selector", None) is not None and r.form.selector.days is not None]
+    return _pairs_named(on_days, requirements, subjects_by_id, class_group_labels)
+
+
+def _add_subject_once_a_day(model, requirements, blocks, req_period_vars, block_occ,
+                            sorted_periods_by_day, exempt, pinned_entries,
+                            exempt_req_ids=frozenset(), exempt_block_ids=frozenset()) -> None:
+    """The "one period of a subject a day" tick box, as a firm rule wherever
+    the week has room for it: a subject with no more periods a week than the
+    days it can go on gets at most one a day. A subject with more periods than
+    that keeps its extras as a preference (see _add_default_habits), and so
+    does one in `exempt` - asked for as a double period, or placed on
+    particular days by a rule of the school's own - or taught by a teacher a
+    rule keeps off some days (`exempt_req_ids`, `exempt_block_ids`), or whose
+    locked or kept lessons already put two on one day: a lock is the admin's
+    call."""
+    if not _STANDARD.get().subject_spread or "subject_spread" in _RELAX.get():
+        return
+    day_of = {p.id: d for d, ps in sorted_periods_by_day.items() for p in ps}
+    counter = _ONE_A_DAY_FIRM.get()
+    # Periods already fixed by locked or kept lessons, per subject or block per day.
+    fixed: dict[tuple, set[int]] = {}
+    for le in pinned_entries or ():
+        d = day_of.get(le.period_id)
+        if d is None:
+            continue
+        key = ("b", le.elective_block_id) if le.elective_block_id is not None else ("r", le.class_group_id, le.subject_id)
+        fixed.setdefault((*key, d), set()).add(le.period_id)
+    twice = {k[:-1] for k, ps in fixed.items() if len(ps) > 1}
+
+    def once_a_day(per_week, vars_by_period):
+        by_day: dict[int, list] = {}
+        for pid, vs in vars_by_period.items():
+            if pid in day_of and vs:
+                by_day.setdefault(day_of[pid], []).extend(vs)
+        if per_week < 1 or per_week > len(by_day):
+            return  # more periods than days it can go on: two on some day
+        for vs in by_day.values():
+            if len(vs) > 1:
+                model.Add(sum(vs) <= 1)
+                if counter is not None:
+                    counter["constraints"] += 1
+
+    for req in requirements:
+        if (req.id in exempt_req_ids or (req.class_group_id, req.subject_id) in exempt
+                or ("r", req.class_group_id, req.subject_id) in twice):
+            continue
+        once_a_day(req.periods_per_week, req_period_vars.get(req.id, {}))
+    for block in blocks:
+        if block.id in exempt_block_ids or ("b", block.id) in twice:
+            continue
+        once_a_day(block.periods_per_week, {pid: [occ] for (bid, pid), occ in block_occ.items() if bid == block.id})
+
+
 def _add_default_habits(
     model, requirements, option_reqs, blocks, block_occ, req_period_vars,
     teacher_period_vars, teachers, sorted_periods_by_day, teaching_runs,
-    unavailable_by_cg, subjects_by_id, ir_rules, consecutive_constraints,
+    unavailable_by_cg, subjects_by_id, ir_rules, consecutive_constraints, doubled=frozenset(),
 ) -> list:
     """Soft defaults applied to every school, returned as penalty terms.
 
@@ -431,8 +535,10 @@ def _add_default_habits(
        With the "one period of a subject a day" tick box (on by default) every
        lesson past the first on a day costs _SUBJECT_SPREAD_WEIGHT; without
        it, every lesson over a fair share for its day costs 1. Skipped for a
-       subject the school has given a double-period rule, where two on one
-       day is the point.
+       section's subject the school has given a double-period rule, where two
+       on one day is the point (`doubled`: (section, subject) pairs). Where
+       the week has room for one a day, the tick box is also a firm rule -
+       see _add_subject_once_a_day.
     2. Teachers aren't taught solid. Three periods back to back (within a
        stretch between breaks) cost 1 each time, and - so a teacher's day is
        spread out rather than bunched - two back to back cost 1 as well.
@@ -450,17 +556,11 @@ def _add_default_habits(
     in three periods running, still gets a timetable.
     """
     terms: list = []
-    names_by_id = {s.id: s.name for s in subjects_by_id.values()}
-
-    doubled: set[str] = set()
     teacher_rule = False
     for rule in ir_rules:
         form = rule.form
-        if isinstance(form, Run):
-            if form.block_size:
-                doubled.update(form.selector.subjects or ())
-            if "teacher" in form.scope:
-                teacher_rule = True
+        if isinstance(form, Run) and "teacher" in form.scope:
+            teacher_rule = True
         if isinstance(form, Span) and "teacher" in form.scope:
             teacher_rule = True
     capped_teachers = {
@@ -493,7 +593,7 @@ def _add_default_habits(
             terms.append(over * _SUBJECT_SPREAD_WEIGHT if once_a_day else over)
 
     for req in requirements:
-        if names_by_id.get(req.subject_id) in doubled:
+        if (req.class_group_id, req.subject_id) in doubled:
             continue
         spread(f"r{req.id}", req.class_group_id, req.periods_per_week, req_period_vars.get(req.id, {}))
     for block in blocks:
@@ -914,12 +1014,50 @@ def _is_batched(req: SubjectRequirement, subjects_by_id: dict[int, "Subject"]) -
 
 def generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResult:
     """Solve a school's timetable under its tick-box rules - see
-    _generate_school_timetable for the model itself."""
+    _generate_school_timetable for the model itself.
+
+    One period of a subject a day is firm where the week has room for it,
+    but a tick box must never cost a school its timetable: what makes it
+    impossible is often a teacher's own rule ("Sabina has no periods on
+    Wednesday or Friday") that leaves her subject fewer days than periods,
+    which can't be seen before solving. So when the firm version finds no
+    timetable, it is solved again with one-a-day as a preference only - and
+    the subjects that end up twice on a day are flagged on the timetable
+    (app/services/standard_checks.py)."""
     token = _STANDARD.set(_std.for_school(db.get(School, school_id)))
+    firm = {"constraints": 0}
+    token2 = _ONE_A_DAY_FIRM.set(firm)
     try:
-        return _generate_school_timetable(db, school_id)
+        result = _generate_school_timetable(db, school_id)
+        if result.status not in ("optimal", "feasible") and _retrying_without_firm_one_a_day():
+            logger.info("school=%s: no timetable with one-a-day firm; solving with it as a preference", school_id)
+            token3 = _RELAX.set(_RELAX.get() | {"subject_spread"})
+            try:
+                retry = _generate_school_timetable(db, school_id)
+            finally:
+                _RELAX.reset(token3)
+            if retry.status in ("optimal", "feasible"):
+                retry.warnings.append(_ONE_A_DAY_GAVE_WAY)
+            return retry
+        return result
     finally:
+        _ONE_A_DAY_FIRM.reset(token2)
         _STANDARD.reset(token)
+
+
+def _retrying_without_firm_one_a_day() -> bool:
+    """Whether a failed solve is solved again with one-a-day as a preference:
+    firm one-a-day constraints were added, and this isn't already the second
+    try or a diagnostic re-solve (those leave the habits off)."""
+    firm = _ONE_A_DAY_FIRM.get()
+    return bool(firm and firm["constraints"]) and _DEFAULT_HABITS.get() and "subject_spread" not in _RELAX.get()
+
+
+_ONE_A_DAY_GAVE_WAY = (
+    "Not every subject could be kept to one period a day - the timetable would have been impossible "
+    "(often a teacher who is free on fewer days than their subject has periods). The subjects that have "
+    "two on a day are listed under Rules."
+)
 
 
 def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveResult:
@@ -2271,6 +2409,16 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
         .filter(Constraint.school_id == school_id, Constraint.type == "ir")
         .all()
     )
+    ir_rule_forms = [rule_from_dict(c.parameters or {}) for c in ir_constraints if _valid_ir(c)]
+    kept_off = _teachers_kept_off_days(ir_rule_forms, teachers)
+    doubled_pairs = _double_period_pairs(ir_rule_forms, requirements, subjects_by_id, _class_group_labels(class_groups))
+    _add_subject_once_a_day(
+        model, requirements, blocks, req_period_vars, block_occ, sorted_periods_by_day,
+        doubled_pairs | _day_rule_pairs(ir_rule_forms, requirements, subjects_by_id, _class_group_labels(class_groups)),
+        pinned_entries,
+        exempt_req_ids={r.id for r in requirements if set(candidate_ids_by_req.get(r.id) or ()) & kept_off},
+        exempt_block_ids={bid for (bid, _pid, _oid), choice in option_x.items() if any(t in kept_off for t, _v in choice)},
+    )
     deferred_rules: list = []
     deferred_compile = None
     adversary = _ADVERSARY.get()
@@ -2395,8 +2543,8 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             model, requirements, option_reqs, blocks, block_occ, req_period_vars,
             teacher_period_vars, teachers, sorted_periods_by_day, teaching_runs,
             zero_period_ids_by_class_group, subjects_by_id,
-            ir_rules=[rule_from_dict(c.parameters or {}) for c in ir_constraints if _valid_ir(c)],
-            consecutive_constraints=consecutive_constraints,
+            ir_rules=ir_rule_forms,
+            consecutive_constraints=consecutive_constraints, doubled=doubled_pairs,
         )
         shared = share_terms()
         if not penalties and not habit_penalties and not shared:
@@ -2513,6 +2661,12 @@ def _generate_school_timetable(db: Session, school_id: int) -> TimetableSolveRes
             if e.locked:
                 locked_keys.add(_assignment_key(a))
         _assign_rooms(db, school_id, assignments, locked_rooms=locked_rooms)
+
+    if status_name in ("infeasible", "unknown") and _retrying_without_firm_one_a_day():
+        # generate_school_timetable solves again without it; explaining this
+        # attempt's failure would only cost time.
+        return TimetableSolveResult(status=status_name, assignments=[], locked_keys=locked_keys,
+                                    errors=errors, warnings=warnings)
 
     if status_name in ("infeasible", "unknown"):
         errors = errors + _diagnose_infeasibility(
@@ -3393,7 +3547,9 @@ def find_blocking_rules(db: Session, school_id: int, budget_seconds: float = 180
             return None
         t1 = _SKIP_RULES.set(frozenset(skip | soft_ids))
         t2 = _TIME_LIMIT.set(min(per_try_seconds, left))
-        t3 = _RELAX.set(relax)
+        # One-a-day is never what makes a school impossible - generation
+        # falls back to it as a preference - so the search leaves it out.
+        t3 = _RELAX.set(frozenset(relax) | {"subject_spread"})
         t4 = _DEFAULT_HABITS.set(False)
         try:
             return generate_school_timetable(db, school_id)
