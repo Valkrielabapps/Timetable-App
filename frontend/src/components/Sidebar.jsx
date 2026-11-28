@@ -240,6 +240,7 @@ export default function Sidebar({
       <nav className="flex flex-col gap-0.5" aria-label="Main">
         <NavItem
           label="Dashboard"
+          testId="nav-dashboard"
           active={activeTab === 'dashboard'}
           onClick={onGoToDashboard}
           icon={
@@ -253,6 +254,7 @@ export default function Sidebar({
         />
         <NavItem
           label="Calendar"
+          testId="nav-calendar"
           active={activeTab === 'calendar'}
           onClick={onGoToCalendar}
           icon={
@@ -264,6 +266,7 @@ export default function Sidebar({
         />
         <NavItem
           label="Demo"
+          testId="nav-demo"
           active={activeTab === 'demo'}
           onClick={onGoToDemo}
           icon={
@@ -275,6 +278,7 @@ export default function Sidebar({
         />
         <NavItem
           label="Settings"
+          testId="nav-settings"
           active={activeTab === 'settings'}
           onClick={onGoToSettings}
           icon={
@@ -603,9 +607,10 @@ export default function Sidebar({
   )
 }
 
-function NavItem({ label, icon, active, onClick }) {
+function NavItem({ label, icon, active, onClick, testId }) {
   return (
     <button
+      data-testid={testId}
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium ${

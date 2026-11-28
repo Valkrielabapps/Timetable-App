@@ -24,7 +24,7 @@ const m = vi.hoisted(() => ({
 vi.mock('./SubstitutionsTab', () => ({ default: () => <div data-testid="subs" /> }))
 vi.mock('../hooks/useEntitlements', () => ({ useEntitlements: () => ({ data: m.entitlements }) }))
 vi.mock('../hooks/useSchoolData', () => ({
-  usePlanChanges: () => ({ data: null }),
+  usePlanChanges: () => ({ data: m.planChanges }),
   useRefreshAll: () => () => {},
   useSetupCheck: () => ({ data: m.check, isLoading: false }),
   useTimetables: () => ({ data: m.list }),
@@ -105,7 +105,7 @@ const openRules = () => fireEvent.click(screen.getByRole('button', { name: /rule
 
 beforeEach(() => {
   Object.assign(m, {
-    timetable: null, list: [], frozen: [], subjectFreezes: [], blocks: [], rooms: [], lessons: [physicsA, physicsB], check: null,
+    timetable: null, planChanges: null, list: [], frozen: [], subjectFreezes: [], blocks: [], rooms: [], lessons: [physicsA, physicsB], check: null,
     entitlements: undefined, forecast: null,
     generate: vi.fn(() => Promise.resolve()), setFrozen: vi.fn(() => Promise.resolve()), blank: vi.fn(() => Promise.resolve()),
     open: vi.fn(() => Promise.resolve()), apply: vi.fn(),
@@ -605,6 +605,54 @@ describe('generating', () => {
     expect(within(picker).getByRole('option', { name: 'Version 2 (current)' })).toBeInTheDocument()
     fireEvent.change(picker, { target: { value: '0' } })
     await waitFor(() => expect(m.open).toHaveBeenCalledWith(0))
+  })
+})
+
+describe('plan changes', () => {
+  const changes = [{ text: 'Grade 9 A: Library is new (1 a week)' }, { text: 'Mr George now takes Physics in Grade 9 B' }]
+
+  it('are a toolbar button and a panel, not a bar above the grid', async () => {
+    useTimetable()
+    m.planChanges = { timetable_id: 1, changes }
+    renderTab()
+    expect(screen.queryByRole('region', { name: 'The plan has changed' })).toBeNull()
+    expect(screen.queryByText('Grade 9 A: Library is new (1 a week)')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '⚠ Plan changed (2)' }))
+    const panel = screen.getByRole('complementary', { name: 'Plan changes' })
+    expect(within(panel).getByText('Mr George now takes Physics in Grade 9 B')).toBeInTheDocument()
+    fireEvent.click(within(panel).getByRole('button', { name: 'Update the timetable' }))
+    await waitFor(() => expect(m.generate).toHaveBeenCalledWith({ update: true }))
+    expect(screen.queryByRole('complementary', { name: 'Plan changes' })).toBeNull()
+  })
+
+  it('shows no button when nothing changed, or for another version', () => {
+    useTimetable()
+    m.planChanges = { timetable_id: 99, changes }
+    renderTab()
+    expect(screen.queryByRole('button', { name: /Plan changed/ })).toBeNull()
+  })
+
+  it('pops up at the bottom once the update finishes, not when the page opens', async () => {
+    useTimetable({ update: { stage: 1, unchanged: 46, placed: 1 } })
+    m.planChanges = { timetable_id: 1, changes }
+    const view = renderTab()
+    expect(screen.queryByText('Timetable updated')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '⚠ Plan changed (2)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Update the timetable' }))
+    await waitFor(() => expect(m.generate).toHaveBeenCalled())
+    useTimetable({ id: 1, update: { stage: 1, unchanged: 47, placed: 2 } })
+    m.planChanges = null
+    view.rerender(<TimetableTab schoolId={1} classGroup={A} classGroups={sections} teachers={[george, susan]} subjects={subjects} periods={periods} constraints={[]} />)
+    expect(await screen.findByText('Timetable updated')).toBeInTheDocument()
+    expect(screen.getByText(/47 lessons stayed exactly where they were and 2 were placed/)).toBeInTheDocument()
+  })
+
+  it('keeps what an update kept under Rules, without a bar above the grid', () => {
+    useTimetable({ update: { stage: 1, unchanged: 46, placed: 1 } })
+    renderTab()
+    expect(screen.queryByText(/46 lessons stayed/)).toBeNull()
+    openRules()
+    expect(within(screen.getByRole('complementary', { name: 'Rules' })).getByText(/46 lessons stayed exactly where they were/)).toBeInTheDocument()
   })
 })
 

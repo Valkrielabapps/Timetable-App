@@ -311,11 +311,21 @@ export default function TimetableTab({
   const { data: planChanges } = usePlanChanges(schoolId, timetable, !readOnly && !isGenerating)
   const changes = planChanges?.timetable_id === timetable?.id ? planChanges?.changes ?? [] : []
   const [replaceOpen, setReplaceOpen] = useState(false)
+  // What an update kept pops up at the bottom once, when the update finishes
+  // here - not every time the page opens on an updated timetable.
+  const updateAsked = useRef(false)
+  useEffect(() => {
+    if (!updateAsked.current || timetable?.status !== 'draft' || !timetable?.update) return
+    updateAsked.current = false
+    toast('ok', 'Timetable updated', updateSummary(timetable.update))
+  }, [timetable?.id, timetable?.status, timetable?.update, toast])
   async function handleUpdate() {
     setMenu(null)
+    updateAsked.current = true
     try {
       await generate({ update: true })
     } catch (err) {
+      updateAsked.current = false
       setError(err.message)
     }
   }
@@ -482,6 +492,19 @@ export default function TimetableTab({
             )}
             <span className="tw-spacer" />
             {solved && <span className="tw-count" data-testid="lessons-placed">{placedLessons} of {totalLessons} lessons placed</span>}
+            {/* The plan has changed since this timetable was made: a button, not a
+                bar above the grid, so the workspace keeps its height. */}
+            {solved && !readOnly && changes.length > 0 && (
+              <button
+                type="button"
+                className="tw-btn tw-alert"
+                data-testid="plan-changed-btn"
+                aria-expanded={drawer === 'changes'}
+                onClick={() => setDrawer(drawer === 'changes' ? null : 'changes')}
+              >
+                ⚠ Plan changed ({changes.length})
+              </button>
+            )}
             <button
               type="button"
               className={`tw-btn${problems || setupErrors.length ? ' tw-alert' : ''}`}
@@ -550,11 +573,6 @@ export default function TimetableTab({
                 )}
               </div>
             )}
-          </div>
-        )}
-        {page === 'schedule' && solved && !readOnly && (changes.length > 0 || timetable?.update) && (
-          <div style={{ flexBasis: '100%' }}>
-            <PlanChangedBar changes={changes} update={timetable?.update} onUpdate={handleUpdate} busy={isGenerating} />
           </div>
         )}
       </div>
@@ -657,6 +675,23 @@ export default function TimetableTab({
         </div>
       )}
 
+      {drawer === 'changes' && solved && changes.length > 0 && (
+        <aside className="tw-drawer" aria-label="Plan changes">
+          <header>
+            <h2>Plan changes</h2>
+            <button type="button" className="tw-btn" onClick={() => setDrawer(null)}>Close</button>
+          </header>
+          <PlanChanges
+            changes={changes}
+            busy={isGenerating}
+            onUpdate={() => {
+              setDrawer(null)
+              handleUpdate()
+            }}
+          />
+        </aside>
+      )}
+
       {drawer === 'rules' && (
         <aside className="tw-drawer" aria-label="Rules">
           <header>
@@ -726,9 +761,10 @@ export default function TimetableTab({
               . Check the Constraints step for which ones and why.
             </p>
           )}
-          {solved && (timetable.generation_notes?.length > 0 || timetable.frozen_kept?.length > 0) && (
+          {solved && (timetable.generation_notes?.length > 0 || timetable.frozen_kept?.length > 0 || timetable.update) && (
             <div>
               <h3 style={{ fontSize: 13, fontWeight: 600 }}>From this generation</h3>
+              {timetable.update && <p className="tw-drawer-note">{updateSummary(timetable.update)}</p>}
               {timetable.frozen_kept?.length > 0 && <p className="tw-drawer-note">Kept as frozen: {timetable.frozen_kept.join(', ')}.</p>}
               {timetable.generation_notes?.map((n) => <p key={n} className="tw-drawer-note">{n}</p>)}
             </div>
@@ -1140,56 +1176,27 @@ function CompromiseNotice({ compromise, readOnly, onAccept, onOpenConstraints })
   )
 }
 
+/** What an update for plan changes kept, in one sentence. */
+export function updateSummary(update) {
+  if (update.stage === 3) return 'The changes couldn’t fit around the existing timetable, so it was built again.'
+  return `Updated for your changes: ${update.unchanged} lessons stayed exactly where they were and ${update.placed} ${update.placed === 1 ? 'was' : 'were'} placed${update.stage === 2 ? ' (the sections and teachers the changes touched were rearranged)' : ''}.`
+}
+
 /**
- * Above the timetable when the plan has changed since it was made, and after
- * an update: what changed, and what the update kept.
+ * The "Plan changed" panel: what the plan now says that this timetable
+ * doesn't, and the update that places only those changes.
  */
-export function PlanChangedBar({ changes, update, onUpdate, busy }) {
-  const [all, setAll] = useState(false)
-  // Closing hides the bar until the plan changes again or another update runs.
-  const [closed, setClosed] = useState(null)
-  const changesKey = changes.map((c) => c.text).join('\n')
-  const close = (
-    <button type="button" aria-label="Close" title="Close" onClick={() => setClosed(changes.length > 0 ? changesKey : update)}
-      className="-mr-1 shrink-0 rounded p-1 text-lg leading-none opacity-70 hover:bg-black/5 hover:opacity-100">
-      &times;
-    </button>
-  )
-  if (changes.length > 0) {
-    if (closed === changesKey) return null
-    const shown = all ? changes : changes.slice(0, 3)
-    return (
-      <section aria-label="The plan has changed" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold">The plan has changed since this timetable was made</p>
-            <ul className="mt-0.5 max-h-40 list-disc overflow-y-auto pl-4">
-              {shown.map((c) => <li key={c.text}>{c.text}</li>)}
-            </ul>
-            {changes.length > 3 && (
-              <button type="button" className="text-xs underline" onClick={() => setAll(!all)}>
-                {all ? 'Show fewer' : `and ${changes.length - 3} more`}
-              </button>
-            )}
-          </div>
-          <div className="text-right">
-            <button type="button" className="tw-btn tw-primary" disabled={busy} onClick={onUpdate}>Update the timetable</button>
-            <p className="mt-1 max-w-[16rem] text-xs text-amber-900">Keeps every lesson that&rsquo;s still right; only the changes are placed.</p>
-          </div>
-          {close}
-        </div>
-      </section>
-    )
-  }
-  if (!update || closed === update) return null
+export function PlanChanges({ changes, onUpdate, busy }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-      <p role="status" className="min-w-0 flex-1">
-        {update.stage === 3
-          ? 'The changes couldn’t fit around the existing timetable, so it was built again.'
-          : `Updated for your changes: ${update.unchanged} lessons stayed exactly where they were and ${update.placed} ${update.placed === 1 ? 'was' : 'were'} placed${update.stage === 2 ? ' (the sections and teachers the changes touched were rearranged)' : ''}.`}
-      </p>
-      {close}
-    </div>
+    <>
+      <p className="tw-drawer-note">The plan has changed since this timetable was made:</p>
+      <ul className="list-disc pl-5 text-sm">
+        {changes.map((c) => <li key={c.text}>{c.text}</li>)}
+      </ul>
+      <button type="button" className="tw-btn tw-primary" disabled={busy} onClick={onUpdate} style={{ alignSelf: 'flex-start' }}>
+        Update the timetable
+      </button>
+      <p className="tw-drawer-note">Keeps every lesson that&rsquo;s still right; only the changes are placed.</p>
+    </>
   )
 }

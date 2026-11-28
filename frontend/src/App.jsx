@@ -94,6 +94,7 @@ function SidebarDrawer({ tucked, children }) {
       <button
         type="button"
         className="tw-rail"
+        data-testid="nav-open-sidebar"
         aria-label="Open sidebar"
         title="Open sidebar"
         onMouseEnter={() => setOpen(true)}

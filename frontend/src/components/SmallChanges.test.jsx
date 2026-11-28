@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({ replaceTeacher: vi.fn() }))
 vi.mock('../api', () => ({ api }))
 import ReplaceTeacherDialog from './ReplaceTeacherDialog'
-import { PlanChangedBar } from './TimetableTab'
+import { PlanChanges, updateSummary } from './TimetableTab'
 
 const TEACHERS = [{ id: 1, name: 'Anil' }, { id: 2, name: 'Ravi' }]
 const SECTIONS = [{ id: 5, grade: 'Grade 6', name: 'A' }, { id: 6, grade: 'Grade 6', name: 'B' }]
@@ -34,31 +34,18 @@ describe('small changes', () => {
     expect(onUpdate).toHaveBeenCalled()
   })
 
-  it('shows what changed in the plan and offers the update', () => {
+  it('lists what changed in the plan and offers the update', () => {
     const onUpdate = vi.fn()
     const changes = [1, 2, 3, 4].map((n) => ({ text: `Grade 6 A: change ${n}` }))
-    render(<PlanChangedBar changes={changes} onUpdate={onUpdate} busy={false} />)
-    expect(screen.getByText('The plan has changed since this timetable was made')).toBeInTheDocument()
-    expect(screen.queryByText('Grade 6 A: change 4')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'and 1 more' }))
+    render(<PlanChanges changes={changes} onUpdate={onUpdate} busy={false} />)
+    expect(screen.getByText('The plan has changed since this timetable was made:')).toBeInTheDocument()
     expect(screen.getByText('Grade 6 A: change 4')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Update the timetable' }))
     expect(onUpdate).toHaveBeenCalled()
   })
 
-  it('closes, and comes back when the plan changes again', () => {
-    const first = [{ text: 'Grade 6 A: Library is new (1 a week)' }]
-    const { rerender } = render(<PlanChangedBar changes={first} onUpdate={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByText('The plan has changed since this timetable was made')).not.toBeInTheDocument()
-    rerender(<PlanChangedBar changes={[...first]} onUpdate={() => {}} />)
-    expect(screen.queryByText('The plan has changed since this timetable was made')).not.toBeInTheDocument()
-    rerender(<PlanChangedBar changes={[...first, { text: 'Grade 6 A: SUPW is new (1 a week)' }]} onUpdate={() => {}} />)
-    expect(screen.getByText('The plan has changed since this timetable was made')).toBeInTheDocument()
-  })
-
   it('says what an update kept', () => {
-    render(<PlanChangedBar changes={[]} update={{ stage: 1, unchanged: 46, placed: 1 }} onUpdate={() => {}} />)
-    expect(screen.getByRole('status')).toHaveTextContent('46 lessons stayed exactly where they were and 1 was placed')
+    expect(updateSummary({ stage: 1, unchanged: 46, placed: 1 })).toBe('Updated for your changes: 46 lessons stayed exactly where they were and 1 was placed.')
+    expect(updateSummary({ stage: 3 })).toMatch(/built again/)
   })
 })
